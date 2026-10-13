@@ -8,7 +8,7 @@ Coordinator: ccrc session `ccrc-pwa-calm-canyon`. It also coordinates ccrc's `na
 
 | # | scope | PRs | state |
 |---|---|---|---|
-| L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1 | plan in review |
+| L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1 | **plan merged** 2026-10-13 (`00fa66cb2`), approved by the operator. Run 414 is open; its dispatch waits for a fleet slot |
 | L2 | The layout. `enhance(root, options)` made embeddable: host adapters, namespaced storage keys, operator-specific defaults scrubbed into off-by-default options, CSP-safe. The styles, and the fonts with `OFL.txt`. A self-hosted single-file Mermaid with pinned limits. `THIRD-PARTY-NOTICES`. | — | after L1 |
 | L3 | The frame and the release. `frameDocument()`, the frame bootstrap and click guard as hashed assets, `mountDocFrame()` for other hosts, and `assets.json`. Then v1: the repo goes public, and the package is published to npm with provenance as `@synapsium-labs/docserver`. | — | after L2 |
 
@@ -62,4 +62,10 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 
 ## Next-wave brief (L1)
 
-Written once the L1 plan is reviewed.
+For run 414. The brief carries the wave's specifics only; the standing protocol is the worker skill's.
+- **Plan:** `docs/superpowers/plans/2026-10-12-docserver-l1-rules-and-corpus.md` at `00fa66cb2`. Run Tasks 1-12 in order, then the held-out whole-branch review, the final gate and the whole mutation table, then the close.
+- **Base:** `main` at `00fa66cb2`, a fresh workspace.
+- **Routing:** an Opus·high main loop with Sonnet·high implementers. Opus·high task reviewers and the whole-branch review. Workflows off. Never Fable.
+- **The reference renderer** is supplied on command lines only (C5). Its pins were measured equal to the plan's on 2026-10-13. If a hash or version differs, the worker stops and asks.
+- **Departures:** no D-numbers here. The allocator for this project is not seeded by design (2026-10-13, the allocator answered `not-seeded`). A departure comes to the coordinator as a question and becomes C24 onward in this ledger before any file moves.
+- **Repository settings:** none changed (C4). The merge is the coordinator's, with the `Goldens-moved:` body the plan describes.
