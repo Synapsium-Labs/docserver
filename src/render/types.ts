@@ -1,12 +1,23 @@
 // The public types of `./render` and its two default limits (docserver L1; architecture section C as amended
-// by rulings C2 and C3). Imports nothing, so every module of src/render can import it without a cycle.
+// by rulings C2, C3 and C20). Imports nothing, so every module of src/render can import it without a cycle.
 
-/** What `render()` did: parsed and rendered, refused by the byte gate, or fell back after an internal error. */
-export type RenderOutcome = 'rendered' | 'over-limit' | 'failed';
+/**
+ * What `render()` did: parsed and rendered; refused by the byte gate (`over-limit`); stopped because its html
+ * would pass `maxHtmlBytes` (`output-over-limit`); or fell back after an internal error.
+ */
+export type RenderOutcome = 'rendered' | 'over-limit' | 'output-over-limit' | 'failed';
 
 export interface RenderOptions {
-  /** UTF-8 byte cap on the input; above it nothing is parsed. Default DEFAULT_MAX_BYTES. */
+  /**
+   * UTF-8 byte cap on the input; above it nothing is parsed. Default DEFAULT_MAX_BYTES. It bounds the input
+   * only; `maxHtmlBytes` bounds the html.
+   */
   maxBytes?: number;
+  /**
+   * UTF-8 byte cap on the html; a render whose html would pass it stops with outcome 'output-over-limit'.
+   * Default 16777216 (16 MiB, four times DEFAULT_MAX_BYTES).
+   */
+  maxHtmlBytes?: number;
   /** Emit data-line="a-b" on block elements. Default true. */
   lineAttrs?: boolean;
 }
@@ -40,7 +51,7 @@ export interface RenderMeta {
 }
 
 export interface RenderResult {
-  /** '' when over-limit; the escaped fallback block when failed */
+  /** '' when over-limit; the escaped fallback block, cut to maxHtmlBytes, when output-over-limit or failed */
   html: string;
   outcome: RenderOutcome;
   /** measured UTF-8 length (when over-limit: the cap + 1 at which counting stopped) */

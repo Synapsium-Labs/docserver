@@ -38,12 +38,12 @@ describe('./render: runtime exports', () => {
 describe('./render: signatures (ruling C2)', () => {
   it('render(markdown, options?) returns a RenderResult', () => {
     expectTypeOf(render).toEqualTypeOf<(markdown: string, o?: RenderOptions) => RenderResult>();
-    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'lineAttrs'>();
+    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs'>();
   });
 
   it('RenderResult is html, outcome, bytes and meta', () => {
     expectTypeOf<keyof RenderResult>().toEqualTypeOf<'html' | 'outcome' | 'bytes' | 'meta'>();
-    expectTypeOf<RenderOutcome>().toEqualTypeOf<'rendered' | 'over-limit' | 'failed'>();
+    expectTypeOf<RenderOutcome>().toEqualTypeOf<'rendered' | 'over-limit' | 'output-over-limit' | 'failed'>();
     expectTypeOf<RenderResult['outcome']>().toEqualTypeOf<RenderOutcome>();
     expectTypeOf<RenderResult['meta']>().toEqualTypeOf<RenderMeta>();
   });
