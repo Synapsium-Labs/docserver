@@ -1,0 +1,56 @@
+{
+  "name": "@synapsium-labs/docserver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A pure Markdown renderer with a conformance corpus.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Synapsium-Labs/docserver.git"
+  },
+  "exports": {
+    "./render": {
+      "types": "./dist/render/index.d.ts",
+      "import": "./dist/render/index.js"
+    },
+    "./conformance": {
+      "types": "./dist/conformance/index.d.ts",
+      "import": "./dist/conformance/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "conformance/manifest.json",
+    "conformance/corpus",
+    "conformance/expected",
+    "conformance/hostile.json",
+    "conformance/DEPARTURES.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "highlight.js": "11.12.0",
+    "js-yaml": "4.3.2",
+    "markdown-it": "15.0.2",
+    "markdown-it-footnote": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "22.20.4",
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  }
+}
