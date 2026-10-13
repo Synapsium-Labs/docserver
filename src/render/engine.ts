@@ -13,8 +13,11 @@
 // alt="a c"), where markdown-it-py, a port of 14, gives alt="a " (decision gate D1, measured on the corpus).
 //
 // The core chain ends with line_attrs; later rules go `before('line_attrs', …)` so data-line stays last.
+// block_strip goes right after block, before inline parsing reads the text it strips (blockStrip.ts).
 import MarkdownIt from 'markdown-it';
+import { blockStrip } from './blockStrip.js';
 import { lineAttrs } from './lineAttrs.js';
+import { anchors } from './slug.js';
 
 export function createEngine(): MarkdownIt {
   const md = new MarkdownIt('commonmark', {
@@ -26,5 +29,7 @@ export function createEngine(): MarkdownIt {
   });
   md.enable(['table', 'strikethrough']);
   md.core.ruler.push('line_attrs', lineAttrs);
+  md.core.ruler.after('block', 'block_strip', blockStrip);
+  md.core.ruler.before('line_attrs', 'anchors', anchors);
   return md;
 }

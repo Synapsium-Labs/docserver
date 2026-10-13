@@ -8,11 +8,13 @@
 // 4. Any exception gives outcome 'failed' and the reference renderer's fallback block, its source escaped
 //    the way the reference escaped it (Python's html.escape). It is never raw HTML, and it is cut to
 //    `maxHtmlBytes` too, so no outcome returns more html than the bound.
-// Later tasks add the BOM strip between 1 and 2 (Task 9) and build `meta` from the tokens (Tasks 4-10).
+// 5. `meta` is collected from what the rules recorded in the env (meta.ts).
+// Task 9 adds the BOM strip between 1 and 2.
 import type { MarkdownIt, Token } from 'markdown-it';
 import { createEngine } from './engine.js';
 import { createEnv, type RenderEnv } from './env.js';
 import { pyEscape } from './escape.js';
+import { collectMeta } from './meta.js';
 import { utf8Length } from './pyText.js';
 import { DEFAULT_MAX_BYTES, type RenderMeta, type RenderOptions, type RenderResult } from './types.js';
 
@@ -38,11 +40,6 @@ const FALLBACK_CLOSE = '</pre>';
 const DEFAULT_MAX_HTML_BYTES = 4 * DEFAULT_MAX_BYTES;
 
 const ENGINE = createEngine();
-
-/** The meta of a rendered document: empty so far. Task 4 replaces this with meta.ts's collectMeta. */
-function collectMeta(_tokens: readonly Token[], _env: RenderEnv): RenderMeta {
-  return { front: null, frontList: null, title: null, headings: [], figures: 0, tables: 0, mermaidKinds: [] };
-}
 
 /** A limit option, checked: a non-negative safe integer, or a RangeError naming the option. */
 function checkLimit(name: string, value: number): number {
@@ -140,7 +137,7 @@ export function renderWith(markdown: string, o: RenderOptions | undefined, engin
     if (html === undefined) {
       return { html: fallbackHtml(src, maxHtmlBytes), outcome: 'output-over-limit', bytes, meta: EMPTY_META };
     }
-    return { html, outcome: 'rendered', bytes, meta: collectMeta(tokens, env) };
+    return { html, outcome: 'rendered', bytes, meta: collectMeta(env) };
   } catch {
     return { html: fallbackHtml(src, maxHtmlBytes), outcome: 'failed', bytes, meta: EMPTY_META };
   }

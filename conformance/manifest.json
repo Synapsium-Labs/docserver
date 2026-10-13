@@ -14,7 +14,7 @@
   {
     "id": "heading-unicode-case",
     "kind": "golden",
-    "pins": "Python lower() per code point (final sigma stays σ), İ, ß and astral letters, combining marks dropped from slugs, \\x1c \\x85 and U+3000 stripped Python-style at heading edges, U+FEFF kept by strip and dropped by the slug.",
+    "pins": "Python lower() of the whole title (the final sigma becomes ς), İ, ß and astral letters, combining marks dropped from slugs, \\x1c \\x85 and U+3000 stripped Python-style at heading and paragraph edges, U+FEFF kept by strip and dropped by the slug.",
     "probes": []
   },
   {

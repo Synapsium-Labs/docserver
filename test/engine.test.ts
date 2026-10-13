@@ -57,8 +57,16 @@ describe('createEngine: options', () => {
 describe('createEngine: rule chains', () => {
   const md = createEngine();
 
-  it('core: the parse stages, then line_attrs last', () => {
-    expect(enabled(md.core.ruler)).toEqual(['normalize', 'block', 'inline', 'text_join', 'line_attrs']);
+  it('core: block_strip between block and inline, anchors after text_join, then line_attrs last', () => {
+    expect(enabled(md.core.ruler)).toEqual([
+      'normalize',
+      'block',
+      'block_strip',
+      'inline',
+      'text_join',
+      'anchors',
+      'line_attrs',
+    ]);
   });
 
   it('block: the CommonMark rules plus table, in order', () => {
