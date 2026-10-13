@@ -1,0 +1,100 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": null,
+  "headings": [
+    {
+      "level": 2,
+      "id": "",
+      "text": ""
+    },
+    {
+      "level": 2,
+      "id": "-1",
+      "text": ""
+    },
+    {
+      "level": 2,
+      "id": "-2",
+      "text": "!"
+    },
+    {
+      "level": 2,
+      "id": "-3",
+      "text": "?"
+    },
+    {
+      "level": 2,
+      "id": "中文-标题",
+      "text": "中文 标题"
+    },
+    {
+      "level": 2,
+      "id": "привіт-світе",
+      "text": "Привіт світе"
+    },
+    {
+      "level": 2,
+      "id": "½-²-x",
+      "text": "½ ² x"
+    },
+    {
+      "level": 2,
+      "id": "abc",
+      "text": "a.b.c"
+    },
+    {
+      "level": 2,
+      "id": "12-version",
+      "text": "1.2 version"
+    },
+    {
+      "level": 2,
+      "id": "ab",
+      "text": "a\tb"
+    },
+    {
+      "level": 2,
+      "id": "a--b-",
+      "text": "A & B <"
+    },
+    {
+      "level": 2,
+      "id": "a--b",
+      "text": "A  B"
+    },
+    {
+      "level": 2,
+      "id": "a-k-b",
+      "text": "A K B"
+    },
+    {
+      "level": 2,
+      "id": "a-b",
+      "text": "A B"
+    },
+    {
+      "level": 2,
+      "id": "ab-1",
+      "text": "ab"
+    },
+    {
+      "level": 2,
+      "id": "text-1-more-k",
+      "text": "Text 1 more K"
+    },
+    {
+      "level": 2,
+      "id": "in-bq",
+      "text": "In bq"
+    },
+    {
+      "level": 2,
+      "id": "in-list",
+      "text": "In list"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

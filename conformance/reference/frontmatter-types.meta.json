@@ -1,0 +1,79 @@
+{
+  "front": {
+    "flag": "True",
+    "b": "True",
+    "f": "1.5",
+    "d": "2026-10-12",
+    "dt": "2026-10-12 08:00:00",
+    "list": [
+      "1",
+      "x"
+    ],
+    "html": "<b>&",
+    "long": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "frontList": [
+    {
+      "key": "flag",
+      "list": false,
+      "vals": [
+        "True"
+      ]
+    },
+    {
+      "key": "b",
+      "list": false,
+      "vals": [
+        "True"
+      ]
+    },
+    {
+      "key": "f",
+      "list": false,
+      "vals": [
+        "1.5"
+      ]
+    },
+    {
+      "key": "d",
+      "list": false,
+      "vals": [
+        "2026-10-12"
+      ]
+    },
+    {
+      "key": "dt",
+      "list": false,
+      "vals": [
+        "2026-10-12 08:00:00"
+      ]
+    },
+    {
+      "key": "list",
+      "list": true,
+      "vals": [
+        "1",
+        "x"
+      ]
+    },
+    {
+      "key": "html",
+      "list": false,
+      "vals": [
+        "<b>&"
+      ]
+    },
+    {
+      "key": "long",
+      "list": false,
+      "vals": [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ]
+    }
+  ],
+  "title": null,
+  "headings": [],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

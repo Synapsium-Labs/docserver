@@ -1,0 +1,60 @@
+{
+  "front": {
+    "status": "Draft",
+    "owner": "Docs team"
+  },
+  "frontList": [
+    {
+      "key": "status",
+      "list": false,
+      "vals": [
+        "Draft"
+      ]
+    },
+    {
+      "key": "owner",
+      "list": false,
+      "vals": [
+        "Docs team"
+      ]
+    }
+  ],
+  "title": "Shared renderer for team notes",
+  "headings": [
+    {
+      "level": 1,
+      "id": "shared-renderer-for-team-notes",
+      "text": "Shared renderer for team notes"
+    },
+    {
+      "level": 2,
+      "id": "in-short",
+      "text": "In short"
+    },
+    {
+      "level": 2,
+      "id": "1-context",
+      "text": "1. Context"
+    },
+    {
+      "level": 2,
+      "id": "2-design",
+      "text": "2. Design"
+    },
+    {
+      "level": 3,
+      "id": "21-options",
+      "text": "2.1 Options"
+    },
+    {
+      "level": 2,
+      "id": "3-where-things-stand",
+      "text": "3. Where things stand"
+    }
+  ],
+  "figures": 1,
+  "tables": 1,
+  "mermaidKinds": [
+    "flowchart"
+  ]
+}

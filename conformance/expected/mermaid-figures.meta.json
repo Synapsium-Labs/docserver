@@ -1,0 +1,16 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": null,
+  "headings": [],
+  "figures": 13,
+  "tables": 0,
+  "mermaidKinds": [
+    "flowchart",
+    "sequenceDiagram",
+    "graph",
+    "A",
+    "B",
+    "stateDiagram-v2"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": "location",
+  "headings": [
+    {
+      "level": 1,
+      "id": "location",
+      "text": "location"
+    },
+    {
+      "level": 1,
+      "id": "document",
+      "text": "document"
+    },
+    {
+      "level": 1,
+      "id": "proto",
+      "text": "proto"
+    },
+    {
+      "level": 1,
+      "id": "__proto__",
+      "text": "__proto__"
+    },
+    {
+      "level": 1,
+      "id": "constructor",
+      "text": "constructor"
+    },
+    {
+      "level": 1,
+      "id": "doc-meta",
+      "text": "doc-meta"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

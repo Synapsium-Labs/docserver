@@ -1,0 +1,22 @@
+<p data-line="1-1">Probe: escape.</p>
+<p data-line="3-3">a &lt; b &gt; c &amp; d &quot;q&quot; * _   &lt;notatag&gt; &lt;/div&gt; &lt;a href=&quot;x&quot;&gt;raw&lt;/a&gt;</p>
+<p data-line="5-5">Probe: escaped_chars.</p>
+<p data-line="7-7"># [ ] ( ) ` &gt; | ~</p>
+<p data-line="9-9">Probe: entity.</p>
+<p data-line="11-11"># A &amp;foo; &amp;amp;</p>
+<p data-line="13-13">Probe: text_entities_special.</p>
+<p data-line="15-15">x &lt;b&gt; &quot; � �</p>
+<p data-line="17-17">Probe: emphasis_edge.</p>
+<p data-line="19-19"><em><strong>both</strong></em> <strong>u</strong> <em>i</em> snake_case_word 2<em>3</em>4</p>
+<p data-line="21-21">Probe: strike_single.</p>
+<p data-line="23-23">~a~ <s>b</s> ~<s>c</s>~</p>
+<p data-line="25-25">Probe: emoji_unicode.</p>
+<p data-line="27-27">Ünï — 日本語 😀</p>
+<p data-line="29-29">Probe: nul.</p>
+<p data-line="31-31">a�b</p>
+<p data-line="33-33">Probe: hr.</p>
+<p data-line="35-35">a</p>
+<hr data-line="37-37" />
+<p data-line="39-39">b</p>
+<hr data-line="41-41" />
+<hr data-line="43-43" />

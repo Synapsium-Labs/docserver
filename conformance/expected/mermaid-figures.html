@@ -1,0 +1,61 @@
+<p data-line="1-1">Probe: mermaid.</p>
+<figure class="mermaid-figure" data-line="3-6"><pre class="mermaid">flowchart LR
+  A[&quot;a &lt;b&gt;&quot;] --&gt; B &amp; C
+</pre><figcaption>Figure 1. Caption with <code>code</code> and <strong>bold</strong>.</figcaption></figure>
+<p data-line="9-9">text after</p>
+<p data-line="11-11">Probe: mermaid_nocap.</p>
+<figure class="mermaid-figure" data-line="13-16"><pre class="mermaid">flowchart LR
+  A--&gt;B
+</pre></figure>
+<p data-line="18-18">Plain para.</p>
+<p data-line="20-20">Probe: mermaid_capsep.</p>
+<figure class="mermaid-figure" data-line="22-25"><pre class="mermaid">sequenceDiagram
+  A-&gt;&gt;B: hi
+</pre><figcaption>Figure 12. Separate paragraph caption.</figcaption></figure>
+<p data-line="29-29">Probe: fig_after_two_blank.</p>
+<figure class="mermaid-figure" data-line="31-34"><pre class="mermaid">graph TD
+ A--&gt;B
+</pre><figcaption>Figure 1. Far.</figcaption></figure>
+<p data-line="39-39">Probe: fig_two_in_row.</p>
+<figure class="mermaid-figure" data-line="41-43"><pre class="mermaid">A
+</pre></figure>
+<figure class="mermaid-figure" data-line="44-46"><pre class="mermaid">B
+</pre><figcaption>Figure 2. second</figcaption></figure>
+<p data-line="49-49">Probe: fig_empty.</p>
+<figure class="mermaid-figure" data-line="51-52"><pre class="mermaid"></pre></figure>
+<p data-line="54-54">Probe: fig_tilde.</p>
+<figure class="mermaid-figure" data-line="56-58"><pre class="mermaid">graph TD
+</pre></figure>
+<p data-line="60-60">Probe: mermaid_in_list.</p>
+<ul data-line="62-69">
+<li data-line="62-69">
+<p data-line="62-62">item</p>
+<figure class="mermaid-figure" data-line="64-67"><pre class="mermaid">graph TD
+A--&gt;B
+</pre><figcaption>Figure 4. in list.</figcaption></figure>
+</li>
+</ul>
+<p data-line="70-70">Probe: fig_bq.</p>
+<blockquote data-line="72-75">
+<figure class="mermaid-figure" data-line="72-74"><pre class="mermaid">graph TD
+</pre><figcaption>Figure 9. in bq.</figcaption></figure>
+</blockquote>
+<p data-line="77-77">Probe: mermaid_info.</p>
+<figure class="mermaid-figure" data-line="79-82"><pre class="mermaid">graph TD
+ A--&gt;B
+</pre></figure>
+<figure class="mermaid-figure" data-line="84-87"><pre class="mermaid">graph TD
+ C--&gt;D
+</pre></figure>
+<div class="codehilite" data-line="89-91"><pre>X
+</pre></div>
+<p data-line="93-93">Probe: (added) mermaid kinds after comments and diagram front matter.</p>
+<figure class="mermaid-figure" data-line="95-104"><pre class="mermaid">%% a comment line
+
+---
+title: Kinds
+---
+%% another comment
+stateDiagram-v2
+  [*] --&gt; Ready
+</pre></figure>

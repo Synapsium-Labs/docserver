@@ -1,0 +1,15 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": "A",
+  "headings": [
+    {
+      "level": 1,
+      "id": "a",
+      "text": "A"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}
