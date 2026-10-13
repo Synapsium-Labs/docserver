@@ -1,10 +1,6 @@
 {
-  "headings": "T5",
   "heading-ids-edge": "T8",
-  "inline-allowlist": "T5",
   "comment-anchors": "T8",
-  "details/main": "T5",
-  "details/placement": "T5",
   "fences/main": "T6",
   "fences/empty": "T6",
   "fences/unclosed": "T6",
@@ -27,8 +23,6 @@
   "spec-template": "T10",
   "line-endings/crlf": "T9",
   "h-attr-smuggle": "T8",
-  "h-comment-anchor-injection": "T5",
-  "h-details-hostile": "T5",
   "h-fence-injection": "T6",
   "h-frontmatter-hostile/proto-keys": "T9",
   "h-frontmatter-hostile/caps": "T9",
@@ -36,6 +30,5 @@
   "h-frontmatter-hostile/yaml-tags": "T9",
   "h-frontmatter-hostile/oversize": "T9",
   "h-frontmatter-hostile/markup-keys": "T9",
-  "h-dom-clobber-names": "T5",
   "h-alert-caption-spoof": "T7"
 }

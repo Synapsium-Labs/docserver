@@ -57,7 +57,7 @@ describe('createEngine: options', () => {
 describe('createEngine: rule chains', () => {
   const md = createEngine();
 
-  it('core: block_strip between block and inline, anchors after text_join, then line_attrs last', () => {
+  it('core: block_strip between block and inline, anchors and balance_details after text_join, then line_attrs last', () => {
     expect(enabled(md.core.ruler)).toEqual([
       'normalize',
       'block',
@@ -65,11 +65,12 @@ describe('createEngine: rule chains', () => {
       'inline',
       'text_join',
       'anchors',
+      'balance_details',
       'line_attrs',
     ]);
   });
 
-  it('block: the CommonMark rules plus table, in order', () => {
+  it('block: the CommonMark rules plus table, and safe_block_html before html_block, in order', () => {
     expect(enabled(md.block.ruler)).toEqual([
       'table',
       'code',
@@ -78,6 +79,7 @@ describe('createEngine: rule chains', () => {
       'hr',
       'list',
       'reference',
+      'safe_block_html',
       'html_block',
       'heading',
       'lheading',
@@ -85,7 +87,12 @@ describe('createEngine: rule chains', () => {
     ]);
   });
 
-  it('inline: the CommonMark rules plus strikethrough, in order', () => {
+  it('safe_block_html interrupts a paragraph, a reference and a blockquote, and does not end a list', () => {
+    const rule = rules(md.block.ruler).find((r) => r.name === 'safe_block_html');
+    expect(rule?.alt).toEqual(['paragraph', 'reference', 'blockquote']);
+  });
+
+  it('inline: the CommonMark rules plus strikethrough, and safe_inline_html before html_inline, in order', () => {
     expect(enabled(md.inline.ruler)).toEqual([
       'text',
       'newline',
@@ -96,6 +103,7 @@ describe('createEngine: rule chains', () => {
       'link',
       'image',
       'autolink',
+      'safe_inline_html',
       'html_inline',
       'entity',
     ]);

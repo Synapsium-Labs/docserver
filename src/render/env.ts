@@ -3,6 +3,7 @@
 // needs state for the length of one document keeps it here, never at module scope, so two renders cannot
 // see each other. Later tasks add their fields (the figure and table counters, the front-matter result) to
 // this interface and to createEnv together.
+import { createCommentScan, type CommentScan } from './allowlist.js';
 import { createSlugState, type SlugState } from './slug.js';
 import type { Heading } from './types.js';
 
@@ -13,9 +14,11 @@ export interface RenderEnv {
   readonly slugs: SlugState;
   /** Every heading in document order, as the anchors rule set its id (meta.headings). */
   readonly headings: Heading[];
+  /** Where the allowlist's comment rules last searched for `-->` (allowlist.ts). */
+  readonly comments: CommentScan;
 }
 
 /** A fresh env for one render. */
 export function createEnv(o: { lineAttrs: boolean }): RenderEnv {
-  return { lineAttrs: o.lineAttrs, slugs: createSlugState(), headings: [] };
+  return { lineAttrs: o.lineAttrs, slugs: createSlugState(), headings: [], comments: createCommentScan() };
 }

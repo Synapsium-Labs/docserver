@@ -1,10 +1,11 @@
-// The public surface of `./render` as Task 1 leaves it (docserver L1, Task 1; architecture section C, rulings C2
-// and C3). The runtime names are pinned here, so a new public export is a deliberate edit of this list: Task 5
-// adds 'ALLOWLIST'. The signatures are type-level assertions, checked by `npm run typecheck` (this file is in
+// The public surface of `./render` (docserver L1, Tasks 1 and 5; architecture section C, rulings C2 and C3).
+// The runtime names are pinned here, so a new public export is a deliberate edit of this list: Task 5 added
+// 'ALLOWLIST'. The signatures are type-level assertions, checked by `npm run typecheck` (this file is in
 // tsconfig.json's include); at run time `expectTypeOf` is a no-op.
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import * as api from '../src/render/index.js';
 import {
+  ALLOWLIST,
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_IMAGES,
   render,
@@ -30,12 +31,28 @@ describe('./render: default limits (ruling C3)', () => {
 });
 
 describe('./render: runtime exports', () => {
-  it('are exactly the two limits, render and scanRefs', () => {
-    expect(Object.keys(api).sort()).toEqual(['DEFAULT_MAX_BYTES', 'DEFAULT_MAX_IMAGES', 'render', 'scanRefs']);
+  it('are exactly ALLOWLIST, the two limits, render and scanRefs', () => {
+    expect(Object.keys(api).sort()).toEqual([
+      'ALLOWLIST',
+      'DEFAULT_MAX_BYTES',
+      'DEFAULT_MAX_IMAGES',
+      'render',
+      'scanRefs',
+    ]);
   });
 });
 
 describe('./render: signatures (ruling C2)', () => {
+  it('ALLOWLIST is the readonly allowlist of section C, literal types included', () => {
+    expectTypeOf(ALLOWLIST).toEqualTypeOf<
+      Readonly<{
+        inlineTags: readonly ['br', 'sup', 'sub', 'kbd'];
+        blockLines: readonly ['<details>', '<details open>', '</details>', '<summary>…</summary>'];
+        anchorId: '[A-Za-z0-9_-]{1,100}';
+      }>
+    >();
+  });
+
   it('render(markdown, options?) returns a RenderResult', () => {
     expectTypeOf(render).toEqualTypeOf<(markdown: string, o?: RenderOptions) => RenderResult>();
     expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs'>();
