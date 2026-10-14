@@ -36,7 +36,7 @@ import type { FrontEntry } from './types.js';
 export const FM_MAX_CHARS = 20000;
 /** Keys shown in the strip and listed in meta.frontList, the first in document order. */
 export const FM_MAX_KEYS = 40;
-/** Code points of a scalar value, in the strip and in meta. */
+/** Code points of a scalar value, and of a key, in the strip and in meta (ruling C31). */
 export const FM_MAX_VALUE = 500;
 /** Items of a list value the strip reads (nested lists and mappings among them are then skipped). */
 export const FM_MAX_ITEMS = 50;
@@ -183,16 +183,24 @@ export function fmValue(v: unknown): string {
   return cpSlice(scalarText(v), FM_MAX_VALUE);
 }
 
-/** The first FM_MAX_KEYS keys of a mapping, in document order. */
-function firstKeys(data: FrontMapping): string[] {
-  return Object.keys(data).slice(0, FM_MAX_KEYS);
+/**
+ * The first FM_MAX_KEYS pairs of a mapping, in document order, each key cut to FM_MAX_VALUE code points
+ * as a value is (ruling C31, part of PD8). This is the one cut: the strip escapes the cut key and meta
+ * records it, so the two agree, and nothing past the cut is ever escaped or copied. A sequence key built
+ * from aliases can load as millions of characters; the loader builds it once, and nothing here touches
+ * more than the first 500 code points. Two keys that share those code points collide after the cut: the
+ * strip and meta.frontList list both, in document order, and meta.front keeps the later (frontRecord).
+ */
+function firstPairs(data: FrontMapping): Array<readonly [key: string, value: unknown]> {
+  return Object.keys(data)
+    .slice(0, FM_MAX_KEYS)
+    .map((k) => [cpSlice(k, FM_MAX_VALUE), data[k]] as const);
 }
 
-/** meta.frontList: after the key cut, a list gives its items, a scalar its text; a mapping or null is skipped. */
+/** meta.frontList: after the key cut (firstPairs), a list gives its items, a scalar its text; a mapping or null is skipped. */
 export function frontEntries(data: FrontMapping): FrontEntry[] {
   const out: FrontEntry[] = [];
-  for (const key of firstKeys(data)) {
-    const v = data[key];
+  for (const [key, v] of firstPairs(data)) {
     if (Array.isArray(v)) {
       const vals = v
         .slice(0, FM_LIST_MAX_ITEMS)
@@ -230,10 +238,10 @@ export function renderFrontMatter(tokens: Token[], idx: number, _options: unknow
   const data = parseFrontMatter(token.content);
   env.frontList = data === null ? null : frontEntries(data);
   if (data === null) return '';
-  const keys = firstKeys(data);
-  if (keys.length === 0) return '';
-  const items = keys
-    .map((k) => `<div><dt>${pyEscape(k)}</dt><dd>${pyEscape(fmValue(data[k]))}</dd></div>`)
+  const pairs = firstPairs(data);
+  if (pairs.length === 0) return '';
+  const items = pairs
+    .map(([k, v]) => `<div><dt>${pyEscape(k)}</dt><dd>${pyEscape(fmValue(v))}</dd></div>`)
     .join('');
   return `<dl class="doc-meta"${lineAttr(token, env)}>${items}</dl>\n`;
 }

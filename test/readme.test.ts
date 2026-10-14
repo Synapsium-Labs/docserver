@@ -62,6 +62,11 @@ describe('README', () => {
     expect(CATEGORIES.filter((c) => README.split(`\n| ${c} | `).length !== 2)).toEqual([]);
   });
 
+  it('PD8 says a front-matter key is cut to 500 code points, as a value is (ruling C31)', () => {
+    const row = README.split('\n').find((l) => l.startsWith('| PD8 | ')) ?? '';
+    expect(row).toContain('a front-matter key is cut to 500 code points, as a value is');
+  });
+
   it("shows a consumer's CI call with scanRefs, and the golden-move trailer", () => {
     expect(README).toContain('runCorpus(render, { scanRefs })');
     expect(README).toContain('Goldens-moved: <id>, <id>');

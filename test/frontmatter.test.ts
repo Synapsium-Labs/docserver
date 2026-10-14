@@ -379,6 +379,71 @@ describe('the limits', () => {
   });
 });
 
+describe('keys are cut to FM_MAX_VALUE code points, as values are (ruling C31, part of PD8)', () => {
+  const ASTRAL = '\u{1F600}';
+  const cp = (s: string): number => [...s].length;
+  const keyOf = (n: number): string => `---\n${'k'.repeat(n)}: v\n---\n`;
+
+  it('an ordinary key of 499 and of 500 code points is unchanged; 501 is cut to 500', () => {
+    for (const n of [499, 500]) {
+      const r = render(keyOf(n));
+      expect(r.html).toBe(dl('1-3', item('k'.repeat(n), 'v')));
+      expect(r.meta.frontList).toEqual([scalar('k'.repeat(n), 'v')]);
+    }
+    const r = render(keyOf(501));
+    expect(r.html).toBe(dl('1-3', item('k'.repeat(500), 'v')));
+    expect(r.meta.frontList).toEqual([scalar('k'.repeat(500), 'v')]);
+    expect(Object.keys(r.meta.front ?? {})).toEqual(['k'.repeat(500)]);
+  });
+
+  it('the cut counts code points and never splits an astral character', () => {
+    const r = render(`---\n"${'a'.repeat(499)}${ASTRAL}b": v\n---\n`);
+    expect(r.html).toBe(dl('1-3', item(`${'a'.repeat(499)}${ASTRAL}`, 'v')));
+    expect(r.meta.frontList).toEqual([scalar(`${'a'.repeat(499)}${ASTRAL}`, 'v')]);
+  });
+
+  it('the cut key is escaped after the cut, in the strip', () => {
+    const r = render(`---\n"${'<'.repeat(501)}": v\n---\n`);
+    expect(r.html).toBe(dl('1-3', item('&lt;'.repeat(500), 'v')));
+    expect(r.meta.frontList?.[0]?.key).toBe('<'.repeat(500));
+  });
+
+  // Two keys that share their first 500 code points: the strip lists both, as it lists two equal keys of a
+  // list; meta.frontList keeps both entries in document order, and meta.front (a record) keeps the later one,
+  // as a later duplicate key wins in YAML's JSON mode. Nothing throws and nothing reaches a prototype.
+  it('two long keys that share their first 500 code points collide: both listed, the later wins in front', () => {
+    const head = 'k'.repeat(500);
+    const r = render(`---\n${head}x: one\n${head}y: two\n---\n`);
+    expect(r.html).toBe(dl('1-4', item(head, 'one') + item(head, 'two')));
+    expect(r.meta.frontList).toEqual([scalar(head, 'one'), scalar(head, 'two')]);
+    expect(Object.keys(r.meta.front ?? {})).toEqual([head]);
+    expect(r.meta.front?.[head]).toBe('two');
+  });
+
+  it('a long key that cuts to __proto__ is no worse than the short one: an own key, nothing polluted', () => {
+    const r = render(`---\n"__proto__${'_'.repeat(600)}": polluted\n---\n`);
+    expect(Object.keys(r.meta.front ?? {})).toEqual([`__proto__${'_'.repeat(491)}`]);
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+    expect(Object.getPrototypeOf(r.meta.front)).toBe(null);
+  });
+
+  it('a key built from aliases (about 20 KB of YAML) is cut in the strip and in meta, in bounded time', () => {
+    // `a` is 9990 characters; the sequence key joins 3330 aliases of it into 33 million: the cut runs
+    // before the escape, so the strip and meta hold 500 code points of it and not 33 million.
+    const src = `---\na: &a "${'<'.repeat(9990)}"\n? [${Array(3330).fill('*a').join(',')}]\n: v\n---\n`;
+    expect(cp(src)).toBeLessThan(FM_MAX_CHARS + 20);
+    const started = performance.now();
+    const r = render(src);
+    expect(performance.now() - started).toBeLessThan(3000);
+    const list = r.meta.frontList ?? [];
+    expect(list.map((e) => e.key.length)).toEqual([1, 500]);
+    expect(list[1]?.key).toBe('<'.repeat(500));
+    expect(r.html.length).toBeLessThan(5000);
+    expect(r.html).toContain(`<dt>${'&lt;'.repeat(500)}</dt>`);
+    expect(Object.keys(r.meta.front ?? {}).map((k) => cp(k))).toEqual([1, 500]);
+  });
+});
+
 describe('the rule in the engine', () => {
   it('one hidden block token at line 0, its content the lines between, its map through the closer', () => {
     const tokens = createEngine().parse('---\na: 1\nb: 2\n---\n\nx\n', createEnv({ lineAttrs: true }));
