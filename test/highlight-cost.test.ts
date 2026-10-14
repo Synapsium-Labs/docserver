@@ -57,6 +57,23 @@ describe('highlightCode: a block is whole up to the threshold, and one line at a
     });
   }
 
+  // The cases above compute their sizes from MAX_WHOLE_BLOCK_CHARS, so they follow the constant wherever it
+  // goes: set to 128 or to 512, they all still pass. These two use the literal numbers of ruling C24 (a block
+  // of at most 256 code units is whole), which pins the threshold itself, from below and from above.
+  it('a literal 256-unit javascript block comment is highlighted whole, as one comment span', () => {
+    const text = `/*\n${'a'.repeat(125)}\n${'b'.repeat(124)}\n*/`;
+    expect(text.length).toBe(256);
+    expect(highlightCode(text, 'javascript')).toBe(`<span class="hljs-comment">${text}</span>`);
+  });
+
+  it('a literal 257-unit one is highlighted a line at a time: the comment ends with its first line', () => {
+    const text = `/*\n${'a'.repeat(126)}\n${'b'.repeat(124)}\n*/`;
+    expect(text.length).toBe(257);
+    const html = highlightCode(text, 'javascript');
+    expect(html).not.toBe(`<span class="hljs-comment">${text}</span>`);
+    expect(html.startsWith('<span class="hljs-comment">/*</span>\n')).toBe(true);
+  });
+
   it('over the threshold, a hostile shape is the lines highlighted separately, joined by line feeds', () => {
     for (const [language, unit] of [
       ['shell', '$ ${'],
