@@ -62,6 +62,23 @@ describe('README', () => {
     expect(CATEGORIES.filter((c) => README.split(`\n| ${c} | `).length !== 2)).toEqual([]);
   });
 
+  it('PD2 lists the whole of the departure: the scalars, the loader differences (a) to (e), tags, line breaks, null items', () => {
+    const row = README.split('\n').find((l) => l.startsWith('| PD2 | ')) ?? '';
+    for (const part of [
+      '`null` renders empty',
+      '(a) integer-like keys are listed first',
+      '(b) a last block scalar keeps its trailing line feed',
+      '(c) a sequence key loads as its items joined by commas',
+      '(d) nesting deeper than 100 levels fails the load',
+      '(e) a `<<` merge key after other keys puts the merged keys last',
+      'A tag outside the schema (`!!int`, `!!float`, `!!binary`) fails the load',
+      'U+0085, U+2028 and U+2029 are not line breaks',
+      'A null list item renders empty',
+    ]) {
+      expect(row).toContain(part);
+    }
+  });
+
   it('PD8 says a front-matter key is cut to 500 code points, as a value is (ruling C31)', () => {
     const row = README.split('\n').find((l) => l.startsWith('| PD8 | ')) ?? '';
     expect(row).toContain('a front-matter key is cut to 500 code points, as a value is');

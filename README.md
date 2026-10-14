@@ -117,7 +117,7 @@ The goldens were produced by the Python renderer these rules were ported from. T
 | Category | Departure |
 |---|---|
 | PD1 | Code highlighting: highlight.js replaces Pygments, so code inside `div.codehilite` is compared as text (no file moves). |
-| PD2 | Front matter scalars render their source text: `null` renders empty, booleans render `true` and `false`, and every other scalar (`1.50`, `.inf`, `017`, `yes`, `on`, dates) stays as written, where the reference printed Python's values. |
+| PD2 | Front matter scalars render their source text: `null` renders empty, booleans render `true` and `false`, and every other scalar (`1.50`, `.inf`, `017`, `yes`, `on`, dates) stays as written, where the reference printed Python's values. The loader differs too: (a) integer-like keys are listed first; (b) a last block scalar keeps its trailing line feed; (c) a sequence key loads as its items joined by commas; (d) nesting deeper than 100 levels fails the load; (e) a `<<` merge key after other keys puts the merged keys last. A tag outside the schema (`!!int`, `!!float`, `!!binary`) fails the load. U+0085, U+2028 and U+2029 are not line breaks. A null list item renders empty. |
 | PD3 | `meta.front` and `meta.frontList` come from the same front-matter block the strip renders, so CRLF files, `----` and `...` fences agree. |
 | PD4 | One leading byte order mark is removed before parsing. |
 | PD5 | Allowlisted tag names fold ASCII letters only; look-alike letters that only Unicode case folding equates stay text (no file moves). |
