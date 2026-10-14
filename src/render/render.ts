@@ -11,6 +11,8 @@
 //    the way the reference escaped it (Python's html.escape). It is never raw HTML, and it is cut to
 //    `maxHtmlBytes` too, so no outcome returns more html than the bound.
 // 6. `meta` is collected from what the rules recorded in the env (meta.ts).
+// scanRefs (scan.ts) shares this module's engine, its byte gate's option check and its BOM strip, so the
+// two read the same text with the same rules.
 import type { MarkdownIt, Token } from 'markdown-it';
 import { createEngine } from './engine.js';
 import { createEnv, type RenderEnv } from './env.js';
@@ -40,15 +42,21 @@ const FALLBACK_CLOSE = '</pre>';
 /** Default UTF-8 byte cap on the html: 16 MiB, four times the input's default cap (ruling C20). */
 const DEFAULT_MAX_HTML_BYTES = 4 * DEFAULT_MAX_BYTES;
 
-const ENGINE = createEngine();
+/** The engine render() and scanRefs() share. Internal: index.ts never exports it. */
+export const ENGINE = createEngine();
 
 /** U+FEFF, removed once from the start of the input (PD4). */
 const BOM = 0xfeff;
 
-/** A limit option, checked: a non-negative safe integer, or a RangeError naming the option. */
-function checkLimit(name: string, value: number): number {
+/** The input without one leading U+FEFF (PD4): the text render() and scanRefs() parse. */
+export function stripBom(markdown: string): string {
+  return markdown.charCodeAt(0) === BOM ? markdown.substring(1) : markdown;
+}
+
+/** A limit option, checked: a non-negative safe integer, or a RangeError naming the function and the option. */
+export function checkLimit(fn: string, name: string, value: number): number {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new RangeError(`render: ${name} must be a non-negative safe integer, got ${String(value)}`);
+    throw new RangeError(`${fn}: ${name} must be a non-negative safe integer, got ${String(value)}`);
   }
   return value;
 }
@@ -129,11 +137,11 @@ function renderBounded(engine: MarkdownIt, tokens: Token[], env: RenderEnv, limi
  * Throws RangeError for an invalid `maxBytes` or `maxHtmlBytes`; never throws for any input text.
  */
 export function renderWith(markdown: string, o: RenderOptions | undefined, engine: MarkdownIt): RenderResult {
-  const maxBytes = checkLimit('maxBytes', o?.maxBytes ?? DEFAULT_MAX_BYTES);
-  const maxHtmlBytes = checkLimit('maxHtmlBytes', o?.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES);
+  const maxBytes = checkLimit('render', 'maxBytes', o?.maxBytes ?? DEFAULT_MAX_BYTES);
+  const maxHtmlBytes = checkLimit('render', 'maxHtmlBytes', o?.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES);
   const bytes = utf8Length(markdown, maxBytes);
   if (bytes > maxBytes) return { html: '', outcome: 'over-limit', bytes, meta: EMPTY_META };
-  const src = markdown.charCodeAt(0) === BOM ? markdown.substring(1) : markdown;
+  const src = stripBom(markdown);
   try {
     const env = createEnv({ lineAttrs: o?.lineAttrs ?? true });
     const tokens = engine.parse(src, env);

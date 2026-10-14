@@ -10,7 +10,8 @@
 // The caption is the rendered HTML between that first `<em>` and that last `</em>`, so its text is escaped
 // exactly as the paragraph's would have been, and `*Figure 1. a* *b*` keeps the reference's unbalanced
 // `Figure 1. a</em> <em>b`. The paragraph's three tokens are dropped (with its data-line), and renderFence
-// writes `<figcaption>{caption}</figcaption>` before `</figure>`.
+// writes `<figcaption>{caption}</figcaption>` before `</figure>`. The inline tokens are kept on the fence
+// (FenceMeta.inline): every image among them is inside the caption, and scanRefs reads them there.
 //
 // The reference's pattern also forbids `</p>` inside the caption; rendered inline content never holds one
 // (markdown-it escapes `<` in text, and the allowlist emits only br, sup, sub and kbd), so the paragraph's
@@ -39,7 +40,7 @@ export function figcaption(state: StateCore): void {
     if (tokens[k + 2]?.type !== 'paragraph_close') continue;
     const m = CAPTION.exec(state.md.renderer.renderInline(inline.children ?? [], state.md.options, state.env));
     if (m === null) continue;
-    fence.meta = { caption: m[1] ?? '' } satisfies FenceMeta;
+    fence.meta = { caption: m[1] ?? '', inline: inline.children ?? [] } satisfies FenceMeta;
     drop.add(k).add(k + 1).add(k + 2);
     i = k + 2;
   }
