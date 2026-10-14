@@ -1,9 +1,11 @@
 // scanRefs() (docserver L1; architecture section C, the "scanRefs" row; rulings C2, C3 and C28). What a host
 // needs to know about a document before it renders it: the images render() will show and the sizes of the
-// Mermaid sources it will turn into figures. It parses with render()'s own engine and renders nothing;
-// markdown-it's parse runs the whole core chain, so the token stream is the one render() renders. No parse
-// rule renders html (ruling C28: the figcaption rule decides on tokens), so what a scan costs is the parse,
-// linear in the input, and it holds only the images it keeps; it has no html bound because it builds no html.
+// Mermaid sources it will turn into figures. It parses with render()'s own engine and builds no html;
+// markdown-it's parse runs the whole core chain, so the token stream is the one render() renders. The only
+// parse rule that renders anything is the figcaption decision (ruling C28, review 458 F2): it renders a
+// span's opening `<em>` and its leading text and softbreak children, bounded by the caption prefix it reads,
+// which is text the paragraph already holds, and keeps none of it. So what a scan costs is the parse, linear
+// in the input, and it holds only the images it keeps; it has no html bound because it keeps no html.
 // The result describes a SUCCESSFUL render: the images and figures render() shows when its outcome is
 // 'rendered'. When render() ends 'output-over-limit' or 'failed' it shows the escaped source instead, and
 // none of them; scanRefs does not run render()'s html bound, so it still lists what the document holds.
@@ -64,7 +66,7 @@ function scanFence(t: Token, s: Scan): void {
 }
 
 /**
- * scanRefs() with an explicit engine. Internal: tests inject an engine here to show the scan renders nothing.
+ * scanRefs() with an explicit engine. Internal: tests inject an engine here to show the scan builds no html.
  * Throws RangeError for an invalid `maxBytes` or `maxImages`.
  */
 export function scanWith(markdown: string, o: ScanRefsOptions | undefined, engine: MarkdownIt): ScanRefsResult {

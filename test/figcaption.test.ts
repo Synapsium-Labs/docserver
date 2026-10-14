@@ -297,6 +297,48 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
     expect(render(expansion(10, 1000)).html).toContain('Figure 1. <a href="/uuuuuuuuuu">a</a>');
   });
 
+  // Review 458, F2: the decision renders the span's `<em>` and its leading text and softbreak children, and
+  // nothing else. A link or an image right after `<em>` (or after `Figure `) used to be rendered whole, once
+  // per figure, only for the decision to reject it, so a long destination cost its length at every figure.
+  it('parsing renders no link or image, whether or not the span is a caption (review 458, F2)', () => {
+    const counts = (caption: string): Record<string, number> => {
+      const md = createEngine();
+      const seen: Record<string, number> = {};
+      for (const [name, rule] of Object.entries(md.renderer.rules)) {
+        if (rule === undefined) continue;
+        md.renderer.rules[name] = (tokens, idx, options, env, self) => {
+          seen[name] = (seen[name] ?? 0) + 1;
+          return rule(tokens, idx, options, env, self);
+        };
+      }
+      for (const name of ['link_open', 'image']) {
+        if (md.renderer.rules[name] !== undefined) continue;
+        md.renderer.rules[name] = (tokens, idx, options, _env, self) => {
+          seen[name] = (seen[name] ?? 0) + 1;
+          return self.renderToken(tokens, idx, options);
+        };
+      }
+      md.parse(`[a]: /x\n\n\`\`\`mermaid\nA\n\`\`\`\n\n${caption}\n`, createEnv({ lineAttrs: true }));
+      return seen;
+    };
+    for (const caption of ['*[a]*', '*Figure [a]*', '*![a]*', '*Figure 1. [a]*', '*Figure 1. ![a]*']) {
+      const seen = counts(caption);
+      expect(seen['link_open'] ?? 0, caption).toBe(0);
+      expect(seen['image'] ?? 0, caption).toBe(0);
+    }
+    // The control: the spy does see a render when one happens (the render phase renders the link).
+    const md = createEngine();
+    let links = 0;
+    md.renderer.rules['link_open'] = (tokens, idx, options, _env, self) => {
+      links += 1;
+      return self.renderToken(tokens, idx, options);
+    };
+    const tokens = md.parse('[a]: /x\n\n*[a]*\n', createEnv({ lineAttrs: true }));
+    expect(links).toBe(0);
+    md.renderer.render(tokens, md.options, createEnv({ lineAttrs: true }));
+    expect(links).toBe(1);
+  });
+
   it('a caption is the figcaption_open, the inline token and figcaption_close right after the fence', () => {
     const tokens = createEngine().parse('```mermaid\nA\n```\n\n</details>\n\n*Figure 1. a*\n\nz\n', createEnv({ lineAttrs: true }));
     const types = tokens.map((t) => t.type);

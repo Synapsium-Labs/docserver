@@ -1,7 +1,7 @@
 // The figcaption core rule (docserver L1; architecture section C, the "Caption" row; contract section 2.7;
 // ruling C28). The reference renderer finds a caption with a regular expression over its finished HTML: a
 // Mermaid figure, whitespace, then a paragraph that is exactly `<em>Figure N. …</em>`. This rule makes the
-// same decision on the token stream, before anything is rendered, and renders nothing it keeps:
+// same decision on the token stream, rendering at most a short prefix of the span and keeping none of it:
 // - a fence that renders a Mermaid figure (fence.ts's own test: fenceName(info) === MERMAID);
 // - its next block, stepping over blocks that render as whitespace (skipBlank), is a paragraph that is
 //   not hidden: a tight list's paragraph renders no <p>, and the reference's pattern needs one;
@@ -13,12 +13,16 @@
 //   child. Emphasis nested inside the span (`*Figure 1. a *b* c*`) raises the depth and back, so it counts;
 // - the span's rendered start is `<em>`, `Figure`, Python whitespace, a decimal digit run (Python's \d: any
 //   Unicode decimal digit), then `.` (startsCaption). That is CAPTION's acceptance set, decided on a PREFIX:
-//   the children are rendered one token at a time, only until the decision is made, so deciding costs the
-//   length of what it reads (a run of whitespace) and never the length of the caption. CAPTION itself, the
+//   the decision reads the rendered html of the span's `em_open` and of its leading `text` and `softbreak`
+//   children, one token at a time and only until it is made. That is bounded by the caption prefix it reads,
+//   which is text the paragraph already holds; any other token is not rendered (renderedPieces), so a link
+//   or image right after the `<em>` costs nothing at parse time. CAPTION itself, the
 //   reference's pattern on a finished paragraph, stays as the oracle that test/figcaption.test.ts compares
 //   startsCaption with.
-// Ruling C28: nothing here renders the caption. An earlier version rendered the whole paragraph at parse time
-// (outside render()'s html bound, and inside scanRefs, which has no bound) and kept the string; a caption
+// Ruling C28: nothing here renders the caption. The decision renders only what renderedPieces yields (the
+// span's opening `<em>` and its leading text and softbreak children) and keeps none of it. An earlier version
+// rendered the whole paragraph at parse time (outside render()'s html bound, and inside scanRefs, which has
+// no bound) and kept the string; a caption
 // whose links each repeat one long destination built a gigabyte string (a fatal out-of-memory error, or
 // outcome 'failed' for a document that should be 'output-over-limit', or a RangeError out of scanRefs).
 // Now the caption stays tokens, so the render phase renders it piece by piece through the same bound as any
@@ -91,11 +95,24 @@ export function startsCaption(pieces: Iterable<string>): boolean {
   return false;
 }
 
-/** The html of each inline child in turn, as renderer.renderInline would write it, one at a time and only on demand. */
+/**
+ * The html the caption decision reads, one inline child at a time and only on demand: the first child (the
+ * span's `em_open`) as renderer.renderInline would write it, then the html of each `text` and `softbreak`
+ * child. Any other token (a link, an image, code, emphasis, a tag) is NOT rendered: it yields the sentinel
+ * '<' instead, which startsCaption rejects in every state past `<em>`, so the decision is the one rendering
+ * it would give, and a link or image right after the `<em>` (or after `Figure `) costs nothing at parse time
+ * (review 458, F2). Every character startsCaption accepts after `<em>` is text, and a softbreak renders as
+ * a newline, which is Python whitespace.
+ */
 function* renderedPieces(state: StateCore, children: Token[]): Generator<string> {
   const renderer = state.md.renderer;
   for (let j = 0; j < children.length; j += 1) {
-    const rule = renderer.rules[children[j]?.type ?? ''];
+    const type = children[j]?.type ?? '';
+    if (j > 0 && type !== 'text' && type !== 'softbreak') {
+      yield '<';
+      continue;
+    }
+    const rule = renderer.rules[type];
     yield rule === undefined
       ? renderer.renderToken(children, j, state.md.options)
       : rule(children, j, state.md.options, state.env, renderer);
