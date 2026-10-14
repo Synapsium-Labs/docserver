@@ -52,6 +52,17 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 - **C14: a corpus defect.** One input hid two of its probes behind an earlier one. The input was reordered before any golden was generated.
 - **C18: a purity finding.** highlight.js's type declarations pulled the DOM types into the pure entry's typecheck. Task 1's typecheck config maps them to local declarations from the start, so the pure entry never sees `lib.dom`.
 
+### Rulings during L1 execution (C24 on)
+
+- **C24 (2026-10-14): code is highlighted line by line.** Task 6's review measured that the highlighting bounds in its plan (each line at most 256 code units, at most 256 KiB highlighted per document) bound the input but not the work, because one `hljs.highlight` call can still go quadratic across lines:
+  - A `shell`, `console` or `dockerfile` fence whose lines each open `${` makes the output grow quadratically. The embedded `bash` grammar reopens every open scope on every later line. A 128 KiB fence exhausts the V8 heap, a fatal error that `render()` cannot catch.
+  - An `ini` or `toml` fence of `\"` runs is quadratic in time, because the quoted-key pattern crosses newlines. At the 256 KiB budget, one render takes about three minutes.
+  - Lines of `<script>` in `javascript`, `typescript` or `xml` take up to 3.4 s at the budget, twice the plan's stated worst case.
+
+  The output bound (C20) cannot help, because all of this happens inside a single highlight call. So `highlightCode` now highlights each line on its own, which makes the work linear for every grammar, including any added later. The change stays inside `highlight.ts`. Multi-line comments and strings lose their colour across lines. PD1's normalisation compares code as text, so no golden moves. The shapes are pinned by unit cases and mutation rows. A generated hostile case for each shape, with `maxMs`, follows once Task 11's corpus machinery exists.
+
+  Cost if wrong: multi-line constructs are highlighted less faithfully until a bounded multi-line approach is measured.
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
