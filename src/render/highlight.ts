@@ -3,6 +3,7 @@
 // case (the reference's Pygments lookup lowers the name too), so the language class a page carries is always
 // one of these canonical names and never the author's spelling. Highlighting ignores illegal lexemes (a
 // block is highlighted as far as it can be rather than dropped to plain text) and never guesses a language.
+// A long block is highlighted line by line (ruling C24; MAX_WHOLE_BLOCK_CHARS and highlightCode explain why).
 //
 // The languages are registered on a private highlight.js instance (newInstance), created once at load and
 // never changed afterwards: the package's shared instance is a mutable singleton that any other code in the
@@ -76,10 +77,33 @@ export function resolveLanguage(info: string): string | null {
 }
 
 /**
+ * The longest text, in code units, that is highlighted as one block (ruling C24). Longer text is highlighted
+ * one line at a time. Measured with the registered grammars at 2048 code units: highlighting a whole block
+ * costs output quadratic in its line count for a shell or dockerfile fence whose lines each open `${`
+ * (`${${${`, `$ ${` and `RUN ${` lines: 3 MB of html from 2 KiB, 12 MB from 4 KiB, 47 MB from 8 KiB, and a
+ * heap exhaustion at 128 KiB, because a scope that is still open is reopened on every later line), and time
+ * quadratic in its length for an ini fence of `\"` runs (2.7 s at 32 KiB). At 1024 the worst measured block
+ * is 0.76 MB of html in about 130 ms, so every block up to here stays small and fast, and an ordinary snippet
+ * keeps its block comments, JSDoc and multi-line strings coloured across lines.
+ */
+export const MAX_WHOLE_BLOCK_CHARS = 1024;
+
+/**
  * `text` highlighted as `language`, a canonical name resolveLanguage returned: escaped text and
  * highlight.js spans. Throws RangeError for any other name.
+ *
+ * Text of at most MAX_WHOLE_BLOCK_CHARS code units is highlighted as one block. Longer text is highlighted
+ * one line at a time and the results are joined with a line feed (ruling C24), so the work and the output
+ * are linear in the text for every grammar; a construct that spans lines, such as a block comment, is then
+ * coloured on its first line only. The text itself is the same either way, which is all the corpus compares
+ * (PD1).
  */
 export function highlightCode(text: string, language: string): string {
   if (!Object.hasOwn(LANGUAGES, language)) throw new RangeError(`highlightCode: unregistered language ${language}`);
-  return hljs.highlight(text, { language, ignoreIllegals: true }).value;
+  const options = { language, ignoreIllegals: true };
+  if (text.length <= MAX_WHOLE_BLOCK_CHARS) return hljs.highlight(text, options).value;
+  return text
+    .split('\n')
+    .map((line) => hljs.highlight(line, options).value)
+    .join('\n');
 }
