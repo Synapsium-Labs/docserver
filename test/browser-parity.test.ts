@@ -9,6 +9,9 @@
 // (the results differ). The static walls are test/purity.test.ts. Time is not what this file judges: the Node
 // corpus run (test/corpus.test.ts) holds every maxMs at scale 1, so this second run of the same code scales
 // them by TIME_SCALE and stays a parity check when the machine is busy.
+// Arguments cross the boundary too: every options object a case passes to the bundle is created inside the
+// context (its JSON literal evaluated there), so no outer-realm object, and no host Function through its
+// constructor chain, reaches the sandboxed code.
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
@@ -41,6 +44,11 @@ function newSandbox(): vm.Context {
   return vm.createContext(Object.create(null));
 }
 
+/** A copy of a JSON value made inside the context: its objects and arrays belong to the context's realm, not the host's. */
+function inContext<T>(context: vm.Context, value: T): T {
+  return vm.runInContext(`(${JSON.stringify(value)})`, context) as T;
+}
+
 /** Bundle src/render/index.ts for the browser and run it in an empty VM context. */
 function bundleInEmptyContext(): Bundled {
   const out = buildSync({
@@ -67,7 +75,10 @@ describe('browser parity: the bundle in an empty VM context', () => {
 
   beforeAll(() => {
     b = bundleInEmptyContext();
-    vmRun = runCorpus(b.R.render, { scanRefs: b.R.scanRefs, timeScale: TIME_SCALE });
+    vmRun = runCorpus((input, options) => b.R.render(input, inContext(b.context, options)), {
+      scanRefs: (input, options) => b.R.scanRefs(input, inContext(b.context, options)),
+      timeScale: TIME_SCALE,
+    });
   }, 300_000);
 
   it('bundles for the browser without a warning', () => {
@@ -93,6 +104,19 @@ describe('browser parity: the bundle in an empty VM context', () => {
     expect(vm.runInContext(probe, b.context)).toBe('undefined');
   });
 
+  it('the options a case passes in are created in the context: the host Function is not reachable through them', () => {
+    // From inside the context, walk an options object's constructor chain to a Function and ask it for process.
+    const reach = vm.runInContext(
+      `(o) => { try { return [].constructor.constructor('return typeof process')() + '/' + o.constructor.constructor('return typeof process')(); } catch (e) { return 'threw'; } }`,
+      b.context,
+    ) as (o: unknown) => string;
+    // The probe can see a leak: an outer-realm object reaches the host's process.
+    expect(reach({})).toBe('undefined/object');
+    const reached = cases.filter((c) => reach(inContext(b.context, c.options)) !== 'undefined/undefined').map((c) => c.id);
+    expect(reached).toEqual([]);
+    expect(reach(inContext(b.context, { maxBytes: 9, lineAttrs: false }))).toBe('undefined/undefined');
+  });
+
   it('the bundle defines exactly one global, R, with the same exports as the Node import', () => {
     expect(b.globalsAfter).toEqual(['R']);
     expect(Object.keys(b.R).sort()).toEqual(Object.keys(node).sort());
@@ -110,14 +134,14 @@ describe('browser parity: the bundle in an empty VM context', () => {
     const differ: string[] = [];
     for (const c of cases) {
       const a = node.render(c.input, c.options);
-      const v = b.R.render(c.input, c.options);
+      const v = b.R.render(c.input, inContext(b.context, c.options));
       if (JSON.stringify(v) !== JSON.stringify(a)) differ.push(`${c.id}: render`);
       const aFront = a.meta.front === null ? 'null' : String(Object.getPrototypeOf(a.meta.front));
       const vFront = v.meta.front === null ? 'null' : String(Object.getPrototypeOf(v.meta.front));
       if (aFront !== vFront) differ.push(`${c.id}: meta.front prototype`);
       const maxBytes = c.options.maxBytes;
       const scanOptions = maxBytes === undefined ? {} : { maxBytes };
-      if (JSON.stringify(b.R.scanRefs(c.input, scanOptions)) !== JSON.stringify(node.scanRefs(c.input, scanOptions))) {
+      if (JSON.stringify(b.R.scanRefs(c.input, inContext(b.context, scanOptions))) !== JSON.stringify(node.scanRefs(c.input, scanOptions))) {
         differ.push(`${c.id}: scanRefs`);
       }
     }
@@ -126,7 +150,7 @@ describe('browser parity: the bundle in an empty VM context', () => {
 
   it('agrees with Node with data-line off, and over the byte cap', () => {
     const doc = '# Title\n\n> [!NOTE]\n> text\n\n```mermaid\nflowchart LR\n```\n\n*Figure 1. A.*\n';
-    expect(JSON.stringify(b.R.render(doc, { lineAttrs: false }))).toBe(JSON.stringify(node.render(doc, { lineAttrs: false })));
-    expect(JSON.stringify(b.R.render('x'.repeat(10), { maxBytes: 9 }))).toBe(JSON.stringify(node.render('x'.repeat(10), { maxBytes: 9 })));
+    expect(JSON.stringify(b.R.render(doc, inContext(b.context, { lineAttrs: false })))).toBe(JSON.stringify(node.render(doc, { lineAttrs: false })));
+    expect(JSON.stringify(b.R.render('x'.repeat(10), inContext(b.context, { maxBytes: 9 })))).toBe(JSON.stringify(node.render('x'.repeat(10), { maxBytes: 9 })));
   });
 });
