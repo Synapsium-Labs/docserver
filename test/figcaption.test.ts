@@ -326,6 +326,10 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
       expect(seen['link_open'] ?? 0, caption).toBe(0);
       expect(seen['image'] ?? 0, caption).toBe(0);
     }
+    // A token between the digits and the dot is never skipped: a tag, code or an image there is no caption.
+    for (const shape of ['Figure 1<sup></sup>. a', 'Figure 1`x`. a', 'Figure 1![](u). a', 'Figure <kbd></kbd>1. a']) {
+      expect(render(`\`\`\`mermaid\nA\n\`\`\`\n*${shape}*\n`).html, shape).not.toContain('<figcaption>');
+    }
     // The control: the spy does see a render when one happens (the render phase renders the link).
     const md = createEngine();
     let links = 0;
