@@ -123,6 +123,8 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
     - the `frontmatter-types` pin text.
   - **The worker's own rulings stand.** The null-prototype sandbox stands. C28 needs no corpus case once the render-count case exists. The downsized generated cases are secondary to the deterministic guards. The threshold of 256 stands. The consumer-smoke header stays as it is.
 
+- **C38 (2026-10-14, during L1's fix round 1): PD2's C17(e) covers the order within a multi-source merge list.** With `<<: [{a: 1, c: 1}, {a: 2, b: 2}]`, the reference lists a, b, c, and `render()` lists a, c, b. With `x: 0` then `<<: [{a: 1}, {b: 2}]`, the reference lists b, a, x, and `render()` lists x, a, b. The values are identical; only the order differs. PyYAML reverses a merge list's sources and puts merged keys first. Ruled: C17(e) now reads that merged keys follow JavaScript's object order. A late `<<` puts them last, and a multi-source list keeps its sources' order. Unit cases pin both outputs, and the README's PD2 row lists it. Why: this is the same class C17 accepted, from js-yaml and the object order rather than from a guard. Cost if wrong: front-matter key order differs from the reference for merge lists, which no golden reaches.
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
