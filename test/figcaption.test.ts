@@ -301,7 +301,7 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
   // nothing else. A link or an image right after `<em>` (or after `Figure `) used to be rendered whole, once
   // per figure, only for the decision to reject it, so a long destination cost its length at every figure.
   it('parsing renders no link or image, whether or not the span is a caption (review 458, F2)', () => {
-    const counts = (caption: string): Record<string, number> => {
+    const counts = (caption: string, alsoRender = false): Record<string, number> => {
       const md = createEngine();
       const seen: Record<string, number> = {};
       for (const [name, rule] of Object.entries(md.renderer.rules)) {
@@ -318,7 +318,9 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
           return self.renderToken(tokens, idx, options);
         };
       }
-      md.parse(`[a]: /x\n\n\`\`\`mermaid\nA\n\`\`\`\n\n${caption}\n`, createEnv({ lineAttrs: true }));
+      const env = createEnv({ lineAttrs: true });
+      const tokens = md.parse(`[a]: /x\n\n\`\`\`mermaid\nA\n\`\`\`\n\n${caption}\n`, env);
+      if (alsoRender) md.renderer.render(tokens, md.options, env);
       return seen;
     };
     for (const caption of ['*[a]*', '*Figure [a]*', '*![a]*', '*Figure 1. [a]*', '*Figure 1. ![a]*']) {
@@ -326,6 +328,11 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
       expect(seen['link_open'] ?? 0, caption).toBe(0);
       expect(seen['image'] ?? 0, caption).toBe(0);
     }
+    // The control for the helper: the same `counts`, on a path that must render a link and an image (the render
+    // phase of a caption holding both), sees both, so its spies are shown to fire.
+    const rendered = counts('*Figure 1. [a] ![b](/i)*', true);
+    expect(rendered['link_open'] ?? 0).toBeGreaterThan(0);
+    expect(rendered['image'] ?? 0).toBeGreaterThan(0);
     // A token between the digits and the dot is never skipped: a tag, code or an image there is no caption.
     for (const shape of ['Figure 1<sup></sup>. a', 'Figure 1`x`. a', 'Figure 1![](u). a', 'Figure <kbd></kbd>1. a']) {
       expect(render(`\`\`\`mermaid\nA\n\`\`\`\n*${shape}*\n`).html, shape).not.toContain('<figcaption>');
