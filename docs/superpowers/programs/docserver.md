@@ -74,6 +74,17 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 
   Why: PD7's own reason applies to this shape too, because parity would mean emitting unbalanced HTML. A library that hosts render must not carry emphasis into the rest of their page. Cost if wrong: one rare line shape renders as a paragraph instead of a caption.
 
+- **C26 (2026-10-14, during L1 Task 8): `footnote_tail` is ported so that its cost is linear.** markdown-it-footnote's `footnote_tail` runs `state.tokens = state.tokens.concat(tokens)` once per note, so render time grows with the square of the note count. The worker measured 32.6 s for 20,000 ordinary notes and 427 s for 100,000 inline `^[a]` notes in a 400 KB input; a 4 MiB input would take hours. This happens at parse time, so `maxHtmlBytes` cannot stop it. Task 8's decision 6 had taken the plugin as it ships.
+
+  Ruled:
+  - `footnote_tail` is ported with output identical to the plugin's and a cost linear in the note count. The plugin stays pinned at 4.0.0, and every other rule is used as it ships.
+  - This is not a departure. The corpus, a differential run against the plugin's own tail over note-heavy inputs, and a unit case all show the same output. Any difference is a stop and a question.
+  - A bound case with a mutation row, plus two generated hostile cases (20,000 notes and 100,000 inline notes), each with a verdict.
+  - The plugin's other rules are measured for the same pattern, and anything superlinear comes back as a question.
+  - A plugin upgrade must re-run the differential.
+
+  Why: the plan's constraint is that cost is bounded, not only input. A note cap would be a departure that no ordinary document needs, and deferring would leave Tasks 9-12 building on a quadratic path. Cost if wrong: the port drifts from a future plugin release; the differential catches that at upgrade time.
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
