@@ -174,10 +174,10 @@ describe('the shipped hostile.json', () => {
   const manifest = readJson('../conformance/manifest.json') as { id: string; kind: string }[];
   const entries = parseHostile(readJson('../conformance/hostile.json'));
 
-  it('agrees with the manifest: 15 hostile and 25 generated cases', () => {
+  it('agrees with the manifest: 15 hostile and 30 generated cases', () => {
     expect(crossCheck(manifest, entries)).toEqual([]);
     expect(entries.filter((e) => e.input === undefined)).toHaveLength(15);
-    expect(entries.filter((e) => e.input !== undefined)).toHaveLength(25);
+    expect(entries.filter((e) => e.input !== undefined)).toHaveLength(30);
   });
 
   it('lists its entries in manifest order', () => {

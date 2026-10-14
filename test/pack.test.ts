@@ -142,7 +142,7 @@ describe('the packed package, imported by name', () => {
         'consumer-smoke: installed the tarball offline',
         'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
         'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-        'consumer-smoke: 77 of 77 cases passed',
+        'consumer-smoke: 82 of 82 cases passed',
         '',
       ].join('\n'),
     );
@@ -155,7 +155,7 @@ describe('the packed package, imported by name', () => {
       'consumer-smoke: installed the tarball offline',
       'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
       'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-      'consumer-smoke: 76 of 77 cases passed',
+      'consumer-smoke: 81 of 82 cases passed',
     ]);
     expect(lines[4]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
     expect(brokenSmoke?.status).toBe(1);

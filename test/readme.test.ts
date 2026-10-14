@@ -40,6 +40,12 @@ describe('README', () => {
     expect(README).toContain(`\`${render.ALLOWLIST.anchorId}\``);
   });
 
+  it('states the highlighting bounds, the switch to one line at a time included (ruling C24)', () => {
+    expect(README).toContain('a fence with a line over 256 characters');
+    expect(README).toContain('256 KiB of highlighted code');
+    expect(README).toContain('A fence over 256 characters is highlighted one line at a time');
+  });
+
   it('describes every departure category, one table row each', () => {
     expect(CATEGORIES).toEqual(['PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8']);
     expect(CATEGORIES.filter((c) => README.split(`\n| ${c} | `).length !== 2)).toEqual([]);

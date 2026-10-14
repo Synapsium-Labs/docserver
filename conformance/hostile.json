@@ -183,5 +183,30 @@
     "id": "x-limits/html-expansion",
     "input": {"parts": [{"text": "[a]: /"}, {"text": "u", "times": 4000}, {"text": "\n\n"}, {"text": "[a]", "times": 100000}, {"text": "\n"}]},
     "verdict": {"outcome": "output-over-limit", "maxMs": 2000, "maxOutputRatio": 2, "forbid": ["<a "], "require": ["<p class=\"page-subtitle\">This document could not be rendered; its source follows.</p><pre>[a]: /uuuu"], "balanced": ["p", "pre"]}
+  },
+  {
+    "id": "x-limits/code-shell-subst",
+    "input": {"parts": [{"text": "```shell\n"}, {"text": "$ ${\n", "times": 600}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 29, "require": ["<code class=\"hljs language-shell\">", "<span class=\"hljs-"], "balanced": ["div", "pre", "code", "span"]}
+  },
+  {
+    "id": "x-limits/code-ini-quotes",
+    "input": {"parts": [{"text": "```ini\n[a]\nx = 1\n"}, {"text": "\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\n", "times": 128}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 5, "require": ["<code class=\"hljs language-ini\">", "<span class=\"hljs-"], "balanced": ["div", "pre", "code", "span"]}
+  },
+  {
+    "id": "x-limits/code-js-script",
+    "input": {"parts": [{"text": "```javascript\nlet x = 1;\n"}, {"text": "<script></script>\n", "times": 400}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 3, "require": ["<code class=\"hljs language-javascript\">", "<span class=\"hljs-"], "balanced": ["div", "pre", "code", "span"]}
+  },
+  {
+    "id": "x-collisions/footnote-inline-8000",
+    "input": {"parts": [{"text": "^[a]", "times": 8000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 58, "require": ["<li id=\"fn8000\""]}
+  },
+  {
+    "id": "x-collisions/footnote-defs-7000",
+    "input": {"parts": [{"text": "[^@]", "times": 7000, "index": "@"}, {"text": "\n\n"}, {"text": "[^@]: a\n", "times": 7000, "index": "@"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 15, "require": ["<li id=\"fn7000\""]}
   }
 ]

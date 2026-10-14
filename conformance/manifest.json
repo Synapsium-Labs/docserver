@@ -460,5 +460,35 @@
     "kind": "generated",
     "pins": "A 4000-character destination defined once and used 100000 times (304 KB) would render 200 MB of html: it stops at the 16 MiB html bound with outcome output-over-limit (ruling C20, departure PD8).",
     "probes": []
+  },
+  {
+    "id": "x-limits/code-shell-subst",
+    "kind": "generated",
+    "pins": "600 lines of `$ ${` in a shell fence (3 KB): a fence over 256 characters is highlighted one line at a time (ruling C24), so the html stays linear, 22.7 times the input; highlighted as one block it is 2110 times (6.4 MB).",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-ini-quotes",
+    "kind": "generated",
+    "pins": "A 128-line ini fence of `\\\"` runs, 127 pairs and a backslash a line (32 KB): highlighted one line at a time (ruling C24), so the time stays linear, 34 ms; highlighted as one block it took 2.9 s.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-js-script",
+    "kind": "generated",
+    "pins": "400 `<script></script>` lines in a javascript fence (7 KB): highlighted one line at a time (ruling C24), the html is 1.7 times the input; highlighted as one block it is 10.3 times. This one is held by its output bound: the time the same shape costs as one block (seconds) needs about 256 KiB, more than the 8 MiB total of generated inputs can carry.",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/footnote-inline-8000",
+    "kind": "generated",
+    "pins": "8000 inline notes `^[a]` in one paragraph (32 KB): the footnote tail appends each note once (ruling C26), so the time stays linear, 93 ms; the plugin's own tail copies the token array once per note and took 2.8 s.",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/footnote-defs-7000",
+    "kind": "generated",
+    "pins": "7000 ordinary `[^n]` references, each with its definition (124 KB): the footnote tail appends each note once (ruling C26), so the time stays linear, 71 ms; the plugin's own tail copies the token array once per note and took 2.0 s.",
+    "probes": []
   }
 ]
