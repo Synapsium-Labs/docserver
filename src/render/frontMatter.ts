@@ -153,14 +153,43 @@ function isMapping(v: unknown): v is FrontMapping {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** The YAML of a front-matter block as a mapping, or null (too long, a load error, or not a mapping). */
+/** Throws when a marked mapping is turned into text: the one place js-yaml does that is a mapping key. */
+function refuseMappingKey(): never {
+  throw new TypeError('a mapping cannot be a key');
+}
+
+/**
+ * The YAML of a front-matter block as a mapping, or null (too long, a load error, or not a mapping).
+ *
+ * A mapping used as a key, or a sequence key holding one, fails the load (ruling C33, part of PD2), through
+ * the same `null` as a tag outside the schema. The reference (PyYAML) cannot hash a mapping, so it refuses
+ * the whole block; js-yaml would read the key as the text `[object Object]`. js-yaml turns a key into text
+ * with String(), and it never turns a value into text; so while loading, every mapping is marked with two
+ * symbol properties, a class that is not `[object Object]` (which js-yaml would replace by that text before
+ * converting) and a conversion to text that throws. The throw happens exactly where a mapping is a key, at
+ * any depth, and nowhere else. The symbols cannot clash with an author's key, and they are removed again
+ * before the mapping is returned, so what the caller gets is a plain object.
+ */
 export function parseFrontMatter(content: string): FrontMapping | null {
   if (cpLength(content) >= FM_MAX_CHARS) return null;
+  const marked = new Set<object>();
+  const listener = (event: string, state: { kind: string | null; result: unknown }): void => {
+    const m = state.result;
+    if (event !== 'close' || state.kind !== 'mapping' || typeof m !== 'object' || m === null || marked.has(m)) return;
+    marked.add(m);
+    Object.defineProperty(m, Symbol.toStringTag, { value: 'FrontMatterMapping', configurable: true });
+    Object.defineProperty(m, Symbol.toPrimitive, { value: refuseMappingKey, configurable: true });
+  };
   let data: unknown;
   try {
-    data = load(content, { schema: FM_SCHEMA, json: true });
+    data = load(content, { schema: FM_SCHEMA, json: true, listener });
   } catch {
     return null;
+  } finally {
+    for (const m of marked) {
+      Reflect.deleteProperty(m, Symbol.toStringTag);
+      Reflect.deleteProperty(m, Symbol.toPrimitive);
+    }
   }
   return isMapping(data) ? data : null;
 }

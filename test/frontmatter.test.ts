@@ -254,6 +254,71 @@ describe('PD2: scalars render their source text, without Python (rulings C1 and 
   });
 });
 
+// Ruling C33: a key that is a mapping, or a sequence key that holds one, fails the load, through the same
+// path as a tag outside the schema (js-yaml would read it as the text `[object Object]`). The reference
+// (PyYAML) cannot hash a mapping and refuses the whole block, so it rendered nothing and meta was null.
+describe('PD2: a mapping key fails the load, as in the reference (ruling C33)', () => {
+  const failed = (src: string): void => {
+    const r = render(src);
+    expect([r.html, r.meta.frontList, r.meta.front]).toEqual(['', null, null]);
+  };
+  const tag = render('---\nk: !!int 3\n---\n');
+
+  it('the failure is the one a tag outside the schema gives: the same html and meta', () => {
+    const r = render('---\n? {a: 1}\n: v\n---\n');
+    expect([r.html, r.meta.frontList, r.meta.front]).toEqual([tag.html, tag.meta.frontList, tag.meta.front]);
+    expect(r.html).toBe('');
+  });
+
+  it('a mapping as a key, in block and in flow style', () => {
+    failed('---\n? {a: 1}\n: v\n---\n');
+    failed('---\n? a: 1\n: v\n---\n');
+    failed('---\n? {}\n: v\n---\n');
+    failed('---\n{? {a: 1} : v}\n---\n');
+  });
+
+  it('a sequence key that holds a mapping', () => {
+    failed('---\n? [x, {a: 1}]\n: v\n---\n');
+    failed('---\n? [{a: 1}]\n: v\n---\n');
+    failed('---\n? [x, y, {}]\n: v\n---\n');
+  });
+
+  it('a mapping key anywhere in the block fails the whole block, among good keys and inside a value', () => {
+    failed('---\nq: 1\n? {a: 1}\n: v\n---\n');
+    failed('---\n? {a: 1}\n: v\nq: 1\n---\n');
+    failed('---\nq: {? {a: 1} : v}\n---\n');
+    failed('---\nq: [{? [x, {a: 1}] : v}]\n---\n');
+  });
+
+  it('a mapping reached through an alias or an explicit tag is still a mapping key', () => {
+    failed('---\nm: &m {a: 1}\n? *m\n: v\n---\n');
+    failed('---\n? !!map {a: 1}\n: v\n---\n');
+  });
+
+  it('controls: a plain sequence key still loads as joined text (C17 (c)), and mappings elsewhere are untouched', () => {
+    expect(render('---\n? [a, b]\n: v\n---\n').html).toBe(dl('1-4', item('a,b', 'v')));
+    expect(render('---\nm: {a: 1}\nl: [{b: 2}, c]\n---\n').html).toBe(dl('1-4', item('m', '\u2026') + item('l', 'c')));
+    expect(render('---\na: 1\n<<: {b: 2}\n---\n').html).toBe(dl('1-4', item('a', '1') + item('b', '2')));
+    expect(render('---\nm: &m {a: 1}\nn: *m\n---\n').html).toBe(dl('1-4', item('m', '\u2026') + item('n', '\u2026')));
+  });
+
+  it('the loaded mappings are plain objects again: the marks the load used are gone, at every depth', () => {
+    const data = parseFrontMatter('base: &b {x: 1}\nm: {n: {o: 1}}\nl: [{p: 1}]\n<<: *b');
+    const walk = (v: unknown): void => {
+      if (typeof v !== 'object' || v === null) return;
+      expect(Object.getOwnPropertySymbols(v)).toEqual([]);
+      if (!Array.isArray(v)) expect(Object.prototype.toString.call(v)).toBe('[object Object]');
+      for (const x of Object.values(v)) walk(x);
+    };
+    walk(data);
+    expect(Object.keys(data ?? {})).toEqual(['base', 'm', 'l', 'x']);
+  });
+
+  it('a key whose text is `[object Object]` is only text, and still loads', () => {
+    expect(render('---\n"[object Object]": v\n---\n').html).toBe(dl('1-3', item('[object Object]', 'v')));
+  });
+});
+
 // Ruling C32: PD2 also covers U+2028 and U+2029. PyYAML treats both as line breaks and js-yaml does not, so
 // this implementation reads them as ordinary characters of a line. Each case notes what the reference
 // rendered, measured with the reference renderer on the same input (its output is not stored in the repo).
