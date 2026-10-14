@@ -78,15 +78,20 @@ export function resolveLanguage(info: string): string | null {
 
 /**
  * The longest text, in code units, that is highlighted as one block (ruling C24). Longer text is highlighted
- * one line at a time. Measured with the registered grammars at 2048 code units: highlighting a whole block
- * costs output quadratic in its line count for a shell or dockerfile fence whose lines each open `${`
- * (`${${${`, `$ ${` and `RUN ${` lines: 3 MB of html from 2 KiB, 12 MB from 4 KiB, 47 MB from 8 KiB, and a
- * heap exhaustion at 128 KiB, because a scope that is still open is reopened on every later line), and time
- * quadratic in its length for an ini fence of `\"` runs (2.7 s at 32 KiB). At 1024 the worst measured block
- * is 0.76 MB of html in about 130 ms, so every block up to here stays small and fast, and an ordinary snippet
- * keeps its block comments, JSDoc and multi-line strings coloured across lines.
+ * one line at a time. Measured with the registered grammars:
+ * - Output is quadratic in the line count of a block. A shell or dockerfile fence whose lines each open `${`
+ *   gave 0.76 MB of html from 1 KiB, 3 MB from 2 KiB, 12 MB from 4 KiB and 47 MB from 8 KiB, because a scope
+ *   that is still open is reopened on every later line; at 256 code units the worst block gives 52 KB.
+ * - Span depth is about two thirds of the block's length in the worst shapes (python `f"{`, javascript and
+ *   typescript `` `${ ``, bash `"$(`): 679 nested spans from 1 KiB, past the 512 levels a browser's HTML
+ *   parser keeps, so a browser would build a different tree from the html. At 256 code units the worst
+ *   block nests 170 spans, the depth one 256-unit line reaches on the line-by-line path (171), the floor.
+ * - Time is quadratic in a block's length for an ini fence of `\"` runs (2.7 s at 32 KiB); at 256 code units
+ *   any block takes under 10 ms, and the line-by-line path takes 0.03 to 0.4 s for 256 KiB.
+ * Up to this length an ordinary snippet keeps its block comments, JSDoc and multi-line strings coloured
+ * across lines.
  */
-export const MAX_WHOLE_BLOCK_CHARS = 1024;
+export const MAX_WHOLE_BLOCK_CHARS = 256;
 
 /**
  * `text` highlighted as `language`, a canonical name resolveLanguage returned: escaped text and

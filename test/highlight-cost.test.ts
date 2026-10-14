@@ -1,6 +1,7 @@
 // How much code is highlighted at once (docserver L1, ruling C24; src/render/highlight.ts). A block of at most
-// MAX_WHOLE_BLOCK_CHARS code units is highlighted whole, so a block comment or a multi-line string is coloured
-// across its lines; longer text is highlighted one line at a time. Whole-block highlighting costs more than
+// MAX_WHOLE_BLOCK_CHARS code units (256) is highlighted whole, so a block comment or a multi-line string is
+// coloured across its lines; longer text is highlighted one line at a time, which also bounds how deeply the
+// spans nest (a whole block nests about two thirds of its length, a line at most 171). Whole-block highlighting costs more than
 // linear for some grammars: a shell or dockerfile fence whose lines each open `${` reopens every open scope on
 // every later line (output quadratic in the line count; 8 KiB gave 47 MB, and 128 KiB exhausted the heap), an
 // ini fence of `\"` runs ran a quoted key across lines in quadratic time (256 KiB took about 187 s), and a
@@ -40,7 +41,7 @@ describe('highlightCode: a block is whole up to the threshold, and one line at a
   ];
   for (const [language, head, whole] of multi) {
     it(`${language}: a multi-line construct under the threshold is one span, so it differs from line by line`, () => {
-      const text = padTo(head, 200);
+      const text = padTo(head, MAX_WHOLE_BLOCK_CHARS - 1);
       expect(highlightCode(text, language)).toContain(whole);
       expect(highlightCode(text, language)).not.toBe(perLine(text, language));
     });
@@ -76,24 +77,67 @@ describe('highlightCode: a block is whole up to the threshold, and one line at a
   });
 });
 
-describe('the worst whole blocks, at the threshold, stay small and fast', () => {
+/** The deepest nesting of `<span` elements in `html`. */
+function spanDepth(html: string): number {
+  let depth = 0;
+  let max = 0;
+  for (const tag of html.match(/<span\b|<\/span>/g) ?? []) {
+    depth += tag === '</span>' ? -1 : 1;
+    max = Math.max(max, depth);
+  }
+  return max;
+}
+
+/** The sizes just under, at and just over the threshold, and well over it. */
+const SIZES = [MAX_WHOLE_BLOCK_CHARS - 1, MAX_WHOLE_BLOCK_CHARS, MAX_WHOLE_BLOCK_CHARS + 1, 4 * MAX_WHOLE_BLOCK_CHARS];
+
+describe('the worst blocks, under, at and over the threshold, stay small and fast', () => {
   const shapes: readonly (readonly [language: string, unit: string])[] = [
     ['shell', '$ ${'],
     ['shell', '${${${'],
     ['dockerfile', 'RUN ${'],
-    ['ini', '\\"'.repeat(127) + '\\'],
+    ['ini', '\\"'.repeat(40) + '\\'],
     ['ini', '\\"\\"'],
     ['javascript', '<script>'],
     ['typescript', '<script>'],
     ['xml', '<script>'],
   ];
   for (const [language, unit] of shapes) {
-    it(`${language}: lines of ${JSON.stringify(unit.slice(0, 12))} at ${MAX_WHOLE_BLOCK_CHARS} code units`, () => {
-      const text = padTo(lines(unit, MAX_WHOLE_BLOCK_CHARS - 1), MAX_WHOLE_BLOCK_CHARS);
-      expect(text.length).toBe(MAX_WHOLE_BLOCK_CHARS);
-      const { value, ms } = timed(() => highlightCode(text, language));
-      expect(value.length).toBeLessThan(1_500_000);
-      expect(ms).toBeLessThan(1000);
+    for (const size of SIZES) {
+      it(`${language}: lines of ${JSON.stringify(unit.slice(0, 12))} at ${size} code units`, () => {
+        const text = padTo(lines(unit, size - 1), size);
+        expect(text.length).toBe(size);
+        const { value, ms } = timed(() => highlightCode(text, language));
+        expect(value.length).toBeLessThan(100_000);
+        expect(ms).toBeLessThan(1000);
+      });
+    }
+  }
+});
+
+describe('the span depth of a block is bounded by the depth of one line', () => {
+  // Measured: one 256-unit line nests 170 spans in python and 171 in javascript and typescript; a whole block
+  // of MAX_WHOLE_BLOCK_CHARS code units nests at most 170 (128 to 170 over the shapes below), where 1024
+  // code units nest 512 to 679.
+  const FLOOR = 171;
+  const openers: readonly (readonly [language: string, opener: string])[] = [
+    ['python', 'f"{'],
+    ['javascript', '`${'],
+    ['typescript', '`${'],
+  ];
+  for (const [language, opener] of openers) {
+    it(`${language}: lines of ${JSON.stringify(opener)} nest no deeper than one line does, at every size`, () => {
+      const line = opener.repeat(MAX_HIGHLIGHT_LINE).slice(0, MAX_HIGHLIGHT_LINE);
+      const floor = spanDepth(highlightCode(line, language));
+      expect(floor).toBeLessThanOrEqual(FLOOR);
+      expect(floor).toBeGreaterThan(100);
+      for (const size of SIZES) {
+        for (const per of [1, 3, 16, 64]) {
+          const unit = opener.repeat(per);
+          const text = `${Array.from({ length: Math.ceil(size / (unit.length + 1)) }, () => unit).join('\n')}`.slice(0, size);
+          expect(spanDepth(highlightCode(text, language))).toBeLessThanOrEqual(floor);
+        }
+      }
     });
   }
 });
