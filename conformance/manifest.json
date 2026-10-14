@@ -74,7 +74,7 @@
   {
     "id": "figure-captions",
     "kind": "golden",
-    "pins": "The caption rule including the malformed </em> <em> quirk; non-captions stay paragraphs.",
+    "pins": "The caption rule: a caption is one emphasis span, so a two-span paragraph stays a paragraph (ruling C25); non-captions stay paragraphs.",
     "probes": ["mermaid_badcap", "fig_cap_two_em", "fig_cap_3a", "fig_cap_link", "fig_cap_lower", "fig_cap_strong", "fig_cap_underscore", "fig_cap_with_em", "fig_caption_multiline", "fig_caption_nodot", "fig_caption_para_two"]
   },
   {

@@ -34,5 +34,11 @@
     "files": ["html", "meta"],
     "category": "PD4",
     "reason": "One leading byte order mark is removed before parsing. The reference kept it, so the file's front matter was not recognised and rendered as a setext heading holding the BOM and the YAML; it now renders the strip, and meta reads the block."
+  },
+  {
+    "case": "figure-captions",
+    "files": ["html"],
+    "category": "PD7",
+    "reason": "A figure caption is made only from one emphasis span (ruling C25). In `*Figure 1. a* *b*` the first emphasis is not the one that closes the paragraph, and the reference's pattern took everything from the first <em> to the last </em>, which emitted the unbalanced `<figcaption>Figure 1. a</em> <em>b</figcaption>`. The paragraph stays an ordinary paragraph after the figure, rendered as markdown-it renders it, and the HTML stays balanced."
   }
 ]

@@ -1,7 +1,8 @@
 // The contract files (docserver L1, Task 2; architecture section D). For every golden and hostile case,
 // expected/<id>.html is normaliseForCompare(reference/<id>.html) and expected/<id>.meta.json is
 // reference/<id>.meta.json, byte for byte, unless DEPARTURES.json lists that file: a listed file must differ
-// (no stale entry) and an unlisted one must not (no silent edit). Departures are PD2-PD4 only (ruling C1).
+// (no stale entry) and an unlisted one must not (no silent edit). Departures are PD2-PD4 (ruling C1) and
+// PD7 (ruling C25).
 //
 // Regenerate the unlisted files with `UPDATE_EXPECTED=1 ./node_modules/.bin/vitest run test/expected.test.ts`;
 // listed files are edited by hand. CI never sets UPDATE_EXPECTED (test/ci-workflow.test.ts).
@@ -17,7 +18,7 @@ const readText = (rel: string): string => readFileSync(at(rel), 'utf8');
 
 type File = 'html' | 'meta';
 const FILES: readonly File[] = ['html', 'meta'];
-const CATEGORIES = new Set(['PD2', 'PD3', 'PD4']);
+const CATEGORIES = new Set(['PD2', 'PD3', 'PD4', 'PD7']);
 interface Case {
   id: string;
   kind: 'golden' | 'hostile' | 'generated';

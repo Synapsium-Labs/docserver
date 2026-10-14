@@ -120,7 +120,7 @@ The goldens were produced by the Python renderer these rules were ported from. T
 | PD4 | One leading byte order mark is removed before parsing. |
 | PD5 | Allowlisted tag names fold ASCII letters only; look-alike letters that only Unicode case folding equates stay text (no file moves). |
 | PD6 | Reference labels: markdown-it normalises a link's label with JavaScript's whitespace and the reference with Python's, so a label holding U+001C-U+001F, U+0085 or U+FEFF can match a different definition, or none (no file moves). |
-| PD7 | A figure caption never comes from a tight list's hidden paragraph and never reaches past the block after its figure, so the output stays balanced (no file moves). |
+| PD7 | A figure caption keeps the HTML balanced. It never comes from a tight list's hidden paragraph, never reaches past the block after its figure, and is made only from one emphasis span: `*Figure 1. a* *b*` stays an ordinary paragraph, where the reference emitted an unbalanced `Figure 1. a</em> <em>b` (moves the html of `figure-captions`). |
 | PD8 | Bounds that only hostile documents reach: short table rows add at most 65536 empty cells in the whole document; html past `maxHtmlBytes` stops with `'output-over-limit'`; and `details`, `sup`, `sub` and `kbd` nest at most 64 open levels each, a deeper opener and the closer that pairs with it staying text (no file moves). |
 
 A change that moves any file under `conformance/expected/` names the moved case ids in a `Goldens-moved: <id>, <id>` commit trailer, and a hostile verdict may only tighten: `node scripts/ratchet.mjs --base <ref>` refuses anything else, and CI runs it on every change.

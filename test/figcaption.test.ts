@@ -2,7 +2,8 @@
 // Every expected html string in the first block was produced by the reference renderer from the same input
 // and is compared after normaliseForCompare (it only touches code blocks; figures and captions are compared
 // exactly). The reference finds a caption with a regular expression over its finished HTML; this library
-// decides on the token stream (figcaption.ts), and these cases pin that the two agree, quirks included.
+// decides on the token stream (figcaption.ts), and these cases pin that the two agree. Where they differ on
+// purpose (rulings C12 and C25, PD7), the last block pins both outputs.
 // The later blocks pin this library's own behaviour where the reference has nothing to say, and the one
 // place where it differs from the reference on purpose.
 import { describe, expect, it } from 'vitest';
@@ -34,14 +35,14 @@ describe('figcaption: against the reference', () => {
         '</pre><figcaption>Figure 12. far</figcaption></figure>\n<p data-line="13-13">text</p>\n',
     ],
     [
-      'from the first <em> to the last </em>: a nested em, the two-em quirk, a link, a break, a second line',
-      '```mermaid\nA\n```\n*Figure 8. a *nested* em.*\n\n```mermaid\nB\n```\n*Figure 1. a* *b*\n\n' +
+      'from the first <em> to the last </em>: a nested em, a link, a break, a second line',
+      '```mermaid\nA\n```\n*Figure 8. a *nested* em.*\n\n```mermaid\nB\n```\n*Figure 1. a*\n\n' +
         '```mermaid\nC\n```\n*Figure 2. see [x](y).*\n\n```mermaid\nD\n```\n*Figure 3. a\\\nb*\n\n' +
         '```mermaid\nE\n```\n*Figure 4. line1\nline2*\n',
       '<figure class="mermaid-figure" data-line="1-3"><pre class="mermaid">A\n' +
         '</pre><figcaption>Figure 8. a <em>nested</em> em.</figcaption></figure>\n' +
         '<figure class="mermaid-figure" data-line="6-8"><pre class="mermaid">B\n' +
-        '</pre><figcaption>Figure 1. a</em> <em>b</figcaption></figure>\n' +
+        '</pre><figcaption>Figure 1. a</figcaption></figure>\n' +
         '<figure class="mermaid-figure" data-line="11-13"><pre class="mermaid">C\n' +
         '</pre><figcaption>Figure 2. see <a href="y">x</a>.</figcaption></figure>\n' +
         '<figure class="mermaid-figure" data-line="16-18"><pre class="mermaid">D\n' +
@@ -201,5 +202,50 @@ describe('figcaption: where this library differs from the reference', () => {
     const html = render(SRC).html;
     expect(html).toBe(THIS);
     expect(html).not.toBe(REFERENCE);
+  });
+
+  // Ruling C25: a caption is ONE emphasis span. In `*Figure 1. a* *b*` the first <em> is not the one that
+  // closes the paragraph, and the reference's pattern took everything from the first <em> to the last </em>,
+  // which emitted an unbalanced `Figure 1. a</em> <em>b`. This library leaves the paragraph as it is.
+  const TWO = '```mermaid\nA\n```\n*Figure 1. a* *b*\n';
+  const TWO_REFERENCE =
+    '<figure class="mermaid-figure" data-line="1-3"><pre class="mermaid">A\n' +
+    '</pre><figcaption>Figure 1. a</em> <em>b</figcaption></figure>\n';
+  const TWO_THIS =
+    '<figure class="mermaid-figure" data-line="1-3"><pre class="mermaid">A\n</pre></figure>\n' +
+    '<p data-line="4-4"><em>Figure 1. a</em> <em>b</em></p>\n';
+
+  it('a paragraph of two emphasis spans is not a caption: both outputs are pinned', () => {
+    const html = render(TWO).html;
+    expect(html).toBe(TWO_THIS);
+    expect(html).not.toBe(TWO_REFERENCE);
+    expect(TWO_REFERENCE).toContain('</em> <em>');
+    expect(TWO_REFERENCE.match(/<em>/g)?.length).toBe(1);
+    expect(TWO_REFERENCE.match(/<\/em>/g)?.length).toBe(1);
+    expect(render(TWO).meta.figures).toBe(1);
+  });
+
+  it('emphasis nested inside the one span is still a caption', () => {
+    expect(render('```mermaid\nA\n```\n*Figure 1. a *b* c*\n').html).toBe(
+      '<figure class="mermaid-figure" data-line="1-3"><pre class="mermaid">A\n' +
+        '</pre><figcaption>Figure 1. a <em>b</em> c</figcaption></figure>\n',
+    );
+  });
+
+  it('the output is balanced: no stray </em>, whatever the emphasis around the caption', () => {
+    const shapes = [
+      '*Figure 1. a* *b*',
+      '*Figure 1. a* b *c*',
+      '*Figure 1. a* **b** *c*',
+      '*Figure 1. a *b* c*',
+      '_Figure 1. a_ _b_',
+      '*Figure 1. a*_b_',
+    ];
+    for (const shape of shapes) {
+      const html = render(`\`\`\`mermaid\nA\n\`\`\`\n${shape}\n`).html;
+      expect(html.match(/<em>/g)?.length ?? 0, shape).toBe(html.match(/<\/em>/g)?.length ?? 0);
+      expect(checkOutputSafety(html), shape).toEqual([]);
+    }
+    expect(render(TWO).html).not.toMatch(/<figcaption>[^]*<\/em>[^]*<\/figcaption>/);
   });
 });
