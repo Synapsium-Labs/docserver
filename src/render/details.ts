@@ -6,7 +6,7 @@
 // - empties a `</details>` with no open `<details>` before it, so it renders nothing;
 // - rewrites every `<details>` still open at the end to `<details open>`, so an unclosed one can never fold
 //   the rest of the document out of sight, and appends one `</details>` for each at the very end of the
-//   token list (after the footnotes, once Task 8 adds them).
+//   token list, after the footnotes (footnote_tail runs before this rule).
 // Unlike the reference (departure PD8, ruling C21), it also caps the nesting of each of the four tag kinds at
 // MAX_TAG_DEPTH open levels in the whole document: an opener past the cap renders as escaped text, and so
 // does the closer that pairs with it, so the html stays balanced and a consumer's recursive walk never meets

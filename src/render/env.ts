@@ -1,8 +1,9 @@
 // The per-render state (docserver L1; architecture section C, rule 3 of render(), global constraint 2).
 // One RenderEnv is created for each render() call and handed to markdown-it as its `env`; every rule that
 // needs state for the length of one document keeps it here, never at module scope, so two renders cannot
-// see each other. Later tasks add their fields (the figure and table counters, the front-matter result) to
-// this interface and to createEnv together.
+// see each other. Later tasks add their fields (the front-matter result) to this interface and to createEnv
+// together. The footnote plugin (markdown-it-footnote) keeps its own per-document state on the same object,
+// under `footnotes`, which it creates when a document defines a footnote.
 import { createCommentScan, type CommentScan } from './allowlist.js';
 import { createSlugState, type SlugState } from './slug.js';
 import type { Heading } from './types.js';
@@ -22,6 +23,10 @@ export interface RenderEnv {
   readonly mermaidKinds: string[];
   /** Code units the fence rule has highlighted so far, at most MAX_HIGHLIGHT_CHARS (fence.ts). */
   highlighted: number;
+  /** Tables the table_open rule has emitted so far (meta.tables; tables.ts). */
+  tables: number;
+  /** Empty cells the table rule has added to short rows in this document, at most 65536 (tables.ts). */
+  emptyCells: number;
 }
 
 /** A fresh env for one render. */
@@ -34,5 +39,7 @@ export function createEnv(o: { lineAttrs: boolean }): RenderEnv {
     figures: 0,
     mermaidKinds: [],
     highlighted: 0,
+    tables: 0,
+    emptyCells: 0,
   };
 }

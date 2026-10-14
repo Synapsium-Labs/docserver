@@ -23,7 +23,16 @@
 // caption pass ran first, then its alert pass; the two never touch the same tokens, so their order here
 // changes nothing). alerts turns blockquotes into alert_open/alert_close, which render through this
 // library's own two rules; figcaption records a caption on its fence token, which renderFence writes.
+// Tables, task lists and footnotes, as the reference renders them:
+// - the table block rule is this library's port of markdown-it's (tables.ts), set in its place under the
+//   same name and with the same alternatives, so it strips the Python way; table_code goes after
+//   figcaption, and tables render through this library's two wrapper rules;
+// - the footnote plugin is markdown-it-footnote, used as it ships (its output matches the reference's
+//   plugin, xhtmlOut included); it adds footnote_def before reference, footnote_inline and footnote_ref
+//   after image, and footnote_tail right after inline;
+// - task_lists goes before text_join, so after footnote_tail, as the reference's does (tasklists.ts).
 import MarkdownIt from 'markdown-it';
+import footnote from 'markdown-it-footnote';
 import { alerts, renderAlertClose, renderAlertOpen } from './alerts.js';
 import { safeBlockHtml, safeInlineHtml } from './allowlist.js';
 import { blockStrip } from './blockStrip.js';
@@ -32,6 +41,8 @@ import { renderFence } from './fence.js';
 import { figcaption } from './figcaption.js';
 import { lineAttrs } from './lineAttrs.js';
 import { anchors } from './slug.js';
+import { pyTable, renderTableClose, renderTableOpen, tableCode } from './tables.js';
+import { taskLists } from './tasklists.js';
 
 export function createEngine(): MarkdownIt {
   const md = new MarkdownIt('commonmark', {
@@ -42,6 +53,8 @@ export function createEngine(): MarkdownIt {
     typographer: false,
   });
   md.enable(['table', 'strikethrough']);
+  md.block.ruler.at('table', pyTable, { alt: ['paragraph', 'reference'] });
+  md.use(footnote);
   md.core.ruler.push('line_attrs', lineAttrs);
   md.core.ruler.after('block', 'block_strip', blockStrip);
   md.core.ruler.before('line_attrs', 'anchors', anchors);
@@ -52,8 +65,12 @@ export function createEngine(): MarkdownIt {
   md.core.ruler.before('line_attrs', 'balance_details', balanceDetails);
   md.core.ruler.before('line_attrs', 'alerts', alerts);
   md.core.ruler.before('line_attrs', 'figcaption', figcaption);
+  md.core.ruler.before('text_join', 'task_lists', taskLists);
+  md.core.ruler.before('line_attrs', 'table_code', tableCode);
   md.renderer.rules.fence = renderFence;
   md.renderer.rules.alert_open = renderAlertOpen;
   md.renderer.rules.alert_close = renderAlertClose;
+  md.renderer.rules.table_open = renderTableOpen;
+  md.renderer.rules.table_close = renderTableClose;
   return md;
 }

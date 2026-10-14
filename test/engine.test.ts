@@ -57,22 +57,25 @@ describe('createEngine: options', () => {
 describe('createEngine: rule chains', () => {
   const md = createEngine();
 
-  it('core: block_strip after block; anchors, balance_details, alerts, figcaption after text_join; line_attrs last', () => {
+  it('core: footnote_tail, task_lists before text_join; anchors to table_code after it; line_attrs last', () => {
     expect(enabled(md.core.ruler)).toEqual([
       'normalize',
       'block',
       'block_strip',
       'inline',
+      'footnote_tail',
+      'task_lists',
       'text_join',
       'anchors',
       'balance_details',
       'alerts',
       'figcaption',
+      'table_code',
       'line_attrs',
     ]);
   });
 
-  it('block: the CommonMark rules plus table, and safe_block_html before html_block, in order', () => {
+  it('block: the CommonMark rules plus table and footnote_def, and safe_block_html before html_block', () => {
     expect(enabled(md.block.ruler)).toEqual([
       'table',
       'code',
@@ -80,6 +83,7 @@ describe('createEngine: rule chains', () => {
       'blockquote',
       'hr',
       'list',
+      'footnote_def',
       'reference',
       'safe_block_html',
       'html_block',
@@ -94,7 +98,7 @@ describe('createEngine: rule chains', () => {
     expect(rule?.alt).toEqual(['paragraph', 'reference', 'blockquote']);
   });
 
-  it('inline: the CommonMark rules plus strikethrough, and safe_inline_html before html_inline, in order', () => {
+  it('inline: CommonMark plus strikethrough and the footnote rules; safe_inline_html before html_inline', () => {
     expect(enabled(md.inline.ruler)).toEqual([
       'text',
       'newline',
@@ -104,6 +108,8 @@ describe('createEngine: rule chains', () => {
       'emphasis',
       'link',
       'image',
+      'footnote_inline',
+      'footnote_ref',
       'autolink',
       'safe_inline_html',
       'html_inline',

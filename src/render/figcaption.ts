@@ -33,6 +33,10 @@ export function figcaption(state: StateCore): void {
     const open = tokens[k];
     const inline = tokens[k + 1];
     if (open?.type !== 'paragraph_open' || open.hidden || inline?.type !== 'inline') continue;
+    // A footnote's last paragraph also holds its back-references, after the inline content and before
+    // paragraph_close (markdown-it-footnote's footnote_tail); the reference's caption pattern needs `</p>`
+    // right after `</em>`, so that paragraph is never a caption.
+    if (tokens[k + 2]?.type !== 'paragraph_close') continue;
     const m = CAPTION.exec(state.md.renderer.renderInline(inline.children ?? [], state.md.options, state.env));
     if (m === null) continue;
     fence.meta = { caption: m[1] ?? '' } satisfies FenceMeta;
