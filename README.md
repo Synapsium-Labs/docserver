@@ -138,7 +138,7 @@ npm run build                     # dist/ from src/
 
 - Run the local `vitest` binary, never a bare `npx vitest`, which can resolve a different global copy.
 - Tests never reach a network: `test/setup/no-network.ts` makes `fetch` and every socket connect throw, and the packing test runs npm offline.
-- CI (`.github/workflows/ci.yml`) runs those four steps on Node 22 and 24, on pull requests and on `main`, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry and runs the corpus through the package's public entries.
+- CI (`.github/workflows/ci.yml`) runs those four steps on Node 22 and 24, on pull requests and on `main`, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry (with `--before` set 14 days back, so its transitive dependencies obey the age rule too) and runs the corpus through the package's public entries.
 - A new or bumped dependency is an exact version at least 14 days old. Add it with
   `npm install --save-exact --before=<a date 14 days back> <name>@<x.y.z>`; npm then refuses a younger version.
 

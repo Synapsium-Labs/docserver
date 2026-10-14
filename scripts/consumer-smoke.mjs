@@ -10,7 +10,8 @@
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, and runs
 // runCorpus(render, { scanRefs }). It exits 0 only when every case passes, 1 when the check fails, 2 on a usage
 // error. Without --deps-from, `npm install` fetches the package's dependencies from the registry, as a real
-// consumer would; with it, the tarball is unpacked as the package and its dependencies are linked from an
+// consumer would, with `--before` set MIN_AGE_DAYS back from the moment it runs, so the transitive dependencies
+// the lock does not pin obey the same age rule as every direct pin; with it, the tarball is unpacked as the package and its dependencies are linked from an
 // installed tree, and nothing touches the network. --time-scale multiplies every verdict's maxMs, for a busy
 // machine (the test passes one; CI does not). Node built-ins only; dev tooling, never shipped.
 import { spawnSync } from 'node:child_process';
@@ -19,6 +20,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const PACKAGE = '@synapsium-labs/docserver';
+
+/** A dependency version must be at least this many days old, the rule every pin follows. */
+const MIN_AGE_DAYS = 14;
+
+/** The `--before` cutoff for an install made at `now` (a Date): MIN_AGE_DAYS back, as an ISO timestamp. */
+function installCutoff(now) {
+  return new Date(now.getTime() - MIN_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
 
 /** Runs inside the consumer project; every specifier resolves from there. */
 const check = (timeScale) => `import { render, scanRefs } from '${PACKAGE}/render';
@@ -107,7 +116,8 @@ function main(argv) {
     const project = { name: 'docserver-consumer-smoke', version: '0.0.0', private: true, type: 'module' };
     writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify(project, null, 2)}\n`);
     if (depsFrom === null) {
-      run('npm', ['install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts', tarball], dir);
+      const before = `--before=${installCutoff(new Date())}`;
+      run('npm', ['install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts', before, tarball], dir);
       console.log('consumer-smoke: installed the tarball from the registry');
     } else {
       installOffline(tarball, depsFrom, dir);

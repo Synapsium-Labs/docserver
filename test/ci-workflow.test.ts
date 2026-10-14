@@ -69,9 +69,9 @@ describe('ci.yml: the test job', () => {
     expect(test.strategy?.matrix?.node).toEqual([22, 24]);
   });
 
-  it('checks out full history and sets up the matrix Node with the npm cache', () => {
+  it('checks out full history, keeps no credentials in the workspace, and sets up the matrix Node with the npm cache', () => {
     expect(steps.filter((s) => s.uses !== undefined).map((s) => [s.uses, s.with])).toEqual([
-      ['actions/checkout@v4', { 'fetch-depth': 0 }],
+      ['actions/checkout@v4', { 'fetch-depth': 0, 'persist-credentials': false }],
       ['actions/setup-node@v4', { 'node-version': '${{ matrix.node }}', cache: 'npm' }],
     ]);
   });
