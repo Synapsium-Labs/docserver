@@ -23,7 +23,7 @@ interface Manifest {
 }
 interface Lock {
   lockfileVersion: number;
-  packages: Record<string, { version?: string; dependencies?: Deps; devDependencies?: Deps }>;
+  packages: Record<string, { version?: string; dev?: boolean; dependencies?: Deps; devDependencies?: Deps }>;
 }
 
 const pkg = readJson('package.json') as Manifest;
@@ -51,6 +51,26 @@ describe('package.json: exact pins', () => {
       Object.keys(all).map((name) => [name, lock.packages[`node_modules/${name}`]?.version]),
     );
     expect(resolved).toEqual(all);
+  });
+});
+
+describe('package.json: the types the packed declarations import', () => {
+  // dist/render/*.d.ts import 'markdown-it' and 'js-yaml', whose types come only from these two packages. A
+  // consumer installs dependencies, never devDependencies, so a strict consumer (skipLibCheck: false) resolves
+  // the packed declarations only if these are dependencies (review 458, F7; test/pack.test.ts runs that check).
+  const TYPES = { '@types/js-yaml': '4.0.9', '@types/markdown-it': '14.2.0' };
+
+  it('@types/markdown-it and @types/js-yaml are exact-pinned dependencies, not devDependencies', () => {
+    expect(pkg.dependencies).toMatchObject(TYPES);
+    for (const name of Object.keys(TYPES)) expect(pkg.devDependencies).not.toHaveProperty(name);
+  });
+
+  it('the lockfile marks them, and the @types they pull in, as production packages', () => {
+    const marked = Object.entries(lock.packages)
+      .filter(([key]) => /^node_modules\/@types\/(?:js-yaml|markdown-it|linkify-it|mdurl)$/.test(key))
+      .map(([key, p]) => [key, p.dev === true]);
+    expect(marked.length).toBeGreaterThanOrEqual(4);
+    expect(marked.filter(([, dev]) => dev)).toEqual([]);
   });
 });
 

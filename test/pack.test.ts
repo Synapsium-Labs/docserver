@@ -1,7 +1,8 @@
 // The packed package (docserver L1, Task 12; architecture section F T12). A clean copy of the checkout is built
 // and packed in a temporary directory, as CI's `npm run build` and `npm pack` would, so this test never writes
-// the checkout's own dist/. The tarball must hold the two entries, their types and the whole corpus a consumer's
-// runCorpus reads, and nothing else: no Python references, no scripts, no sources, tests or working papers.
+// the checkout's own dist/. The tarball must hold the two entries, their declarations and the whole corpus a consumer's
+// runCorpus reads, and nothing else (the types those declarations import, @types/markdown-it and @types/js-yaml,
+// are not in it: they are dependencies, which a consumer's install brings, review 458 F7): no Python references, no scripts, no sources, tests or working papers.
 // Then scripts/consumer-smoke.mjs installs the tarball offline (its dependencies linked from this checkout's
 // node_modules) and imports it by package name, exactly as CI's registry-installed smoke does; a second tarball
 // whose packed golden was changed must fail it, naming the case. npm runs offline here, with its update check off
