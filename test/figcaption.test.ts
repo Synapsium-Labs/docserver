@@ -428,6 +428,27 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
     }
   });
 
+  // Departure PD9: a caption's number is a run of \p{Nd}, so it follows the RUNTIME's Unicode tables. U+16D71
+  // KIRAT RAI DIGIT ONE is a decimal digit from Unicode 16.0. The reference's Python 3.12 (Unicode 15.0) leaves
+  // `*Figure \u{16D71}. x*` after a Mermaid fence an ordinary paragraph: <p data-line="4-4"><em>Figure \u{16D71}. x</em></p>
+  // after a figure with no figcaption. No golden holds the code point, so no file moves.
+  it('a Unicode 16 decimal digit is a caption number from Unicode 16.0 on, and is not before (departure PD9)', () => {
+    const unicode = Number.parseFloat(process.versions['unicode'] ?? '');
+    expect(Number.isFinite(unicode)).toBe(true);
+    const html = render('```mermaid\nA\n```\n*Figure \u{16D71}. x*\n').html;
+    if (unicode >= 16) {
+      expect(html).toBe(
+        '<figure class="mermaid-figure" data-line="1-3"><pre class="mermaid">A\n</pre>' +
+          '<figcaption>Figure \u{16D71}. x</figcaption></figure>\n',
+      );
+    } else {
+      expect(html).toBe(
+        '<figure class="mermaid-figure" data-line="1-3"><pre class="mermaid">A\n</pre></figure>\n' +
+          '<p data-line="4-4"><em>Figure \u{16D71}. x</em></p>\n',
+      );
+    }
+  });
+
   it('startsCaption stops at the first piece that decides, and a long whitespace run is read in full', () => {
     let asked = 0;
     function* pieces(): Generator<string> {

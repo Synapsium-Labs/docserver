@@ -84,6 +84,14 @@ describe('README', () => {
     expect(row).toContain('a front-matter key is cut to 500 code points, as a value is');
   });
 
+  it('PD9 names the three surfaces that follow the runtimes Unicode tables (ruling C35)', () => {
+    const row = README.split('\n').find((l) => l.startsWith('| PD9 | ')) ?? '';
+    expect(row).toContain('Unicode tables follow the runtime, for three surfaces');
+    for (const part of ['Heading ids', 'Caption digits', 'Reference labels', '`\\p{Nd}`', '`toLowerCase().toUpperCase()`', '(no file moves)']) {
+      expect(row).toContain(part);
+    }
+  });
+
   it("shows a consumer's CI call with scanRefs, and the golden-move trailer", () => {
     expect(README).toContain('runCorpus(render, { scanRefs })');
     expect(README).toContain('Goldens-moved: <id>, <id>');

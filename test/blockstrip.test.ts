@@ -83,3 +83,20 @@ describe('reference labels: departure PD6 (ruling C23)', () => {
     }
   }
 });
+
+// Departure PD9: markdown-it matches a reference label by `toLowerCase().toUpperCase()`, so the match follows the
+// RUNTIME's Unicode case tables. U+1C89 CYRILLIC CAPITAL LETTER TJE and U+1C8A (its lower case) are assigned from
+// Unicode 16.0. For `[\u1c89]: /u` and a use of `[\u1c8a]`, the reference's Python 3.12 (Unicode 15.0) folds neither
+// and finds no definition: <p data-line="3-3">[\u1c8a]</p>. No golden holds the pair, so no file moves.
+describe('reference label case folding follows the runtime Unicode tables (departure PD9)', () => {
+  it('U+1C89 defines the label that U+1C8A uses from Unicode 16.0 on, and not before', () => {
+    const unicode = Number.parseFloat(process.versions['unicode'] ?? '');
+    expect(Number.isFinite(unicode)).toBe(true);
+    const html = render('[\u1c89]: /u\n\n[\u1c8a]\n').html;
+    if (unicode >= 16) {
+      expect(html).toBe('<p data-line="3-3"><a href="/u">\u1c8a</a></p>\n');
+    } else {
+      expect(html).toBe('<p data-line="3-3">[\u1c8a]</p>\n');
+    }
+  });
+});
