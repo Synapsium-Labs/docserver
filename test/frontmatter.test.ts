@@ -249,7 +249,7 @@ describe('PD2: scalars render their source text, without Python (rulings C1 and 
     expect(render('---\n<<: {b: 2}\na: 1\n---\n').html).toBe(dl('1-4', item('b', '2') + item('a', '1')));
   });
 
-  it("C17 (e): merged keys follow js-yaml's order: where the `<<` is, a merge list's sources in list order", () => {
+  it("C17 (e): a multi-source `<<` list keeps its sources' order, where the reference reversed the sources", () => {
     // Reference (PyYAML), measured on the same inputs: the keys come out b, a, x for the first and a, b, c for
     // the second.
     const first = render('---\nx: 0\n<<: [{a: 1}, {b: 2}]\n---\n');
