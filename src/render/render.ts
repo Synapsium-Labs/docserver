@@ -110,7 +110,10 @@ export function fallbackHtml(src: string, limit: number): string {
  * renderer.renderInline does, so a paragraph of many long links stops at the bound instead of being built
  * whole. The pieces are the ones renderer.render would join, so a finished html equals renderer.render's byte for byte.
  * A figure's caption is inline tokens after its fence (figcaption.ts), so it is counted piece by piece too.
- * The one thing counted whole is a single token's own html, which is at most a few times its source.
+ * The one thing counted whole is a single token's own html. It is not a small multiple of its source: a
+ * reference link's `link_open` is as long as its destination (a 6-byte `[x][r]` can render 2 MB), and a
+ * 256-unit whole-block shell fence renders about 49 KB. What bounds it is that each piece is bounded by the
+ * input it was built from, so the work is at most `maxBytes` times a constant (review 458, F10).
  */
 function renderBounded(engine: MarkdownIt, tokens: Token[], env: RenderEnv, limit: number): string | undefined {
   const renderer = engine.renderer;
