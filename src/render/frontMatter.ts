@@ -175,7 +175,7 @@ export function parseFrontMatter(content: string): FrontMapping | null {
   const marked = new Set<object>();
   const listener = (event: string, state: { kind: string | null; result: unknown }): void => {
     const m = state.result;
-    if (event !== 'close' || state.kind !== 'mapping' || typeof m !== 'object' || m === null || marked.has(m)) return;
+    if (event !== 'close' || state.kind !== 'mapping' || typeof m !== 'object' || m === null) return;
     marked.add(m);
     Object.defineProperty(m, Symbol.toStringTag, { value: 'FrontMatterMapping', configurable: true });
     Object.defineProperty(m, Symbol.toPrimitive, { value: refuseMappingKey, configurable: true });
