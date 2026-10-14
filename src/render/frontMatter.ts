@@ -170,8 +170,10 @@ function refuseMappingKey(): never {
  * that throws. The throw happens exactly where a mapping is a key, at any depth, and nowhere else.
  * - A sequence is marked as well as its mapping elements: inside a flow sequence, `a: 1` is a single-pair
  *   mapping that js-yaml pushes straight into the array and that is never a node's own result, so only the
- *   sequence's close shows it to the listener. (The marks on the sequence itself are never read: js-yaml
- *   copies a sequence key before it converts it; the C17 (c) control pins that.)
+ *   sequence's close shows it to the listener. A sequence that holds an alias of itself is heard before it
+ *   is finished, so the listener keeps how many elements it has looked at and reads the rest at each hearing.
+ *   (The marks on the sequence itself are never read: js-yaml copies a sequence key before it converts it;
+ *   the C17 (c) control pins that.)
  * - The symbols cannot clash with an author's key, and they are removed again before the mapping is
  *   returned, so what the caller gets is a plain object.
  */
@@ -183,18 +185,28 @@ export function parseFrontMatter(content: string): FrontMapping | null {
     Object.defineProperty(m, Symbol.toStringTag, { value: 'FrontMatterMapping', configurable: true });
     Object.defineProperty(m, Symbol.toPrimitive, { value: refuseMappingKey, configurable: true });
   };
-  // Called as each node opens (its result is still null then) and closes. Anything with an object for a
-  // result is marked; a sequence also marks the objects it holds, which may never have been a node's result.
-  // An alias hands the listener a result it has already seen: that costs one lookup, so a block that aliases
-  // one large sequence many times never rescans its elements.
+  // For each sequence the listener has heard: how many of its elements it has already looked at.
+  const scanned = new Map<unknown[], number>();
+  // Called as each node opens and closes. At open it still sees the previous node's result (js-yaml resets
+  // it after the call), which can be a sequence that is not finished: an alias inside a flow sequence
+  // returns the array being read, because its anchor is stored when it opens. Anything with an object for a
+  // result is marked once. A sequence also marks the objects it holds, which may never have been a node's
+  // result; it is heard again (an alias, or its own close after an alias inside it), so the count above
+  // makes each hearing look only at the elements added since the last. An alias of a finished sequence then
+  // costs one lookup, and a block that aliases one large sequence many times never rescans its elements.
   const listener = (_event: string, state: { result: unknown }): void => {
     const m = state.result;
-    if (typeof m !== 'object' || m === null || marked.has(m)) return;
-    mark(m);
+    if (typeof m !== 'object' || m === null) return;
     if (Array.isArray(m)) {
-      for (const el of m as unknown[]) {
-        if (typeof el === 'object' && el !== null) mark(el);
+      const seen = scanned.get(m);
+      if (seen === undefined) mark(m);
+      for (let i = seen ?? 0; i < m.length; i += 1) {
+        const el: unknown = m[i];
+        if (typeof el === 'object' && el !== null && !Array.isArray(el)) mark(el);
       }
+      scanned.set(m, m.length);
+    } else if (!marked.has(m)) {
+      mark(m);
     }
   };
   let data: unknown;

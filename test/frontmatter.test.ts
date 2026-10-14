@@ -305,6 +305,25 @@ describe('PD2: a mapping key fails the load, as in the reference (ruling C33)', 
     failed('---\n? [? a : 1]\n: v\n---\n');
   });
 
+  // js-yaml stores a flow sequence's anchor when the sequence opens, so an alias inside it returns the array
+  // while it is still being read. The alias is heard first, with the array short; the pair mappings pushed after
+  // it must still be marked when the sequence closes. Measured with the reference: all three render nothing.
+  it('a self-aliasing flow sequence used as a key still has its later single-pair mappings refused', () => {
+    failed('---\na: &a [c: *a, b: 1]\n? *a\n: v\n---\n');
+    failed('---\na: &a [*a : 1, b: 1]\n? *a\n: v\n---\n');
+    failed('---\na: &a [? *a , b: 1]\n? *a\n: v\n---\n');
+  });
+
+  it('control: the same self-aliasing sequence as a value loads (the reference reads it too)', () => {
+    // Reference: <dl><div><dt>a</dt><dd></dd></div><div><dt>z</dt><dd></dd></div></dl>.
+    const r = render('---\na: &a [c: *a, b: 1]\nz: *a\n---\n');
+    expect(r.html).toBe(dl('1-4', item('a', '') + item('z', '')));
+    expect(r.meta.frontList).toEqual([
+      { key: 'a', list: true, vals: [] },
+      { key: 'z', list: true, vals: [] },
+    ]);
+  });
+
   it('controls: the same single-pair mapping as a value, or in a merge, loads as before', () => {
     expect(render('---\nk: [a: 1, b]\n---\n').html).toBe(dl('1-3', item('k', 'b')));
     expect(render('---\nk: [a: 1]\nz: 2\n---\n').html).toBe(dl('1-4', item('k', '') + item('z', '2')));
