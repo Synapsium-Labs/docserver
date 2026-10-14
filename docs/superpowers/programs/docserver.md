@@ -8,7 +8,7 @@ Coordinator: ccrc session `ccrc-pwa-calm-canyon`. It also coordinates ccrc's `na
 
 | # | scope | PRs | state |
 |---|---|---|---|
-| L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1 | **plan merged** 2026-10-13 (`00fa66cb2`), approved by the operator. Run 414 is open; its dispatch waits for a fleet slot |
+| L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1; work: #8 | **plan merged** 2026-10-13 (`00fa66cb2`), approved by the operator. Run 414 dispatched 2026-10-13. PR #8 opened 2026-10-14. The coordinator's review (run 458) sent it to one fix round (C31-C37) |
 | L2 | The layout. `enhance(root, options)` made embeddable: host adapters, namespaced storage keys, operator-specific defaults scrubbed into off-by-default options, CSP-safe. The styles, and the fonts with `OFL.txt`. A self-hosted single-file Mermaid with pinned limits. `THIRD-PARTY-NOTICES`. | — | after L1 |
 | L3 | The frame and the release. `frameDocument()`, the frame bootstrap and click guard as hashed assets, `mountDocFrame()` for other hosts, and `assets.json`. Then v1: the repo goes public, and the package is published to npm with provenance as `@synapsium-labs/docserver`. | — | after L2 |
 
@@ -104,6 +104,24 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 - **Coordinator notes for L1 (2026-10-14).**
   - C26's generated cases ship at 7,000 references and definitions and at 8,000 inline notes, not the sizes C26 names. The 8 MiB corpus cap leaves no room for the larger ones. The deterministic linearity test is the primary guard.
   - The browser-parity sandbox is created with a null prototype, so no host `Function` is reachable from inside it. This is a test-only hardening.
+
+- **C31-C37 (2026-10-14, the coordinator's review of L1, run 458).** The held-out panel confirmed 17 findings. The run goes back for one fix round.
+  - **Two critical findings, fixed within existing rulings, so they get no new number:**
+    - C21's inline cap counted the task-list checkbox, so from the 65th task item on, every checkbox rendered as escaped text. That is a parity bug that ordinary checklists reach. The cap counts only the allowlist's own tags.
+    - C28's caption decision still rendered a whole link or image at parse time, so figures that share one long reference destination cost figures times length: 9.6 s in `render()` and 12.3 s in `scanRefs()` from 114 KB. After the first child, the decision reads only text, and it rejects any other token without rendering it. Output is identical, and a deterministic count of parse-time renders pins it.
+  - **C31: front-matter keys are capped like values.** A key built from aliases grew to millions of characters from 20 KB, taking 4-6 s and up to about 0.9 GB. Keys are cut to the value cap before escaping. This is part of PD8, because only hostile documents reach it. Cost if wrong: a key over the cap renders cut, where the reference renders it whole.
+  - **C32: PD2 also covers U+2028 and U+2029.** PyYAML treats them as line breaks and js-yaml does not, which is the same loader class as U+0085 under C17. A unit case pins both outputs.
+  - **C33: a mapping used as a key fails the load.** It loaded as the key `[object Object]`, which no author wrote. PyYAML refuses the block, so this restores parity, through the same path as a tag outside the schema. No departure.
+  - **C34: the published types resolve under a strict consumer.** The packed declarations import types from `@types/markdown-it` and `@types/js-yaml`, which were devDependencies, so a consumer that does not set `skipLibCheck` failed to typecheck. Both become dependencies, exact-pinned under C6 and C7, and CI's consumer smoke gains a strict `tsc` check.
+  - **C35: PD9 covers every Unicode table that follows the runtime.** That is heading ids, caption digits (`\p{Nd}`) and reference-label case folding, with a case per surface, gated on the runtime's Unicode version. This follows C29's choice to document rather than freeze.
+  - **C36: PD6 covers markdown-it's own Unicode tables.** Emphasis flanking uses uc.micro's punctuation and symbol tables, in which five Unicode 15.1 symbols differ from Python 3.12. This is engine residue like PD6's labels, and it does not depend on the runtime. Five unit cases pin both outputs.
+  - **C37: the rulings' mutation rows are recorded in the repository.** The 81 rows that C24-C30 and the review added lived only in the workspace's untracked files. They are appended to the L1 plan in a results section on the branch, so `main` keeps every row's definition after the merge.
+  - **Smaller items, fixed:**
+    - the comments that said no parse rule renders, or that a token's html is a few times its source;
+    - PD8's "64 levels" wording, since a footnote reference's `<sup>` is the plugin's;
+    - the README's PD2 row, which now lists C17's loader items;
+    - the `frontmatter-types` pin text.
+  - **The worker's own rulings stand.** The null-prototype sandbox stands. C28 needs no corpus case once the render-count case exists. The downsized generated cases are secondary to the deterministic guards. The threshold of 256 stands. The consumer-smoke header stays as it is.
 
 ## Carried constraints (reviewers get these)
 
