@@ -91,7 +91,7 @@ describe('README', () => {
     }
   });
 
-  it('PD9 names the three surfaces that follow the runtimes Unicode tables (ruling C35)', () => {
+  it("PD9 names the three surfaces that follow the runtime's Unicode tables (ruling C35)", () => {
     const row = README.split('\n').find((l) => l.startsWith('| PD9 | ')) ?? '';
     expect(row).toContain('Unicode tables follow the runtime, for three surfaces');
     for (const part of ['Heading ids', 'Caption digits', 'Reference labels', '`\\p{Nd}`', '`toLowerCase().toUpperCase()`', '(no file moves)']) {

@@ -46,6 +46,7 @@ function newSandbox(): vm.Context {
 
 /** A copy of a JSON value made inside the context: its objects and arrays belong to the context's realm, not the host's. */
 function inContext<T>(context: vm.Context, value: T): T {
+  if (value === undefined) return value;
   return vm.runInContext(`(${JSON.stringify(value)})`, context) as T;
 }
 
@@ -73,10 +74,31 @@ describe('browser parity: the bundle in an empty VM context', () => {
   let vmRun: CorpusRun;
   const cases = loadCorpus();
 
+  // Every call into the bundle goes through `bundle`, which records whether the options argument is an object of
+  // the context's own realm (its prototype is the context's Object.prototype). Omitted options are allowed.
+  let contextObjectPrototype: unknown;
+  const seen = { withOptions: 0, host: [] as string[] };
+  function note(call: string, options: unknown): void {
+    if (options === undefined) return;
+    seen.withOptions += 1;
+    if (Object.getPrototypeOf(options) !== contextObjectPrototype) seen.host.push(`${call}: ${JSON.stringify(options)}`);
+  }
+  const bundle = {
+    render(input: string, options?: Parameters<RenderApi['render']>[1]): ReturnType<RenderApi['render']> {
+      note('render', options);
+      return b.R.render(input, options);
+    },
+    scanRefs(input: string, options?: Parameters<RenderApi['scanRefs']>[1]): ReturnType<RenderApi['scanRefs']> {
+      note('scanRefs', options);
+      return b.R.scanRefs(input, options);
+    },
+  };
+
   beforeAll(() => {
     b = bundleInEmptyContext();
-    vmRun = runCorpus((input, options) => b.R.render(input, inContext(b.context, options)), {
-      scanRefs: (input, options) => b.R.scanRefs(input, inContext(b.context, options)),
+    contextObjectPrototype = vm.runInContext('Object.prototype', b.context);
+    vmRun = runCorpus((input, options) => bundle.render(input, inContext(b.context, options)), {
+      scanRefs: (input, options) => bundle.scanRefs(input, inContext(b.context, options)),
       timeScale: TIME_SCALE,
     });
   }, 300_000);
@@ -128,29 +150,36 @@ describe('browser parity: the bundle in an empty VM context', () => {
     const failed = vmRun.results.filter((r) => !r.ok).map((r) => `${r.id}: ${r.failures.join(' | ')}`);
     expect(failed).toEqual([]);
     expect([vmRun.ok, vmRun.total, vmRun.passed]).toEqual([true, cases.length, cases.length]);
+    // The corpus run passed options in (so the recording is not vacuous), and every one was made in the context.
+    expect(seen.withOptions).toBeGreaterThanOrEqual(cases.length);
+    expect(seen.host).toEqual([]);
   });
 
   it("every case's render() and scanRefs() equal the Node import's, byte for byte", () => {
     const differ: string[] = [];
+    const before = seen.withOptions;
     for (const c of cases) {
       const a = node.render(c.input, c.options);
-      const v = b.R.render(c.input, inContext(b.context, c.options));
+      const v = bundle.render(c.input, inContext(b.context, c.options));
       if (JSON.stringify(v) !== JSON.stringify(a)) differ.push(`${c.id}: render`);
       const aFront = a.meta.front === null ? 'null' : String(Object.getPrototypeOf(a.meta.front));
       const vFront = v.meta.front === null ? 'null' : String(Object.getPrototypeOf(v.meta.front));
       if (aFront !== vFront) differ.push(`${c.id}: meta.front prototype`);
       const maxBytes = c.options.maxBytes;
       const scanOptions = maxBytes === undefined ? {} : { maxBytes };
-      if (JSON.stringify(b.R.scanRefs(c.input, inContext(b.context, scanOptions))) !== JSON.stringify(node.scanRefs(c.input, scanOptions))) {
+      if (JSON.stringify(bundle.scanRefs(c.input, inContext(b.context, scanOptions))) !== JSON.stringify(node.scanRefs(c.input, scanOptions))) {
         differ.push(`${c.id}: scanRefs`);
       }
     }
     expect(differ).toEqual([]);
+    expect(seen.withOptions - before).toBe(2 * cases.length);
+    expect(seen.host).toEqual([]);
   });
 
   it('agrees with Node with data-line off, and over the byte cap', () => {
     const doc = '# Title\n\n> [!NOTE]\n> text\n\n```mermaid\nflowchart LR\n```\n\n*Figure 1. A.*\n';
-    expect(JSON.stringify(b.R.render(doc, inContext(b.context, { lineAttrs: false })))).toBe(JSON.stringify(node.render(doc, { lineAttrs: false })));
-    expect(JSON.stringify(b.R.render('x'.repeat(10), inContext(b.context, { maxBytes: 9 })))).toBe(JSON.stringify(node.render('x'.repeat(10), { maxBytes: 9 })));
+    expect(JSON.stringify(bundle.render(doc, inContext(b.context, { lineAttrs: false })))).toBe(JSON.stringify(node.render(doc, { lineAttrs: false })));
+    expect(JSON.stringify(bundle.render('x'.repeat(10), inContext(b.context, { maxBytes: 9 })))).toBe(JSON.stringify(node.render('x'.repeat(10), { maxBytes: 9 })));
+    expect(seen.host).toEqual([]);
   });
 });
