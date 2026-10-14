@@ -343,6 +343,39 @@ describe('figcaption: the caption is bounded (ruling C28)', () => {
     expect(links).toBe(1);
   });
 
+  // C28's claim that the decision reads only a prefix, measured: one candidate paragraph of 1000 lines (about
+  // 2000 text and softbreak children) after a Mermaid fence. The lazy decision stops inside the first text
+  // child, so it calls the text rule once and the softbreak rule never (exactly 1 and 0); spreading every
+  // piece would call them about 1000 times each. The bound of 4 leaves a wide margin.
+  it('parsing reads only a prefix of a long caption: the text and softbreak rules are called at most a few times', () => {
+    const lines = (first: string): string => `${first}\n${Array.from({ length: 999 }, (_, i) => `l${i}`).join('\n')}`;
+    const calls = (caption: string): { text: number; softbreak: number; children: number } => {
+      const md = createEngine();
+      const seen = { text: 0, softbreak: 0, children: 0 };
+      for (const name of ['text', 'softbreak'] as const) {
+        const rule = md.renderer.rules[name];
+        if (rule === undefined) throw new Error(`no ${name} rule`);
+        md.renderer.rules[name] = (tokens, idx, options, env, self) => {
+          seen[name] += 1;
+          return rule(tokens, idx, options, env, self);
+        };
+      }
+      const tokens = md.parse(`\`\`\`mermaid\nA\n\`\`\`\n\n${caption}\n`, createEnv({ lineAttrs: true }));
+      seen.children = tokens.find((t) => t.type === 'inline')?.children?.length ?? 0;
+      return seen;
+    };
+    // A real caption: decided inside its first text child.
+    const real = calls(`*${lines('Figure 1. a')}*`);
+    expect(real.children).toBeGreaterThan(1900);
+    expect(real.text).toBeLessThanOrEqual(4);
+    expect(real.softbreak).toBeLessThanOrEqual(4);
+    // A non-caption decided early too: `Fig x` fails at the space.
+    const fake = calls(`*${lines('Fig x')}*`);
+    expect(fake.children).toBeGreaterThan(1900);
+    expect(fake.text).toBeLessThanOrEqual(4);
+    expect(fake.softbreak).toBeLessThanOrEqual(4);
+  });
+
   it('a caption is the figcaption_open, the inline token and figcaption_close right after the fence', () => {
     const tokens = createEngine().parse('```mermaid\nA\n```\n\n</details>\n\n*Figure 1. a*\n\nz\n', createEnv({ lineAttrs: true }));
     const types = tokens.map((t) => t.type);
