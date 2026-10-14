@@ -283,6 +283,21 @@ describe('PD2: a mapping key fails the load, as in the reference (ruling C33)', 
     failed('---\n? [x, y, {}]\n: v\n---\n');
   });
 
+  // Inside a flow sequence, `a: 1` is a single-pair mapping that js-yaml pushes straight into the array; it is
+  // never a node's own result. Measured with the reference: each of these four renders nothing, meta null.
+  it('a sequence key that holds a single-pair mapping of a flow sequence', () => {
+    failed('---\n? [x, a: 1]\n: v\n---\n');
+    failed('---\n? [a: 1]\n: v\n---\n');
+    failed('---\n{[a: 1]: v}\n---\n');
+    failed('---\n? [? a : 1]\n: v\n---\n');
+  });
+
+  it('controls: the same single-pair mapping as a value, or in a merge, loads as before', () => {
+    expect(render('---\nk: [a: 1, b]\n---\n').html).toBe(dl('1-3', item('k', 'b')));
+    expect(render('---\nk: [a: 1]\nz: 2\n---\n').html).toBe(dl('1-4', item('k', '') + item('z', '2')));
+    expect(render('---\n<<: [{a: 1}]\n---\n').html).toBe(dl('1-3', item('a', '1')));
+  });
+
   it('a mapping key anywhere in the block fails the whole block, among good keys and inside a value', () => {
     failed('---\nq: 1\n? {a: 1}\n: v\n---\n');
     failed('---\n? {a: 1}\n: v\nq: 1\n---\n');
@@ -527,7 +542,7 @@ describe('keys are cut to FM_MAX_VALUE code points, as values are (ruling C31, p
     expect(r.meta.front?.[head]).toBe('two');
   });
 
-  it('a long key that cuts to __proto__ is no worse than the short one: an own key, nothing polluted', () => {
+  it('a long key that begins with __proto__ is cut to 500 code points like any other: an own key, nothing polluted', () => {
     const r = render(`---\n"__proto__${'_'.repeat(600)}": polluted\n---\n`);
     expect(Object.keys(r.meta.front ?? {})).toEqual([`__proto__${'_'.repeat(491)}`]);
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();

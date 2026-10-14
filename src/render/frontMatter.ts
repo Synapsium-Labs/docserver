@@ -164,24 +164,36 @@ function refuseMappingKey(): never {
  * A mapping used as a key, or a sequence key holding one, fails the load (ruling C33, part of PD2), through
  * the same `null` as a tag outside the schema. The reference (PyYAML) cannot hash a mapping, so it refuses
  * the whole block; js-yaml would read the key as the text `[object Object]`. js-yaml turns a key into text
- * with String(), and it never turns a value into text; so while loading, every node that has an object for
- * a result (a mapping or a sequence, when the listener hears it open with no result and close with one) is
- * marked with two symbol properties, a class that is not `[object Object]` (which js-yaml would replace by
- * that text before converting) and a conversion to text that throws. The throw happens exactly where a
- * mapping is a key, at any depth, and nowhere else: js-yaml copies a sequence key before it converts it, so
- * the marks on a sequence are never read (the sequence-key control in the tests pins that). The symbols
- * cannot clash with an author's key, and they are removed again before the mapping is returned, so what
- * the caller gets is a plain object.
+ * with String(), and it never turns a value into text. So while loading, the listener marks every object a
+ * node ends with, and the mappings inside a sequence, with two symbol properties: a class that is not
+ * `[object Object]` (which js-yaml would replace by that text before converting) and a conversion to text
+ * that throws. The throw happens exactly where a mapping is a key, at any depth, and nowhere else.
+ * - A sequence is marked as well as its mapping elements: inside a flow sequence, `a: 1` is a single-pair
+ *   mapping that js-yaml pushes straight into the array and that is never a node's own result, so only the
+ *   sequence's close shows it to the listener. (The marks on the sequence itself are never read: js-yaml
+ *   copies a sequence key before it converts it; the C17 (c) control pins that.)
+ * - The symbols cannot clash with an author's key, and they are removed again before the mapping is
+ *   returned, so what the caller gets is a plain object.
  */
 export function parseFrontMatter(content: string): FrontMapping | null {
   if (cpLength(content) >= FM_MAX_CHARS) return null;
   const marked = new Set<object>();
-  const listener = (_event: string, state: { result: unknown }): void => {
-    const m = state.result;
-    if (typeof m !== 'object' || m === null) return;
+  const mark = (m: object): void => {
     marked.add(m);
     Object.defineProperty(m, Symbol.toStringTag, { value: 'FrontMatterMapping', configurable: true });
     Object.defineProperty(m, Symbol.toPrimitive, { value: refuseMappingKey, configurable: true });
+  };
+  // Called as each node opens (its result is still null then) and closes. Anything with an object for a
+  // result is marked; a sequence also marks the objects it holds, which may never have been a node's result.
+  const listener = (_event: string, state: { result: unknown }): void => {
+    const m = state.result;
+    if (typeof m !== 'object' || m === null) return;
+    mark(m);
+    if (Array.isArray(m)) {
+      for (const el of m as unknown[]) {
+        if (typeof el === 'object' && el !== null) mark(el);
+      }
+    }
   };
   let data: unknown;
   try {
