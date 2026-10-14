@@ -1,8 +1,9 @@
 // The packed package (docserver L1, Task 12; architecture section F T12). A clean copy of the checkout is built
 // and packed in a temporary directory, as CI's `npm run build` and `npm pack` would, so this test never writes
-// the checkout's own dist/. The tarball must hold the two entries, their declarations and the whole corpus a consumer's
-// runCorpus reads, and nothing else (the types those declarations import, @types/markdown-it and @types/js-yaml,
-// are not in it: they are dependencies, which a consumer's install brings, review 458 F7): no Python references, no scripts, no sources, tests or working papers.
+// the checkout's own dist/. The tarball must hold the two entries, their declarations and the whole corpus a
+// consumer's runCorpus reads, and nothing else: no Python references, no scripts, no sources, tests or working
+// papers. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
+// dependencies, which a consumer's install brings (review 458, F7).
 // Then scripts/consumer-smoke.mjs installs the tarball offline (its dependencies linked from this checkout's
 // node_modules) and imports it by package name, exactly as CI's registry-installed smoke does; a second tarball
 // whose packed golden was changed must fail it, naming the case. npm runs offline here, with its update check off
@@ -57,7 +58,13 @@ let work = '';
 let packed: Packed = { filename: '', files: [] };
 let smoke: SpawnSyncReturns<string> | null = null;
 let brokenSmoke: SpawnSyncReturns<string> | null = null;
-let untypedSmoke: SpawnSyncReturns<string> | null = null;
+const untypedSmokes = new Map<string, SpawnSyncReturns<string>>();
+
+/** Each @types package a consumer needs, with the module whose declaration it supplies and who imports it. */
+const UNTYPED: Record<string, { module: string; file: string }> = {
+  '@types/markdown-it': { module: 'markdown-it', file: 'allowlist|render|scan' },
+  '@types/js-yaml': { module: 'js-yaml', file: 'frontMatter' },
+};
 
 /** Run scripts/consumer-smoke.mjs with these arguments. */
 function runSmoke(args: readonly string[]): SpawnSyncReturns<string> {
@@ -97,21 +104,24 @@ beforeAll(() => {
   packed = { filename: first?.filename ?? '', files: (first?.files ?? []).map((f) => f.path).sort() };
   const deps = realpathSync(path.join(ROOT, 'node_modules'));
   smoke = runSmoke([path.join(work, packed.filename), '--deps-from', deps, '--time-scale', '10']);
-  // The same package with the two @types packages back in devDependencies: a consumer's install would not bring
-  // them, so its strict typecheck of the packed declarations fails (review 458, F7).
+  // The same package with one of the two @types packages back in devDependencies: a consumer's install would
+  // not bring it, so the strict typecheck of the packed declarations fails (review 458, F7). Each package has its
+  // own run, because the two imports sit in different declaration files.
   const manifestPath = path.join(stage, 'package.json');
   const original = readFileSync(manifestPath, 'utf8');
-  const untyped = JSON.parse(original) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
-  for (const name of ['@types/markdown-it', '@types/js-yaml']) {
+  type Manifest = { dependencies: Record<string, string>; devDependencies: Record<string, string> };
+  for (const name of Object.keys(UNTYPED)) {
+    const untyped = JSON.parse(original) as Manifest;
     untyped.devDependencies[name] = untyped.dependencies[name] ?? '';
     delete untyped.dependencies[name];
+    writeFileSync(manifestPath, JSON.stringify(untyped, null, 2));
+    const untypedDir = path.join(work, `untyped-${name.replace(/\W/g, '-')}`);
+    mkdirSync(untypedDir);
+    const untypedPack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', untypedDir], stage);
+    if (untypedPack.status !== 0) throw new Error(`npm pack failed: ${untypedPack.stderr}`);
+    const tarball = path.join(untypedDir, packed.filename);
+    untypedSmokes.set(name, runSmoke([tarball, '--deps-from', deps, '--time-scale', '10']));
   }
-  writeFileSync(manifestPath, JSON.stringify(untyped, null, 2));
-  const untypedDir = path.join(work, 'untyped');
-  mkdirSync(untypedDir);
-  const untypedPack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', untypedDir], stage);
-  if (untypedPack.status !== 0) throw new Error(`npm pack failed: ${untypedPack.stderr}`);
-  untypedSmoke = runSmoke([path.join(untypedDir, packed.filename), '--deps-from', deps, '--time-scale', '10']);
   writeFileSync(manifestPath, original);
   // The same package with one packed golden changed: its own corpus no longer passes.
   const broken = path.join(work, 'broken');
@@ -180,11 +190,18 @@ describe('the packed package, imported by name', () => {
     expect(smoke?.status).toBe(0);
   });
 
-  it('typechecks under a strict consumer config: with the @types packages as devDependencies it fails with TS7016', () => {
-    expect(untypedSmoke?.status).toBe(1);
-    expect(untypedSmoke?.stdout).toBe('consumer-smoke: installed the tarball offline\n');
-    expect(untypedSmoke?.stderr).toMatch(/dist\/render\/\w+\.d\.ts\(\d+,\d+\): error TS7016: Could not find a declaration file for module 'markdown-it'/);
-  });
+  it.each(Object.entries(UNTYPED))(
+    'typechecks under a strict consumer config: with %s as a devDependency it fails with TS7016',
+    (name, { module, file }) => {
+      const r = untypedSmokes.get(name);
+      expect(r?.status).toBe(1);
+      expect(r?.stdout).toBe('consumer-smoke: installed the tarball offline\n');
+      const error = new RegExp(
+        `dist/render/(?:${file})\\.d\\.ts\\(\\d+,\\d+\\): error TS7016: Could not find a declaration file for module '${module}'`,
+      );
+      expect(r?.stderr).toMatch(error);
+    },
+  );
 
   it('fails, naming the case, when the packed corpus does not pass', () => {
     const lines = brokenSmoke?.stdout.split('\n') ?? [];

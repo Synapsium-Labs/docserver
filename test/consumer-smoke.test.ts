@@ -24,8 +24,9 @@ const PACKAGE = '@synapsium-labs/docserver';
 
 /**
  * A stand-in `npm`: records its arguments, then, when FAKE_KIND is set, installs a fake package into the consumer
- * (its working directory) whose declarations are `clean`, import a module that does not exist (`dangling`), or lack
- * the conformance entry's `runCorpus` (`no-run-corpus`).
+ * (its working directory) whose declarations are `clean`; or import a module that does not exist (`dangling`); or
+ * lack the conformance entry's `runCorpus` (`no-run-corpus`); or are clean at both entries while a third file, one
+ * neither entry reaches, imports a module that does not exist (`dangling-unreached`).
  */
 const FAKE_NPM = `#!${process.execPath}
 const { appendFileSync, mkdirSync, writeFileSync } = require('node:fs');
@@ -39,6 +40,10 @@ if (kind) {
     'export declare const ALLOWLIST: readonly string[];',
   ];
   if (kind === 'dangling') render.unshift("import type { Nope } from 'no-such-module';", 'export type Dangling = Nope;');
+  if (kind === 'dangling-unreached') {
+    mkdirSync(dir + '/dist/render', { recursive: true });
+    writeFileSync(dir + '/dist/render/unreached.d.ts', "import type { Nope } from 'no-such-module';\\nexport type Unreached = Nope;\\n");
+  }
   const conformance = ['export interface CorpusRun { ok: boolean }'];
   if (kind !== 'no-run-corpus') conformance.push('export declare function runCorpus(render: unknown, o?: { timeScale?: number }): CorpusRun;');
   for (const [sub, lines] of [['render', render], ['conformance', conformance]]) {
@@ -89,7 +94,7 @@ beforeAll(() => {
   });
   after = Date.now();
   args = readFileSync(log, 'utf8').split('\n').filter((l) => l !== '');
-  for (const kind of ['clean', 'dangling', 'no-run-corpus']) typed.set(kind, runTyped(kind));
+  for (const kind of ['clean', 'dangling', 'dangling-unreached', 'no-run-corpus']) typed.set(kind, runTyped(kind));
 }, 120_000);
 
 afterAll(() => {
@@ -128,6 +133,13 @@ describe('scripts/consumer-smoke.mjs: the strict consumer typecheck', () => {
     expect(r?.stderr).toMatch(/dist\/render\/index\.d\.ts\(\d+,\d+\): error TS2307: Cannot find module 'no-such-module'/);
   });
 
+  it('typechecks every packed declaration file, not only the ones the two entries reach', () => {
+    const r = typed.get('dangling-unreached');
+    expect(r?.status).toBe(1);
+    expect(r?.stdout).not.toContain(STRICT);
+    expect(r?.stderr).toMatch(/dist\/render\/unreached\.d\.ts\(\d+,\d+\): error TS2307: Cannot find module 'no-such-module'/);
+  });
+
   it('fails the smoke when the conformance entry lacks a value the consumer file uses', () => {
     const r = typed.get('no-run-corpus');
     expect(r?.status).toBe(1);
@@ -141,6 +153,7 @@ describe('scripts/consumer-smoke.mjs: the strict consumer typecheck', () => {
     expect(SOURCE).toMatch(/moduleResolution: 'nodenext',/);
     expect(SOURCE).toMatch(/skipLibCheck: false,/);
     expect(SOURCE).toMatch(/noEmit: true,/);
+    expect(SOURCE).toContain('include: [\'check.ts\', `node_modules/${PACKAGE}/dist/**/*.d.ts`],');
     expect(SOURCE).toContain("from '${PACKAGE}/render'");
     expect(SOURCE).toContain("from '${PACKAGE}/conformance'");
   });

@@ -8,15 +8,17 @@
 // project, so every import resolves by package name through the tarball's own exports map, never through this
 // checkout. The check imports `@synapsium-labs/docserver/render` and `/conformance`, confirms the entry
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, and runs
-// runCorpus(render, { scanRefs }). Before that it typechecks a consumer file that imports both entries, with this
-// checkout's own typescript, under the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a
+// runCorpus(render, { scanRefs }). Before that it typechecks, with this checkout's own typescript, a consumer
+// file that imports both entries together with every packed declaration file (dist/**/*.d.ts, including those
+// neither entry reaches), under the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a
 // packed declaration whose imports a consumer cannot resolve fails the smoke; the consumer gets no Node types,
-// because the packed declarations reference none. It exits 0 only when every case passes, 1 when the check or the
-// typecheck fails, 2 on a usage error. Without --deps-from, `npm install` fetches the package's dependencies from the registry, as a real
-// consumer would, with `--before` set MIN_AGE_DAYS back from the moment it runs, so the transitive dependencies
-// the lock does not pin obey the same age rule as every direct pin; with it, the tarball is unpacked as the package and its dependencies are linked from an
-// installed tree, and nothing touches the network. --time-scale multiplies every verdict's maxMs, for a busy
-// machine (the test passes one; CI does not). Node built-ins only; dev tooling, never shipped.
+// because the packed declarations reference none. It exits 0 only when every case passes, 1 when the check or
+// the typecheck fails, 2 on a usage error. Without --deps-from, `npm install` fetches the package's dependencies
+// from the registry, as a real consumer would, with `--before` set MIN_AGE_DAYS back from the moment it runs, so
+// the transitive dependencies the lock does not pin obey the same age rule as every direct pin; with it, the
+// tarball is unpacked as the package and its dependencies are linked from an installed tree, and nothing touches
+// the network. --time-scale multiplies every verdict's maxMs, for a busy machine (the test passes one; CI does
+// not). Node built-ins only; dev tooling, never shipped.
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -46,7 +48,9 @@ const CONSUMER_TSCONFIG = {
     noEmit: true,
     target: 'es2022',
   },
-  files: ['check.ts'],
+  // Every packed declaration file is listed by pattern, because `import("js-yaml")` in frontMatter.d.ts is
+  // reached by neither entry's imports.
+  include: ['check.ts', `node_modules/${PACKAGE}/dist/**/*.d.ts`],
 };
 
 /** The consumer's typed file: a value and a type from each entry, so every packed declaration is read. */
