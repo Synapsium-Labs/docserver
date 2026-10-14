@@ -1,7 +1,9 @@
 // Browser parity of `./render` (docserver L1, Task 12; architecture section F T12, global constraint 3).
 // esbuild bundles src/render/index.ts for the browser as one script that defines the global R, and the script
 // runs in a fresh VM context: V8's own built-ins and nothing a host adds (no process, require, fetch, timers,
-// DOM, storage or TextEncoder). There the bundle must pass the whole corpus, and for every case its render()
+// DOM, storage or TextEncoder). The context's sandbox object has a null prototype: a plain {} hands the context
+// the outer realm's Object.prototype, and through its constructor chain the outer Function and with it process.
+// There the bundle must pass the whole corpus, and for every case its render()
 // and scanRefs() results must equal the Node import's, byte for byte. A host API reached at run time, however
 // it was reached, fails here: it is missing in the context (the render fails), or it answers differently there
 // (the results differ). The static walls are test/purity.test.ts. Time is not what this file judges: the Node
@@ -34,6 +36,11 @@ interface Bundled {
   globalsAfter: string[];
 }
 
+/** A fresh VM context whose sandbox object has no prototype, so nothing of the outer realm hangs off it. */
+function newSandbox(): vm.Context {
+  return vm.createContext(Object.create(null));
+}
+
 /** Bundle src/render/index.ts for the browser and run it in an empty VM context. */
 function bundleInEmptyContext(): Bundled {
   const out = buildSync({
@@ -47,7 +54,7 @@ function bundleInEmptyContext(): Bundled {
     logLevel: 'silent',
   });
   const code = out.outputFiles[0]?.text ?? '';
-  const context = vm.createContext({});
+  const context = newSandbox();
   vm.runInContext(code, context, { filename: 'docserver-render.bundle.js' });
   const sandbox = context as Record<string, unknown>;
   return { code, warnings: out.warnings.length, context, R: sandbox['R'] as RenderApi, globalsAfter: Object.keys(sandbox) };
@@ -71,6 +78,19 @@ describe('browser parity: the bundle in an empty VM context', () => {
   it('the context holds none of the host globals', () => {
     const present = vm.runInContext(`${JSON.stringify(HOST_GLOBALS)}.filter((n) => typeof globalThis[n] !== 'undefined')`, b.context) as string[];
     expect([...present]).toEqual([]);
+  });
+
+  it('the context reaches no host Function: the constructor chain yields no process', () => {
+    // Every step is guarded, so a probe that fails for another reason answers 'threw' and not a false pass.
+    const probe = `(() => {
+      try {
+        return [].constructor.constructor('return this')().constructor.constructor('return typeof process')();
+      } catch (e) {
+        return 'threw';
+      }
+    })()`;
+    expect(vm.runInContext(probe, newSandbox())).toBe('undefined');
+    expect(vm.runInContext(probe, b.context)).toBe('undefined');
   });
 
   it('the bundle defines exactly one global, R, with the same exports as the Node import', () => {
