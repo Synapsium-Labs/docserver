@@ -46,6 +46,32 @@ describe('pySlug', () => {
   }
 });
 
+// Departure PD9 (ruling C29). The slug keeps `\p{L}` and `\p{N}` and lower-cases with toLowerCase(), so it follows
+// the RUNTIME's Unicode tables, where the reference followed Python 3.12's (Unicode 15.0). A code point that is
+// unassigned in 15.0 and assigned later can therefore appear in an id here, and two runtimes can disagree with
+// each other. U+1C89 CYRILLIC CAPITAL LETTER TJE is one: assigned in Unicode 16.0 (a capital letter, lower case
+// U+1C8A). The reference's output for `# a\u1c89b` is the id `ab` (the code point is unassigned there, so `\w`
+// drops it); this library's, on a runtime with Unicode 16 or later, is `a\u1c8ab`. Node 22 and 24 both ship
+// Unicode 16 or later, and the case branches on process.versions.unicode so it stays true on one that does not.
+// No golden holds such a code point, so no file moves.
+describe('heading ids follow the runtime Unicode tables (departure PD9)', () => {
+  const unicode = Number.parseFloat(process.versions['unicode'] ?? '');
+
+  it('U+1C89, unassigned in Unicode 15.0, is dropped there and kept (lower-cased) from Unicode 16.0 on', () => {
+    expect(Number.isFinite(unicode)).toBe(true);
+    const html = render('# a\u1c89b\n').html;
+    if (unicode >= 16) {
+      expect(html).toContain('<h1 id="a\u1c8ab" data-line="1-1">a\u1c89b</h1>');
+    } else {
+      expect(html).toContain('<h1 id="ab" data-line="1-1">a\u1c89b</h1>');
+    }
+  });
+
+  it('a code point unassigned in every Unicode version is dropped on every runtime, as in the reference', () => {
+    expect(render('# a\u0378b\n').html).toContain('<h1 id="ab" data-line="1-1">a\u0378b</h1>');
+  });
+});
+
 describe('headingTitle', () => {
   it('joins text and code_inline children only: no raw HTML, image alt or break', () => {
     const children = [

@@ -12,8 +12,8 @@ const departures = JSON.parse(readFileSync(new URL('../conformance/DEPARTURES.js
   category: string;
 }[];
 
-/** The categories with no file to move (PD1 compares code as text; PD5, PD6 and PD8 move no golden), then those that do. */
-const CATEGORIES = [...new Set(['PD1', 'PD5', 'PD6', 'PD8', ...departures.map((d) => d.category)])].sort();
+/** The categories with no file to move (PD1 compares code as text; PD5, PD6, PD8 and PD9 move no golden), then those that do. */
+const CATEGORIES = [...new Set(['PD1', 'PD5', 'PD6', 'PD8', 'PD9', ...departures.map((d) => d.category)])].sort();
 
 describe('README', () => {
   it('names every runtime export of ./render and ./conformance', () => {
@@ -58,7 +58,7 @@ describe('README', () => {
   });
 
   it('describes every departure category, one table row each', () => {
-    expect(CATEGORIES).toEqual(['PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8']);
+    expect(CATEGORIES).toEqual(['PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8', 'PD9']);
     expect(CATEGORIES.filter((c) => README.split(`\n| ${c} | `).length !== 2)).toEqual([]);
   });
 
