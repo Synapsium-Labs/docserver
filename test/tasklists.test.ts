@@ -149,6 +149,10 @@ describe("task lists: this library's own parts", () => {
 // task-list checkbox is also an html_inline token, but it is never a tag the cap meant, so a list of more
 // than 64 tasks of one kind still renders every checkbox as an input. The expected html below is the
 // reference renderer's output for the same inputs (compared offline, byte for byte, after normalisation).
+// The checkbox bytes below are literal, as the reference emits them (the corpus goldens show the same), so these
+// two cases do not lean on the implementation's own constants.
+const UNCHECKED_BYTES = '<input class="task-list-item-checkbox" disabled="disabled" type="checkbox">';
+const CHECKED_BYTES = '<input class="task-list-item-checkbox" checked="checked" disabled="disabled" type="checkbox">';
 describe('task lists: past 64 of one kind every checkbox is still an input (review 458, F1)', () => {
   it('70 unchecked tasks: 70 inputs, none escaped', () => {
     const src = Array.from({ length: 70 }, (_, i) => `- [ ] task ${i + 1}`).join('\n') + '\n';
@@ -156,7 +160,7 @@ describe('task lists: past 64 of one kind every checkbox is still an input (revi
       '<ul class="contains-task-list" data-line="1-70">\n' +
       Array.from(
         { length: 70 },
-        (_, i) => `<li class="task-list-item" data-line="${i + 1}-${i + 1}">${UNCHECKED} task ${i + 1}</li>\n`,
+        (_, i) => `<li class="task-list-item" data-line="${i + 1}-${i + 1}">${UNCHECKED_BYTES} task ${i + 1}</li>\n`,
       ).join('') +
       '</ul>\n';
     const html = render(src).html;
@@ -171,7 +175,7 @@ describe('task lists: past 64 of one kind every checkbox is still an input (revi
       '<ul class="contains-task-list" data-line="1-140">\n' +
       Array.from({ length: 140 }, (_, k) => {
         const n = Math.floor(k / 2) + 1;
-        const [box, word] = k % 2 === 0 ? [UNCHECKED, 'open'] : [CHECKED, 'done'];
+        const [box, word] = k % 2 === 0 ? [UNCHECKED_BYTES, 'open'] : [CHECKED_BYTES, 'done'];
         return `<li class="task-list-item" data-line="${k + 1}-${k + 1}">${box} ${word} ${n}</li>\n`;
       }).join('') +
       '</ul>\n';
