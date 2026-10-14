@@ -24,11 +24,16 @@ export interface RenderOptions {
 
 export interface Heading {
   level: 1 | 2 | 3 | 4 | 5 | 6;
+  /** the heading's id in the html; authors control it and it may equal another element's id: never look up by it */
   id: string;
+  /** plain text as the author wrote it, not escaped HTML: insert it with textContent, or escape it */
   text: string;
 }
 
-/** One front-matter key, in source order. Same shape as the standalone server's meta.front. */
+/**
+ * One front-matter key, in source order. Same shape as the standalone server's meta.front. `key` and `vals`
+ * are plain text as the author wrote them, not escaped HTML: insert them with textContent, or escape them.
+ */
 export interface FrontEntry {
   key: string;
   list: boolean;
@@ -36,10 +41,13 @@ export interface FrontEntry {
 }
 
 export interface RenderMeta {
-  /** null-prototype record derived from frontList: list ? vals : vals[0]. null when there is no front-matter mapping. */
+  /**
+   * null-prototype record derived from frontList: list ? vals : vals[0]. null when there is no front-matter
+   * mapping. Its keys and values are plain text, not escaped HTML.
+   */
   front: Readonly<Record<string, string | readonly string[]>> | null;
   frontList: readonly FrontEntry[] | null;
-  /** text of the first level-1 heading in document order, else null */
+  /** text of the first level-1 heading in document order, else null; plain text, not escaped HTML */
   title: string | null;
   headings: readonly Heading[];
   /** count of figure.mermaid-figure emitted */

@@ -1,8 +1,8 @@
 // The conformance corpus against this library's render() (docserver L1, Task 3; architecture section F,
 // "How tasks hand over"). test/corpus-pending.json names the cases a later task makes pass, each with that
 // task (`"T<n>"`): a pending case must FAIL, so a case that starts passing is removed from the list in the
-// same change, and every other case must pass. Each task removes its own cases; Task 12 asserts the list
-// is empty. The first blocks test runCorpus and loadCorpus themselves with stand-in render functions.
+// same change, and every other case must pass. Each task removed its own cases, and at the end of L1 the list
+// is empty (Task 12). The first blocks test runCorpus and loadCorpus themselves with stand-in render functions.
 // Task 11 adds the verdicts of conformance/hostile.json: a hostile case is judged by its golden and its
 // verdict, a generated case (built from a spec, with no golden) by its verdict alone, and the oracle runs
 // on every case. Every non-ASCII character is written as a \u escape.
@@ -169,10 +169,9 @@ describe('the corpus against render()', () => {
   const run = runCorpus(render, { scanRefs });
   const ids = new Set(cases.map((c) => c.id));
 
-  it('pending names only known cases, each with the later task that makes it pass', () => {
-    expect(Object.keys(pending).filter((id) => !ids.has(id))).toEqual([]);
-    const bad = Object.entries(pending).filter(([, task]) => !/^T12$/.test(task));
-    expect(bad).toEqual([]);
+  it('pending is empty: every case of the corpus passes (Task 12)', () => {
+    expect(pending).toEqual({});
+    expect(run.total).toBe(ids.size);
   });
 
   for (const r of run.results) {

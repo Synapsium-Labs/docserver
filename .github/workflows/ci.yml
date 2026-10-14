@@ -1,6 +1,10 @@
 name: ci
 
-# Typecheck, test and build on every pull request and every push to main, on Node 22 and 24.
+# Typecheck, test and build on every pull request and every push to main, on Node 22 and 24; then refuse a
+# weakened hostile verdict or an unnamed golden move (the ratchet), and install the packed tarball in a
+# throwaway project and run the corpus through its public entries (the consumer smoke). The ratchet's base is
+# the pull request's base branch; on a push, main's tip before the push, so every commit the push adds is read
+# (HEAD^ only for a push that has no previous tip); by hand, origin/main.
 # The token is read-only; a later job that needs more asks for it in its own diff.
 on:
   push:
@@ -36,3 +40,9 @@ jobs:
       - run: npm run typecheck
       - run: ./node_modules/.bin/vitest run
       - run: npm run build
+      - name: ratchet
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || github.event_name == 'push' && 'HEAD^' || 'origin/main' }}
+        run: node scripts/ratchet.mjs --base "${BASE}"
+      - run: npm pack
+      - run: node scripts/consumer-smoke.mjs ./synapsium-labs-docserver-0.1.0.tgz

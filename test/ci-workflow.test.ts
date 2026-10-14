@@ -1,7 +1,9 @@
 // The first CI workflow, .github/workflows/ci.yml (docserver L1, Task 1). Read as data with js-yaml (YAML 1.2
 // core: `on` stays the string "on"). The required-check names branch protection would match are the job
-// names, `test (22)` and `test (24)`, so the name template and the matrix are pinned together. Task 12 appends
-// the ratchet and the packed-consumer smoke to the step list below, and nothing else.
+// names, `test (22)` and `test (24)`, so the name template and the matrix are pinned together. Task 12 appended
+// the verdict ratchet (against the pull request's base branch, the push's previous tip, or origin/main by hand)
+// and the packed-consumer smoke (npm pack, then scripts/consumer-smoke.mjs on the tarball npm names from
+// package.json).
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +12,7 @@ interface Step {
   name?: string;
   uses?: string;
   with?: Record<string, unknown>;
+  env?: Record<string, unknown>;
   run?: string;
 }
 interface Job {
@@ -31,6 +34,10 @@ const wf = load(TEXT) as Workflow;
 const jobs = wf.jobs ?? {};
 const test = jobs['test'] ?? {};
 const steps = test.steps ?? [];
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+  name: string;
+  version: string;
+};
 
 describe('ci.yml: permissions', () => {
   it('the workflow token is read-only', () => {
@@ -69,13 +76,28 @@ describe('ci.yml: the test job', () => {
     ]);
   });
 
-  it('installs from the lock, typechecks, tests with the local vitest, then builds', () => {
+  it('installs from the lock, typechecks, tests, builds, runs the ratchet, then packs and smokes the tarball', () => {
     expect(steps.filter((s) => s.run !== undefined).map((s) => s.run)).toEqual([
       'npm ci --no-audit --no-fund',
       'npm run typecheck',
       './node_modules/.bin/vitest run',
       'npm run build',
+      'node scripts/ratchet.mjs --base "${BASE}"',
+      'npm pack',
+      `node scripts/consumer-smoke.mjs ./${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.tgz`,
     ]);
+  });
+
+  it('the ratchet reads from the base branch on a pull request, the previous tip on a push, main by hand', () => {
+    // A push may add several commits; comparing with HEAD^ alone would read only the last of them.
+    const ratchet = steps.find((s) => s.run?.startsWith('node scripts/ratchet.mjs'));
+    expect(ratchet?.env).toEqual({
+      BASE:
+        "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || " +
+        "github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && " +
+        "github.event.before || github.event_name == 'push' && 'HEAD^' || 'origin/main' }}",
+    });
+    expect(steps.filter((s) => s.env !== undefined)).toHaveLength(1);
   });
 
   it('never runs a bare npx vitest and never sets UPDATE_EXPECTED', () => {

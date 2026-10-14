@@ -1,0 +1,52 @@
+// The README documents what ships (docserver L1, Task 12; architecture section F T12). Each runtime export of
+// both entries, the three default limits, the allowlist, every departure category, the warning that ids may
+// collide (ruling C22) and the consumer's corpus call is named there, so a new export or a new departure cannot
+// ship undocumented. The words around them are not pinned; the names are.
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import * as conformance from '../src/conformance/index.js';
+import * as render from '../src/render/index.js';
+
+const README = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+const departures = JSON.parse(readFileSync(new URL('../conformance/DEPARTURES.json', import.meta.url), 'utf8')) as {
+  category: string;
+}[];
+
+/** The categories with no file to move (PD1 compares code as text; PD5-PD8 move no golden), then those that do. */
+const CATEGORIES = [...new Set(['PD1', 'PD5', 'PD6', 'PD7', 'PD8', ...departures.map((d) => d.category)])].sort();
+
+describe('README', () => {
+  it('names every runtime export of ./render and ./conformance', () => {
+    const names = [...Object.keys(render), ...Object.keys(conformance)].sort();
+    expect(names).toHaveLength(13);
+    expect(names.filter((n) => !README.includes(`\`${n}\``) && !README.includes(`\`${n}(`))).toEqual([]);
+  });
+
+  it('states the default limits with their values, the html bound among them', () => {
+    expect(README).toContain(`\`DEFAULT_MAX_BYTES\`, ${String(render.DEFAULT_MAX_BYTES)}`);
+    expect(README).toContain(`\`DEFAULT_MAX_IMAGES\`, ${String(render.DEFAULT_MAX_IMAGES)}`);
+    expect(README).toContain(`| \`maxHtmlBytes\` | ${String(4 * render.DEFAULT_MAX_BYTES)} `);
+    expect(README).toContain("`'output-over-limit'`");
+  });
+
+  it('warns that ids may collide, so a host never looks an element up by a document id (ruling C22)', () => {
+    expect(README).toContain('ids may collide');
+    expect(README).toContain('must never look up an element of a rendered document by a document id');
+  });
+
+  it('lists every inline tag of the allowlist and the anchor id grammar', () => {
+    const missing = render.ALLOWLIST.inlineTags.filter((t) => !README.includes(`\`<${t}>\``));
+    expect(missing).toEqual([]);
+    expect(README).toContain(`\`${render.ALLOWLIST.anchorId}\``);
+  });
+
+  it('describes every departure category, one table row each', () => {
+    expect(CATEGORIES).toEqual(['PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8']);
+    expect(CATEGORIES.filter((c) => README.split(`\n| ${c} | `).length !== 2)).toEqual([]);
+  });
+
+  it("shows a consumer's CI call with scanRefs, and the golden-move trailer", () => {
+    expect(README).toContain('runCorpus(render, { scanRefs })');
+    expect(README).toContain('Goldens-moved: <id>, <id>');
+  });
+});
