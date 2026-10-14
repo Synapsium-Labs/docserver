@@ -100,3 +100,18 @@ describe('reference label case folding follows the runtime Unicode tables (depar
     }
   });
 });
+
+// Departure PD6, second part: markdown-it decides emphasis flanking from uc.micro's punctuation and symbol tables,
+// which hold five Unicode 15.1 symbols that the reference's Python 3.12 reports as unassigned. Each of the five, as
+// `a*Xb*`, is punctuation to markdown-it, so the `*` before it cannot open emphasis and the line stays text:
+// <p data-line="1-1">a*Xb*</p>. The reference's output is <p data-line="1-1">a<em>Xb</em></p> for all five (measured).
+// This does not depend on the runtime, and no golden holds one of them, so no file moves.
+describe("emphasis flanking: markdown-it's own Unicode tables (departure PD6)", () => {
+  for (const code of [0x2ffc, 0x2ffd, 0x2ffe, 0x2fff, 0x31ef]) {
+    const c = String.fromCodePoint(code);
+    it(`U+${code.toString(16).toUpperCase()} makes the asterisk before it flank as punctuation`, () => {
+      expect(render(`a*${c}b*\n`).html).toBe(`<p data-line="1-1">a*${c}b*</p>\n`);
+      expect(render(`a*${c}b*\n`).html).not.toBe(`<p data-line="1-1">a<em>${c}b</em></p>\n`);
+    });
+  }
+});

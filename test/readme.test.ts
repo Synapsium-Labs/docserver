@@ -84,6 +84,13 @@ describe('README', () => {
     expect(row).toContain('a front-matter key is cut to 500 code points, as a value is');
   });
 
+  it("PD6 covers markdown-it's own Unicode tables: the five Unicode 15.1 symbols, and that the runtime does not matter (ruling C36)", () => {
+    const row = README.split('\n').find((l) => l.startsWith('| PD6 | ')) ?? '';
+    for (const part of ['uc.micro', 'U+2FFC, U+2FFD, U+2FFE, U+2FFF and U+31EF', '`<p>a*㇯b*</p>`', '`<p>a<em>㇯b</em></p>`', 'does not depend on the runtime']) {
+      expect(row).toContain(part);
+    }
+  });
+
   it('PD9 names the three surfaces that follow the runtimes Unicode tables (ruling C35)', () => {
     const row = README.split('\n').find((l) => l.startsWith('| PD9 | ')) ?? '';
     expect(row).toContain('Unicode tables follow the runtime, for three surfaces');
