@@ -8,8 +8,11 @@
 // project, so every import resolves by package name through the tarball's own exports map, never through this
 // checkout. The check imports `@synapsium-labs/docserver/render` and `/conformance`, confirms the entry
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, and runs
-// runCorpus(render, { scanRefs }). It exits 0 only when every case passes, 1 when the check fails, 2 on a usage
-// error. Without --deps-from, `npm install` fetches the package's dependencies from the registry, as a real
+// runCorpus(render, { scanRefs }). Before that it typechecks a consumer file that imports both entries, with this
+// checkout's own typescript, under the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a
+// packed declaration whose imports a consumer cannot resolve fails the smoke; the consumer gets no Node types,
+// because the packed declarations reference none. It exits 0 only when every case passes, 1 when the check or the
+// typecheck fails, 2 on a usage error. Without --deps-from, `npm install` fetches the package's dependencies from the registry, as a real
 // consumer would, with `--before` set MIN_AGE_DAYS back from the moment it runs, so the transitive dependencies
 // the lock does not pin obey the same age rule as every direct pin; with it, the tarball is unpacked as the package and its dependencies are linked from an
 // installed tree, and nothing touches the network. --time-scale multiplies every verdict's maxMs, for a busy
@@ -18,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PACKAGE = '@synapsium-labs/docserver';
 
@@ -28,6 +32,33 @@ const MIN_AGE_DAYS = 14;
 function installCutoff(now) {
   return new Date(now.getTime() - MIN_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
+
+/** The typescript compiler of the checkout this script lives in; the consumer never installs one. */
+const TSC = fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url));
+
+/** The consumer's tsconfig: what a strict consumer of a package with declarations sets. skipLibCheck stays off. */
+const CONSUMER_TSCONFIG = {
+  compilerOptions: {
+    strict: true,
+    module: 'nodenext',
+    moduleResolution: 'nodenext',
+    skipLibCheck: false,
+    noEmit: true,
+    target: 'es2022',
+  },
+  files: ['check.ts'],
+};
+
+/** The consumer's typed file: a value and a type from each entry, so every packed declaration is read. */
+const CHECK_TS = `import { ALLOWLIST, render } from '${PACKAGE}/render';
+import type { RenderResult } from '${PACKAGE}/render';
+import { runCorpus } from '${PACKAGE}/conformance';
+import type { CorpusRun } from '${PACKAGE}/conformance';
+
+export const result: RenderResult = render('# title');
+export const run: CorpusRun = runCorpus(render, { timeScale: 1 });
+export const allowlist: unknown = ALLOWLIST;
+`;
 
 /** Runs inside the consumer project; every specifier resolves from there. */
 const check = (timeScale) => `import { render, scanRefs } from '${PACKAGE}/render';
@@ -123,6 +154,10 @@ function main(argv) {
       installOffline(tarball, depsFrom, dir);
       console.log('consumer-smoke: installed the tarball offline');
     }
+    writeFileSync(path.join(dir, 'tsconfig.json'), `${JSON.stringify(CONSUMER_TSCONFIG, null, 2)}\n`);
+    writeFileSync(path.join(dir, 'check.ts'), CHECK_TS);
+    run(process.execPath, [TSC, '-p', 'tsconfig.json'], dir);
+    console.log('consumer-smoke: the packed declarations typecheck under strict, nodenext and skipLibCheck: false');
     writeFileSync(path.join(dir, 'check.mjs'), check(timeScale));
     const r = spawnSync(process.execPath, ['check.mjs'], { cwd: dir, stdio: 'inherit' });
     return r.status === 0 ? 0 : 1;

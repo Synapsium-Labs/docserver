@@ -9,7 +9,17 @@
 // and a throwaway cache, so the test touches no network. The smoke runs with --time-scale 10: test/corpus.test.ts
 // holds every maxMs at scale 1, and this run judges the package, not the machine.
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  appendFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +38,8 @@ const manifest = JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'manifes
 /** The file name npm gives the tarball: the scope's @ dropped, its slash a dash, then the version. */
 const TARBALL = `${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.tgz`;
 
+const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under strict, nodenext and skipLibCheck: false';
+
 /** The only places a packed file may live. */
 const ALLOWED = [
   /^dist\/(?:render|conformance)\/[A-Za-z]+\.(?:js|d\.ts)$/,
@@ -45,6 +57,7 @@ let work = '';
 let packed: Packed = { filename: '', files: [] };
 let smoke: SpawnSyncReturns<string> | null = null;
 let brokenSmoke: SpawnSyncReturns<string> | null = null;
+let untypedSmoke: SpawnSyncReturns<string> | null = null;
 
 /** Run scripts/consumer-smoke.mjs with these arguments. */
 function runSmoke(args: readonly string[]): SpawnSyncReturns<string> {
@@ -84,6 +97,22 @@ beforeAll(() => {
   packed = { filename: first?.filename ?? '', files: (first?.files ?? []).map((f) => f.path).sort() };
   const deps = realpathSync(path.join(ROOT, 'node_modules'));
   smoke = runSmoke([path.join(work, packed.filename), '--deps-from', deps, '--time-scale', '10']);
+  // The same package with the two @types packages back in devDependencies: a consumer's install would not bring
+  // them, so its strict typecheck of the packed declarations fails (review 458, F7).
+  const manifestPath = path.join(stage, 'package.json');
+  const original = readFileSync(manifestPath, 'utf8');
+  const untyped = JSON.parse(original) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
+  for (const name of ['@types/markdown-it', '@types/js-yaml']) {
+    untyped.devDependencies[name] = untyped.dependencies[name] ?? '';
+    delete untyped.dependencies[name];
+  }
+  writeFileSync(manifestPath, JSON.stringify(untyped, null, 2));
+  const untypedDir = path.join(work, 'untyped');
+  mkdirSync(untypedDir);
+  const untypedPack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', untypedDir], stage);
+  if (untypedPack.status !== 0) throw new Error(`npm pack failed: ${untypedPack.stderr}`);
+  untypedSmoke = runSmoke([path.join(untypedDir, packed.filename), '--deps-from', deps, '--time-scale', '10']);
+  writeFileSync(manifestPath, original);
   // The same package with one packed golden changed: its own corpus no longer passes.
   const broken = path.join(work, 'broken');
   mkdirSync(broken);
@@ -141,6 +170,7 @@ describe('the packed package, imported by name', () => {
     expect(smoke?.stdout).toBe(
       [
         'consumer-smoke: installed the tarball offline',
+        STRICT_LINE,
         'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
         'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
         'consumer-smoke: 82 of 82 cases passed',
@@ -150,15 +180,22 @@ describe('the packed package, imported by name', () => {
     expect(smoke?.status).toBe(0);
   });
 
+  it('typechecks under a strict consumer config: with the @types packages as devDependencies it fails with TS7016', () => {
+    expect(untypedSmoke?.status).toBe(1);
+    expect(untypedSmoke?.stdout).toBe('consumer-smoke: installed the tarball offline\n');
+    expect(untypedSmoke?.stderr).toMatch(/dist\/render\/\w+\.d\.ts\(\d+,\d+\): error TS7016: Could not find a declaration file for module 'markdown-it'/);
+  });
+
   it('fails, naming the case, when the packed corpus does not pass', () => {
     const lines = brokenSmoke?.stdout.split('\n') ?? [];
-    expect(lines.slice(0, 4)).toEqual([
+    expect(lines.slice(0, 5)).toEqual([
       'consumer-smoke: installed the tarball offline',
+      STRICT_LINE,
       'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
       'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
       'consumer-smoke: 81 of 82 cases passed',
     ]);
-    expect(lines[4]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
+    expect(lines[5]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
     expect(brokenSmoke?.status).toBe(1);
   });
 });
