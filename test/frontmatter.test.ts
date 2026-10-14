@@ -249,6 +249,18 @@ describe('PD2: scalars render their source text, without Python (rulings C1 and 
     expect(render('---\n<<: {b: 2}\na: 1\n---\n').html).toBe(dl('1-4', item('b', '2') + item('a', '1')));
   });
 
+  it("C17 (e): merged keys follow js-yaml's order: where the `<<` is, a merge list's sources in list order", () => {
+    // Reference (PyYAML), measured on the same inputs: the keys come out b, a, x for the first and a, b, c for
+    // the second.
+    const first = render('---\nx: 0\n<<: [{a: 1}, {b: 2}]\n---\n');
+    expect(first.html).toBe(dl('1-4', item('x', '0') + item('a', '1') + item('b', '2')));
+    expect(first.meta.frontList?.map((e) => e.key)).toEqual(['x', 'a', 'b']);
+    // Both sources give `a`: the earlier source wins, a=1, in the reference and here; only the order differs.
+    const second = render('---\n<<: [{a: 1, c: 1}, {a: 2, b: 2}]\n---\n');
+    expect(second.html).toBe(dl('1-3', item('a', '1') + item('c', '1') + item('b', '2')));
+    expect(second.meta.frontList).toEqual([scalar('a', '1'), scalar('c', '1'), scalar('b', '2')]);
+  });
+
   it('C17: U+0085 is not a line break, so this value fails the load, where the reference read two keys', () => {
     const r = render('---\na: x\u0085b: y\n---\n');
     expect([r.html, r.meta.frontList]).toEqual(['', null]);

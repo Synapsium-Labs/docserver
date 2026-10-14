@@ -70,7 +70,7 @@ describe('README', () => {
       '(b) a last block scalar keeps its trailing line feed',
       '(c) a sequence key loads as its items joined by commas',
       '(d) nesting deeper than 100 levels fails the load',
-      '(e) a `<<` merge key after other keys puts the merged keys last',
+      "(e) merged keys follow js-yaml's order: they sit where the `<<` is, and a merge list's sources come in list order",
       'A tag outside the schema (`!!int`, `!!float`, `!!binary`) fails the load',
       'U+0085, U+2028 and U+2029 are not line breaks',
       'A null list item renders empty',
