@@ -29,10 +29,13 @@
 //   figcaption, and tables render through this library's two wrapper rules;
 // - the footnote plugin is markdown-it-footnote, used as it ships (its output matches the reference's
 //   plugin, xhtmlOut included); it adds footnote_def before reference, footnote_inline and footnote_ref
-//   after image, and footnote_tail right after inline;
+//   after image, and footnote_tail right after inline; footnote_tail is then replaced in place by a
+//   linear port of the plugin's rule, with the same output (footnotes.ts, ruling C26); a plugin upgrade
+//   must re-run test/footnote-cost.test.ts, its differential above all;
 // - task_lists goes before text_join, so after footnote_tail, as the reference's does (tasklists.ts).
 import MarkdownIt from 'markdown-it';
 import footnote from 'markdown-it-footnote';
+import { footnoteTail } from './footnotes.js';
 import { alerts, renderAlertClose, renderAlertOpen } from './alerts.js';
 import { safeBlockHtml, safeInlineHtml } from './allowlist.js';
 import { blockStrip } from './blockStrip.js';
@@ -55,6 +58,7 @@ export function createEngine(): MarkdownIt {
   md.enable(['table', 'strikethrough']);
   md.block.ruler.at('table', pyTable, { alt: ['paragraph', 'reference'] });
   md.use(footnote);
+  md.core.ruler.at('footnote_tail', footnoteTail);
   md.core.ruler.push('line_attrs', lineAttrs);
   md.core.ruler.after('block', 'block_strip', blockStrip);
   md.core.ruler.before('line_attrs', 'anchors', anchors);
