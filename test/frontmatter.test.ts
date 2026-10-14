@@ -254,6 +254,48 @@ describe('PD2: scalars render their source text, without Python (rulings C1 and 
   });
 });
 
+// Ruling C32: PD2 also covers U+2028 and U+2029. PyYAML treats both as line breaks and js-yaml does not, so
+// this implementation reads them as ordinary characters of a line. Each case notes what the reference
+// rendered, measured with the reference renderer on the same input (its output is not stored in the repo).
+describe('PD2: U+2028 and U+2029 are not line breaks (ruling C32)', () => {
+  for (const [name, ch] of [
+    ['U+2028', '\u2028'],
+    ['U+2029', '\u2029'],
+  ] as const) {
+    it(`${name} in the middle of a line: the load fails, where the reference read two keys`, () => {
+      // Reference: <dl><div><dt>a</dt><dd>x</dd></div><div><dt>b</dt><dd>y</dd></div></dl>, meta a: x and b: y.
+      const r = render(`---\na: x${ch}b: y\n---\n`);
+      expect([r.html, r.meta.frontList]).toEqual(['', null]);
+    });
+
+    it(`${name} at the end of a value is part of the value, where the reference ended the line there`, () => {
+      // Reference: the value is `x`, with no trailing character.
+      const r = render(`---\na: x${ch}\nb: y\n---\n`);
+      expect(r.html).toBe(dl('1-4', item('a', `x${ch}`) + item('b', 'y')));
+      expect(r.meta.frontList).toEqual([scalar('a', `x${ch}`), scalar('b', 'y')]);
+    });
+
+    it(`${name} inside a block scalar is part of its text, where the reference refused the whole block`, () => {
+      // Reference: the block renders nothing, and meta is null.
+      const r = render(`---\na: |\n  x${ch}y\n---\n`);
+      expect(r.html).toBe(dl('1-4', item('a', `x${ch}y\n`)));
+      expect(r.meta.frontList).toEqual([scalar('a', `x${ch}y\n`)]);
+    });
+
+    it(`${name} inside a comment does not end it, where the reference read the key after it`, () => {
+      // Reference: the keys b and a, in that order (b: y is read as a key after the comment's break).
+      const r = render(`---\n# c${ch}b: y\na: 1\n---\n`);
+      expect(r.html).toBe(dl('1-4', item('a', '1')));
+      expect(r.meta.frontList).toEqual([scalar('a', '1')]);
+    });
+
+    it(`${name} inside a quoted scalar is kept, as in the reference`, () => {
+      const r = render(`---\na: "x${ch}y"\n---\n`);
+      expect(r.html).toBe(dl('1-3', item('a', `x${ch}y`)));
+    });
+  }
+});
+
 describe('PD3: meta comes from the block the strip renders (ruling C1)', () => {
   for (const [name, src] of [
     ['a four-dash opener and closer', '----\na: 1\n----\n'],
