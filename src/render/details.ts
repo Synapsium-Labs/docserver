@@ -28,10 +28,19 @@ interface Depth {
   over: number;
 }
 
-/** Caps one inline token's sup, sub and kbd tags (the allowlist's only html_inline tokens) against `depths`. */
+/**
+ * The html_inline tokens the cap counts: exactly the bare sup, sub and kbd tags and their closers, which
+ * safeInlineHtml (allowlist.ts) pushes. They are not the only html_inline tokens in a stream: task_lists
+ * (tasklists.ts) pushes each checkbox as one, with no closer. The cap takes a filter on the token's content
+ * (review 458, F1), not a token type of its own for the checkbox, so a checkbox is never counted, never
+ * escaped, and a list of more than 64 tasks renders every one.
+ */
+const COUNTED = /^<\/?(?:sup|sub|kbd)>$/;
+
+/** Caps one inline token's sup, sub and kbd tags (the html_inline tokens COUNTED accepts) against `depths`. */
 function capInline(children: readonly Token[], depths: Map<string, Depth>): void {
   for (const t of children) {
-    if (t.type !== 'html_inline') continue;
+    if (t.type !== 'html_inline' || !COUNTED.test(t.content)) continue;
     const closer = t.content.charAt(1) === '/';
     const name = t.content.slice(closer ? 2 : 1, -1);
     let d = depths.get(name);

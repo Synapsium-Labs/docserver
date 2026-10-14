@@ -144,3 +144,40 @@ describe("task lists: this library's own parts", () => {
     expect(core.__rules__.find((r) => r.name === 'task_lists')?.fn).toBe(taskLists);
   });
 });
+
+// Review 458, F1: the C21 inline cap (details.ts) counts only the allowlist's sup, sub and kbd tags. The
+// task-list checkbox is also an html_inline token, but it is never a tag the cap meant, so a list of more
+// than 64 tasks of one kind still renders every checkbox as an input. The expected html below is the
+// reference renderer's output for the same inputs (compared offline, byte for byte, after normalisation).
+describe('task lists: past 64 of one kind every checkbox is still an input (review 458, F1)', () => {
+  it('70 unchecked tasks: 70 inputs, none escaped', () => {
+    const src = Array.from({ length: 70 }, (_, i) => `- [ ] task ${i + 1}`).join('\n') + '\n';
+    const expected =
+      '<ul class="contains-task-list" data-line="1-70">\n' +
+      Array.from(
+        { length: 70 },
+        (_, i) => `<li class="task-list-item" data-line="${i + 1}-${i + 1}">${UNCHECKED} task ${i + 1}</li>\n`,
+      ).join('') +
+      '</ul>\n';
+    const html = render(src).html;
+    expect(html).not.toContain('&lt;input');
+    expect(html.match(/<input /g)).toHaveLength(70);
+    expect(normaliseForCompare(html)).toBe(expected);
+  });
+
+  it('70 unchecked and 70 checked tasks, mixed: every checkbox is an input', () => {
+    const src = Array.from({ length: 70 }, (_, i) => `- [ ] open ${i + 1}\n- [x] done ${i + 1}`).join('\n') + '\n';
+    const expected =
+      '<ul class="contains-task-list" data-line="1-140">\n' +
+      Array.from({ length: 140 }, (_, k) => {
+        const n = Math.floor(k / 2) + 1;
+        const [box, word] = k % 2 === 0 ? [UNCHECKED, 'open'] : [CHECKED, 'done'];
+        return `<li class="task-list-item" data-line="${k + 1}-${k + 1}">${box} ${word} ${n}</li>\n`;
+      }).join('') +
+      '</ul>\n';
+    const html = render(src).html;
+    expect(html).not.toContain('&lt;input');
+    expect(html.match(/<input /g)).toHaveLength(140);
+    expect(normaliseForCompare(html)).toBe(expected);
+  });
+});
