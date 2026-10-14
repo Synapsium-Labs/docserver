@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "case": "frontmatter-types",
+    "files": ["html", "meta"],
+    "category": "PD2",
+    "reason": "Scalars render their source text (ruling C16: js-yaml's failsafe schema plus YAML 1.2's null and bool and the merge key, no int or float) instead of PyYAML's YAML 1.1 values: `flag: yes` stays the string yes where the reference read the boolean True, `b: true` renders true where it printed True, `f: 1.50` renders 1.50 as written where it printed the float 1.5, and `n: null` renders an empty value where it printed None (meta skips a null value either way)."
+  },
+  {
+    "case": "frontmatter-openers/dashes4",
+    "files": ["meta"],
+    "category": "PD3",
+    "reason": "meta.front and meta.frontList come from the block the strip renders. The reference read meta from the raw text with a stricter pattern that needs exactly three dashes, so a ---- block rendered its strip and gave null meta."
+  },
+  {
+    "case": "frontmatter-openers/dots",
+    "files": ["meta"],
+    "category": "PD3",
+    "reason": "meta.front and meta.frontList come from the block the strip renders. The reference's raw-text pattern does not accept a ... closer, so the block rendered its strip and gave null meta."
+  },
+  {
+    "case": "frontmatter-openers/space-open",
+    "files": ["meta"],
+    "category": "PD3",
+    "reason": "meta.front and meta.frontList come from the block the strip renders. The reference's raw-text pattern does not accept text after the opening dashes (--- x), so the block rendered its strip and gave null meta."
+  },
+  {
+    "case": "line-endings/crlf",
+    "files": ["meta"],
+    "category": "PD3",
+    "reason": "meta.front and meta.frontList come from the block the strip renders, after line endings are normalised. The reference's raw-text pattern ran before normalisation and missed a CRLF file's front matter, which it rendered as a strip."
+  },
+  {
+    "case": "line-endings/bom",
+    "files": ["html", "meta"],
+    "category": "PD4",
+    "reason": "One leading byte order mark is removed before parsing. The reference kept it, so the file's front matter was not recognised and rendered as a setext heading holding the BOM and the YAML; it now renders the strip, and meta reads the block."
+  }
+]

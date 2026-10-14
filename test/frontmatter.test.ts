@@ -1,0 +1,410 @@
+// Front matter (docserver L1, Task 9; architecture section C, the "Front matter" row; contract section 2.12;
+// ruling C1's departures PD2, PD3 and PD4). Every expected html string in the first block was produced by
+// the reference renderer from the same input and is compared after normaliseForCompare (it only touches
+// code blocks). The later blocks pin the three departures, meta.front and meta.frontList, the limits, and
+// the rule's place in the engine. Every non-ASCII character is written as a \u escape.
+import { describe, expect, it } from 'vitest';
+import { normaliseForCompare } from '../src/conformance/normalise.js';
+import { checkOutputSafety } from '../src/conformance/oracle.js';
+import { createEngine } from '../src/render/engine.js';
+import { createEnv } from '../src/render/env.js';
+import { FM_MAX_CHARS, frontRecord, parseFrontMatter } from '../src/render/frontMatter.js';
+import { render } from '../src/render/index.js';
+import type { FrontEntry } from '../src/render/types.js';
+
+type Case = readonly [name: string, src: string, html: string];
+
+function cases(list: readonly Case[]): void {
+  for (const [name, src, html] of list) {
+    it(name, () => {
+      expect(normaliseForCompare(render(src).html)).toBe(html);
+    });
+  }
+}
+
+const dl = (line: string, items: string): string => `<dl class="doc-meta" data-line="${line}">${items}</dl>\n`;
+const item = (k: string, v: string): string => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+const scalar = (key: string, v: string): FrontEntry => ({ key, list: false, vals: [v] });
+const A1 = dl('1-3', item('a', '1'));
+
+describe('front matter: against the reference', () => {
+  cases([
+    [
+      'a mapping renders the strip; the hidden token puts a line feed before a heading',
+      '---\ntitle: T\n---\n# H\n\n```py\nx\n```\n',
+      dl('1-3', item('title', 'T')) +
+        '\n<h1 id="h" data-line="4-4">H</h1>\n<div class="codehilite" data-line="6-8"><pre>x\n</pre></div>\n',
+    ],
+    [
+      'the line feed comes before a table, a list and a blockquote',
+      '---\na: 1\n---\n| a |\n|---|\n| b |\n\n- x\n\n> q\n',
+      `${A1}\n<div class="table-wrapper"><table data-line="4-6">\n<thead>\n<tr data-line="4-4">\n<th>a</th>\n</tr>\n` +
+        '</thead>\n<tbody>\n<tr data-line="6-6">\n<td>b</td>\n</tr>\n</tbody>\n</table></div>\n' +
+        '<ul data-line="8-9">\n<li data-line="8-9">x</li>\n</ul>\n<blockquote data-line="10-10">\n' +
+        '<p data-line="10-10">q</p>\n</blockquote>\n',
+    ],
+    [
+      'and not before a figure, a details line or indented code, which render through their own rules',
+      '---\na: 1\n---\n```mermaid\nA\n```\n',
+      `${A1}<figure class="mermaid-figure" data-line="4-6"><pre class="mermaid">A\n</pre></figure>\n`,
+    ],
+    [
+      'a details line after the block',
+      '---\na: 1\n---\n<details>\n<summary>S</summary>\n</details>\n',
+      `${A1}<details>\n<summary>S</summary>\n</details>\n`,
+    ],
+    ['indented code after the block', '---\na: 1\n---\n    code\n', `${A1}<pre data-line="4-4"><code>code\n</code></pre>\n`],
+    [
+      'a `...` line closes the block and stays in its content',
+      '---\na: 1\n...\n# H\n',
+      `${A1}\n<h1 id="h" data-line="4-4">H</h1>\n`,
+    ],
+    [
+      'a `...` line with no line after it closes nothing',
+      '---\na: 1\n...',
+      '<hr data-line="1-1" />\n<p data-line="2-3">a: 1\n...</p>\n',
+    ],
+    [
+      'the closer needs at least as many dashes as the opener; the text between two `---` lines is the block',
+      '----\na: 1\n---\nb: 2\n-----\n\nx\n',
+      '\n<p data-line="7-7">x</p>\n',
+    ],
+    [
+      'a closer indented four spaces is skipped, three spaces close; the skipped line is YAML text',
+      '---\na: 1\n    ---\n   ---\n',
+      dl('1-4', item('a', '1 ---')),
+    ],
+    ['spaces or a tab may follow the closing dashes', '---\na: 1\n---\t\n\nx\n', `${A1}\n<p data-line="5-5">x</p>\n`],
+    [
+      'anything else after them is no closer, and an unclosed block is no front matter',
+      '---\na: 1\n---x\n\nx\n',
+      '<hr data-line="1-1" />\n<p data-line="2-3">a: 1\n---x</p>\n<p data-line="5-5">x</p>\n',
+    ],
+    ['two dashes open nothing', '--\na: 1\n--\n', '<h2 id="--a-1" data-line="1-3">--\na: 1</h2>\n'],
+    [
+      'only at line 0: a later pair of `---` lines is a thematic break and a setext heading',
+      '---\na: 1\n---\n\n---\nb: 2\n---\n',
+      `${A1}\n<hr data-line="5-5" />\n<h2 id="b-2" data-line="6-7">b: 2</h2>\n`,
+    ],
+    [
+      'the source must start with a dash: a blockquote at line 0 holds no front matter',
+      '> ---\n> a: 1\n> ---\n',
+      '<blockquote data-line="1-3">\n<hr data-line="1-1" />\n<h2 id="a-1" data-line="2-3">a: 1</h2>\n</blockquote>\n',
+    ],
+    [
+      'but a list item at line 0 can, inside its own blockquote (the reference reads state.src[0])',
+      '- > ---\n  > a: 1\n  > ---\n- b\n',
+      '<ul data-line="1-4">\n<li data-line="1-3">\n<blockquote data-line="1-3">' +
+        `${A1}</blockquote>\n</li>\n<li data-line="4-4">b</li>\n</ul>\n`,
+    ],
+    [
+      'an empty block, or a block of `...` alone, renders nothing but the line feed',
+      '---\n---\n\nx\n',
+      '\n<p data-line="4-4">x</p>\n',
+    ],
+    [
+      'a list value joins its items, skipping nested ones; a mapping value is an ellipsis',
+      '---\nk: [a, [b], {c: 1}, d]\nm: {x: 1}\n---\n',
+      dl('1-4', item('k', 'a, d') + item('m', '\u2026')),
+    ],
+    [
+      'a duplicate key keeps its first place and takes its last value',
+      '---\na: 1\nb: 2\na: 3\n---\n',
+      dl('1-5', item('a', '3') + item('b', '2')),
+    ],
+    [
+      'the merge key merges, as PyYAML does when it comes first',
+      '---\n<<: {z: 1}\nbase: &b {x: 1, y: 2}\nm:\n  <<: *b\n  y: 3\nlist: [*b]\n---\n',
+      dl('1-8', item('z', '1') + item('base', '\u2026') + item('m', '\u2026') + item('list', '')),
+    ],
+    ['an empty mapping renders nothing', '---\n{}\n---\n', ''],
+  ]);
+
+  it('meta.frontList equals the reference where its raw-text pattern found the same block', () => {
+    expect(render('---\ntitle: T\n---\n# H\n').meta.frontList).toEqual([scalar('title', 'T')]);
+    expect(render('---\nk: [a, [b], {c: 1}, d]\nm: {x: 1}\n---\n').meta.frontList).toEqual([
+      { key: 'k', list: true, vals: ['a', 'd'] },
+    ]);
+    expect(render('---\na: 1\nb: 2\na: 3\n---\n').meta.frontList).toEqual([scalar('a', '3'), scalar('b', '2')]);
+    expect(render('---\n{}\n---\n').meta.frontList).toEqual([]);
+    expect(render('---\nbase: &b {x: 1, y: 2}\nm:\n  <<: *b\n  y: 3\n---\n').meta.frontList).toEqual([]);
+  });
+});
+
+describe('PD2: scalars render their source text, without Python (rulings C1 and C16)', () => {
+  const SRC =
+    '---\nn: null\nt: ~\ne:\nb: true\nB: False\ny: yes\nN: no\non: off\nd: 2026-10-12\n' +
+    'dt: 2026-10-12 08:00:00\no: 017\ns: 1:30\nl: [~, false]\n---\n';
+
+  it("null is '', booleans are true/false, yes/no/on/off, timestamps, 017 and 1:30 stay as written", () => {
+    expect(render(SRC).html).toBe(
+      dl(
+        '1-15',
+        item('n', '') +
+          item('t', '') +
+          item('e', '') +
+          item('b', 'true') +
+          item('B', 'false') +
+          item('y', 'yes') +
+          item('N', 'no') +
+          item('on', 'off') +
+          item('d', '2026-10-12') +
+          item('dt', '2026-10-12 08:00:00') +
+          item('o', '017') +
+          item('s', '1:30') +
+          item('l', ', false'),
+      ),
+    );
+  });
+
+  it('meta skips null values, as the reference did, and lists a null item as an empty string', () => {
+    expect(render(SRC).meta.frontList?.map((e) => `${e.key}=${e.vals.join('|')}`)).toEqual([
+      'b=true',
+      'B=false',
+      'y=yes',
+      'N=no',
+      'on=off',
+      'd=2026-10-12',
+      'dt=2026-10-12 08:00:00',
+      'o=017',
+      's=1:30',
+      'l=|false',
+    ]);
+  });
+
+  it('the schema reads a date, yes and a number as strings', () => {
+    const data = parseFrontMatter('d: 2026-10-12\ny: yes\nt: 2026-10-12T08:00:00Z\nv: 1.0');
+    expect(data).toEqual({ d: '2026-10-12', y: 'yes', t: '2026-10-12T08:00:00Z', v: '1.0' });
+    expect(typeof data?.['d']).toBe('string');
+    expect(typeof data?.['v']).toBe('string');
+  });
+
+  it('numbers render as written (ruling C16): 1.0, .inf, a 20-digit integer, 0o17; true is true, null is empty', () => {
+    const src =
+      '---\nversion: 1.0\ninf: .inf\nbig: 12345678901234567890\noct: 0o17\nt: true\nn: null\n' +
+      'hex: 0x1F\nexp: 1e3\nneg: -.5\nund: 1_000\nl: [1.50, ~, TRUE, .nan]\n---\n';
+    const r = render(src);
+    expect(r.html).toBe(
+      dl(
+        '1-13',
+        item('version', '1.0') +
+          item('inf', '.inf') +
+          item('big', '12345678901234567890') +
+          item('oct', '0o17') +
+          item('t', 'true') +
+          item('n', '') +
+          item('hex', '0x1F') +
+          item('exp', '1e3') +
+          item('neg', '-.5') +
+          item('und', '1_000') +
+          item('l', '1.50, , true, .nan'),
+      ),
+    );
+    expect({ ...r.meta.front }).toEqual({
+      version: '1.0',
+      inf: '.inf',
+      big: '12345678901234567890',
+      oct: '0o17',
+      t: 'true',
+      hex: '0x1F',
+      exp: '1e3',
+      neg: '-.5',
+      und: '1_000',
+      l: ['1.50', '', 'true', '.nan'],
+    });
+  });
+
+  it('tags outside the schema fail the load: the block renders nothing and meta is null', () => {
+    for (const v of ['!!int 3', '!!float 1.5', '!!binary aGVsbG8=', '!!set {a, b}', '!!timestamp 2026-10-12', "!!js/function 'f'"]) {
+      const r = render(`---\nk: ${v}\n---\n`);
+      expect([r.html, r.meta.frontList, r.meta.front]).toEqual(['', null, null]);
+    }
+  });
+
+  // Ruling C17: the loader differences PD2 also covers. Each case notes what the reference rendered.
+  it('C17 (a): integer-like keys are listed first, where the reference kept document order', () => {
+    const r = render('---\na: y\n2: x\n---\n');
+    expect(r.html).toBe(dl('1-4', item('2', 'x') + item('a', 'y')));
+    expect(r.meta.frontList?.map((e) => e.key)).toEqual(['2', 'a']);
+  });
+
+  it('C17 (b): a last block scalar keeps its trailing line feed, where the reference dropped it', () => {
+    expect(render('---\nk: v\na: |\n  x\n---\n').html).toBe(dl('1-5', item('k', 'v') + item('a', 'x\n')));
+  });
+
+  it('C17 (c): a sequence key loads as its items joined by commas, where the reference rendered nothing', () => {
+    expect(render('---\n? [a, b]\n: v\n---\n').html).toBe(dl('1-4', item('a,b', 'v')));
+  });
+
+  it('C17 (d): nesting deeper than 100 levels fails the load, where the reference read it', () => {
+    const nested = (n: number): string => `---\nk: ${'['.repeat(n)}${']'.repeat(n)}\n---\n`;
+    expect(render(nested(99)).html).toBe(dl('1-3', item('k', '')));
+    const r = render(nested(100));
+    expect([r.html, r.meta.frontList]).toEqual(['', null]);
+  });
+
+  it('C17 (e): a late merge key puts the merged keys last, where the reference put them first', () => {
+    expect(render('---\na: 1\n<<: {b: 2}\n---\n').html).toBe(dl('1-4', item('a', '1') + item('b', '2')));
+    expect(render('---\n<<: {b: 2}\na: 1\n---\n').html).toBe(dl('1-4', item('b', '2') + item('a', '1')));
+  });
+
+  it('C17: U+0085 is not a line break, so this value fails the load, where the reference read two keys', () => {
+    const r = render('---\na: x\u0085b: y\n---\n');
+    expect([r.html, r.meta.frontList]).toEqual(['', null]);
+  });
+});
+
+describe('PD3: meta comes from the block the strip renders (ruling C1)', () => {
+  for (const [name, src] of [
+    ['a four-dash opener and closer', '----\na: 1\n----\n'],
+    ['a `...` closer', '---\na: 1\n...\n# H\n'],
+    ['text after the opening dashes', '--- x\na: 1\n---\n'],
+    ['CRLF line endings', '---\r\na: 1\r\n---\r\n'],
+    ['CR line endings', '---\ra: 1\r---\r'],
+  ] as const) {
+    it(`${name}: the strip and meta.frontList both read a: 1`, () => {
+      const r = render(src);
+      expect(r.html.startsWith(A1)).toBe(true);
+      expect(r.meta.frontList).toEqual([scalar('a', '1')]);
+      expect({ ...r.meta.front }).toEqual({ a: '1' });
+    });
+  }
+
+  it('no front matter, or one that is not a mapping, gives null for both', () => {
+    for (const src of ['# H\n', '---\na: 1\n', '---\n- a\n- b\n---\n', '---\n: : bad\n---\n', '---\nplain\n---\n']) {
+      const r = render(src);
+      expect([r.meta.front, r.meta.frontList]).toEqual([null, null]);
+    }
+  });
+});
+
+describe('PD4: one leading byte order mark is removed (ruling C1)', () => {
+  it('a BOM file keeps its front matter, and bytes still counts the BOM', () => {
+    const r = render('\ufeff---\na: 1\n---\n');
+    expect(r.html).toBe(A1);
+    expect(r.meta.frontList).toEqual([scalar('a', '1')]);
+    expect(r.bytes).toBe(16);
+  });
+
+  it('only one is removed, and only at the start', () => {
+    expect(render('\ufeff\ufeff---\na: 1\n---\n').html).toBe('<h2 id="---a-1" data-line="1-3">\ufeff---\na: 1</h2>\n');
+    expect(render('\ufeffx\ufeff\n').html).toBe('<p data-line="1-1">x\ufeff</p>\n');
+  });
+});
+
+describe('meta.front and meta.frontList', () => {
+  it('front is a null-prototype record of frontList: a list to its items, a scalar to its value', () => {
+    const r = render('---\nkey: [1, 2]\none: x\n---\n');
+    expect(Object.getPrototypeOf(r.meta.front)).toBe(null);
+    expect({ ...r.meta.front }).toEqual({ key: ['1', '2'], one: 'x' });
+    expect(r.meta.frontList).toEqual([{ key: 'key', list: true, vals: ['1', '2'] }, scalar('one', 'x')]);
+  });
+
+  it('an own __proto__ key stays an own key, round-trips through JSON and pollutes nothing', () => {
+    const r = render('---\n__proto__: polluted\nconstructor: built\ntoString: str\n---\n');
+    const front = r.meta.front ?? {};
+    expect(Object.keys(front)).toEqual(['__proto__', 'constructor', 'toString']);
+    expect(Object.getOwnPropertyDescriptor(front, '__proto__')?.value).toBe('polluted');
+    expect(JSON.stringify(front)).toBe('{"__proto__":"polluted","constructor":"built","toString":"str"}');
+    const back = JSON.parse(JSON.stringify(front)) as Record<string, unknown>;
+    expect(Object.getOwnPropertyDescriptor(back, '__proto__')?.value).toBe('polluted');
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+  });
+
+  it('frontRecord builds every key with defineProperty on a null-prototype object', () => {
+    const rec = frontRecord([scalar('__proto__', 'p'), { key: 'l', list: true, vals: [] }]);
+    expect(Object.getPrototypeOf(rec)).toBe(null);
+    expect(Object.keys(rec)).toEqual(['__proto__', 'l']);
+    expect(rec['l']).toEqual([]);
+  });
+
+  it('a mapping with no listable value gives an empty frontList and an empty front', () => {
+    const r = render('---\nm: {x: 1}\nn: null\n---\n');
+    expect(r.meta.frontList).toEqual([]);
+    expect(Object.keys(r.meta.front ?? { x: 1 })).toEqual([]);
+  });
+});
+
+describe('the limits', () => {
+  const ASTRAL = '\u{1F600}';
+
+  it('40 keys, the first in document order, in the strip and in meta', () => {
+    const src = `---\n${Array.from({ length: 41 }, (_, i) => `k${i}: v`).join('\n')}\n---\n`;
+    const r = render(src);
+    expect(r.html.split('<dt>').length - 1).toBe(40);
+    expect(r.html).not.toContain('<dt>k40</dt>');
+    expect(r.meta.frontList).toHaveLength(40);
+  });
+
+  it('500 code points of a value, never half an astral character', () => {
+    const r = render(`---\nv: ${'a'.repeat(499)}${ASTRAL}b\n---\n`);
+    expect(r.html).toBe(dl('1-3', item('v', `${'a'.repeat(499)}${ASTRAL}`)));
+    expect(r.meta.frontList).toEqual([scalar('v', `${'a'.repeat(499)}${ASTRAL}`)]);
+  });
+
+  it('the strip reads the first 50 items of a list, then skips the nested ones among them', () => {
+    const items = ['[n]', ...Array.from({ length: 60 }, (_, i) => String(i + 1))];
+    const r = render(`---\nk: [${items.join(', ')}]\n---\n`);
+    expect(r.html).toBe(dl('1-3', item('k', Array.from({ length: 49 }, (_, i) => String(i + 1)).join(', '))));
+  });
+
+  it('meta reads the first 300 items, then skips nested ones; 300 code points of each', () => {
+    const items = ['{m: 1}', `${'b'.repeat(299)}${ASTRAL}c`, ...Array.from({ length: 400 }, (_, i) => `w${i}`)];
+    const r = render(`---\nk: [${items.join(', ')}]\n---\n`);
+    const vals = r.meta.frontList?.[0]?.vals ?? [];
+    expect(vals).toHaveLength(299);
+    expect(vals[0]).toBe(`${'b'.repeat(299)}${ASTRAL}`);
+    expect(vals.at(-1)).toBe('w297');
+  });
+
+  it('YAML of FM_MAX_CHARS code points or more is not read; the count is code points', () => {
+    expect(FM_MAX_CHARS).toBe(20000);
+    const under = `x: ${ASTRAL.repeat(FM_MAX_CHARS - 4)}`;
+    const at = `x: ${ASTRAL.repeat(FM_MAX_CHARS - 3)}`;
+    expect(Object.keys(parseFrontMatter(under) ?? {})).toEqual(['x']);
+    expect(parseFrontMatter(at)).toBe(null);
+    expect(render(`---\n${at}\n---\n`).html).toBe('');
+  });
+
+  it('a list of aliases to one list stays cheap (the anchors are shared, never expanded)', () => {
+    const rows = ['a: &a [x, x, x, x, x, x, x, x, x]'];
+    for (let i = 1; i < 12; i += 1) {
+      const p = String.fromCharCode(96 + i);
+      rows.push(`${String.fromCharCode(97 + i)}: &${String.fromCharCode(97 + i)} [${Array(9).fill(`*${p}`).join(', ')}]`);
+    }
+    const started = performance.now();
+    const r = render(`---\n${rows.join('\n')}\n---\n`);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(r.meta.frontList).toHaveLength(12);
+  });
+});
+
+describe('the rule in the engine', () => {
+  it('one hidden block token at line 0, its content the lines between, its map through the closer', () => {
+    const tokens = createEngine().parse('---\na: 1\nb: 2\n---\n\nx\n', createEnv({ lineAttrs: true }));
+    const t = tokens[0];
+    expect([t?.type, t?.hidden, t?.block, t?.markup, t?.content, t?.map]).toEqual([
+      'front_matter',
+      true,
+      true,
+      '---',
+      'a: 1\nb: 2',
+      [0, 4],
+    ]);
+    expect(tokens.filter((x) => x.type === 'front_matter')).toHaveLength(1);
+  });
+
+  it('lineAttrs: false leaves the strip without data-line', () => {
+    expect(render('---\na: 1\n---\n', { lineAttrs: false }).html).toBe(
+      '<dl class="doc-meta"><div><dt>a</dt><dd>1</dd></div></dl>\n',
+    );
+  });
+
+  it("keys and values are escaped with Python's html.escape, and the output passes the oracle", () => {
+    const r = render('---\n"<script>it\'s": "<img src=x onerror=1> & \\"q\\""\n---\n');
+    expect(r.html).toBe(
+      dl('1-3', item('&lt;script&gt;it&#x27;s', '&lt;img src=x onerror=1&gt; &amp; &quot;q&quot;')),
+    );
+    expect(checkOutputSafety(r.html)).toEqual([]);
+  });
+});

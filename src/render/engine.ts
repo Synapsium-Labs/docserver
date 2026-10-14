@@ -33,6 +33,8 @@
 //   linear port of the plugin's rule, with the same output (footnotes.ts, ruling C26); a plugin upgrade
 //   must re-run test/footnote-cost.test.ts, its differential above all;
 // - task_lists goes before text_join, so after footnote_tail, as the reference's does (tasklists.ts).
+// Front matter is the reference's plugin, ported (frontMatter.ts): front_matter goes first in the block
+// chain (before table), with the plugin's alternatives, and renders through this library's own rule.
 import MarkdownIt from 'markdown-it';
 import footnote from 'markdown-it-footnote';
 import { footnoteTail } from './footnotes.js';
@@ -42,6 +44,7 @@ import { blockStrip } from './blockStrip.js';
 import { balanceDetails } from './details.js';
 import { renderFence } from './fence.js';
 import { figcaption } from './figcaption.js';
+import { frontMatterRule, renderFrontMatter } from './frontMatter.js';
 import { lineAttrs } from './lineAttrs.js';
 import { anchors } from './slug.js';
 import { pyTable, renderTableClose, renderTableOpen, tableCode } from './tables.js';
@@ -71,10 +74,14 @@ export function createEngine(): MarkdownIt {
   md.core.ruler.before('line_attrs', 'figcaption', figcaption);
   md.core.ruler.before('text_join', 'task_lists', taskLists);
   md.core.ruler.before('line_attrs', 'table_code', tableCode);
+  md.block.ruler.before('table', 'front_matter', frontMatterRule, {
+    alt: ['paragraph', 'reference', 'blockquote', 'list'],
+  });
   md.renderer.rules.fence = renderFence;
   md.renderer.rules.alert_open = renderAlertOpen;
   md.renderer.rules.alert_close = renderAlertClose;
   md.renderer.rules.table_open = renderTableOpen;
   md.renderer.rules.table_close = renderTableClose;
+  md.renderer.rules.front_matter = renderFrontMatter;
   return md;
 }

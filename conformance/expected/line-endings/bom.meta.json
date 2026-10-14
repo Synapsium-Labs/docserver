@@ -1,13 +1,18 @@
 {
-  "front": null,
-  "frontList": null,
+  "front": {
+    "title": "Byte order mark"
+  },
+  "frontList": [
+    {
+      "key": "title",
+      "list": false,
+      "vals": [
+        "Byte order mark"
+      ]
+    }
+  ],
   "title": "After the mark",
   "headings": [
-    {
-      "level": 2,
-      "id": "---title-byte-order-mark",
-      "text": "﻿---title: Byte order mark"
-    },
     {
       "level": 1,
       "id": "after-the-mark",

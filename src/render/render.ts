@@ -1,15 +1,16 @@
 // render() (docserver L1; architecture section C, "Rules for render()"; rulings C2, C3 and C20).
 // 1. The byte gate: an input over `maxBytes` UTF-8 bytes is not parsed; the count stops at the cap.
-// 2. Parse and render with a fresh RenderEnv; the engine holds no per-document state.
-// 3. The html bound (ruling C20, departure PD8): the html is counted as it is rendered, and the first piece
+// 2. One leading U+FEFF (a byte order mark) is removed (departure PD4): the reference kept it, so a BOM
+//    file's front matter was not recognised and rendered as body text. `bytes` is the input's own length.
+// 3. Parse and render with a fresh RenderEnv; the engine holds no per-document state.
+// 4. The html bound (ruling C20, departure PD8): the html is counted as it is rendered, and the first piece
 //    that would take it past `maxHtmlBytes` UTF-8 bytes stops the render with outcome 'output-over-limit'
-//    and the fallback block of rule 4. An input under `maxBytes` can still expand far past it (a long link
+//    and the fallback block of rule 5. An input under `maxBytes` can still expand far past it (a long link
 //    destination defined once and used many times), and the bound keeps that cost a host's to choose.
-// 4. Any exception gives outcome 'failed' and the reference renderer's fallback block, its source escaped
+// 5. Any exception gives outcome 'failed' and the reference renderer's fallback block, its source escaped
 //    the way the reference escaped it (Python's html.escape). It is never raw HTML, and it is cut to
 //    `maxHtmlBytes` too, so no outcome returns more html than the bound.
-// 5. `meta` is collected from what the rules recorded in the env (meta.ts).
-// Task 9 adds the BOM strip between 1 and 2.
+// 6. `meta` is collected from what the rules recorded in the env (meta.ts).
 import type { MarkdownIt, Token } from 'markdown-it';
 import { createEngine } from './engine.js';
 import { createEnv, type RenderEnv } from './env.js';
@@ -40,6 +41,9 @@ const FALLBACK_CLOSE = '</pre>';
 const DEFAULT_MAX_HTML_BYTES = 4 * DEFAULT_MAX_BYTES;
 
 const ENGINE = createEngine();
+
+/** U+FEFF, removed once from the start of the input (PD4). */
+const BOM = 0xfeff;
 
 /** A limit option, checked: a non-negative safe integer, or a RangeError naming the option. */
 function checkLimit(name: string, value: number): number {
@@ -129,7 +133,7 @@ export function renderWith(markdown: string, o: RenderOptions | undefined, engin
   const maxHtmlBytes = checkLimit('maxHtmlBytes', o?.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES);
   const bytes = utf8Length(markdown, maxBytes);
   if (bytes > maxBytes) return { html: '', outcome: 'over-limit', bytes, meta: EMPTY_META };
-  const src = markdown;
+  const src = markdown.charCodeAt(0) === BOM ? markdown.substring(1) : markdown;
   try {
     const env = createEnv({ lineAttrs: o?.lineAttrs ?? true });
     const tokens = engine.parse(src, env);

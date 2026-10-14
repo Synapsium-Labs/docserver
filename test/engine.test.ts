@@ -75,8 +75,9 @@ describe('createEngine: rule chains', () => {
     ]);
   });
 
-  it('block: the CommonMark rules plus table and footnote_def, and safe_block_html before html_block', () => {
+  it('block: front_matter first, then table, CommonMark, footnote_def; safe_block_html before html_block', () => {
     expect(enabled(md.block.ruler)).toEqual([
+      'front_matter',
       'table',
       'code',
       'fence',
@@ -91,6 +92,11 @@ describe('createEngine: rule chains', () => {
       'lheading',
       'paragraph',
     ]);
+  });
+
+  it("front_matter carries the reference plugin's alternatives", () => {
+    const rule = rules(md.block.ruler).find((r) => r.name === 'front_matter');
+    expect(rule?.alt).toEqual(['paragraph', 'reference', 'blockquote', 'list']);
   });
 
   it('safe_block_html interrupts a paragraph, a reference and a blockquote, and does not end a list', () => {

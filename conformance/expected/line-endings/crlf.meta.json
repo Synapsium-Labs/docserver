@@ -1,6 +1,16 @@
 {
-  "front": null,
-  "frontList": null,
+  "front": {
+    "title": "Carriage returns"
+  },
+  "frontList": [
+    {
+      "key": "title",
+      "list": false,
+      "vals": [
+        "Carriage returns"
+      ]
+    }
+  ],
   "title": "A",
   "headings": [
     {

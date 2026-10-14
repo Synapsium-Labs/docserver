@@ -1,8 +1,8 @@
 {
   "front": {
-    "flag": "True",
-    "b": "True",
-    "f": "1.5",
+    "flag": "yes",
+    "b": "true",
+    "f": "1.50",
     "d": "2026-10-12",
     "dt": "2026-10-12 08:00:00",
     "list": [
@@ -17,21 +17,21 @@
       "key": "flag",
       "list": false,
       "vals": [
-        "True"
+        "yes"
       ]
     },
     {
       "key": "b",
       "list": false,
       "vals": [
-        "True"
+        "true"
       ]
     },
     {
       "key": "f",
       "list": false,
       "vals": [
-        "1.5"
+        "1.50"
       ]
     },
     {
