@@ -46,6 +46,17 @@ describe('README', () => {
     expect(README).toContain('A fence over 256 characters is highlighted one line at a time');
   });
 
+  it('tells hosts that memory is linear in the input, and that raising maxHtmlBytes lifts the output bound', () => {
+    expect(README).toContain('Memory is linear in the size of the input');
+    expect(README).toContain('so size `maxBytes` to your heap');
+    expect(README).toContain('Raising `maxHtmlBytes` removes the output bound that protects you');
+  });
+
+  it('states the span depth bound of highlighted code, and that the 64-level cap is for the allowlisted tags only', () => {
+    expect(README).toContain('nests `<span>` elements at most about 170 deep');
+    expect(README).toContain('the 64-level cap below applies to the allowlisted tags only');
+  });
+
   it('describes every departure category, one table row each', () => {
     expect(CATEGORIES).toEqual(['PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8']);
     expect(CATEGORIES.filter((c) => README.split(`\n| ${c} | `).length !== 2)).toEqual([]);

@@ -31,7 +31,7 @@ export interface Heading {
 }
 
 /**
- * One front-matter key, in source order. Same shape as the standalone server's meta.front. `key` and `vals`
+ * One front-matter key, in source order. The same shape as the reference renderer's front matter entries. `key` and `vals`
  * are plain text as the author wrote them, not escaped HTML: insert them with textContent, or escape them.
  */
 export interface FrontEntry {
