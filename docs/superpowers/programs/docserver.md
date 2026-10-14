@@ -85,6 +85,17 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 
   Why: the plan's constraint is that cost is bounded, not only input. A note cap would be a departure that no ordinary document needs, and deferring would leave Tasks 9-12 building on a quadratic path. Cost if wrong: the port drifts from a future plugin release; the differential catches that at upgrade time.
 
+- **C27 (2026-10-14, during L1 Task 12): the public-readiness walk skips a `.git` file and named root scratch directories.** Task 12's tree scan skipped `.git` only as a directory. In a linked git worktree, `.git` is a file that holds an absolute path, and the walk also read local scratch that git ignores through `info/exclude`. So the scan failed in any worktree, where this wave's final gate runs, but passed in CI's clean checkout.
+
+  Ruled:
+  - Keep the walk. Task 12's decision 4 chose it over `git ls-files` because a mutation copy has no `.git`.
+  - At the root, skip `.git` whether it is a file or a directory, plus a short fixed list of named scratch directories that workflows create and git never tracks. Each name is generic and gives its reason.
+  - Where a `.git` exists, a case asserts that `git ls-files` lists nothing under a named directory, so the list cannot hide tracked content.
+  - The test states what it actually scans.
+  - Cases: a hit in a `.git` file is skipped; a hit in a named root directory is skipped; a hit anywhere else, including a nested directory with the same name, still fails. Each has mutation rows.
+
+  Why: the walk is what lets the scan run in mutation copies. Cost if wrong: a named directory hides a file someone later tracks, which the `ls-files` case catches in CI.
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
