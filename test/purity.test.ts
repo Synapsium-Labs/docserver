@@ -164,7 +164,10 @@ describe('purity: the import graph of src/render/index.ts', () => {
   });
 
   it('imports every runtime dependency, and only those', () => {
-    expect(graph.packages).toEqual(Object.keys(pkg.dependencies).sort());
+    // The @types packages are dependencies so a consumer's compiler finds the types of the packed declarations
+    // (test/package.test.ts pins them); no source file imports them by name.
+    const runtime = Object.keys(pkg.dependencies).filter((name) => !name.startsWith('@types/'));
+    expect(graph.packages).toEqual(runtime.sort());
   });
 
   it('the scanner sees every import form, and the judge refuses what it must', () => {
