@@ -105,7 +105,9 @@ const DOCUMENTS: readonly (readonly [name: string, markdown: string])[] = [
 ];
 
 describe('scanRefs and meta agree with the html render() emits', () => {
-  for (const c of loadCorpus()) {
+  // Generated cases (Task 11) are judged by their verdicts. Two of them do not render by design:
+  // x-limits/over-limit is over the byte cap and x-limits/html-expansion over maxHtmlBytes.
+  for (const c of loadCorpus().filter((x) => x.kind !== 'generated')) {
     it(`corpus: ${c.id}`, () => {
       expect(c.options).toEqual({});
       consistent(c.input);

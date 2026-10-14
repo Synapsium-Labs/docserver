@@ -304,5 +304,161 @@
     "kind": "hostile",
     "pins": "Alert spoofs stay text, 25 nested alerts stay bounded, and a caption carries escaped text only.",
     "probes": []
+  },
+  {
+    "id": "h-anchor-after-summary-nested",
+    "kind": "hostile",
+    "pins": "An id comment after a blockquote that a details line ends is still an anchor: the comment search covers the whole document even when its first use comes from inside the quote.",
+    "probes": []
+  },
+  {
+    "id": "x-blockquote-10000",
+    "kind": "generated",
+    "pins": "Ten thousand nested blockquote markers: maxNesting (20) bounds the depth.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/star-4096",
+    "kind": "generated",
+    "pins": "4096 emphasis openers with no closer stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/underscore-4096",
+    "kind": "generated",
+    "pins": "4096 emphasis closers with no opener stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/bracket-4096",
+    "kind": "generated",
+    "pins": "4096 nested link brackets stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/backtick-4096",
+    "kind": "generated",
+    "pins": "4096 backtick runs pair into code spans in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/emph-nest-100",
+    "kind": "generated",
+    "pins": "Emphasis and strong emphasis nested 100 deep each.",
+    "probes": []
+  },
+  {
+    "id": "x-hr-90000",
+    "kind": "generated",
+    "pins": "90000 thematic breaks: a bounded output ratio.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/wide-header",
+    "kind": "generated",
+    "pins": "A table with a 2000-column header and one body row stays balanced.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/ragged-rows",
+    "kind": "generated",
+    "pins": "A 2000-column header with 2000 one-cell rows: the padding stops at the autofill limit.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/many-tables",
+    "kind": "generated",
+    "pins": "1000 small tables, each wrapped and balanced.",
+    "probes": []
+  },
+  {
+    "id": "x-details-10000-unclosed",
+    "kind": "generated",
+    "pins": "10000 unclosed details lines: 64 are forced open and closed at the end, the rest are escaped text (ruling C21, departure PD8).",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/headings-20000",
+    "kind": "generated",
+    "pins": "20000 equal headings get the ids a, a-1, a-2 and on, from the memoised uniquifier.",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/footnote-refs-10000",
+    "kind": "generated",
+    "pins": "10000 references to one footnote, each with its own back-reference id.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/over-limit",
+    "kind": "generated",
+    "pins": "DEFAULT_MAX_BYTES + 1 bytes, a two-byte character at the end: nothing is parsed and the html is empty.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/images-many",
+    "kind": "generated",
+    "pins": "10000 distinct images: scanRefs keeps the first 512 and says it cut the list.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-pathological",
+    "kind": "generated",
+    "pins": "About 200 KB each of quote and backslash runs in Python and template openers in TypeScript: highlighting stays bounded.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/block-20000",
+    "kind": "generated",
+    "pins": "20000 unterminated comment openers, one per line, stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/inline-40000",
+    "kind": "generated",
+    "pins": "40000 unterminated inline comment openers on one line stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/inline-image-alt",
+    "kind": "generated",
+    "pins": "20000 images whose alt text opens a comment, each followed by an unterminated <!--: each inline text keeps its own comment search, so the paragraph's is never evicted and the time stays linear.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/closing-line",
+    "kind": "generated",
+    "pins": "8000 <!-- lines that all reach one closing line with 50000 characters before its --> and 50000 spaces after: the closing line is read once, not once per <!--.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/many-ragged",
+    "kind": "generated",
+    "pins": "Four tables that each reach markdown-it's 65536 empty-cell limit: the limit holds for the whole document, so the html stays bounded.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-long-lines",
+    "kind": "generated",
+    "pins": "A 30000-character line in an ini, a java, a typescript and a javascript fence: a fence with a line over 256 code units is escaped text, never highlighted, so no grammar spends quadratic time on it.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-budget",
+    "kind": "generated",
+    "pins": "A java fence of 4096 lines of 255 characters (1 MiB): a fence past the document's 256 KiB highlighting budget is escaped text.",
+    "probes": []
+  },
+  {
+    "id": "x-inline-unclosed/sup-100000",
+    "kind": "generated",
+    "pins": "100000 unclosed <sup> tags: 64 nest and the rest are escaped text (ruling C21, departure PD8).",
+    "probes": []
+  },
+  {
+    "id": "x-limits/html-expansion",
+    "kind": "generated",
+    "pins": "A 4000-character destination defined once and used 100000 times (304 KB) would render 200 MB of html: it stops at the 16 MiB html bound with outcome output-over-limit (ruling C20, departure PD8).",
+    "probes": []
   }
 ]

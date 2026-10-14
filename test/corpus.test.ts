@@ -2,12 +2,16 @@
 // "How tasks hand over"). test/corpus-pending.json names the cases a later task makes pass, each with that
 // task (`"T<n>"`): a pending case must FAIL, so a case that starts passing is removed from the list in the
 // same change, and every other case must pass. Each task removes its own cases; Task 12 asserts the list
-// is empty. The first two blocks test runCorpus and loadCorpus themselves with stand-in render functions.
+// is empty. The first blocks test runCorpus and loadCorpus themselves with stand-in render functions.
+// Task 11 adds the verdicts of conformance/hostile.json: a hostile case is judged by its golden and its
+// verdict, a generated case (built from a spec, with no golden) by its verdict alone, and the oracle runs
+// on every case. Every non-ASCII character is written as a \u escape.
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadCorpus, runCorpus, type RenderFn } from '../src/conformance/index.js';
-import { render } from '../src/render/index.js';
-import type { RenderMeta } from '../src/render/types.js';
+import { render, scanRefs } from '../src/render/index.js';
+import type { RenderMeta, RenderResult } from '../src/render/types.js';
 
 const pending = JSON.parse(readFileSync(new URL('./corpus-pending.json', import.meta.url), 'utf8')) as Record<
   string,
@@ -17,14 +21,20 @@ const cases = loadCorpus();
 
 /** A stand-in renderer that returns one case's expected output, plus `extra` appended to the HTML. */
 function replay(id: string, extra = ''): RenderFn {
-  const c = cases.find((x) => x.id === id);
-  if (c === undefined) throw new Error(`no case ${id}`);
+  const expected = cases.find((x) => x.id === id)?.expected;
+  if (expected === undefined || expected === null) throw new Error(`no golden case ${id}`);
   return () => ({
-    html: c.expected.html + extra,
+    html: expected.html + extra,
     outcome: 'rendered',
     bytes: 0,
-    meta: JSON.parse(c.expected.meta) as RenderMeta,
+    meta: JSON.parse(expected.meta) as RenderMeta,
   });
+}
+
+/** A stand-in renderer that returns `html` for any input. */
+function fixed(html: string): RenderFn {
+  const meta = JSON.parse(cases.find((x) => x.id === 'empty-docs/empty')?.expected?.meta ?? '') as RenderMeta;
+  return (): RenderResult => ({ html, outcome: 'rendered', bytes: 0, meta });
 }
 
 describe('loadCorpus', () => {
@@ -34,13 +44,33 @@ describe('loadCorpus', () => {
     ) as { id: string }[];
     expect(cases.map((c) => c.id)).toEqual(manifest.map((m) => m.id));
     expect(cases.filter((c) => c.kind === 'golden')).toHaveLength(37);
-    expect(cases.filter((c) => c.kind === 'hostile')).toHaveLength(14);
-    expect(cases.filter((c) => !c.expected.meta.endsWith('}\n')).map((c) => c.id)).toEqual([]);
+    expect(cases.filter((c) => c.kind === 'hostile')).toHaveLength(15);
+    expect(cases.filter((c) => c.kind === 'generated')).toHaveLength(25);
+    expect(cases.filter((c) => c.expected !== null && !c.expected.meta.endsWith('}\n')).map((c) => c.id)).toEqual([]);
+  });
+
+  it('a golden case has expected files and no verdict; a hostile case has both; a generated case a verdict only', () => {
+    const shape = (k: string): string[] => [
+      ...new Set(cases.filter((c) => c.kind === k).map((c) => `${String(c.expected !== null)} ${String(c.verdict !== null)}`)),
+    ];
+    expect(shape('golden')).toEqual(['true false']);
+    expect(shape('hostile')).toEqual(['true true']);
+    expect(shape('generated')).toEqual(['false true']);
+    expect(cases.filter((c) => c.kind === 'hostile' && c.verdict?.exact !== true)).toEqual([]);
   });
 
   it('keeps a BOM and CRLF in the input, as the reference read it', () => {
     expect(cases.find((c) => c.id === 'line-endings/bom')?.input.startsWith('\ufeff')).toBe(true);
     expect(cases.find((c) => c.id === 'line-endings/crlf')?.input.includes('\r\n')).toBe(true);
+  });
+
+  it('builds a generated input from its spec', () => {
+    const over = cases.find((c) => c.id === 'x-limits/over-limit')?.input ?? '';
+    expect(Buffer.byteLength(over, 'utf8')).toBe(4_194_305);
+    expect(over.endsWith('a\u00e9')).toBe(true);
+    const images = cases.find((c) => c.id === 'x-limits/images-many')?.input ?? '';
+    expect(images.startsWith('![i](0.png)\n![i](1.png)\n')).toBe(true);
+    expect(images.endsWith('![i](9999.png)\n')).toBe(true);
   });
 });
 
@@ -86,13 +116,62 @@ describe('runCorpus', () => {
   });
 });
 
+describe('runCorpus: verdicts', () => {
+  it('judges a hostile case by its golden and by its verdict', () => {
+    const run = runCorpus(replay('h-script-and-tags', '<SCRIPT>'), { only: ['h-script-and-tags'] });
+    expect(run.results[0]?.failures.map((f) => f.split(' ')[0])).toEqual(['html', 'forbid:', 'oracle:']);
+  });
+
+  it('judges a generated case by its verdict and the oracle alone', () => {
+    const deep = `${'<blockquote>\n'.repeat(21)}${'</blockquote>\n'.repeat(21)}`;
+    const run = runCorpus(fixed(deep), { only: ['x-blockquote-10000'] });
+    expect(run.results[0]?.failures).toEqual(['maxTagDepth: blockquote nests 21 deep, bound 20']);
+    expect(runCorpus(fixed('<p>x</p>\n'), { only: ['x-blockquote-10000'] }).ok).toBe(true);
+  });
+
+  it('a verdict states the outcome: an over-limit case fails a render that parses it', () => {
+    const run = runCorpus(fixed('<p>a</p>\n'), { only: ['x-limits/over-limit'] });
+    expect(run.results[0]?.failures).toEqual([
+      'outcome: expected "over-limit", got "rendered"',
+      'outcome: an over-limit render has empty html, got 9 characters',
+    ]);
+  });
+
+  it('a scan verdict needs scanRefs, and says so', () => {
+    expect(runCorpus(render, { only: ['x-limits/images-many'] }).results[0]?.failures).toEqual([
+      'scan: no scanRefs function was given; pass runCorpus(render, { scanRefs })',
+    ]);
+    expect(runCorpus(render, { only: ['x-limits/images-many'], scanRefs }).ok).toBe(true);
+  });
+
+  it('a scanRefs that throws is the scan arm\'s failure, not an exception', () => {
+    const run = runCorpus(render, {
+      only: ['x-limits/images-many'],
+      scanRefs: () => {
+        throw new Error('no scan');
+      },
+    });
+    expect(run.results[0]?.failures).toEqual(['scan: scanRefs threw: Error: no scan']);
+  });
+
+  it('timeScale multiplies every maxMs, and must be a positive finite number', () => {
+    const tight = runCorpus(render, { only: ['x-delimiters/emph-nest-100'], timeScale: 1e-9 });
+    expect(tight.results[0]?.failures.map((f) => f.split(' ')[0])).toEqual(['maxMs:']);
+    for (const timeScale of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => runCorpus(render, { only: [], timeScale })).toThrow(
+        /runCorpus: timeScale must be a positive finite number/,
+      );
+    }
+  });
+});
+
 describe('the corpus against render()', () => {
-  const run = runCorpus(render);
+  const run = runCorpus(render, { scanRefs });
   const ids = new Set(cases.map((c) => c.id));
 
   it('pending names only known cases, each with the later task that makes it pass', () => {
     expect(Object.keys(pending).filter((id) => !ids.has(id))).toEqual([]);
-    const bad = Object.entries(pending).filter(([, task]) => !/^T1[12]$/.test(task));
+    const bad = Object.entries(pending).filter(([, task]) => !/^T12$/.test(task));
     expect(bad).toEqual([]);
   });
 

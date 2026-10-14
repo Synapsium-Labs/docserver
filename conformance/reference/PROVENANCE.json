@@ -33,6 +33,7 @@
     "frontmatter-openers/unclosed": "649f4ad82ca88aa2aa5bd7e936aad11cd0da8df425835ced89e109a5c9631096",
     "frontmatter-types": "ec60a0b223eaa915881f4731940e5d116449b89994d1098d873e98d6179cfcc4",
     "h-alert-caption-spoof": "65c38cd1ff57379601641c38f7725ed97d8257eac348eaec87cf56f26bdc8dc8",
+    "h-anchor-after-summary-nested": "4a626d1dc088cb10afa54f611161f246df45aa784ea15cfa7bfa4ef53c204900",
     "h-attr-smuggle": "af1adccc5fa7c70f619a02e982f377fc53c357fb2bad8ec9ac8ced0d57732cdd",
     "h-comment-anchor-injection": "0aa0d15737e8301779215f1e7462801a6f9ad16f43ba178959c3542ae5048950",
     "h-details-hostile": "b092d02bb0e1b496cd6455cb9d74dad1022134044e0d0001f5c95a898f109ba9",
@@ -60,5 +61,5 @@
     "tables": "65d1be358cd2dae8200c53ab8eb6eabf6bdc7e25a4e203b9004429000bf7db79",
     "text-edges": "91386f7bc9949e942ba16d6408448e73057c914196c44b68234573f529a423e4"
   },
-  "date": "2026-10-13"
+  "date": "2026-10-14"
 }
