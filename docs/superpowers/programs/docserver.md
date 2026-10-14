@@ -64,6 +64,16 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 
   Why: grammar patches fix only the grammars found, and dropping grammars loses features and still leaves the 3.4 s case. No golden moves, because highlighting is normalised in comparison (PD1). Cost if wrong: multi-line highlighting is lost on fences over the threshold. That is cosmetic, and the threshold can be raised on a later measurement.
 
+- **C25 (2026-10-14, during L1 Task 7): PD7 also covers a caption that is not one emphasis span.** The reference's caption pattern reads `*Figure 1. a* *b*` as a caption and emits `<figcaption>Figure 1. a</em> <em>b</figcaption>`. That is a stray closer, then an opener that never closes. The plan kept it for parity: Task 7's decision 2, and section H's risk 6, which allowed the fix later at the cost of a golden. The review raised it as Important.
+
+  Ruled:
+  - A paragraph after a figure becomes its caption only when the paragraph is one emphasis span, meaning the `<em>` that opens it is the one that closes it. Otherwise it stays an ordinary paragraph after the figure, and the HTML stays balanced. Emphasis nested inside that one span (`*Figure 1. a *b* c*`) is still a caption.
+  - This widens PD7 rather than adding a ninth departure, so the list stays PD1-PD8. PD7 now reads: a figure caption keeps the HTML balanced. It never comes from a hidden (tight-list) paragraph, never reaches past the block after its figure, and is made only from one emphasis span. The README's PD7 row says so.
+  - The golden `figure-captions` moves. Its expected HTML is edited by hand and recorded in `conformance/DEPARTURES.json` under PD7, the way PD2-PD4 record theirs. The commit that moves it, and the merge, carry `Goldens-moved: figure-captions`.
+  - `figcaption.test.ts`'s block of differences pins both outputs for this input. A mutation row that drops the one-span check turns it red.
+
+  Why: PD7's own reason applies to this shape too, because parity would mean emitting unbalanced HTML. A library that hosts render must not carry emphasis into the rest of their page. Cost if wrong: one rare line shape renders as a paragraph instead of a caption.
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
