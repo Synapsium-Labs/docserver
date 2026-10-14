@@ -1,7 +1,8 @@
 // The meta of a rendered document (docserver L1; architecture section C, the "Meta" row; ruling C2).
 // Every field is read from what the rules recorded in the document's RenderEnv while it was parsed and
-// rendered, so meta and html come from one pass and cannot disagree. This task fills `headings` and
-// `title`; Task 9 fills `front` and `frontList`, Tasks 6, 8 and 10 the counters and `mermaidKinds`.
+// rendered, so meta and html come from one pass and cannot disagree. Task 4 filled `headings` and `title`,
+// Task 6 `figures` and `mermaidKinds` (the fence rule, fence.ts); Task 9 fills `front` and `frontList`,
+// Task 8 `tables`.
 import type { RenderEnv } from './env.js';
 import type { RenderMeta } from './types.js';
 
@@ -13,8 +14,8 @@ export function collectMeta(env: RenderEnv): RenderMeta {
     frontList: null,
     title: headings.find((h) => h.level === 1)?.text ?? null,
     headings,
-    figures: 0,
+    figures: env.figures,
     tables: 0,
-    mermaidKinds: [],
+    mermaidKinds: env.mermaidKinds,
   };
 }

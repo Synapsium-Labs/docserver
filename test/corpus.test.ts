@@ -92,7 +92,7 @@ describe('the corpus against render()', () => {
 
   it('pending names only known cases, each with the later task that makes it pass', () => {
     expect(Object.keys(pending).filter((id) => !ids.has(id))).toEqual([]);
-    const bad = Object.entries(pending).filter(([, task]) => !/^T(?:[6-9]|1[0-2])$/.test(task));
+    const bad = Object.entries(pending).filter(([, task]) => !/^T(?:[7-9]|1[0-2])$/.test(task));
     expect(bad).toEqual([]);
   });
 

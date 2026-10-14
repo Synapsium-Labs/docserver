@@ -17,10 +17,13 @@
 // The allowlist's rules go right before markdown-it's own raw-HTML rules, which html: false disables:
 // safe_block_html with alt paragraph, reference and blockquote (it interrupts those, as in the reference,
 // and is not a list terminator), safe_inline_html in the inline chain. balance_details runs after anchors.
+// Fences render through this library's own rule (fence.ts), not markdown-it's: a Mermaid figure or a
+// highlighted code block, with options.highlight left unset.
 import MarkdownIt from 'markdown-it';
 import { safeBlockHtml, safeInlineHtml } from './allowlist.js';
 import { blockStrip } from './blockStrip.js';
 import { balanceDetails } from './details.js';
+import { renderFence } from './fence.js';
 import { lineAttrs } from './lineAttrs.js';
 import { anchors } from './slug.js';
 
@@ -41,5 +44,6 @@ export function createEngine(): MarkdownIt {
   });
   md.inline.ruler.before('html_inline', 'safe_inline_html', safeInlineHtml);
   md.core.ruler.before('line_attrs', 'balance_details', balanceDetails);
+  md.renderer.rules.fence = renderFence;
   return md;
 }

@@ -3,8 +3,8 @@
 // and inclusive, set with attrSet so it comes after any attribute an earlier rule set (a heading's id, a
 // list's start, a task item's class). It runs last in the core chain; a rule that must come before it is
 // inserted with `md.core.ruler.before('line_attrs', …)`. Fences, Mermaid figures and front matter carry
-// data-line through their own render rules, not through this one.
-import type { StateCore } from 'markdown-it';
+// data-line through their own render rules, not through this one: those rules write lineAttr(token, env).
+import type { StateCore, Token } from 'markdown-it';
 import type { RenderEnv } from './env.js';
 
 /** The token types the reference renderer marks, exactly (its _LINE_TOKENS). */
@@ -21,10 +21,23 @@ export const LINE_TOKENS: ReadonlySet<string> = new Set([
   'ordered_list_open',
 ]);
 
+/** The data-line value of a source map: its first and last line, 1-based and inclusive. */
+function lineValue(map: [number, number]): string {
+  return `${map[0] + 1}-${map[1]}`;
+}
+
 export function lineAttrs(state: StateCore): void {
   const env = state.env as RenderEnv;
   if (!env.lineAttrs) return;
   for (const t of state.tokens) {
-    if (t.map && LINE_TOKENS.has(t.type)) t.attrSet('data-line', `${t.map[0] + 1}-${t.map[1]}`);
+    if (t.map && LINE_TOKENS.has(t.type)) t.attrSet('data-line', lineValue(t.map));
   }
+}
+
+/**
+ * The data-line attribute a render rule writes into its own markup (fence.ts; front matter in Task 9):
+ * ` data-line="{first}-{last}"`, or '' when the env has lineAttrs off or the token has no source map.
+ */
+export function lineAttr(token: Token, env: RenderEnv): string {
+  return env.lineAttrs && token.map ? ` data-line="${lineValue(token.map)}"` : '';
 }

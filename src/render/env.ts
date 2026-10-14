@@ -16,9 +16,23 @@ export interface RenderEnv {
   readonly headings: Heading[];
   /** Where the allowlist's comment rules last searched for `-->` (allowlist.ts). */
   readonly comments: CommentScan;
+  /** Mermaid figures the fence rule has emitted so far (meta.figures; fence.ts). */
+  figures: number;
+  /** Their distinct diagram keywords, in document order, at most 32 (meta.mermaidKinds; fence.ts). */
+  readonly mermaidKinds: string[];
+  /** Code units the fence rule has highlighted so far, at most MAX_HIGHLIGHT_CHARS (fence.ts). */
+  highlighted: number;
 }
 
 /** A fresh env for one render. */
 export function createEnv(o: { lineAttrs: boolean }): RenderEnv {
-  return { lineAttrs: o.lineAttrs, slugs: createSlugState(), headings: [], comments: createCommentScan() };
+  return {
+    lineAttrs: o.lineAttrs,
+    slugs: createSlugState(),
+    headings: [],
+    comments: createCommentScan(),
+    figures: 0,
+    mermaidKinds: [],
+    highlighted: 0,
+  };
 }
