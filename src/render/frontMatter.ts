@@ -185,9 +185,11 @@ export function parseFrontMatter(content: string): FrontMapping | null {
   };
   // Called as each node opens (its result is still null then) and closes. Anything with an object for a
   // result is marked; a sequence also marks the objects it holds, which may never have been a node's result.
+  // An alias hands the listener a result it has already seen: that costs one lookup, so a block that aliases
+  // one large sequence many times never rescans its elements.
   const listener = (_event: string, state: { result: unknown }): void => {
     const m = state.result;
-    if (typeof m !== 'object' || m === null) return;
+    if (typeof m !== 'object' || m === null || marked.has(m)) return;
     mark(m);
     if (Array.isArray(m)) {
       for (const el of m as unknown[]) {

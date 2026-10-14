@@ -9,6 +9,7 @@ import { checkOutputSafety } from '../src/conformance/oracle.js';
 import { createEngine } from '../src/render/engine.js';
 import { createEnv } from '../src/render/env.js';
 import { FM_MAX_CHARS, frontRecord, parseFrontMatter } from '../src/render/frontMatter.js';
+import { cpLength } from '../src/render/pyText.js';
 import { render } from '../src/render/index.js';
 import type { FrontEntry } from '../src/render/types.js';
 
@@ -327,6 +328,22 @@ describe('PD2: a mapping key fails the load, as in the reference (ruling C33)', 
     };
     walk(data);
     expect(Object.keys(data ?? {})).toEqual(['base', 'm', 'l', 'x']);
+  });
+
+  // An alias gives the listener the same sequence again. It is skipped once marked, so the aliases of one
+  // large sequence cost one mark each and not one rescan of its elements each. 2000 mappings held 3500
+  // times is 7 million marks without the skip: seconds, against a few milliseconds with it.
+  it('aliasing one large sequence many times stays cheap: an already marked sequence is not rescanned', () => {
+    const src = `---\na: &a [${Array(2000).fill('{}').join(',')}]\nb: [${Array(3500).fill('*a').join(',')}]\n---\n`;
+    expect(cpLength(src)).toBeLessThan(FM_MAX_CHARS);
+    const started = performance.now();
+    const r = render(src);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(r.html).toBe(dl('1-4', item('a', '') + item('b', '')));
+    expect(r.meta.frontList).toEqual([
+      { key: 'a', list: true, vals: [] },
+      { key: 'b', list: true, vals: [] },
+    ]);
   });
 
   it('a key whose text is `[object Object]` is only text, and still loads', () => {
