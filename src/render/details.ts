@@ -10,8 +10,11 @@
 // Unlike the reference (departure PD8, ruling C21), it also caps the nesting of each of the four tag kinds at
 // MAX_TAG_DEPTH open levels in the whole document: an opener past the cap renders as escaped text, and so
 // does the closer that pairs with it, so the html stays balanced and a consumer's recursive walk never meets
-// more than 64 levels of one kind. An inline closer with nothing open stays a tag, as before. The tags of an
-// image's alt text render as attribute text, never as tags, so they are not counted.
+// more than 64 levels of one kind written by the author. The cap counts author-written tags only: the
+// `<sup class="footnote-ref">` that markdown-it-footnote writes for a footnote reference is the plugin's own
+// and is not counted, so a reference inside 64 open author `<sup>` tags sits one level deeper (review 458,
+// F11). An inline closer with nothing open stays a tag, as before. The tags of an image's alt text render
+// as attribute text, never as tags, so they are not counted.
 // It runs after the anchors rule and before line_attrs; html_block tokens carry no data-line.
 import type { StateCore, Token } from 'markdown-it';
 import { pyEscape } from './escape.js';
