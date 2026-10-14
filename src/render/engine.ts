@@ -22,7 +22,8 @@
 // alerts and figcaption follow balance_details. They stand in for the reference's HTML post-passes (its
 // caption pass ran first, then its alert pass; the two never touch the same tokens, so their order here
 // changes nothing). alerts turns blockquotes into alert_open/alert_close, which render through this
-// library's own two rules; figcaption records a caption on its fence token, which renderFence writes.
+// library's own two rules; figcaption puts a caption's tokens after its fence (figcaption_open, the inline
+// token, figcaption_close), which render through this library's two rules and renderFence.
 // Tables, task lists and footnotes, as the reference renders them:
 // - the table block rule is this library's port of markdown-it's (tables.ts), set in its place under the
 //   same name and with the same alternatives, so it strips the Python way; table_code goes after
@@ -43,7 +44,7 @@ import { safeBlockHtml, safeInlineHtml } from './allowlist.js';
 import { blockStrip } from './blockStrip.js';
 import { balanceDetails } from './details.js';
 import { renderFence } from './fence.js';
-import { figcaption } from './figcaption.js';
+import { figcaption, renderFigcaptionClose, renderFigcaptionOpen } from './figcaption.js';
 import { frontMatterRule, renderFrontMatter } from './frontMatter.js';
 import { lineAttrs } from './lineAttrs.js';
 import { anchors } from './slug.js';
@@ -78,6 +79,8 @@ export function createEngine(): MarkdownIt {
     alt: ['paragraph', 'reference', 'blockquote', 'list'],
   });
   md.renderer.rules.fence = renderFence;
+  md.renderer.rules.figcaption_open = renderFigcaptionOpen;
+  md.renderer.rules.figcaption_close = renderFigcaptionClose;
   md.renderer.rules.alert_open = renderAlertOpen;
   md.renderer.rules.alert_close = renderAlertClose;
   md.renderer.rules.table_open = renderTableOpen;

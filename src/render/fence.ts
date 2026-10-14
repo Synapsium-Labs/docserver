@@ -17,9 +17,10 @@
 //   MAX_HIGHLIGHT_CHARS highlighted code units, keeps its language class and gets the escaped text, as an
 //   unregistered name does. The corpus compares the text inside the wrapper (PD1), so no golden depends
 //   on which fences were highlighted.
-// A figure's caption is found by the figcaption core rule (figcaption.ts), which records it on the fence
-// token's meta (FenceMeta); this rule writes it as <figcaption>…</figcaption> right before </figure>.
-// scanRefs (scan.ts) reads fenceName and MERMAID, and the caption's inline tokens on FenceMeta.
+// A figure's caption is found by the figcaption core rule (figcaption.ts), which puts `figcaption_open`, the
+// caption's inline token and `figcaption_close` right after the fence (ruling C28). When the next token is
+// `figcaption_open`, this rule leaves the figure open and figcaption_close closes it, so the caption is
+// rendered, and counted against the html bound, token by token. scanRefs (scan.ts) reads fenceName and MERMAID.
 import type { Token } from 'markdown-it';
 import type { RenderEnv } from './env.js';
 import { escapeHtml, pyEscape } from './escape.js';
@@ -29,17 +30,6 @@ import { pyStrip } from './pyText.js';
 
 /** The fence name that makes a Mermaid figure. */
 export const MERMAID = 'mermaid';
-
-/** What the figcaption rule records on a Mermaid fence token. */
-export interface FenceMeta {
-  /** The caption, as rendered HTML. */
-  readonly caption: string;
-  /**
-   * The caption paragraph's inline tokens, which the rule took out of the stream: render() writes their
-   * images inside the figure's <figcaption>, so scanRefs reads them here.
-   */
-  readonly inline: readonly Token[];
-}
 
 /** At most this many distinct diagram keywords in meta.mermaidKinds. */
 export const MAX_MERMAID_KINDS = 32;
@@ -124,9 +114,8 @@ export function renderFence(tokens: Token[], idx: number, _options: unknown, env
   const dl = lineAttr(token, env);
   if (name === MERMAID) {
     recordFigure(env, token.content);
-    const caption = (token.meta as FenceMeta | null)?.caption;
-    const cap = caption === undefined ? '' : `<figcaption>${caption}</figcaption>`;
-    return `<figure class="mermaid-figure"${dl}><pre class="mermaid">${pyEscape(token.content)}</pre>${cap}</figure>\n`;
+    const figure = `<figure class="mermaid-figure"${dl}><pre class="mermaid">${pyEscape(token.content)}</pre>`;
+    return tokens[idx + 1]?.type === 'figcaption_open' ? figure : `${figure}</figure>\n`;
   }
   const text = codeText(token.content);
   const language = resolveLanguage(name);

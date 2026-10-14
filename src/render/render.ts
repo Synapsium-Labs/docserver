@@ -7,6 +7,8 @@
 //    that would take it past `maxHtmlBytes` UTF-8 bytes stops the render with outcome 'output-over-limit'
 //    and the fallback block of rule 5. An input under `maxBytes` can still expand far past it (a long link
 //    destination defined once and used many times), and the bound keeps that cost a host's to choose.
+//    The bound holds because ALL html is made in this phase: no parse rule renders anything (ruling C28;
+//    a figure's caption stays tokens until here), and every piece is counted before it is appended.
 // 5. Any exception gives outcome 'failed' and the reference renderer's fallback block, its source escaped
 //    the way the reference escaped it (Python's html.escape). It is never raw HTML, and it is cut to
 //    `maxHtmlBytes` too, so no outcome returns more html than the bound.
@@ -105,6 +107,8 @@ export function fallbackHtml(src: string, limit: number): string {
  * stops the render (undefined). An inline token's children are rendered here one at a time, exactly as
  * renderer.renderInline does, so a paragraph of many long links stops at the bound instead of being built
  * whole. The pieces are the ones renderer.render would join, so a finished html equals renderer.render's byte for byte.
+ * A figure's caption is inline tokens after its fence (figcaption.ts), so it is counted piece by piece too.
+ * The one thing counted whole is a single token's own html, which is at most a few times its source.
  */
 function renderBounded(engine: MarkdownIt, tokens: Token[], env: RenderEnv, limit: number): string | undefined {
   const renderer = engine.renderer;

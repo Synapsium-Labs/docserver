@@ -10,8 +10,10 @@ import { describe, expect, it } from 'vitest';
 import { normaliseForCompare } from '../src/conformance/normalise.js';
 import { checkOutputSafety } from '../src/conformance/oracle.js';
 import { createEngine } from '../src/render/engine.js';
-import { CAPTION, figcaption } from '../src/render/figcaption.js';
-import { render } from '../src/render/index.js';
+import { createEnv } from '../src/render/env.js';
+import { CAPTION, figcaption, startsCaption } from '../src/render/figcaption.js';
+import { render, scanRefs } from '../src/render/index.js';
+import { FALLBACK_OPEN } from '../src/render/render.js';
 
 type Case = readonly [name: string, src: string, html: string];
 
@@ -247,5 +249,119 @@ describe('figcaption: where this library differs from the reference', () => {
       expect(checkOutputSafety(html), shape).toEqual([]);
     }
     expect(render(TWO).html).not.toMatch(/<figcaption>[^]*<\/em>[^]*<\/figcaption>/);
+  });
+});
+
+// Ruling C28: the caption is decided on tokens and rendered in the render phase, so the html bound counts it.
+describe('figcaption: the caption is bounded (ruling C28)', () => {
+  /** A reference definition with a `size`-character destination, a Mermaid figure, and a caption of `uses` links to it, spaced: `[a][a]` is one link. */
+  function expansion(size: number, uses: number): string {
+    return `[a]: /${'u'.repeat(size)}\n\n\`\`\`mermaid\nA\n\`\`\`\n\n*Figure 1. ${Array.from({ length: uses }, () => '[a]').join(' ')}*\n`;
+  }
+
+  it('a caption that expands past the html bound is output-over-limit, not failed, and scanRefs does not throw', () => {
+    // 700 uses of a 1 MB destination: 700 MB of html, past V8's longest string (about 512 MiB) when it was built
+    // whole at parse time, which gave outcome 'failed' for render() and a RangeError out of scanRefs().
+    const src = expansion(1_000_000, 700);
+    const r = render(src);
+    expect(r.outcome).toBe('output-over-limit');
+    expect(r.html.startsWith(FALLBACK_OPEN)).toBe(true);
+    expect(Buffer.byteLength(r.html, 'utf8')).toBeLessThanOrEqual(16_777_216);
+    expect(r.html).not.toContain('<a ');
+    const s = scanRefs(src);
+    expect(s.outcome).toBe('scanned');
+    expect(s.mermaid.fences).toBe(1);
+  });
+
+  it('a caption is counted against maxHtmlBytes piece by piece', () => {
+    const src = expansion(4000, 200);
+    expect(render(src, { maxHtmlBytes: 100_000 }).outcome).toBe('output-over-limit');
+    const whole = render(src);
+    expect(whole.outcome).toBe('rendered');
+    const bytes = Buffer.byteLength(whole.html, 'utf8');
+    expect(render(src, { maxHtmlBytes: bytes }).html).toBe(whole.html);
+    expect(render(src, { maxHtmlBytes: bytes - 1 }).outcome).toBe('output-over-limit');
+  });
+
+  it('parsing renders none of the caption: only the start of the span is looked at', () => {
+    const md = createEngine();
+    let links = 0;
+    md.renderer.rules['link_open'] = (tokens, idx, options, _env, self) => {
+      links += 1;
+      return self.renderToken(tokens, idx, options);
+    };
+    const tokens = md.parse(expansion(10, 1000), createEnv({ lineAttrs: true }));
+    expect(links).toBe(0);
+    expect(tokens.map((t) => t.type)).toEqual(['fence', 'figcaption_open', 'inline', 'figcaption_close']);
+    expect(tokens[2]?.children?.filter((t) => t.type === 'link_open')).toHaveLength(1000);
+    expect(render(expansion(10, 1000)).html).toContain('Figure 1. <a href="/uuuuuuuuuu">a</a>');
+  });
+
+  it('a caption is the figcaption_open, the inline token and figcaption_close right after the fence', () => {
+    const tokens = createEngine().parse('```mermaid\nA\n```\n\n</details>\n\n*Figure 1. a*\n\nz\n', createEnv({ lineAttrs: true }));
+    const types = tokens.map((t) => t.type);
+    const at = types.indexOf('fence');
+    expect(types.slice(at, at + 4)).toEqual(['fence', 'figcaption_open', 'inline', 'figcaption_close']);
+    expect(types[at + 4]).toBe('html_block');
+    expect(tokens[at + 2]?.children?.map((t) => t.type)).toEqual(['text']);
+  });
+
+  // The decision is CAPTION's, taken on a prefix. Every shape below is compared with CAPTION on the whole
+  // rendered paragraph, so the two cannot disagree.
+  const SHAPES = [
+    'Figure 1. a', 'Figure 1.', 'Figure\n7.x', 'Figure\u00a01. a', 'Figure\u1680\u2003 \t12. a', 'Figure\u001f2. a',
+    'Figure \u0661. a', 'Figure \uff11\uff12. a', 'Figure \u{1d7ce}. a', 'Figure 01.x', 'Figure &nbsp;1. a', 'Figure &#49;. a',
+    'Figure 1\\. a', 'Figure 1 . a', 'Figure 1', 'Figure 1,', 'Figure .', 'Figure', 'Figure  ', 'figure 1. a', 'FIGURE 1. a',
+    'Figures 1. a', 'Figure1. a', 'Figure \u2160. a', 'Figure \u00b2. a', 'Figure \ufeff1. a', 'Fig\\ure 1. a',
+    'Figure **1**. a', 'Figure `1`. a', 'Figure 1<sup>x</sup>. a', 'Figure <br>1. a', 'Figure ![i](u). a', 'Figure [1](u). a',
+    '**Figure 1.** a', '*Figure 1.* a', 'a *Figure 1.* b', 'Figure 1.\u2028a', 'Figure 1. *b* c', 'Figure 1. [x](y) ![i](j)',
+  ];
+
+  it("startsCaption agrees with CAPTION on a paragraph's rendered start", () => {
+    const md = createEngine();
+    for (const shape of SHAPES) {
+      const tokens = md.parse(`*${shape}*\n`, createEnv({ lineAttrs: true }));
+      const children = tokens.find((t) => t.type === 'inline')?.children ?? [];
+      const pieces = children.map((_, j) => {
+        const rule = md.renderer.rules[children[j]?.type ?? ''];
+        return rule === undefined ? md.renderer.renderToken(children, j, md.options) : rule(children, j, md.options, {}, md.renderer);
+      });
+      const html = pieces.join('');
+      const first = children[0]?.type === 'em_open' && children.at(-1)?.type === 'em_close';
+      if (!first) continue;
+      expect(startsCaption(pieces), shape).toBe(CAPTION.test(html));
+    }
+    // And the shapes that are captions really are: through render(), not only through the predicate.
+    const yes = ['Figure 1. a', 'Figure\n7.x', 'Figure\u00a01. a', 'Figure \u{1d7ce}. a', 'Figure &#49;. a', 'Figure 1\\. a'];
+    for (const shape of yes) {
+      expect(render(`\`\`\`mermaid\nA\n\`\`\`\n*${shape}*\n`).html, shape).toContain('<figcaption>');
+    }
+    const no = ['Figure 1', 'Figure .', 'figure 1. a', 'Figure1. a', 'Figure **1**. a', 'Figure 1<sup>x</sup>. a'];
+    for (const shape of no) {
+      expect(render(`\`\`\`mermaid\nA\n\`\`\`\n*${shape}*\n`).html, shape).not.toContain('<figcaption>');
+    }
+  });
+
+  it('startsCaption stops at the first piece that decides, and a long whitespace run is read in full', () => {
+    let asked = 0;
+    function* pieces(): Generator<string> {
+      for (const p of ['<em>', 'Figure 1.', 'never', 'asked']) {
+        asked += 1;
+        yield p;
+      }
+    }
+    expect(startsCaption(pieces())).toBe(true);
+    expect(asked).toBe(2);
+    asked = 0;
+    function* wrong(): Generator<string> {
+      for (const p of ['<em>', 'Figures', 'never']) {
+        asked += 1;
+        yield p;
+      }
+    }
+    expect(startsCaption(wrong())).toBe(false);
+    expect(asked).toBe(2);
+    const long = `*Figure${'\u00a0'.repeat(200_000)}7. a*`;
+    expect(render(`\`\`\`mermaid\nA\n\`\`\`\n${long}\n`).html).toContain('<figcaption>Figure');
   });
 });
