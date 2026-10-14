@@ -6,7 +6,9 @@
 //    (highlight.js's own types reference the DOM library, so the project maps them to src/types/purity/).
 // 2. The import graph of src/render/index.ts, read with TypeScript's own import scanner and followed through
 //    every relative import, stays inside src/render, names no Node built-in, and names no package outside the
-//    dependency allowlist, which is exactly package.json's dependencies.
+//    dependency allowlist (BARE_ALLOWED, the judge proper). The imported packages are compared with
+//    package.json's dependencies except the @types/* ones, which no source imports by name: a consumer's
+//    compiler needs them for the packed declarations (test/package.test.ts pins them).
 // 3. No source file in src/render names a host or nondeterministic identifier (network, storage, DOM, Node,
 //    clock, randomness, locale, code from strings), or uses a dynamic import(). Comments and strings do not
 //    count: the identifiers are read from TypeScript's syntax tree.

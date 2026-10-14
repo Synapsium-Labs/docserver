@@ -61,7 +61,9 @@ describe('package.json: the types the packed declarations import', () => {
   const TYPES = { '@types/js-yaml': '4.0.9', '@types/markdown-it': '14.2.0' };
 
   it('@types/markdown-it and @types/js-yaml are exact-pinned dependencies, not devDependencies', () => {
-    expect(pkg.dependencies).toMatchObject(TYPES);
+    const entries = Object.entries(pkg.dependencies);
+    const typesDeps = Object.fromEntries(entries.filter(([name]) => name.startsWith('@types/')));
+    expect(typesDeps).toEqual(TYPES);
     for (const name of Object.keys(TYPES)) expect(pkg.devDependencies).not.toHaveProperty(name);
   });
 
