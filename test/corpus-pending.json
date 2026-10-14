@@ -1,9 +1,6 @@
 {
   "heading-ids-edge": "T8",
   "comment-anchors": "T8",
-  "mermaid-figures": "T7",
-  "figure-captions": "T7",
-  "alerts": "T7",
   "tables": "T8",
   "lists-tasks": "T8",
   "doc-shapes/plan": "T8",
@@ -25,6 +22,5 @@
   "h-frontmatter-hostile/alias-bomb": "T9",
   "h-frontmatter-hostile/yaml-tags": "T9",
   "h-frontmatter-hostile/oversize": "T9",
-  "h-frontmatter-hostile/markup-keys": "T9",
-  "h-alert-caption-spoof": "T7"
+  "h-frontmatter-hostile/markup-keys": "T9"
 }

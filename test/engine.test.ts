@@ -57,7 +57,7 @@ describe('createEngine: options', () => {
 describe('createEngine: rule chains', () => {
   const md = createEngine();
 
-  it('core: block_strip between block and inline, anchors and balance_details after text_join, then line_attrs last', () => {
+  it('core: block_strip after block; anchors, balance_details, alerts, figcaption after text_join; line_attrs last', () => {
     expect(enabled(md.core.ruler)).toEqual([
       'normalize',
       'block',
@@ -66,6 +66,8 @@ describe('createEngine: rule chains', () => {
       'text_join',
       'anchors',
       'balance_details',
+      'alerts',
+      'figcaption',
       'line_attrs',
     ]);
   });

@@ -19,11 +19,17 @@
 // and is not a list terminator), safe_inline_html in the inline chain. balance_details runs after anchors.
 // Fences render through this library's own rule (fence.ts), not markdown-it's: a Mermaid figure or a
 // highlighted code block, with options.highlight left unset.
+// alerts and figcaption follow balance_details. They stand in for the reference's HTML post-passes (its
+// caption pass ran first, then its alert pass; the two never touch the same tokens, so their order here
+// changes nothing). alerts turns blockquotes into alert_open/alert_close, which render through this
+// library's own two rules; figcaption records a caption on its fence token, which renderFence writes.
 import MarkdownIt from 'markdown-it';
+import { alerts, renderAlertClose, renderAlertOpen } from './alerts.js';
 import { safeBlockHtml, safeInlineHtml } from './allowlist.js';
 import { blockStrip } from './blockStrip.js';
 import { balanceDetails } from './details.js';
 import { renderFence } from './fence.js';
+import { figcaption } from './figcaption.js';
 import { lineAttrs } from './lineAttrs.js';
 import { anchors } from './slug.js';
 
@@ -44,6 +50,10 @@ export function createEngine(): MarkdownIt {
   });
   md.inline.ruler.before('html_inline', 'safe_inline_html', safeInlineHtml);
   md.core.ruler.before('line_attrs', 'balance_details', balanceDetails);
+  md.core.ruler.before('line_attrs', 'alerts', alerts);
+  md.core.ruler.before('line_attrs', 'figcaption', figcaption);
   md.renderer.rules.fence = renderFence;
+  md.renderer.rules.alert_open = renderAlertOpen;
+  md.renderer.rules.alert_close = renderAlertClose;
   return md;
 }
