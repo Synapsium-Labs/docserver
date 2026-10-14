@@ -51,6 +51,18 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 - **C13: a bug found in planning.** An id comment after a `summary` line inside a nested quote rendered as an empty paragraph. It is fixed in Task 5, with a corpus case and a mutation row.
 - **C14: a corpus defect.** One input hid two of its probes behind an earlier one. The input was reordered before any golden was generated.
 - **C18: a purity finding.** highlight.js's type declarations pulled the DOM types into the pure entry's typecheck. Task 1's typecheck config maps them to local declarations from the start, so the pure entry never sees `lib.dom`.
+- **C24 (2026-10-14, during L1 Task 6): highlighting is bounded line by line.** The worker measured that Task 6's per-line and per-document bounds do not bound cost inside one highlight.js call:
+  - a shell or Dockerfile fence of `$ ${` lines makes the output grow with the square of the line count, and a 128 KiB fence exhausts the heap;
+  - an `ini` or `toml` fence of `\"` runs takes about 187 s at the 256 KiB budget;
+  - `js`, `ts` and `xml` reach about 3.4 s.
+
+  Ruled:
+  - A fence over a measured threshold is highlighted one line at a time, each line on its own, under the existing per-line and per-document caps. Cost and output are then linear in the number of lines for every grammar, not only the ones found.
+  - Ordinary fences at or below the threshold keep whole-block highlighting, so multi-line constructs such as block comments stay correct.
+  - The worker measures the threshold so that the worst hostile case on either path stays within the plan's render budget, and states it.
+  - Each path gets cases, including the three shapes above as generated hostile cases, plus mutation rows.
+
+  Why: grammar patches fix only the grammars found, and dropping grammars loses features and still leaves the 3.4 s case. No golden moves, because highlighting is normalised in comparison (PD1). Cost if wrong: multi-line highlighting is lost on fences over the threshold. That is cosmetic, and the threshold can be raised on a later measurement.
 
 ## Carried constraints (reviewers get these)
 
