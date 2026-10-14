@@ -14,8 +14,10 @@
 // - the span's rendered start is `<em>`, `Figure`, Python whitespace, a decimal digit run (Python's \d: any
 //   Unicode decimal digit), then `.` (startsCaption). That is CAPTION's acceptance set, decided on a PREFIX:
 //   the decision reads the rendered html of the span's `em_open` and of its leading `text` and `softbreak`
-//   children, one token at a time and only until it is made. That is bounded by the caption prefix it reads,
-//   which is text the paragraph already holds; any other token is not rendered (renderedPieces), so a link
+//   children, one token at a time and only until the token where it is made. That covers the `<em>` and the
+//   leading text and softbreak tokens up to that one, each rendered whole (a `text` token is rendered before
+//   its first character is read), so at most the paragraph's own text, escaped (up to 6x for `&quot;`), once
+//   per paragraph, which keeps the total linear; any other token is not rendered (renderedPieces), so a link
 //   or image right after the `<em>` costs nothing at parse time. CAPTION itself, the
 //   reference's pattern on a finished paragraph, stays as the oracle that test/figcaption.test.ts compares
 //   startsCaption with.
@@ -98,7 +100,9 @@ export function startsCaption(pieces: Iterable<string>): boolean {
 /**
  * The html the caption decision reads, one inline child at a time and only on demand: the first child (the
  * span's `em_open`) as renderer.renderInline would write it, then the html of each `text` and `softbreak`
- * child. Any other token (a link, an image, code, emphasis, a tag) is NOT rendered: it yields the sentinel
+ * child. A `text` child is rendered whole before its first character is read, so what is rendered is the
+ * `<em>` and the leading text and softbreak tokens up to the one where the decision lands: at most the
+ * paragraph's own text, escaped (up to 6x for `&quot;`), once per paragraph, so the total is linear. Any other token (a link, an image, code, emphasis, a tag) is NOT rendered: it yields the sentinel
  * '<' instead, which startsCaption rejects in every state past `<em>`, so the decision is the one rendering
  * it would give, and a link or image right after the `<em>` (or after `Figure `) costs nothing at parse time
  * (review 458, F2). Every character startsCaption accepts after `<em>` is text, and a softbreak renders as

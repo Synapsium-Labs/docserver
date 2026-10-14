@@ -9,8 +9,9 @@
 //    destination defined once and used many times), and the bound keeps that cost a host's to choose.
 //    The bound holds because the html is made in this phase: the one parse-time render is the figcaption
 //    decision, which renders only a span's opening `<em>` and its leading text and softbreak children (ruling
-//    C28, review 458 F2; a figure's caption stays tokens until here), bounded by the caption prefix it reads,
-//    which is text the paragraph already holds, and kept by nothing. Every piece is counted before it is appended.
+//    C28, review 458 F2; a figure's caption stays tokens until here), up to the token where the decision lands,
+//    each rendered whole: at most the paragraph's own text, escaped (up to 6x), once per paragraph, so linear,
+//    and kept by nothing. Every piece is counted before it is appended.
 // 5. Any exception gives outcome 'failed' and the reference renderer's fallback block, its source escaped
 //    the way the reference escaped it (Python's html.escape). It is never raw HTML, and it is cut to
 //    `maxHtmlBytes` too, so no outcome returns more html than the bound.

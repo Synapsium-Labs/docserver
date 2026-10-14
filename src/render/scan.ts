@@ -3,8 +3,8 @@
 // Mermaid sources it will turn into figures. It parses with render()'s own engine and builds no html;
 // markdown-it's parse runs the whole core chain, so the token stream is the one render() renders. The only
 // parse rule that renders anything is the figcaption decision (ruling C28, review 458 F2): it renders a
-// span's opening `<em>` and its leading text and softbreak children, bounded by the caption prefix it reads,
-// which is text the paragraph already holds, and keeps none of it. So what a scan costs is the parse, linear
+// span's opening `<em>` and its leading text and softbreak children, up to the token where the decision lands,
+// each rendered whole: at most the paragraph's own text, escaped (up to 6x), once per paragraph, and keeps none of it. So what a scan costs is the parse, linear
 // in the input, and it holds only the images it keeps; it has no html bound because it keeps no html.
 // The result describes a SUCCESSFUL render: the images and figures render() shows when its outcome is
 // 'rendered'. When render() ends 'output-over-limit' or 'failed' it shows the escaped source instead, and
