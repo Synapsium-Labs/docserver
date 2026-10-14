@@ -66,7 +66,7 @@ describe('README', () => {
     const row = README.split('\n').find((l) => l.startsWith('| PD2 | ')) ?? '';
     for (const part of [
       '`null` renders empty',
-      '(a) integer-like keys are listed first',
+      '(a) array-index keys are listed first',
       '(b) a last block scalar keeps its trailing line feed',
       '(c) a sequence key loads as its items joined by commas',
       '(d) nesting deeper than 100 levels fails the load',
