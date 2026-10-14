@@ -62,6 +62,14 @@ describe('manifest.json', () => {
     expect(manifest.filter((c) => typeof c.pins !== 'string' || c.pins.trim() === '').map((c) => c.id)).toEqual([]);
   });
 
+  it('frontmatter-types says what its input pins: `flag: yes`, which holds no `on` scalar', () => {
+    const pins = manifest.find((c) => c.id === 'frontmatter-types')?.pins ?? '';
+    expect(readText('corpus/frontmatter-types.md')).toContain('flag: yes\n');
+    expect(readText('corpus/frontmatter-types.md')).not.toMatch(/^on:/m);
+    expect(pins).toContain('`flag: yes` staying `yes`');
+    expect(pins).not.toContain('yes/on');
+  });
+
   it('every corpus file has an entry and every golden or hostile entry has a corpus file', () => {
     expect(filesUnder('corpus')).toEqual(withInput.map((c) => `${c.id}.md`).sort());
   });

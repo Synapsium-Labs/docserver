@@ -122,7 +122,7 @@
   {
     "id": "frontmatter-types",
     "kind": "golden",
-    "pins": "Departure PD2 (ruled in Task 9): null, booleans, yes/on, floats, dates and datetimes, 500-code-point truncation.",
+    "pins": "Departure PD2 (ruled in Task 9): null, booleans, `flag: yes` staying `yes`, floats, dates and datetimes, nested list items skipped, html escaping, and 500-code-point truncation.",
     "probes": ["fm_yaml_types"]
   },
   {
