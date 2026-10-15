@@ -1,7 +1,8 @@
 // The figcaption core rule (docserver L1; architecture section C, the "Caption" row; contract section 2.7;
 // ruling C28). The reference renderer finds a caption with a regular expression over its finished HTML: a
 // Mermaid figure, whitespace, then a paragraph that is exactly `<em>Figure N. …</em>`. This rule makes the
-// same decision on the token stream, rendering at most a short prefix of the span and keeping none of it:
+// same decision on the token stream, rendering the span's opening and its leading text tokens whole (so the
+// cost is the paragraph's own text, once, linear) and keeping none of it:
 // - a fence that renders a Mermaid figure (fence.ts's own test: fenceName(info) === MERMAID);
 // - its next block, stepping over blocks that render as whitespace (skipBlank), is a paragraph that is
 //   not hidden: a tight list's paragraph renders no <p>, and the reference's pattern needs one;
@@ -21,8 +22,9 @@
 //   or image right after the `<em>` costs nothing at parse time. CAPTION itself, the
 //   reference's pattern on a finished paragraph, stays as the oracle that test/figcaption.test.ts compares
 //   startsCaption with.
-// Ruling C28: nothing here renders the caption. The decision renders only what renderedPieces yields (the
-// span's opening `<em>` and its leading text and softbreak children) and keeps none of it. An earlier version
+// Ruling C28: the caption itself is not rendered here. The decision renders only what renderedPieces yields
+// (the span's opening `<em>` and its leading text and softbreak children, each text token whole, so the cost
+// is the paragraph's own text, linear) and keeps none of it. An earlier version
 // rendered the whole paragraph at parse time (outside render()'s html bound, and inside scanRefs, which has
 // no bound) and kept the string; a caption
 // whose links each repeat one long destination built a gigabyte string (a fatal out-of-memory error, or
