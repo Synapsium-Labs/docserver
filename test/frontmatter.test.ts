@@ -365,10 +365,11 @@ describe('PD2: a mapping key fails the load, as in the reference (ruling C33)', 
     expect(Object.keys(data ?? {})).toEqual(['base', 'm', 'l', 'x']);
   });
 
-  // An alias gives the listener the same sequence again. It is skipped once marked, so the aliases of one
-  // large sequence cost one mark each and not one rescan of its elements each. 2000 mappings held 3500
-  // times is 7 million marks without the skip: seconds, against a few milliseconds with it.
-  it('aliasing one large sequence many times stays cheap: an already marked sequence is not rescanned', () => {
+  // An alias gives the listener the same sequence again. The listener scans from the count of elements it
+  // has already looked at, so each alias of a finished sequence costs one lookup and not a rescan of its
+  // elements. 2000 mappings held 3500 times is 7 million marks when every hearing rescans from the start:
+  // seconds, against a few milliseconds. (Skipping a heard sequence outright would be wrong; C33-M8 reds that.)
+  it('aliasing one large sequence many times stays cheap: the elements already scanned are not scanned again', () => {
     const src = `---\na: &a [${Array(2000).fill('{}').join(',')}]\nb: [${Array(3500).fill('*a').join(',')}]\n---\n`;
     expect(cpLength(src)).toBeLessThan(FM_MAX_CHARS);
     const started = performance.now();
