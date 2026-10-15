@@ -8,8 +8,8 @@ Coordinator: ccrc session `ccrc-pwa-calm-canyon`. It also coordinates ccrc's `na
 
 | # | scope | PRs | state |
 |---|---|---|---|
-| L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1; work: #8 | **plan merged** 2026-10-13 (`00fa66cb2`), approved by the operator. Run 414 dispatched 2026-10-13. PR #8 opened 2026-10-14. The coordinator's review (run 458) sent it to one fix round (C31-C37) |
-| L2 | The layout. `enhance(root, options)` made embeddable: host adapters, namespaced storage keys, operator-specific defaults scrubbed into off-by-default options, CSP-safe. The styles, and the fonts with `OFL.txt`. A self-hosted single-file Mermaid with pinned limits. `THIRD-PARTY-NOTICES`. | — | after L1 |
+| L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1; work: #8 | **merged** 2026-10-15 as `89a9db6f4`, with one `Goldens-moved:` trailer naming the 52 cases. Run 414 dispatched 2026-10-13, and PR #8 opened 2026-10-14. The coordinator's reviews were runs 458, 464 and 469, with two fix rounds (C31-C39). The suite is green on Node 22 and 24, and the mutation table holds 494 rows: 461 red, 33 superseded or not applied, each with a stand-in, and 0 not red |
+| L2 | The layout. `enhance(root, options)` made embeddable: host adapters, namespaced storage keys, operator-specific defaults scrubbed into off-by-default options, CSP-safe. The styles, and the fonts with `OFL.txt`. A self-hosted single-file Mermaid with pinned limits. `THIRD-PARTY-NOTICES`. | — | next: plan to be written |
 | L3 | The frame and the release. `frameDocument()`, the frame bootstrap and click guard as hashed assets, `mountDocFrame()` for other hosts, and `assets.json`. Then v1: the repo goes public, and the package is published to npm with provenance as `@synapsium-labs/docserver`. | — | after L2 |
 
 ## Decisions & deviations
@@ -97,7 +97,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   Why: the walk is what lets the scan run in mutation copies. Cost if wrong: a named directory hides a file someone later tracks, which the `ls-files` case catches in CI.
 
 - **C28-C30 (2026-10-14, L1's whole-branch review).** The worker put the review's open questions as one batched question. The operator answered it in the worker's own dialog at 12:49Z and chose the recommended option each time. It is recorded here after the fact, because the question never reached the coordinator's ask lane.
-  - **C28: the figure caption is bounded, with no change to the output.** The caption rule rendered the whole candidate paragraph at parse time. That was outside `render()`'s html bound, and also inside `scanRefs()`, which has no bound. A caption of links that repeat one long destination built a 1 GB string: a fatal out-of-memory error at 3.0 MB of input, and a `failed` outcome plus a thrown `RangeError` at 3.9 MB, which is under `maxBytes`. The rule now decides from tokens: one emphasis span (C25), then the `Figure N.` test on a bounded prefix. The caption renders in the render phase, under the html bound. Every golden is byte-identical. The corpus, 41 caption shapes and 60,000 fuzzed documents agree. There is no generated corpus case: the 9,238 bytes left under the corpus's 8 MiB cap cannot reach the 16 MiB html bound. Unit cases and 25 mutation rows pin it instead.
+  - **C28: the figure caption is bounded, with no change to the output.** The caption rule rendered the whole candidate paragraph at parse time. That was outside `render()`'s html bound, and also inside `scanRefs()`, which has no bound. A caption of links that repeat one long destination built a 1 GB string: a fatal out-of-memory error at 3.0 MB of input, and a `failed` outcome plus a thrown `RangeError` at 3.9 MB, which is under `maxBytes`. The rule now decides from tokens: one emphasis span (C25), then the `Figure N.` test on a bounded prefix. The caption renders in the render phase, under the html bound. Every golden is byte-identical. The corpus and 39 caption shapes agree (corrected 2026-10-15: an earlier version of this entry said 41 shapes, and named a 60,000-document fuzz run that was never committed as a test). The fix round's differential over 1,439 candidates found no difference. There is no generated corpus case: the 9,238 bytes left under the corpus's 8 MiB cap cannot reach the 16 MiB html bound. Unit cases and 25 mutation rows pin it instead.
   - **C29: PD9, heading ids follow the runtime's Unicode tables.** The slug keeps `\p{L}` and `\p{N}` and lower-cases the way the runtime does. So a code point that was unassigned in Unicode 15.0, the reference's version, can appear in an id where the reference dropped it, and two runtimes with different Unicode versions can disagree. It is documented in the README, with a unit case gated on the runtime's Unicode version, and no code change. No golden reaches it. This makes the departure list PD1-PD9.
   - **C30: highlight span depth is accepted and documented.** A single highlighted line of 256 units can nest highlight.js spans up to about 170 deep. That is above C21's 64, but C21 covers the allowlisted tags only. The line cap and the whole-block threshold bound it, well under browsers' parse limits. The README states the bound.
   - **Fixed within existing constraints:** the CI consumer smoke installs with a 14-day `--before`, and its checkout keeps no credentials. The whole-block threshold is pinned by its literal size. A comment in the shipped types is reworded. The README tells hosts to size `maxBytes` to their heap.
@@ -130,6 +130,11 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - The remaining findings are minor and fixed in a short second round: comment and record wording; a guard that no case reddened, which is removed; the C32, C36 and C38 cases now hold the reference's output in their assertions, not in comments; and the C37 record now states the mutation runner's two changes (a large output buffer, and a killed run reported as not red).
   - Stock xml `<script>` and `<style>` content under C24 rendered in 0.3 to 1.5 s at the 256 KiB budget with highlight.js 11.12.0. That is within budget and needs no ruling. No generated case covers xml, because the corpus cap leaves too little room.
 
+- **L1 merged (2026-10-15).** The last review (run 469) found three minor items, and they are carried into L2's first task rather than held for another round:
+  - Close C39's parity gap. The refusal sits under a key that a block can spell itself, through a YAML escape, an earlier merge source or a separate earlier `<<` pair. The reviewer measured a one-line fix: a key no block under `FM_MAX_CHARS` can spell, such as `'\u0000'.repeat(2 * FM_MAX_CHARS)`, closes every route. With it the reference matches, the front-matter tests pass and the cost does not rise.
+  - C38's case also pins the reference's `frontList` (test-only).
+  - The R7 comment says the reference keeps the uncut key (wording).
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
@@ -138,12 +143,11 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 - Browser code is CSP-safe: no `innerHTML`, `eval` or inline handlers.
 - The corpus is the contract: a golden change is stated, and a hostile verdict never weakens.
 
-## Next-wave brief (L1)
+## Next-wave brief (L2)
 
-For run 414. The brief carries the wave's specifics only; the standing protocol is the worker skill's.
-- **Plan:** `docs/superpowers/plans/2026-10-12-docserver-l1-rules-and-corpus.md` at `00fa66cb2`. Run Tasks 1-12 in order, then the held-out whole-branch review, the final gate and the whole mutation table, then the close.
-- **Base:** `main` at `00fa66cb2`, a fresh workspace.
-- **Routing:** an Opus·high main loop with Sonnet·high implementers. Opus·high task reviewers and the whole-branch review. Workflows off. Never Fable.
-- **The reference renderer** is supplied on command lines only (C5). Its pins were measured equal to the plan's on 2026-10-13. If a hash or version differs, the worker stops and asks.
-- **Departures:** no D-numbers here. The allocator for this project is not seeded by design (2026-10-13, the allocator answered `not-seeded`). A departure comes to the coordinator as a question and becomes C24 onward in this ledger before any file moves.
-- **Repository settings:** none changed (C4). The merge is the coordinator's, with the `Goldens-moved:` body the plan describes.
+L1 merged on 2026-10-15 as `89a9db6f4`. L2's run is opened before L1's closes, and its plan is written next. The plan must:
+- start with the three items carried from L1's last review, closing C39's parity gap first;
+- keep C1-C39 and PD1-PD9 binding;
+- build on `main` at or after `89a9db6f4`.
+
+The reference renderer, departures and repository-settings rules are the same as L1's: C5, C-numbers before any file moves, and C4. Routing is set when the plan is written.
