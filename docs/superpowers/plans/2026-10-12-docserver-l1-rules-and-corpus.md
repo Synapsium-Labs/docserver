@@ -13761,7 +13761,7 @@ Section F's rows map as follows: M8.1 is L1-T8-M1, M8.2 is M2, M8.3 is M3, M8.4 
     "old": "  md.use(footnote);\n",
     "new": "",
     "tests": "test/footnotes.test.ts test/engine.test.ts test/corpus.test.ts",
-    "red": "test/footnotes.test.ts + test/engine.test.ts + test/corpus.test.ts: 16 failed | 68 passed (84). The footnote plugin not used. 'heading-ids-edge: passes' (two failure lines), 'tables: passes', 'footnotes: passes'; the core, block and inline chain pins, the first: AssertionError: expected [ 'normalize', 'block', …(10) ] to deeply equal [ 'normalize', 'block', …(11) ]; all ten footnote cases, the first 'references, a second reference to one note, …': AssertionError: expected '<p data-line=\"1-1\">a<a href=\"second\">…' to be '<p data-line=\"1-1\">a<sup class=\"footn…'."
+    "red": "test/footnotes.test.ts + test/engine.test.ts + test/corpus.test.ts: 3 files failed to load, no tests ran. The footnote plugin not used: since C26, createEngine replaces the plugin's core rule by name (md.core.ruler.at('footnote_tail', …)), which throws 'Error: Parser rule not found: footnote_tail' when the engine is built. (Corrected after review 464; before C26 this row failed 16 of 84 assertions.)"
   },
   {
     "id": "L1-T8-M10",
@@ -21094,22 +21094,30 @@ Expected: `ci: purity, browser parity, public-readiness and the packed-consumer 
 
 ## L1 results
 
-This section was added after the plan merged (ruling C37). It holds every mutation row that the coordinator's rulings C24-C38 and the reviews after Task 12 added, in the format of the rows above, so that `main` holds the definition of every row in the final table. Each row is measured as Task 1 describes: in its own throwaway copy of the tree, with the named test run after the one replacement.
+This section was added after the plan merged (ruling C37). It holds every mutation row that the coordinator's rulings C24-C39 and the reviews after Task 12 added, in the format of the rows above, so that `main` holds the definition of every row in the final table. Each row is measured as Task 1 describes: in its own throwaway copy of the tree, with the named test run after the one replacement.
+
+The table was measured with Task 1's runner plus two changes, and these supersede the runner text in Task 1. The runner captures the test output with a `maxBuffer` of 512 MiB: with Node's default of 1 MiB, a row whose failures print more (L1-T4-M16 prints about 14.8 MB) is killed with no exit status, and Task 1's runner would have counted that as red. And a run that ends with no exit status (a timeout, a signal or a full buffer) is reported as KILLED and counted as no verdict, never as red. The runner still counts any non-zero exit as red without comparing the failures with the row's recorded `red` text; one row's text was found stale this way and is corrected (see below).
 
 ### The final table
 
-Measured in one sequential run over the whole table at the branch's final code: the plan's 357 rows and the 131 rows below.
+Measured in one sequential run over the whole table at the branch's final code: the plan's 357 rows and the 137 rows below.
 
 | Result | Rows |
 |---|---|
-| Red | 455 |
+| Red | 461 |
 | NOT RED | 0 |
 | NOT APPLIED | 33 |
-| Total | 488 |
+| Total | 494 |
 
-A NOT APPLIED row is one whose replaced text no longer exists, because a later task or ruling rewrote that code. The plan expected some of them. Every other one has a stand-in row below that makes the same change at the new text and goes red (its id is `L1-C28-R-…` or `L1-R458-R-…` followed by the id it replaces).
+A NOT APPLIED row is one whose replaced text no longer exists, because a later task or ruling rewrote that code. The plan expected some of them. Every other one has a stand-in row below that makes the same change at the new text and goes red. Most stand-ins are named `L1-C28-R-…` or `L1-R458-R-…` (by the ruling or review that rewrote the code) followed by the id they replace. Five are rows of the ruling that rewrote the code and carry that ruling's own id: `L1-T7-M21` is replaced by `L1-C28-M10`, `L1-T10-M6` and `L1-T10-M7` by `L1-C28-M14`, `L1-T12-M23` by `L1-C27-M6`, and `L1-T12-M32` by `L1-C25-M3`.
 
 NOT APPLIED: `L1-T1-M1`, `L1-T2-M6`, `L1-T2-M7`, `L1-T3-M26`, `L1-T3-M33`, `L1-T4-M9`, `L1-T4-M17`, `L1-T4-M18`, `L1-T5-M23`, `L1-T5-M24`, `L1-T5-M34`, `L1-T6-M11`, `L1-T6-M23`, `L1-T6-M24`, `L1-T7-M9`, `L1-T7-M21`, `L1-T7-M26`, `L1-T7-M27`, `L1-T8-M26`, `L1-T8-M27`, `L1-T9-M12`, `L1-T9-M14`, `L1-T9-M17`, `L1-T9-M21`, `L1-T9-M22`, `L1-T9-M32`, `L1-T10-M6`, `L1-T10-M7`, `L1-T12-M23`, `L1-T12-M32`, `L1-T12-M33`, `L1-C25-M1`, `L1-REV-M10`.
+
+Row `L1-R458-R18-M3` (removing the in-context options from the corpus run's `scanRefs` wrapper in `test/browser-parity.test.ts`) was written and dropped, so the review 458 rows for R18 run M1, M2 and M4-M7. It could not go red: `runCorpus` passes options to `scanRefs` only for a case with both a scan verdict and `options.maxBytes`, and no corpus case has both, so that wrapper only ever receives no options. The byte-for-byte loop's `scanRefs` call, which does receive options, is covered by `L1-R458-R18-M5`.
+
+Row `L1-T8-M9` (the footnote plugin not used) is red, but no longer as its recorded text says: since C26 the engine installs its own footnote tail by name, so without the plugin the engine fails to build, and the three named test files fail to load instead of failing 16 assertions. Its `red` text in Task 8 is corrected to that.
+
+C39 has one known gap, recorded rather than closed. Its refusal is a getter under an internal key name that begins with U+0000, and js-yaml's merge reads a source's key only when the destination does not already hold it. So a block that writes that exact key with a YAML escape before the `<<`, or brings it in through an earlier source of the same merge list, merges a sequence source as keys `0`, `1`, … where the reference refuses the block. Nothing throws and nothing is polluted. A Symbol key cannot be used, because the merge reads `Object.keys` of the source.
 
 Two counts in the record of C28 are corrected here. The caption differential ran over the 39 shapes in `test/figcaption.test.ts` (`SHAPES`), not 41. The 60,000-document fuzz run was a one-off check and is not committed as a test.
 
@@ -21942,7 +21950,7 @@ Two counts in the record of C28 are corrected here. The caption differential ran
     "old": "U+0085, U+2028 and U+2029 are not line breaks.",
     "new": "U+0085 is not a line break.",
     "tests": "test/readme.test.ts",
-    "red": "PD2's README row forgets U+2028 and U+2029 (ruling C32; the unit cases pin render()'s output and have no code to mutate)."
+    "red": "PD2's README row forgets U+2028 and U+2029 (ruling C32; the unit cases pin render()'s output and the reference's, and have no code of ours to mutate: the line-break behaviour is js-yaml's)."
   },
   {
     "id": "L1-R458-C33-M1",
@@ -22265,6 +22273,63 @@ Two counts in the record of C28 are corrected here. The caption differential ran
     "new": "bundle.render('x'.repeat(10), { maxBytes: 9 })",
     "tests": "test/browser-parity.test.ts",
     "red": "The byte-cap case passes a host-realm object: recorded."
+  }
+]
+```
+
+### Review 464, C39 and R7: front matter
+
+6 rows.
+
+```json
+[
+  {
+    "id": "L1-R464-C39-M1",
+    "file": "src/render/frontMatter.ts",
+    "old": "      if (seen === undefined) refuseMerge(m);\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The merge refusal is dropped: a sequence in a << list (aliased, inline, empty, mixed, block style) loads as a mapping with the keys 0, 1, ... and the C39 cases render a strip where the reference renders nothing."
+  },
+  {
+    "id": "L1-R464-C39-M2",
+    "file": "src/render/frontMatter.ts",
+    "old": "    for (const a of refusing) Reflect.deleteProperty(a, MERGE_REFUSAL);\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The refusal property is left on the loaded sequences: the C39 plain-array case and the C33 plain-objects walk see an extra enumerable key."
+  },
+  {
+    "id": "L1-R464-C39-M3",
+    "file": "src/render/frontMatter.ts",
+    "old": "{ get: refuseMergeSource, enumerable: true, configurable: true }",
+    "new": "{ get: refuseMergeSource, enumerable: false, configurable: true }",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The refusal property is not enumerable, so js-yaml never reads it as a merge source key and the C39 cases load."
+  },
+  {
+    "id": "L1-R464-C39-M4",
+    "file": "src/render/frontMatter.ts",
+    "old": "  throw new TypeError('expected a mapping for merging');",
+    "new": "  return undefined as never;",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The getter does not throw: merging reads it and carries on, so the C39 cases load."
+  },
+  {
+    "id": "L1-R464-C39-M5",
+    "file": "src/render/frontMatter.ts",
+    "old": "      if (seen === undefined) refuseMerge(m);\n",
+    "new": "      if (seen === undefined && m.length > 0) refuseMerge(m);\n",
+    "tests": "test/frontmatter.test.ts",
+    "red": "An empty sequence is left unrefused: <<: [[]] loads, where the reference refuses it."
+  },
+  {
+    "id": "L1-R464-R7-M1",
+    "file": "src/render/frontMatter.ts",
+    "old": "    } else if (!isNested(v) && v !== null) {",
+    "new": "    } else if (!isNested(v)) {",
+    "tests": "test/frontmatter.test.ts",
+    "red": "A null value is listed in meta.frontList: the collision case sees a second, empty entry for the later null key."
   }
 ]
 ```
