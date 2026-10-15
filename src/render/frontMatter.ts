@@ -175,16 +175,16 @@ const MERGE_REFUSAL = '\u0000merge source is a sequence';
  * A mapping used as a key, or a sequence key holding one, fails the load (ruling C33, part of PD2), through
  * the same `null` as a tag outside the schema. The reference (PyYAML) cannot hash a mapping, so it refuses
  * the whole block; js-yaml would read the key as the text `[object Object]`. js-yaml turns a key into text
- * with String(), and it never turns a value into text. So while loading, the listener marks every object a
+ * with String(), and it never turns a value into text. So while loading, the listener marks every mapping a
  * node ends with, and the mappings inside a sequence, with two symbol properties: a class that is not
  * `[object Object]` (which js-yaml would replace by that text before converting) and a conversion to text
  * that throws. The throw happens exactly where a mapping is a key, at any depth, and nowhere else.
- * - A sequence is marked as well as its mapping elements: inside a flow sequence, `a: 1` is a single-pair
+ * - The mappings a sequence holds are marked as well: inside a flow sequence, `a: 1` is a single-pair
  *   mapping that js-yaml pushes straight into the array and that is never a node's own result, so only the
  *   sequence's close shows it to the listener. A sequence that holds an alias of itself is heard before it
  *   is finished, so the listener keeps how many elements it has looked at and reads the rest at each hearing.
- *   (The marks on the sequence itself are never read: js-yaml copies a sequence key before it converts it;
- *   the C17 (c) control pins that.)
+ *   The sequence itself is not marked this way: js-yaml copies a sequence key before it converts it, so a
+ *   mark on the sequence would never be read (the C17 (c) control loads such a key).
  * - A `<<` merge source that is a sequence fails the load too (ruling C39, parity with PyYAML, which expects a
  *   mapping for merging; js-yaml would merge the sequence in as a mapping with the keys 0, 1, ...). Every
  *   sequence the listener hears gets an enumerable own property whose getter throws. js-yaml reads a merge
@@ -215,20 +215,19 @@ export function parseFrontMatter(content: string): FrontMapping | null {
   const scanned = new Map<unknown[], number>();
   // Called as each node opens and closes. At open it still sees the previous node's result (js-yaml resets
   // it after the call), which can be a sequence that is not finished: an alias inside a flow sequence
-  // returns the array being read, because its anchor is stored when it opens. Anything with an object for a
-  // result is marked once. A sequence also marks the objects it holds, which may never have been a node's
-  // result; it is heard again (an alias, or its own close after an alias inside it), so the count above
-  // makes each hearing look only at the elements added since the last. An alias of a finished sequence then
-  // costs one lookup, and a block that aliases one large sequence many times never rescans its elements.
+  // returns the array being read, because its anchor is stored when it opens. A mapping that is a node's
+  // result is marked the first time it is heard. A sequence is made unmergeable the first time it is heard,
+  // and marks the mappings it holds, which may never have been a node's result; it is heard again (an alias,
+  // or its own close after an alias inside it), so the count above makes each hearing look only at the
+  // elements added since the last. A mapping held by a sequence is marked again at each scan that reaches
+  // it, once per element position (the same properties, so nothing changes). An alias of a finished
+  // sequence costs one lookup, and a block that aliases one large sequence many times never rescans it.
   const listener = (_event: string, state: { result: unknown }): void => {
     const m = state.result;
     if (typeof m !== 'object' || m === null) return;
     if (Array.isArray(m)) {
       const seen = scanned.get(m);
-      if (seen === undefined) {
-        mark(m);
-        refuseMerge(m);
-      }
+      if (seen === undefined) refuseMerge(m);
       for (let i = seen ?? 0; i < m.length; i += 1) {
         const el: unknown = m[i];
         if (typeof el === 'object' && el !== null && !Array.isArray(el)) mark(el);
