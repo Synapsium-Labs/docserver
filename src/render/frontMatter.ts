@@ -158,6 +158,17 @@ function refuseMappingKey(): never {
   throw new TypeError('a mapping cannot be a key');
 }
 
+/** Throws when a sequence is read as a mapping: the one place js-yaml does that is a `<<` merge source. */
+function refuseMergeSource(): never {
+  throw new TypeError('expected a mapping for merging');
+}
+
+/**
+ * The name of the property that makes a sequence unmergeable (ruling C39). It is a string because js-yaml
+ * merges a source by the string keys of Object.keys; no author's text reaches it except by writing it.
+ */
+const MERGE_REFUSAL = '\u0000merge source is a sequence';
+
 /**
  * The YAML of a front-matter block as a mapping, or null (too long, a load error, or not a mapping).
  *
@@ -174,16 +185,31 @@ function refuseMappingKey(): never {
  *   is finished, so the listener keeps how many elements it has looked at and reads the rest at each hearing.
  *   (The marks on the sequence itself are never read: js-yaml copies a sequence key before it converts it;
  *   the C17 (c) control pins that.)
+ * - A `<<` merge source that is a sequence fails the load too (ruling C39, parity with PyYAML, which expects a
+ *   mapping for merging; js-yaml would merge the sequence in as a mapping with the keys 0, 1, ...). Every
+ *   sequence the listener hears gets an enumerable own property whose getter throws. js-yaml reads a merge
+ *   source's keys and values, so the throw happens there, for a list item or a bare alias of a sequence of
+ *   sequences, and nowhere else: a list of mappings, a mapping and a sequence key are read without it.
  * - The symbols cannot clash with an author's key, and they are removed again before the mapping is
- *   returned, so what the caller gets is a plain object.
+ *   returned, so what the caller gets is a plain object. (The refusal's property is a string, and
+ *   is removed in the same place; an author who wrote that exact key before the `<<` could hide it.)
  */
 export function parseFrontMatter(content: string): FrontMapping | null {
   if (cpLength(content) >= FM_MAX_CHARS) return null;
   const marked = new Set<object>();
+  const refusing = new Set<unknown[]>();
   const mark = (m: object): void => {
     marked.add(m);
     Object.defineProperty(m, Symbol.toStringTag, { value: 'FrontMatterMapping', configurable: true });
     Object.defineProperty(m, Symbol.toPrimitive, { value: refuseMappingKey, configurable: true });
+  };
+  // Ruling C39: js-yaml merges a sequence in as a mapping with the keys 0, 1, ..., where PyYAML refuses the
+  // load. It reads every key of a `<<` source and its value (Object.keys, then source[key]), so a sequence
+  // that has an enumerable own property whose getter throws is refused exactly there, empty or not. js-yaml
+  // reads a sequence's own keys nowhere else: it copies a sequence key before converting it.
+  const refuseMerge = (a: unknown[]): void => {
+    refusing.add(a);
+    Object.defineProperty(a, MERGE_REFUSAL, { get: refuseMergeSource, enumerable: true, configurable: true });
   };
   // For each sequence the listener has heard: how many of its elements it has already looked at.
   const scanned = new Map<unknown[], number>();
@@ -199,7 +225,10 @@ export function parseFrontMatter(content: string): FrontMapping | null {
     if (typeof m !== 'object' || m === null) return;
     if (Array.isArray(m)) {
       const seen = scanned.get(m);
-      if (seen === undefined) mark(m);
+      if (seen === undefined) {
+        mark(m);
+        refuseMerge(m);
+      }
       for (let i = seen ?? 0; i < m.length; i += 1) {
         const el: unknown = m[i];
         if (typeof el === 'object' && el !== null && !Array.isArray(el)) mark(el);
@@ -219,6 +248,7 @@ export function parseFrontMatter(content: string): FrontMapping | null {
       Reflect.deleteProperty(m, Symbol.toStringTag);
       Reflect.deleteProperty(m, Symbol.toPrimitive);
     }
+    for (const a of refusing) Reflect.deleteProperty(a, MERGE_REFUSAL);
   }
   return isMapping(data) ? data : null;
 }

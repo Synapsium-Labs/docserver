@@ -382,6 +382,59 @@ describe('PD2: a mapping key fails the load, as in the reference (ruling C33)', 
   });
 });
 
+// Ruling C39: a `<<` merge source that is not a mapping fails the load, through the same path as C33. PyYAML
+// reads a merge key's value as one mapping, or a list of mappings, and refuses anything else ("expected a
+// mapping for merging"); js-yaml merged a sequence in as a mapping with the keys 0, 1, ... The reference
+// (measured on each input below) rendered the empty string and meta was null.
+describe('PD2: a merge source that is a sequence fails the load, as in the reference (ruling C39)', () => {
+  const reference = { html: '', front: null, frontList: null };
+  const refused = (src: string): void => {
+    const r = render(src);
+    expect({ html: r.html, front: r.meta.front, frontList: r.meta.frontList }).toEqual(reference);
+  };
+
+  it('a sequence inside the merge list, through an alias', () => {
+    refused('---\ntags: &t [alpha, beta]\n<<: [*t]\ntitle: T\n---\n');
+  });
+
+  it('a sequence inside the merge list, written inline, empty or not, in flow and block style', () => {
+    refused('---\n<<: [[a, b]]\n---\n');
+    refused('---\n<<: [[]]\ntitle: T\n---\n');
+    refused('---\n<<:\n  - - a\n    - b\ntitle: T\n---\n');
+  });
+
+  it('a mapping and a sequence in one merge list; a list of aliased sequences of mappings', () => {
+    refused('---\nx: 0\n<<: [{a: 1}, [b]]\n---\n');
+    refused('---\ns: &s [{a: 1}]\n<<: [*s]\ntitle: T\n---\n');
+  });
+
+  it('control: a bare alias of a sequence of scalars is refused, as before', () => {
+    refused('---\ntags: &t [alpha, beta]\n<<: *t\ntitle: T\n---\n');
+  });
+
+  // Reference, same inputs: `<<: *s` (s a sequence of mappings) renders a, s, title; `<<: *m` renders a, m. Here
+  // the merged keys follow their `<<` (C17 (e)), so the order differs and nothing else does.
+  it('controls: ordinary merges still work: an alias, a list of aliases, a list of inline mappings, an inline mapping', () => {
+    expect(render('---\nm: &m {a: 1}\n<<: *m\n---\n').html).toBe(dl('1-4', item('m', '…') + item('a', '1')));
+    expect(render('---\ns: &s [{a: 1}]\n<<: *s\ntitle: T\n---\n').html).toBe(
+      dl('1-5', item('s', '') + item('a', '1') + item('title', 'T')),
+    );
+    expect(render('---\nm: &m {a: 1}\nn: &n {b: 2}\n<<: [*m, *n]\ntitle: T\n---\n').html).toBe(
+      dl('1-6', item('m', '…') + item('n', '…') + item('a', '1') + item('b', '2') + item('title', 'T')),
+    );
+    expect(render('---\n<<: [{a: 1}, {b: 2}]\ntitle: T\n---\n').html).toBe(
+      dl('1-4', item('a', '1') + item('b', '2') + item('title', 'T')),
+    );
+    expect(render('---\n<<: {a: 1}\ntitle: T\n---\n').html).toBe(dl('1-4', item('a', '1') + item('title', 'T')));
+  });
+
+  it('the merge refusal leaves no mark behind: a sequence from a loaded block is a plain array', () => {
+    const data = parseFrontMatter('s: &s [a, [b]]\nt: *s');
+    expect(Object.keys(data?.['s'] as unknown[])).toEqual(['0', '1']);
+    expect(Object.keys(data?.['t'] as unknown[])).toEqual(['0', '1']);
+  });
+});
+
 // Ruling C32: PD2 also covers U+2028 and U+2029. PyYAML treats both as line breaks and js-yaml does not, so
 // this implementation reads them as ordinary characters of a line. Each case notes what the reference
 // rendered, measured with the reference renderer on the same input (its output is not stored in the repo).
