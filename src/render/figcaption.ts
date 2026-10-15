@@ -22,7 +22,7 @@
 //   or image right after the `<em>` costs nothing at parse time. CAPTION itself, the
 //   reference's pattern on a finished paragraph, stays as the oracle that test/figcaption.test.ts compares
 //   startsCaption with.
-// Ruling C28: the caption itself is not rendered here. The decision renders only what renderedPieces yields
+// Ruling C28: nothing rendered here is kept as the caption. The decision renders only what renderedPieces yields
 // (the span's opening `<em>` and its leading text and softbreak children, each text token whole, so the cost
 // is the paragraph's own text, linear) and keeps none of it. An earlier version
 // rendered the whole paragraph at parse time (outside render()'s html bound, and inside scanRefs, which has

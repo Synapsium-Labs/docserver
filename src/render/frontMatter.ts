@@ -165,7 +165,8 @@ function refuseMergeSource(): never {
 
 /**
  * The name of the property that makes a sequence unmergeable (ruling C39). It is a string because js-yaml
- * merges a source by the string keys of Object.keys; no author's text reaches it except by writing it.
+ * merges a source by the string keys of Object.keys, so a Symbol key cannot stand in for it. Only an author
+ * who writes this exact key can reach it; that is a known parity gap, described at parseFrontMatter.
  */
 const MERGE_REFUSAL = '\u0000merge source is a sequence';
 
@@ -191,8 +192,15 @@ const MERGE_REFUSAL = '\u0000merge source is a sequence';
  *   source's keys and values, so the throw happens there, for a list item or a bare alias of a sequence of
  *   sequences, and nowhere else: a list of mappings, a mapping and a sequence key are read without it.
  * - The symbols cannot clash with an author's key, and they are removed again before the mapping is
- *   returned, so what the caller gets is a plain object. (The refusal's property is a string, and
- *   is removed in the same place; an author who wrote that exact key before the `<<` could hide it.)
+ *   returned, so what the caller gets is a plain object. The refusal's property is a string, removed in
+ *   the same place, and that leaves a known parity gap (ruling C39). js-yaml's mergeMappings skips a source
+ *   key the destination already owns, so the sequence is not refused when the destination already has a key
+ *   equal to MERGE_REFUSAL's name. That happens in two ways: (1) the author wrote the key before the `<<`,
+ *   with a YAML escape (`"\0merge source is a sequence"` or `"\u0000..."`; a literal NUL is refused by
+ *   js-yaml); (2) an earlier source of the same merge list brought it in, e.g. `m: &m {"\0...": 1}` with
+ *   `<<: [*m, *t]`. A key written after the `<<` does not bypass it. Then the sequence merges as the keys
+ *   0, 1, ..., where the reference refuses the block. That is all: nothing throws and nothing is polluted.
+ *   A Symbol key cannot close the gap, because mergeMappings reads `Object.keys(source)`.
  */
 export function parseFrontMatter(content: string): FrontMapping | null {
   if (cpLength(content) >= FM_MAX_CHARS) return null;
