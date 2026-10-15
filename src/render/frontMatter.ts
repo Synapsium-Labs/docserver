@@ -275,8 +275,10 @@ export function fmValue(v: unknown): string {
  * as a value is (ruling C31, part of PD8). This is the one cut: the strip escapes the cut key and meta
  * records it, so the two agree, and nothing past the cut is ever escaped or copied. A sequence key built
  * from aliases can load as millions of characters; the loader builds it once, and nothing here touches
- * more than the first 500 code points. Two keys that share those code points collide after the cut: the
- * strip and meta.frontList list both, in document order, and meta.front keeps the later (frontRecord).
+ * more than the first 500 code points. Two keys that share those code points collide after the cut. The
+ * strip lists both, in document order. meta.frontList lists both when both values are scalars or lists, and
+ * meta.front then keeps the later (frontRecord); a later null or mapping value is skipped by frontEntries, as
+ * for any key, so the earlier key and value stay.
  */
 function firstPairs(data: FrontMapping): Array<readonly [key: string, value: unknown]> {
   return Object.keys(data)

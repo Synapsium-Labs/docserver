@@ -659,6 +659,23 @@ describe('keys are cut to FM_MAX_VALUE code points, as values are (ruling C31, p
     expect(r.meta.front?.[head]).toBe('two');
   });
 
+  // The collision with a later null or mapping value: frontEntries skips a null and a mapping (as it does for
+  // any key), so meta.frontList lists only the earlier key and meta.front keeps the earlier value; the strip
+  // still shows the later key, with an empty value for null and an ellipsis for a mapping. Reference
+  // (measured on the same inputs, whose keys are not cut and so do not collide): the same meta, and a strip
+  // with the later value as `None` (PD2 renders null empty) or an ellipsis.
+  it('two long keys that collide, the later holding null or a mapping: meta keeps the earlier, the strip shows both', () => {
+    const head = 'k'.repeat(500);
+    const nul = render(`---\n${head}x: one\n${head}y:\n---\n`);
+    expect(nul.html).toBe(dl('1-4', item(head, 'one') + item(head, '')));
+    expect(nul.meta.frontList).toEqual([scalar(head, 'one')]);
+    expect(nul.meta.front?.[head]).toBe('one');
+    const map = render(`---\n${head}x: one\n${head}y: {a: 1}\n---\n`);
+    expect(map.html).toBe(dl('1-4', item(head, 'one') + item(head, '\u2026')));
+    expect(map.meta.frontList).toEqual([scalar(head, 'one')]);
+    expect(map.meta.front?.[head]).toBe('one');
+  });
+
   it('a long key that begins with __proto__ is cut to 500 code points like any other: an own key, nothing polluted', () => {
     const r = render(`---\n"__proto__${'_'.repeat(600)}": polluted\n---\n`);
     expect(Object.keys(r.meta.front ?? {})).toEqual([`__proto__${'_'.repeat(491)}`]);
