@@ -1,0 +1,53 @@
+{
+  "front": {
+    "__proto__": "polluted",
+    "constructor": "built",
+    "toString": "str",
+    "prototype": [
+      "a",
+      "b"
+    ]
+  },
+  "frontList": [
+    {
+      "key": "__proto__",
+      "list": false,
+      "vals": [
+        "polluted"
+      ]
+    },
+    {
+      "key": "constructor",
+      "list": false,
+      "vals": [
+        "built"
+      ]
+    },
+    {
+      "key": "toString",
+      "list": false,
+      "vals": [
+        "str"
+      ]
+    },
+    {
+      "key": "prototype",
+      "list": true,
+      "vals": [
+        "a",
+        "b"
+      ]
+    }
+  ],
+  "title": "Proto keys",
+  "headings": [
+    {
+      "level": 1,
+      "id": "proto-keys",
+      "text": "Proto keys"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

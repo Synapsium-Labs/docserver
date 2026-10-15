@@ -1,0 +1,145 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": "Title",
+  "headings": [
+    {
+      "level": 1,
+      "id": "title",
+      "text": "Title"
+    },
+    {
+      "level": 2,
+      "id": "3-why-x--y",
+      "text": "3. Why x & y?"
+    },
+    {
+      "level": 2,
+      "id": "3-why-x--y-1",
+      "text": "3. Why x & y?"
+    },
+    {
+      "level": 2,
+      "id": "same",
+      "text": "Same"
+    },
+    {
+      "level": 2,
+      "id": "same-1",
+      "text": "Same"
+    },
+    {
+      "level": 2,
+      "id": "same-2",
+      "text": "Same"
+    },
+    {
+      "level": 3,
+      "id": "ünïcode-ça-va--dash",
+      "text": "Ünïcode Ça va — dash"
+    },
+    {
+      "level": 2,
+      "id": "same-1-1",
+      "text": "Same-1"
+    },
+    {
+      "level": 2,
+      "id": "",
+      "text": ""
+    },
+    {
+      "level": 2,
+      "id": "-1",
+      "text": "!!!"
+    },
+    {
+      "level": 2,
+      "id": "a_b-c--d",
+      "text": "a_b-c  d"
+    },
+    {
+      "level": 2,
+      "id": "bold-and-link--sup",
+      "text": "Bold and link  sup"
+    },
+    {
+      "level": 2,
+      "id": "a",
+      "text": "A"
+    },
+    {
+      "level": 2,
+      "id": "a-1",
+      "text": "A-1"
+    },
+    {
+      "level": 2,
+      "id": "a-2",
+      "text": "A"
+    },
+    {
+      "level": 2,
+      "id": "a-b-c",
+      "text": "a b c"
+    },
+    {
+      "level": 2,
+      "id": "a--b----c",
+      "text": "A--B -- C"
+    },
+    {
+      "level": 2,
+      "id": "x",
+      "text": "x"
+    },
+    {
+      "level": 2,
+      "id": "qa",
+      "text": "Q&A"
+    },
+    {
+      "level": 2,
+      "id": "its",
+      "text": "it's"
+    },
+    {
+      "level": 2,
+      "id": "a-3",
+      "text": "(a)"
+    },
+    {
+      "level": 2,
+      "id": "spaced",
+      "text": "spaced"
+    },
+    {
+      "level": 2,
+      "id": "foo-bar-baz",
+      "text": "Foo bar baz"
+    },
+    {
+      "level": 1,
+      "id": "title-1",
+      "text": "Title"
+    },
+    {
+      "level": 2,
+      "id": "sub",
+      "text": "Sub"
+    },
+    {
+      "level": 1,
+      "id": "atx",
+      "text": "ATX"
+    },
+    {
+      "level": 1,
+      "id": "foobar",
+      "text": "Foobar"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

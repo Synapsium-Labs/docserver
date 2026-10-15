@@ -1,0 +1,35 @@
+{
+  "front": {
+    "<script>alert(1)</script>": "<img src=x onerror=1>",
+    "it's": "a & b < c > d \"q\"",
+    "plain": "<b>bold</b>"
+  },
+  "frontList": [
+    {
+      "key": "<script>alert(1)</script>",
+      "list": false,
+      "vals": [
+        "<img src=x onerror=1>"
+      ]
+    },
+    {
+      "key": "it's",
+      "list": false,
+      "vals": [
+        "a & b < c > d \"q\""
+      ]
+    },
+    {
+      "key": "plain",
+      "list": false,
+      "vals": [
+        "<b>bold</b>"
+      ]
+    }
+  ],
+  "title": null,
+  "headings": [],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

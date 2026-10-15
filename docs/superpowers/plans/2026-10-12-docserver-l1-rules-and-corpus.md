@@ -13761,7 +13761,7 @@ Section F's rows map as follows: M8.1 is L1-T8-M1, M8.2 is M2, M8.3 is M3, M8.4 
     "old": "  md.use(footnote);\n",
     "new": "",
     "tests": "test/footnotes.test.ts test/engine.test.ts test/corpus.test.ts",
-    "red": "test/footnotes.test.ts + test/engine.test.ts + test/corpus.test.ts: 16 failed | 68 passed (84). The footnote plugin not used. 'heading-ids-edge: passes' (two failure lines), 'tables: passes', 'footnotes: passes'; the core, block and inline chain pins, the first: AssertionError: expected [ 'normalize', 'block', …(10) ] to deeply equal [ 'normalize', 'block', …(11) ]; all ten footnote cases, the first 'references, a second reference to one note, …': AssertionError: expected '<p data-line=\"1-1\">a<a href=\"second\">…' to be '<p data-line=\"1-1\">a<sup class=\"footn…'."
+    "red": "test/footnotes.test.ts + test/engine.test.ts + test/corpus.test.ts: 3 files failed to load, no tests ran. The footnote plugin not used: since C26, createEngine replaces the plugin's core rule by name (md.core.ruler.at('footnote_tail', …)), which throws 'Error: Parser rule not found: footnote_tail' when the engine is built. (Corrected after review 464; before C26 this row failed 16 of 84 assertions.)"
   },
   {
     "id": "L1-T8-M10",
@@ -21091,3 +21091,1246 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 
 Run: `git log -1 --format=%s && node scripts/ratchet.mjs --base HEAD^; echo "rc=$?"`
 Expected: `ci: purity, browser parity, public-readiness and the packed-consumer smoke (docserver L1)`, then `ratchet: 40 verdicts kept, 0 golden moves named` and `rc=0` (Task 11's commit holds the same 40 verdicts; this commit moves no golden).
+
+## L1 results
+
+This section was added after the plan merged (ruling C37). It holds every mutation row that the coordinator's rulings C24-C39 and the reviews after Task 12 added, in the format of the rows above, so that `main` holds the definition of every row in the final table. Each row is measured as Task 1 describes: in its own throwaway copy of the tree, with the named test run after the one replacement.
+
+The table was measured with Task 1's runner plus two changes, and these supersede the runner text in Task 1. The runner captures the test output with a `maxBuffer` of 512 MiB: with Node's default of 1 MiB, a row whose failures print more (L1-T4-M16 prints about 14.8 MB) is killed with no exit status, and Task 1's runner would have counted that as red. And a run that ends with no exit status (a timeout, a signal or a full buffer) is reported as KILLED and counted as no verdict, never as red. The runner still counts any non-zero exit as red without comparing the failures with the row's recorded `red` text; one row's text was found stale this way and is corrected (see below).
+
+### The final table
+
+Measured in one sequential run over the whole table at the branch's final code: the plan's 357 rows and the 137 rows below.
+
+| Result | Rows |
+|---|---|
+| Red | 461 |
+| NOT RED | 0 |
+| NOT APPLIED | 33 |
+| Total | 494 |
+
+A NOT APPLIED row is one whose replaced text no longer exists, because a later task or ruling rewrote that code. The plan expected some of them. Every other one has a stand-in row below that makes the same change at the new text and goes red. Most stand-ins are named `L1-C28-R-…` or `L1-R458-R-…` (by the ruling or review that rewrote the code) followed by the id they replace. Five are rows of the ruling that rewrote the code and carry that ruling's own id: `L1-T7-M21` is replaced by `L1-C28-M10`, `L1-T10-M6` and `L1-T10-M7` by `L1-C28-M14`, `L1-T12-M23` by `L1-C27-M6`, and `L1-T12-M32` by `L1-C25-M3`.
+
+NOT APPLIED: `L1-T1-M1`, `L1-T2-M6`, `L1-T2-M7`, `L1-T3-M26`, `L1-T3-M33`, `L1-T4-M9`, `L1-T4-M17`, `L1-T4-M18`, `L1-T5-M23`, `L1-T5-M24`, `L1-T5-M34`, `L1-T6-M11`, `L1-T6-M23`, `L1-T6-M24`, `L1-T7-M9`, `L1-T7-M21`, `L1-T7-M26`, `L1-T7-M27`, `L1-T8-M26`, `L1-T8-M27`, `L1-T9-M12`, `L1-T9-M14`, `L1-T9-M17`, `L1-T9-M21`, `L1-T9-M22`, `L1-T9-M32`, `L1-T10-M6`, `L1-T10-M7`, `L1-T12-M23`, `L1-T12-M32`, `L1-T12-M33`, `L1-C25-M1`, `L1-REV-M10`.
+
+Row `L1-R458-R18-M3` (removing the in-context options from the corpus run's `scanRefs` wrapper in `test/browser-parity.test.ts`) was written and dropped, so the review 458 rows for R18 run M1, M2 and M4-M7. It could not go red: `runCorpus` passes options to `scanRefs` only for a case with both a scan verdict and `options.maxBytes`, and no corpus case has both, so that wrapper only ever receives no options. The byte-for-byte loop's `scanRefs` call, which does receive options, is covered by `L1-R458-R18-M5`.
+
+Row `L1-T8-M9` (the footnote plugin not used) is red, but no longer as its recorded text says: since C26 the engine installs its own footnote tail by name, so without the plugin the engine fails to build, and the three named test files fail to load instead of failing 16 assertions. Its `red` text in Task 8 is corrected to that.
+
+C39 has one known gap, recorded rather than closed. Its refusal is a getter under an internal key name that begins with U+0000, and js-yaml's merge reads a source's key only when the destination does not already hold it. So a block that writes that exact key with a YAML escape before the `<<`, or brings it in through an earlier source of the same merge list, merges a sequence source as keys `0`, `1`, … where the reference refuses the block. Nothing throws and nothing is polluted. A Symbol key cannot be used, because the merge reads `Object.keys` of the source.
+
+Two counts in the record of C28 are corrected here. The caption differential ran over the 39 shapes in `test/figcaption.test.ts` (`SHAPES`), not 41. The 60,000-document fuzz run was a one-off check and is not committed as a test.
+
+### C24: long code fences are highlighted line by line
+
+12 rows.
+
+```json
+[
+  {
+    "id": "L1-C24-M1",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "true",
+    "tests": "test/highlight-cost.test.ts --bail=1",
+    "red": "test/highlight-cost.test.ts --bail=1: 1 failed | 1 passed (46). The switch removed (all highlighted whole). --bail=1 because, unbailed, the file runs the whole-block ini fence at the budget for about 3 minutes (synchronous, a test timeout cannot interrupt it) and a run past 10 minutes is killed with no exit status. First failure: 'javascript: exactly at the threshold is whole, one code unit over is line by line': AssertionError: expected '<span class=\"hljs-keyword\">let</span>…' not to contain '<span class=\"hljs-comment\">/* one\\ntw…'. M8, M9 and M12 show the hostile and depth reds on their own."
+  },
+  {
+    "id": "L1-C24-M2",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "false",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "test/highlight-cost.test.ts: 4 failed | 42 passed (46). Always line by line: both 'a multi-line construct under the threshold is one span…' and both 'exactly at the threshold is whole, one code unit over is line by line': AssertionError: expected '<span class=\"hljs-keyword\">let</span>…' to contain '<span class=\"hljs-comment\">/* one\\ntw…'."
+  },
+  {
+    "id": "L1-C24-M3",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "text.length < MAX_WHOLE_BLOCK_CHARS",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "test/highlight-cost.test.ts: 2 failed | 44 passed (46). Comparison off by one (<): 'exactly at the threshold is whole, one code unit over is line by line' in javascript and python."
+  },
+  {
+    "id": "L1-C24-M4",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "text.length <= MAX_WHOLE_BLOCK_CHARS + 1",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "test/highlight-cost.test.ts: 2 failed | 44 passed (46). Comparison off by one the other way (<= threshold + 1): the same two cases: AssertionError: expected '<span class=\"hljs-keyword\">let</span>…' not to contain '<span class=\"hljs-comment\">/* one\\ntw…'."
+  },
+  {
+    "id": "L1-C24-M5",
+    "file": "src/render/highlight.ts",
+    "old": "    .join('\\n');",
+    "new": "    .join('');",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "test/highlight-cost.test.ts: 4 failed | 42 passed (46). Lines joined without a line feed: 'keeps every line feed: a trailing one and empty lines' (expected '' to be '\\n\\n…'), 'over the threshold, a hostile shape is the lines highlighted separately, joined by line feeds', and the two 'exactly at the threshold' cases."
+  },
+  {
+    "id": "L1-C24-M6",
+    "file": "src/render/highlight.ts",
+    "old": "export const MAX_WHOLE_BLOCK_CHARS = 256;",
+    "new": "export const MAX_WHOLE_BLOCK_CHARS = 4096;",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "test/highlight-cost.test.ts: 13 failed | 33 passed (46). Re-anchored for the constant 256: the threshold raised to 4096. 'the worst blocks, under, at and over the threshold, stay small and fast' for shell, shell and dockerfile at 4095 and 4096 (AssertionError: expected 11788612 to be less than 100000; 11817352; 373468 at 16384) and the three depth cases. (Round 1's M6 anchored '= 1024;' and printed NOT APPLIED once the constant became 256.)"
+  },
+  {
+    "id": "L1-C24-M7",
+    "file": "src/render/highlight.ts",
+    "old": "    .split('\\n')\n",
+    "new": "    .split('\\n\\n')\n",
+    "tests": "test/highlight-cost.test.ts --bail=1",
+    "red": "test/highlight-cost.test.ts --bail=1: 1 failed | 1 passed (46). Text split on two line feeds; --bail=1 for the reason given at M1. 'javascript: exactly at the threshold is whole, one code unit over is line by line'. Unbailed it also fails the line-feed, hostile-shape and budget cases."
+  },
+  {
+    "id": "L1-C24-M8",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "true",
+    "tests": "test/highlight-cost.test.ts -t 'html under'",
+    "red": "test/highlight-cost.test.ts -t 'html under': 3 failed | 43 skipped (46). Everything highlighted whole (as M1), the three html-size cases only: the shell and dockerfile 255-unit fences at the budget and the 8 KiB short-line shell fence overflow maxHtmlBytes: AssertionError: expected 'output-over-limit' to be 'rendered'. No heap exhaustion."
+  },
+  {
+    "id": "L1-C24-M9",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "true",
+    "tests": "test/highlight-cost.test.ts -t 'ini: a fence at the whole budget'",
+    "red": "test/highlight-cost.test.ts -t 'ini: a fence at the whole budget': 1 failed | 45 skipped (46). Everything highlighted whole: the ini fence of \\\" runs at the budget took about 3.5 minutes (210054 ms against 3600)."
+  },
+  {
+    "id": "L1-C24-M10",
+    "file": "src/render/highlight.ts",
+    "old": "    .map((line) => hljs.highlight(line, options).value)\n",
+    "new": "    .map((line) => Array.from({ length: 20 }, () => hljs.highlight(line, options).value)[0] ?? '')\n",
+    "tests": "test/highlight-cost.test.ts -t 'javascript: a fence at the whole budget'",
+    "red": "test/highlight-cost.test.ts -t 'javascript: a fence at the whole budget': 1 failed | 45 skipped (46). Re-anchored. The all-whole mutation is NOT reliably red for javascript (the fence takes 2.5 to 5.3 s whole against the 2900 ms backstop; 1 red in 3 isolated runs), so this row mutates the line path instead: each line highlighted 20 times, a 20-fold cost regression. Red in 3 of 3 runs: AssertionError: expected 5865.779046 to be less than 2900 (5506, 5428)."
+  },
+  {
+    "id": "L1-C24-M11",
+    "file": "src/render/highlight.ts",
+    "old": "export const MAX_WHOLE_BLOCK_CHARS = 256;",
+    "new": "export const MAX_WHOLE_BLOCK_CHARS = 1024;",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "test/highlight-cost.test.ts: 9 failed | 37 passed (46). The threshold back at 1024: the worst blocks at 1023 and 1024 code units overflow the 100000-byte bound (AssertionError: expected 747969 to be less than 100000; 762998; 386682) and the three depth cases (python, javascript, typescript)."
+  },
+  {
+    "id": "L1-C24-M12",
+    "file": "src/render/highlight.ts",
+    "old": "text.length <= MAX_WHOLE_BLOCK_CHARS",
+    "new": "true",
+    "tests": "test/highlight-cost.test.ts -t 'span depth'",
+    "red": "test/highlight-cost.test.ts -t 'span depth': 3 failed | 43 skipped (46). Everything highlighted whole: the depth cases at 4 x 256 code units: AssertionError: expected 512 to be less than or equal to 170 (171 for javascript and typescript)."
+  }
+]
+```
+
+### C24 and C26: the generated cases
+
+10 rows.
+
+```json
+[
+  {
+    "id": "L1-C24G-M1",
+    "file": "src/render/highlight.ts",
+    "old": "if (text.length <= MAX_WHOLE_BLOCK_CHARS) return",
+    "new": "if (text.length <= MAX_WHOLE_BLOCK_CHARS || text.length >= 0) return",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-limits/code-shell-subst: passes'",
+    "red": "Ruling C24's threshold switch removed (every fence is highlighted whole): html as one block is 2110 times the input, past maxOutputRatio 29 (and 6.4 MB of html). 'x-limits/code-shell-subst: passes' goes red."
+  },
+  {
+    "id": "L1-C24G-M2",
+    "file": "src/render/highlight.ts",
+    "old": "if (text.length <= MAX_WHOLE_BLOCK_CHARS) return",
+    "new": "if (text.length <= MAX_WHOLE_BLOCK_CHARS || text.length >= 0) return",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-limits/code-ini-quotes: passes'",
+    "red": "Ruling C24's threshold switch removed (every fence is highlighted whole): the ini fence takes about 2.9 s as one block, past maxMs 1000. 'x-limits/code-ini-quotes: passes' goes red."
+  },
+  {
+    "id": "L1-C24G-M3",
+    "file": "src/render/highlight.ts",
+    "old": "if (text.length <= MAX_WHOLE_BLOCK_CHARS) return",
+    "new": "if (text.length <= MAX_WHOLE_BLOCK_CHARS || text.length >= 0) return",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-limits/code-js-script: passes'",
+    "red": "Ruling C24's threshold switch removed (every fence is highlighted whole): the html as one block is 10.3 times the input, past maxOutputRatio 3. 'x-limits/code-js-script: passes' goes red."
+  },
+  {
+    "id": "L1-C24G-M4",
+    "file": "conformance/hostile.json",
+    "old": "{\"text\": \"```ini\\n[a]\\nx = 1\\n\"}",
+    "new": "{\"text\": \"```ini\\n\"}",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-limits/code-ini-quotes: passes'",
+    "red": "The ini case without its first, ordinary lines: its output holds no hljs- span, so its require arm is the proof that the fence was highlighted rather than refused."
+  },
+  {
+    "id": "L1-C24G-M5",
+    "file": "conformance/hostile.json",
+    "old": "{\"text\": \"```javascript\\nlet x = 1;\\n\"}",
+    "new": "{\"text\": \"```javascript\\n\"}",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-limits/code-js-script: passes'",
+    "red": "The javascript case without its first line: no hljs- span in its output, so the require arm goes red."
+  },
+  {
+    "id": "L1-C24G-M6",
+    "file": "README.md",
+    "old": "A fence over 256 characters is highlighted one line at a time, so cost and output stay linear for every language (a block comment or multi-line string then colours its first line only); a shorter fence is highlighted whole.",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "The README's statement of ruling C24's switch removed: 'states the highlighting bounds, the switch to one line at a time included' goes red."
+  },
+  {
+    "id": "L1-C26G-M1",
+    "file": "src/render/engine.ts",
+    "old": "  md.core.ruler.at('footnote_tail', footnoteTail);\n",
+    "new": "",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-collisions/footnote-inline-8000: passes'",
+    "red": "Ruling C26's port removed, the plugin's own footnote_tail restored: about 2.8 s with the plugin's own tail, past maxMs 1000. 'x-collisions/footnote-inline-8000: passes' goes red."
+  },
+  {
+    "id": "L1-C26G-M2",
+    "file": "src/render/engine.ts",
+    "old": "  md.core.ruler.at('footnote_tail', footnoteTail);\n",
+    "new": "",
+    "tests": "test/corpus.test.ts --bail=1 -t 'x-collisions/footnote-defs-7000: passes'",
+    "red": "Ruling C26's port removed, the plugin's own footnote_tail restored: about 2.0 s with the plugin's own tail, past maxMs 1000. 'x-collisions/footnote-defs-7000: passes' goes red."
+  },
+  {
+    "id": "L1-C26G-M3",
+    "file": "conformance/manifest.json",
+    "old": ",\n  {\n    \"id\": \"x-limits/code-js-script\",\n    \"kind\": \"generated\",\n    \"pins\": \"400 `<script></script>` lines in a javascript fence (7 KB): highlighted one line at a time (ruling C24), the html is 1.7 times the input; highlighted as one block it is 10.3 times. This one is held by its output bound: the time the same shape costs as one block (seconds) needs about 256 KiB, more than the 8 MiB total of generated inputs can carry.\",\n    \"probes\": []\n  }",
+    "new": "",
+    "tests": "test/hostile-input.test.ts test/corpus.test.ts --bail=1",
+    "red": "A new case dropped from the manifest only: hostile.json then holds an entry the manifest does not know (crossCheck), and the generated-case counts (30) are off. Counts the five new cases through test/hostile-input.test.ts and test/corpus.test.ts."
+  },
+  {
+    "id": "L1-C26G-M4",
+    "file": "test/pack.test.ts",
+    "old": "'consumer-smoke: 82 of 82 cases passed',",
+    "new": "'consumer-smoke: 77 of 77 cases passed',",
+    "tests": "test/pack.test.ts --bail=1",
+    "red": "The consumer smoke's case count pinned at the old 77: the packed corpus now has 82 cases."
+  }
+]
+```
+
+### C25: a caption is one emphasis span
+
+5 rows.
+
+```json
+[
+  {
+    "id": "L1-C25-M1",
+    "file": "src/render/figcaption.ts",
+    "old": "    if (!oneSpan(inline.children ?? [])) continue;\n",
+    "new": "",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Drops the one-span check: `*Figure 1. a* *b*` is a caption again, with the unbalanced `Figure 1. a</em> <em>b`. figcaption.test.ts (the two-span case, the balance case) and corpus.test.ts (figure-captions) go red."
+  },
+  {
+    "id": "L1-C25-M2",
+    "file": "src/render/figcaption.ts",
+    "old": "if (type === 'em_open') depth += 1;",
+    "new": "if (type === 'em_open') depth = 1;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "The depth counter forgets nesting: the nested em of `*Figure 1. a *b* c*` closes the span early, so a caption with emphasis inside stops being a caption. The nested-control cases in figcaption.test.ts and the corpus (fig_cap_with_em) go red."
+  },
+  {
+    "id": "L1-C25-M3",
+    "file": "README.md",
+    "old": "| PD7 | A figure caption keeps the HTML balanced. It never comes from a tight list's hidden paragraph, never reaches past the block after its figure, and is made only from one emphasis span: `*Figure 1. a* *b*` stays an ordinary paragraph, where the reference emitted an unbalanced `Figure 1. a</em> <em>b` (moves the html of `figure-captions`). |\n",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "Re-anchors L1-T12-M32 on the PD7 row as ruling C25 words it: 'describes every departure category, one table row each' reds."
+  },
+  {
+    "id": "L1-C25-M4",
+    "file": "test/expected.test.ts",
+    "old": "new Set(['PD2', 'PD3', 'PD4', 'PD7'])",
+    "new": "new Set(['PD2', 'PD3', 'PD4'])",
+    "tests": "test/expected.test.ts",
+    "red": "PD7 is no longer an admitted category: the figure-captions entry fails the category check."
+  },
+  {
+    "id": "L1-C25-M5",
+    "file": "conformance/DEPARTURES.json",
+    "old": ",\n  {\n    \"case\": \"figure-captions\",\n    \"files\": [\"html\"],\n    \"category\": \"PD7\",\n    \"reason\": \"A figure caption is made only from one emphasis span (ruling C25). In `*Figure 1. a* *b*` the first emphasis is not the one that closes the paragraph, and the reference's pattern took everything from the first <em> to the last </em>, which emitted the unbalanced `<figcaption>Figure 1. a</em> <em>b</figcaption>`. The paragraph stays an ordinary paragraph after the figure, rendered as markdown-it renders it, and the HTML stays balanced.\"\n  }",
+    "new": "",
+    "tests": "test/expected.test.ts",
+    "red": "The figure-captions entry removed: its hand-edited html is an unlisted file that differs from the reference."
+  }
+]
+```
+
+### C26: a linear footnote tail
+
+18 rows.
+
+```json
+[
+  {
+    "id": "L1-C26-M1",
+    "file": "src/render/engine.ts",
+    "old": "  md.core.ruler.at('footnote_tail', footnoteTail);\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"no copy of the token array\" --bail=1",
+    "red": "The plugin's quadratic tail runs again: the deterministic concat count is red (the port's zero calls, zero copied elements)."
+  },
+  {
+    "id": "L1-C26-M2",
+    "file": "src/render/engine.ts",
+    "old": "  md.core.ruler.at('footnote_tail', footnoteTail);\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"20000 references with\" --bail=1",
+    "red": "Timing backstop alone, with the plugin's tail restored: 20000 notes exceed the 4100 ms bound."
+  },
+  {
+    "id": "L1-C26-M3",
+    "file": "src/render/footnotes.ts",
+    "old": "if (tokens) for (const t of tokens) out.push(t);",
+    "new": "if (tokens) {\n      const copy = out.concat(tokens);\n      out.length = 0;\n      for (const t of copy) out.push(t);\n    }",
+    "tests": "test/footnote-cost.test.ts -t \"no copy of the token array\" --bail=1",
+    "red": "A concat of the output per note in the port: the deterministic count is red."
+  },
+  {
+    "id": "L1-C26-M4",
+    "file": "src/render/footnotes.ts",
+    "old": "subId: j, label",
+    "new": "subId: 0, label",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "The anchors' subId loop collapsed to subId 0."
+  },
+  {
+    "id": "L1-C26-M5",
+    "file": "src/render/footnotes.ts",
+    "old": "    if (insideRef) current.push(tok);\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "The tokens inside a footnote_reference are not kept."
+  },
+  {
+    "id": "L1-C26-M6",
+    "file": "src/render/footnotes.ts",
+    "old": "    return !insideRef;\n",
+    "new": "    return true;\n",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "The tokens inside a footnote_reference stay in the stream."
+  },
+  {
+    "id": "L1-C26-M7",
+    "file": "src/render/footnotes.ts",
+    "old": "last?.type === 'paragraph_close' ? out.pop() : undefined",
+    "new": "undefined",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "The last paragraph_close is not moved after the anchors."
+  },
+  {
+    "id": "L1-C26-M8",
+    "file": "src/render/footnotes.ts",
+    "old": "    if (lastParagraph) out.push(lastParagraph);\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "The moved paragraph_close is dropped."
+  },
+  {
+    "id": "L1-C26-M9",
+    "file": "src/render/footnotes.ts",
+    "old": "inline.children = note.tokens;",
+    "new": "inline.children = [];",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "An inline note's paragraph has no content."
+  },
+  {
+    "id": "L1-C26-M10",
+    "file": "src/render/footnotes.ts",
+    "old": "note.count > 0 ? note.count : 1",
+    "new": "note.count",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "A note with no reference gets no anchor."
+  },
+  {
+    "id": "L1-C26-M11",
+    "file": "src/render/footnotes.ts",
+    "old": "  if (!env.footnotes) return;\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "A document with no footnotes at all is not skipped."
+  },
+  {
+    "id": "L1-C26-M12",
+    "file": "src/render/footnotes.ts",
+    "old": "  if (!list) return;\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "A document that defines notes but cites none is not skipped."
+  },
+  {
+    "id": "L1-C26-M13",
+    "file": "src/render/footnotes.ts",
+    "old": "refTokens[`:${String(currentLabel)}`] = current;",
+    "new": "refTokens[String(currentLabel)] = current;",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "A block note's tokens are filed under a key the lookup does not use."
+  },
+  {
+    "id": "L1-C26-M14",
+    "file": "src/render/footnotes.ts",
+    "old": "  out.push(new state.Token('footnote_block_open', '', 1));\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "No footnote_block_open."
+  },
+  {
+    "id": "L1-C26-M15",
+    "file": "src/render/footnotes.ts",
+    "old": "  out.push(new state.Token('footnote_block_close', '', -1));\n",
+    "new": "",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "No footnote_block_close."
+  },
+  {
+    "id": "L1-C26-M16",
+    "file": "src/render/footnotes.ts",
+    "old": "open.meta = { id: i, label: note.label };",
+    "new": "open.meta = { id: i + 1, label: note.label };",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "A footnote_open with the wrong id."
+  },
+  {
+    "id": "L1-C26-M17",
+    "file": "src/render/footnotes.ts",
+    "old": "anchor.meta = { id: i, subId",
+    "new": "anchor.meta = { id: 0, subId",
+    "tests": "test/footnote-cost.test.ts -t \"shape:|corpus case|random note-heavy\"",
+    "red": "Every anchor points at note 1."
+  },
+  {
+    "id": "L1-C26-M18",
+    "file": "src/render/engine.ts",
+    "old": "  md.use(footnote);\n  md.core.ruler.at('footnote_tail', footnoteTail);\n",
+    "new": "",
+    "tests": "test/footnotes.test.ts test/engine.test.ts test/corpus.test.ts",
+    "red": "Stands in for L1-T8-M9: with the plugin gone, footnoteTail is registered with at() on a rule that does not exist, so the engine throws while it is built and every file fails to load; this row removes the plugin and the port line together, as M9 intended (the plugin not used)."
+  }
+]
+```
+
+### C27: the public-readiness scan in a linked worktree
+
+6 rows.
+
+```json
+[
+  {
+    "id": "L1-C27-M1",
+    "file": "test/public-ready.test.ts",
+    "old": "  '.git': 'git metadata: a directory, or in a linked worktree a file that holds an absolute path',\n",
+    "new": "",
+    "tests": "test/public-ready.test.ts",
+    "red": "Ruling C27 (amended): the root .git entry, file or directory, is skipped: 'skips a root .git file, a root .git directory and each named root scratch directory' lists it and its planted hit."
+  },
+  {
+    "id": "L1-C27-M2",
+    "file": "test/public-ready.test.ts",
+    "old": "    if (atRoot && Object.hasOwn(ROOT_SKIP, e.name)) continue;",
+    "new": "    if (Object.hasOwn(ROOT_SKIP, e.name)) continue;",
+    "tests": "test/public-ready.test.ts",
+    "red": "Ruling C27 (amended): the skips are root-level only; widened to any depth, 'a nested directory that shares a skipped name, and a nested .git file or directory, are scanned' goes red."
+  },
+  {
+    "id": "L1-C27-M3",
+    "file": "test/public-ready.test.ts",
+    "old": "  '.superpowers': 'scratch that a planning workflow creates and git never tracks',\n",
+    "new": "",
+    "tests": "test/public-ready.test.ts",
+    "red": "Ruling C27: .superpowers is a named root scratch directory: the skip case lists .superpowers/sdd/x.md and its hit."
+  },
+  {
+    "id": "L1-C27-M4",
+    "file": "test/public-ready.test.ts",
+    "old": "  'graphify-out': 'scratch that a code-graph tool creates and git never tracks',\n",
+    "new": "",
+    "tests": "test/public-ready.test.ts",
+    "red": "Ruling C27: graphify-out is a named root scratch directory: the skip case lists graphify-out/graph.json and its hit."
+  },
+  {
+    "id": "L1-C27-M5",
+    "file": "test/public-ready.test.ts",
+    "old": "out.push(...scannedFiles(p, root));",
+    "new": "out.push(...scannedFiles(p));",
+    "tests": "test/public-ready.test.ts",
+    "red": "Ruling C27: the root parameter reaches the recursion: the synthetic-tree cases get paths relative to the wrong root."
+  },
+  {
+    "id": "L1-C27-M6",
+    "file": "test/public-ready.test.ts",
+    "old": "new Set(['node_modules', 'dist', 'coverage', 'docs'])",
+    "new": "new Set(['node_modules', 'dist', 'coverage', 'docs', 'conformance'])",
+    "tests": "test/public-ready.test.ts",
+    "red": "Re-anchors L1-T12-M23 (its old text, a SKIP_DIRS set holding '.git', is gone under C27): the scan walks the whole tree; 'walks the tree, ...' fails (conformance/reference/PROVENANCE.json missing)."
+  }
+]
+```
+
+### C28: the caption is decided on tokens and rendered under the html bound
+
+17 rows.
+
+```json
+[
+  {
+    "id": "L1-C28-M1",
+    "file": "src/render/figcaption.ts",
+    "old": "    if (!oneSpan(children) || !startsCaption(renderedPieces(state, children))) continue;\n",
+    "new": "    if (!oneSpan(children) || CAPTION.exec(state.md.renderer.renderInline(children, state.md.options, state.env)) === null) continue;\n",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Restores the parse-time renderInline of the whole paragraph: the 'parsing renders none of the caption' case counts link_open renders at parse (1000 instead of 0), and the 700 x 1 MB expansion case is 'failed' instead of 'output-over-limit'."
+  },
+  {
+    "id": "L1-C28-M2",
+    "file": "src/render/figcaption.ts",
+    "old": "    if (!oneSpan(children) || !startsCaption(renderedPieces(state, children))) continue;\n",
+    "new": "    if (!oneSpan(children)) continue;\n",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Drops the prefix check: every one-span paragraph after a figure becomes a caption, so '*not a caption*' paragraphs in the corpus and the startsCaption cases go red."
+  },
+  {
+    "id": "L1-C28-M3",
+    "file": "src/render/figcaption.ts",
+    "old": "startsCaption(renderedPieces(state, children))",
+    "new": "startsCaption([...renderedPieces(state, children)])",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Renders every piece before deciding (not a prefix): the case 'parsing reads only a prefix of a long caption' sees about 1000 text and 1000 softbreak render calls, not 1 and 0. (Before review 458 F2 the parse-time link render count also reddened it.)"
+  },
+  {
+    "id": "L1-C28-M4",
+    "file": "src/render/figcaption.ts",
+    "old": "if (ch !== HEAD.charAt(head)) return false;",
+    "new": "if (ch.toLowerCase() !== HEAD.charAt(head).toLowerCase()) return false;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Case-insensitive 'Figure': 'figure 1. a' and 'FIGURE 1. a' become captions (differential against CAPTION)."
+  },
+  {
+    "id": "L1-C28-M5",
+    "file": "src/render/figcaption.ts",
+    "old": "const DIGIT = /^\\p{Nd}$/u;",
+    "new": "const DIGIT = /^\\d$/u;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "ASCII digits only: Arabic-Indic, fullwidth and mathematical digits stop being captions."
+  },
+  {
+    "id": "L1-C28-M6",
+    "file": "src/render/figcaption.ts",
+    "old": "        if (!isPyWs(ch)) return false;\n        state = 2;",
+    "new": "        if (!/^\\s$/.test(ch)) return false;\n        state = 2;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "JavaScript's \\s for the first whitespace: U+001F and U+0085 stop counting, U+FEFF counts."
+  },
+  {
+    "id": "L1-C28-M7",
+    "file": "src/render/figcaption.ts",
+    "old": "        if (!isPyWs(ch)) return false;\n        state = 2;",
+    "new": "        state = 2;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Whitespace after 'Figure' no longer required: 'Figure1. a' becomes a caption."
+  },
+  {
+    "id": "L1-C28-M8",
+    "file": "src/render/figcaption.ts",
+    "old": "        return ch === '.';",
+    "new": "        return true;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "The dot is no longer required: 'Figure 1,' and 'Figure 1' become captions."
+  },
+  {
+    "id": "L1-C28-M9",
+    "file": "src/render/figcaption.ts",
+    "old": "        if (!DIGIT.test(ch)) return false;\n        state = 3;",
+    "new": "        if (!DIGIT.test(ch)) return ch === '.';\n        state = 3;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "A digit is no longer required before the dot: 'Figure .' becomes a caption."
+  },
+  {
+    "id": "L1-C28-M10",
+    "file": "src/render/fence.ts",
+    "old": "    return tokens[idx + 1]?.type === 'figcaption_open' ? figure : `${figure}</figure>\\n`;",
+    "new": "    return `${figure}</figure>\\n`;",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "renderFence always closes the figure: a captioned figure gets a second </figure> from figcaption_close. Re-anchors L1-T7-M21 (drop the caption)."
+  },
+  {
+    "id": "L1-C28-M11",
+    "file": "src/render/figcaption.ts",
+    "old": "  return '</figcaption></figure>\\n';",
+    "new": "  return '</figcaption>\\n';",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "figcaption_close forgets to close the figure."
+  },
+  {
+    "id": "L1-C28-M12",
+    "file": "src/render/figcaption.ts",
+    "old": "    inline.children = children.slice(1, -1);\n",
+    "new": "",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "The span's own em_open and em_close stay inside the figcaption."
+  },
+  {
+    "id": "L1-C28-M13",
+    "file": "src/render/figcaption.ts",
+    "old": "    for (let b = 0; b < blanks.length; b += 1) tokens[i + 4 + b] = blanks[b] as Token;\n",
+    "new": "",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "The blank blocks between the fence and the caption are not moved behind it: stale tokens remain."
+  },
+  {
+    "id": "L1-C28-M14",
+    "file": "src/render/figcaption.ts",
+    "old": "    inline.children = children.slice(1, -1);\n",
+    "new": "    inline.children = children.slice(1, -1).filter((t) => t.type !== 'image');\n",
+    "tests": "test/scan.test.ts test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Images vanish from the caption's inline token: scanRefs (which reads the token like any other) and render() both lose them. Re-anchors L1-T10-M6 and M7, whose anchors (FenceMeta.inline) are gone."
+  },
+  {
+    "id": "L1-C28-M15",
+    "file": "src/render/figcaption.ts",
+    "old": "    yield rule === undefined\n      ? renderer.renderToken(children, j, state.md.options)\n      : rule(children, j, state.md.options, state.env, renderer);",
+    "new": "    yield renderer.renderToken(children, j, state.md.options);",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "renderedPieces ignores the render rules: html_inline and others render as bare tags; checked via an allowlisted-tag caption start."
+  },
+  {
+    "id": "L1-C28-R-T7-M9",
+    "file": "src/render/figcaption.ts",
+    "old": "startsCaption(renderedPieces(state, children))",
+    "new": "startsCaption(['<em>', inline.content.slice(1, -1)])",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Re-anchors L1-T7-M9: a content check on the raw markdown, not the rendered html. 'Figure 1\\\\. a', 'Figure &#49;. a' and 'Figure&nbsp;1.' differ."
+  },
+  {
+    "id": "L1-C28-R-C25-M1",
+    "file": "src/render/figcaption.ts",
+    "old": "!oneSpan(children) || ",
+    "new": "",
+    "tests": "test/figcaption.test.ts test/corpus.test.ts",
+    "red": "Re-anchors L1-C25-M1: drops the one-span check."
+  }
+]
+```
+
+### The whole-branch review (C29, C30 and its fix batch)
+
+12 rows.
+
+```json
+[
+  {
+    "id": "L1-REV-M1",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "--ignore-scripts', before, tarball]",
+    "new": "--ignore-scripts', tarball]",
+    "tests": "test/consumer-smoke.test.ts",
+    "red": "The registry install drops its --before cutoff: the 'carries a --before cutoff' case finds no flag."
+  },
+  {
+    "id": "L1-REV-M2",
+    "file": ".github/workflows/ci.yml",
+    "old": "          persist-credentials: false\n",
+    "new": "",
+    "tests": "test/ci-workflow.test.ts",
+    "red": "actions/checkout keeps the token in the workspace: the checkout step's `with` no longer equals {fetch-depth: 0, persist-credentials: false}."
+  },
+  {
+    "id": "L1-REV-M3",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "const MIN_AGE_DAYS = 14;",
+    "new": "const MIN_AGE_DAYS = 1;",
+    "tests": "test/consumer-smoke.test.ts",
+    "red": "The cutoff is one day back, not 14: the timestamp lies outside the 14-day window."
+  },
+  {
+    "id": "L1-REV-M4",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "now.getTime() - MIN_AGE_DAYS",
+    "new": "now.getTime() + MIN_AGE_DAYS",
+    "tests": "test/consumer-smoke.test.ts",
+    "red": "The cutoff points 14 days into the future."
+  },
+  {
+    "id": "L1-REV-M5",
+    "file": "src/render/highlight.ts",
+    "old": "export const MAX_WHOLE_BLOCK_CHARS = 256;",
+    "new": "export const MAX_WHOLE_BLOCK_CHARS = 128;",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "The whole-block threshold halves: a literal 256-unit block comment is highlighted a line at a time, not as one comment span. (Every earlier case computes its sizes from the constant and stays green.)"
+  },
+  {
+    "id": "L1-REV-M6",
+    "file": "src/render/highlight.ts",
+    "old": "export const MAX_WHOLE_BLOCK_CHARS = 256;",
+    "new": "export const MAX_WHOLE_BLOCK_CHARS = 512;",
+    "tests": "test/highlight-cost.test.ts",
+    "red": "The threshold doubles: a literal 257-unit block comment is highlighted whole."
+  },
+  {
+    "id": "L1-REV-M7",
+    "file": "README.md",
+    "old": "Memory is linear in the size of the input (a document of nothing but short links took about 200 times its size), so size `maxBytes` to your heap and your worker's limit. ",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "The memory sentence is gone from the README."
+  },
+  {
+    "id": "L1-REV-M8",
+    "file": "README.md",
+    "old": "Raising `maxHtmlBytes` removes the output bound that protects you from an input that expands past it, so raise it only for input you trust.",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "The maxHtmlBytes warning is gone from the README."
+  },
+  {
+    "id": "L1-REV-M9",
+    "file": "README.md",
+    "old": " Highlighted code nests `<span>` elements at most about 170 deep (the 256-character line cap and the 256-character whole-block threshold bound it); the 64-level cap below applies to the allowlisted tags only.",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "The span-depth sentence is gone from the README."
+  },
+  {
+    "id": "L1-REV-M10",
+    "file": "README.md",
+    "old": "\n| PD9 | Heading ids follow the runtime's Unicode tables. The slug keeps `\\p{L}` and `\\p{N}` and lower-cases the way the runtime does, so a code point unassigned in Unicode 15.0 (the reference's Python 3.12) can appear in an id where the reference dropped it, and two runtimes with different Unicode versions can disagree with each other (no file moves). |",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "The PD9 row is gone from the departures table: 'describes every departure category, one table row each' finds PD9 with no row."
+  },
+  {
+    "id": "L1-REV-M11",
+    "file": "src/render/slug.ts",
+    "old": "const SLUG_DROP = /[^\\p{L}\\p{N}_",
+    "new": "const SLUG_DROP = /[^\\w",
+    "tests": "test/slug.test.ts",
+    "red": "ASCII word characters only: the PD9 case (U+1C89 kept on a Unicode 16+ runtime) and the non-ASCII slug table go red."
+  },
+  {
+    "id": "L1-REV-M12",
+    "file": "src/render/pyText.ts",
+    "old": "  return s.toLowerCase();",
+    "new": "  return s;",
+    "tests": "test/slug.test.ts",
+    "red": "No lower-casing: the PD9 case expects U+1C8A, the lower-case form of U+1C89, in the id."
+  }
+]
+```
+
+### Task 12 review: the null-prototype parity sandbox
+
+1 row.
+
+```json
+[
+  {
+    "id": "L1-T12F-M1",
+    "file": "test/browser-parity.test.ts",
+    "old": "vm.createContext(Object.create(null))",
+    "new": "vm.createContext({})",
+    "tests": "test/browser-parity.test.ts",
+    "red": "Fix round 1: the sandbox has a null prototype. With a plain {} the outer realm's Function is reachable: 'the context reaches no host Function: the constructor chain yields no process' fails, expected 'object' to be 'undefined'."
+  }
+]
+```
+
+### Review 458, F1-F3: the inline tag cap and the caption decision
+
+7 rows.
+
+```json
+[
+  {
+    "id": "L1-R458-F1-M1",
+    "file": "src/render/details.ts",
+    "old": "if (t.type !== 'html_inline' || !COUNTED.test(t.content)) continue;",
+    "new": "if (t.type !== 'html_inline') continue;",
+    "tests": "test/tasklists.test.ts",
+    "red": "The filter is dropped, so capInline counts every html_inline again: the checkbox past the 64th of one kind is escaped, and both 70-task cases fail."
+  },
+  {
+    "id": "L1-R458-F1-M2",
+    "file": "src/render/details.ts",
+    "old": "const COUNTED = /^<\\/?(?:sup|sub|kbd)>$/;",
+    "new": "const COUNTED = /^<\\/?(?:sup|sub|kbd|input\\b[^>]*)>$/;",
+    "tests": "test/tasklists.test.ts",
+    "red": "The filter also accepts the checkbox's own tag: the same escaped checkboxes past 64."
+  },
+  {
+    "id": "L1-R458-F1-M3",
+    "file": "src/render/details.ts",
+    "old": "const COUNTED = /^<\\/?(?:sup|sub|kbd)>$/;",
+    "new": "const COUNTED = /^<\\/?(?:sup|sub)>$/;",
+    "tests": "test/allowlist.test.ts",
+    "red": "The filter forgets kbd, so the cap no longer bites on 65 kbd: the 'each kind has its own 64 levels' case fails (the control that the cap still works)."
+  },
+  {
+    "id": "L1-R458-F2-M1",
+    "file": "src/render/figcaption.ts",
+    "old": "if (j > 0 && type !== 'text' && type !== 'softbreak') {",
+    "new": "if (j < 0) {",
+    "tests": "test/figcaption.test.ts",
+    "red": "Every child is rendered again, as before the fix: the parse-time render-count case sees 1 link_open or image render for *[a]*, *Figure [a]* and *![a]*."
+  },
+  {
+    "id": "L1-R458-F2-M2",
+    "file": "src/render/figcaption.ts",
+    "old": "if (j > 0 && type !== 'text' && type !== 'softbreak') {",
+    "new": "if (j > 0 && type !== 'text') {",
+    "tests": "test/figcaption.test.ts",
+    "red": "A softbreak is no longer rendered but replaced by the sentinel: 'Figure\\n7.x' stops being a caption."
+  },
+  {
+    "id": "L1-R458-F2-M3",
+    "file": "src/render/figcaption.ts",
+    "old": "      yield '<';\n",
+    "new": "      yield '';\n",
+    "tests": "test/figcaption.test.ts",
+    "red": "The sentinel reads as empty html, so the decision skips a tag, code or an image after the digits: 'Figure 1<sup></sup>. a' becomes a caption."
+  },
+  {
+    "id": "L1-R458-R-L1-T5-M34",
+    "file": "src/render/details.ts",
+    "old": "  for (const t of children) {\n    if (t.type !== 'html_inline' || !COUNTED.test(t.content)) continue;",
+    "new": "  for (const t of children.flatMap((c) => [c, ...(c.children ?? [])])) {\n    if (t.type !== 'html_inline' || !COUNTED.test(t.content)) continue;",
+    "tests": "test/allowlist.test.ts",
+    "red": "test/allowlist.test.ts: 1 failed | 60 passed (61). Alt text counted: \"an image's alt text renders no tag, so its sup does not count\": AssertionError: expected '<p data-line=\"1-1\"><img src=\"x\" alt=\"…' to be '<p data-line=\"1-1\"><img src=\"x\" alt=\"…' (the 100 alt-text tags use up the 64 levels, so the real ones become text). (stand-in: the row's anchor moved with the COUNTED filter)"
+  }
+]
+```
+
+### Review 458, C31-C33 and C38: front matter
+
+18 rows.
+
+```json
+[
+  {
+    "id": "L1-R458-C31-M1",
+    "file": "src/render/frontMatter.ts",
+    "old": ".map((k) => [cpSlice(k, FM_MAX_VALUE), data[k]] as const);",
+    "new": ".map((k) => [k, data[k]] as const);",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The key cut is dropped, in the strip and in meta alike (one shared site): the 501-code-point key, the collision case and the alias-built key keep their full length."
+  },
+  {
+    "id": "L1-R458-C31-M2",
+    "file": "src/render/frontMatter.ts",
+    "old": ".map((k) => [cpSlice(k, FM_MAX_VALUE), data[k]] as const);",
+    "new": ".map((k) => [cpSlice(k, FM_MAX_VALUE + 1), data[k]] as const);",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The key cut is one code point late: the 501-code-point key is cut to 501, not 500."
+  },
+  {
+    "id": "L1-R458-C31-M3",
+    "file": "src/render/frontMatter.ts",
+    "old": ".map((k) => [cpSlice(k, FM_MAX_VALUE), data[k]] as const);",
+    "new": ".map((k) => [k.slice(0, FM_MAX_VALUE), data[k]] as const);",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The key is cut by UTF-16 code units: an astral character at the cut is split in half."
+  },
+  {
+    "id": "L1-R458-C31-M4",
+    "file": "README.md",
+    "old": "; and a front-matter key is cut to 500 code points, as a value is. |",
+    "new": ". |",
+    "tests": "test/readme.test.ts",
+    "red": "PD8's README row forgets the key cut."
+  },
+  {
+    "id": "L1-R458-C32-M1",
+    "file": "README.md",
+    "old": "U+0085, U+2028 and U+2029 are not line breaks.",
+    "new": "U+0085 is not a line break.",
+    "tests": "test/readme.test.ts",
+    "red": "PD2's README row forgets U+2028 and U+2029 (ruling C32; the unit cases pin render()'s output and the reference's, and have no code of ours to mutate: the line-break behaviour is js-yaml's)."
+  },
+  {
+    "id": "L1-R458-C33-M1",
+    "file": "src/render/frontMatter.ts",
+    "old": "    Object.defineProperty(m, Symbol.toPrimitive, { value: refuseMappingKey, configurable: true });\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "A mapping no longer throws when js-yaml makes it a key: the key loads as [object Object] again, and every mapping-key case renders a strip."
+  },
+  {
+    "id": "L1-R458-C33-M2",
+    "file": "src/render/frontMatter.ts",
+    "old": "    Object.defineProperty(m, Symbol.toStringTag, { value: 'FrontMatterMapping', configurable: true });\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The mapping keeps the class [object Object], which js-yaml replaces by that text before it converts the key: a mapping key, and a mapping inside a sequence key, load again."
+  },
+  {
+    "id": "L1-R458-C33-M3",
+    "file": "src/render/frontMatter.ts",
+    "old": "    for (const m of marked) {\n      Reflect.deleteProperty(m, Symbol.toStringTag);\n      Reflect.deleteProperty(m, Symbol.toPrimitive);\n    }\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The marks stay on the returned mappings: the 'plain objects again' case finds own symbols, and a parseFrontMatter result no longer equals a plain object."
+  },
+  {
+    "id": "L1-R458-C33-M4",
+    "file": "src/render/frontMatter.ts",
+    "old": "    if (typeof m !== 'object' || m === null) return;\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The listener marks a null or a scalar result too: defineProperty throws on it (or the Map lookup is skipped), so every load fails and the cases that expect a strip red."
+  },
+  {
+    "id": "L1-R458-C33-M5",
+    "file": "src/render/frontMatter.ts",
+    "old": "    marked.add(m);\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "No mapping is recorded, so none is unmarked: the marks stay on the returned mappings (the 'plain objects again' case and the PD2 toEqual case)."
+  },
+  {
+    "id": "L1-R458-C33-M6",
+    "file": "src/render/frontMatter.ts",
+    "old": "        if (typeof el === 'object' && el !== null && !Array.isArray(el)) mark(el);\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "A sequence no longer marks the objects it holds: a single-pair mapping of a flow sequence key (`? [x, a: 1]`) loads as the key `x,[object Object]` again."
+  },
+  {
+    "id": "L1-R458-C33-M7",
+    "file": "src/render/frontMatter.ts",
+    "old": "for (let i = seen ?? 0; i < m.length; i += 1) {",
+    "new": "for (let i = 0; i < m.length; i += 1) {",
+    "tests": "test/frontmatter.test.ts",
+    "red": "TIMING ONLY (the output is identical): a sequence is rescanned from its first element at every hearing, so the 'aliasing one large sequence many times' case takes about 5 s and misses its 1000 ms backstop."
+  },
+  {
+    "id": "L1-R458-C33-M8",
+    "file": "src/render/frontMatter.ts",
+    "old": "for (let i = seen ?? 0; i < m.length; i += 1) {",
+    "new": "for (let i = seen === undefined ? 0 : m.length; i < m.length; i += 1) {",
+    "tests": "test/frontmatter.test.ts",
+    "red": "A sequence heard before (an alias inside it) is not scanned again, as the old `marked.has` early return did: the pair mappings pushed after the alias are never marked, and the self-aliasing key cases load as `[object Object],[object Object]`."
+  },
+  {
+    "id": "L1-R458-F13-M1",
+    "file": "conformance/manifest.json",
+    "old": "`flag: yes` staying `yes`, ",
+    "new": "yes/on, ",
+    "tests": "test/manifest.test.ts",
+    "red": "The frontmatter-types pins say yes/on again."
+  },
+  {
+    "id": "L1-R458-R-L1-T9-M12",
+    "file": "src/render/frontMatter.ts",
+    "old": "load(content, { schema: FM_SCHEMA, json: true, listener })",
+    "new": "load(content, { json: true, listener })",
+    "tests": "test/frontmatter.test.ts test/corpus.test.ts",
+    "red": "Stand-in for L1-T9-M12 (the load call gained the listener option): no schema at all, so js-yaml's default schema types numbers and dates."
+  },
+  {
+    "id": "L1-R458-R-L1-T9-M14",
+    "file": "src/render/frontMatter.ts",
+    "old": "load(content, { schema: FM_SCHEMA, json: true, listener })",
+    "new": "load(content, { schema: FM_SCHEMA, listener })",
+    "tests": "test/frontmatter.test.ts test/corpus.test.ts",
+    "red": "Stand-in for L1-T9-M14: json: true dropped, so a duplicate key throws instead of the last one winning."
+  },
+  {
+    "id": "L1-R458-R-L1-T9-M17",
+    "file": "src/render/frontMatter.ts",
+    "old": "<dd>${pyEscape(fmValue(v))}</dd>",
+    "new": "<dd>${pyEscape(fmValue(v)).replaceAll('&#x27;', \"'\")}</dd>",
+    "tests": "test/frontmatter.test.ts test/corpus.test.ts",
+    "red": "Stand-in for L1-T9-M17 (the value is now named v): pyEscape for dd leaves a single quote unescaped."
+  },
+  {
+    "id": "L1-R458-R-L1-T9-M32",
+    "file": "src/render/frontMatter.ts",
+    "old": "  if (pairs.length === 0) return '';\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts test/corpus.test.ts",
+    "red": "Stand-in for L1-T9-M32 (keys is now pairs): an empty mapping renders an empty dl."
+  }
+]
+```
+
+### Review 458, C34: the packed types and the strict consumer
+
+11 rows.
+
+```json
+[
+  {
+    "id": "L1-R458-C34-M1",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "skipLibCheck: false,",
+    "new": "skipLibCheck: true,",
+    "tests": "test/consumer-smoke.test.ts",
+    "red": "The consumer tsconfig skips library checks: a packed declaration with a dangling import passes, and the source pin on the flag fails."
+  },
+  {
+    "id": "L1-R458-C34-M2",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "    run(process.execPath, [TSC, '-p', 'tsconfig.json'], dir);\n",
+    "new": "",
+    "tests": "test/consumer-smoke.test.ts",
+    "red": "The strict tsc step is gone: the success line no longer prints after a typecheck, and a dangling import or a missing export no longer fails the smoke."
+  },
+  {
+    "id": "L1-R458-C34-M3",
+    "file": "package.json",
+    "old": "\"devDependencies\": {\n    \"@types/node\"",
+    "new": "\"devDependencies\": {\n    \"@types/markdown-it\": \"14.2.0\",\n    \"@types/node\"",
+    "tests": "test/package.test.ts",
+    "red": "@types/markdown-it is also a devDependency again: the not-a-devDependency pin and the lockfile root's devDependencies comparison fail."
+  },
+  {
+    "id": "L1-R458-C34-M4",
+    "file": "package.json",
+    "old": "\"devDependencies\": {\n    \"@types/node\"",
+    "new": "\"devDependencies\": {\n    \"@types/js-yaml\": \"4.0.9\",\n    \"@types/node\"",
+    "tests": "test/package.test.ts",
+    "red": "Same for @types/js-yaml."
+  },
+  {
+    "id": "L1-R458-C34-M5",
+    "file": "package-lock.json",
+    "old": "      \"resolved\": \"https://registry.npmjs.org/@types/linkify-it/-/linkify-it-5.0.0.tgz\",\n",
+    "new": "      \"resolved\": \"https://registry.npmjs.org/@types/linkify-it/-/linkify-it-5.0.0.tgz\",\n      \"dev\": true,\n",
+    "tests": "test/package.test.ts",
+    "red": "The lock marks a transitive @types a consumer needs as dev-only: the lockfile production-packages pin fails."
+  },
+  {
+    "id": "L1-R458-C34-M6",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "import { runCorpus } from '${PACKAGE}/conformance';\nimport type { CorpusRun }",
+    "new": "declare function runCorpus(r: unknown, o?: unknown): CorpusRun;\nimport type { CorpusRun }",
+    "tests": "test/consumer-smoke.test.ts",
+    "red": "The consumer file no longer imports the conformance entry value runCorpus: the missing-export case passes tsc and its test fails."
+  },
+  {
+    "id": "L1-R458-C34-M7",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "strict: true,",
+    "new": "strict: false,",
+    "tests": "test/pack.test.ts test/consumer-smoke.test.ts",
+    "red": "Without strict (noImplicitAny) TS7016 is not raised: the real untyped tarball passes the smoke, and the source pin fails."
+  },
+  {
+    "id": "L1-R458-C34-M8",
+    "file": "test/purity.test.ts",
+    "old": "!name.startsWith('@types/')",
+    "new": "true",
+    "tests": "test/purity.test.ts",
+    "red": "The filter is gone: the expected list holds @types/js-yaml and @types/markdown-it, which no source imports."
+  },
+  {
+    "id": "L1-R458-C34-M9",
+    "file": "test/purity.test.ts",
+    "old": "!name.startsWith('@types/')",
+    "new": "false",
+    "tests": "test/purity.test.ts",
+    "red": "The filter drops every dependency: the expected list is empty while the graph imports four packages."
+  },
+  {
+    "id": "L1-R458-R-L1-T1-M1",
+    "file": "package.json",
+    "old": "\"markdown-it\": \"14.3.2\"",
+    "new": "\"markdown-it\": \"^14.3.2\"",
+    "tests": "test/package.test.ts",
+    "red": "Stand-in for L1-T1-M1 (its anchor named the pre-gate markdown-it 15.0.2): a caret range on markdown-it fails the exact-pin test and the lockfile comparisons."
+  },
+  {
+    "id": "L1-R458-C34-M10",
+    "file": "scripts/consumer-smoke.mjs",
+    "old": "  include: ['check.ts', `node_modules/${PACKAGE}/dist/**/*.d.ts`],\n",
+    "new": "  files: ['check.ts'],\n",
+    "tests": "test/consumer-smoke.test.ts test/pack.test.ts",
+    "red": "Only the declarations the two entries reach are typechecked: the unreached dangling declaration passes, and with @types/js-yaml in devDependencies frontMatter.d.ts is never read."
+  }
+]
+```
+
+### Review 458, C35, C36 and R18: Unicode tables and the parity sandbox
+
+14 rows.
+
+```json
+[
+  {
+    "id": "L1-R458-C35-M1",
+    "file": "src/render/figcaption.ts",
+    "old": "const DIGIT = /^\\p{Nd}$/u;",
+    "new": "const DIGIT = /^(?!\\u{16D71})\\p{Nd}$/u;",
+    "tests": "test/figcaption.test.ts",
+    "red": "The caption digit set stops at Unicode 15.0's digits for the one code point: the Unicode 16 caption case finds a paragraph where it pins a figcaption."
+  },
+  {
+    "id": "L1-R458-C35-M2",
+    "file": "README.md",
+    "old": "Unicode tables follow the runtime, for three surfaces.",
+    "new": "Heading ids follow the runtime's Unicode tables.",
+    "tests": "test/readme.test.ts",
+    "red": "PD9 is scoped to heading ids again: the row no longer says it covers three surfaces."
+  },
+  {
+    "id": "L1-R458-C35-M3",
+    "file": "README.md",
+    "old": "Caption digits: a figure caption's number is a run of `\\p{Nd}`. ",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "PD9's row loses the caption-digit surface."
+  },
+  {
+    "id": "L1-R458-C35-M4",
+    "file": "README.md",
+    "old": "Reference labels: a label is matched by `toLowerCase().toUpperCase()`. ",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "PD9's row loses the reference-label surface."
+  },
+  {
+    "id": "L1-R458-C36-M1",
+    "file": "README.md",
+    "old": "(uc.micro), which include five Unicode 15.1 symbols (U+2FFC, U+2FFD, U+2FFE, U+2FFF and U+31EF)",
+    "new": "(uc.micro), which include some Unicode 15.1 symbols",
+    "tests": "test/readme.test.ts",
+    "red": "PD6's row no longer names the five code points."
+  },
+  {
+    "id": "L1-R458-C36-M2",
+    "file": "README.md",
+    "old": "This does not depend on the runtime (no file moves).",
+    "new": "(no file moves).",
+    "tests": "test/readme.test.ts",
+    "red": "PD6's row no longer says the emphasis difference is independent of the runtime."
+  },
+  {
+    "id": "L1-R458-R-L1-REV-M10",
+    "file": "README.md",
+    "old": "\n| PD9 | Unicode tables follow the runtime, for three surfaces. Heading ids: the slug keeps `\\p{L}` and `\\p{N}` and lower-cases the way the runtime does. Caption digits: a figure caption's number is a run of `\\p{Nd}`. Reference labels: a label is matched by `toLowerCase().toUpperCase()`. A code point that Unicode 15.0 (the reference's Python 3.12) leaves unassigned can therefore appear in an id, count as a caption digit or fold to a match here where the reference dropped it, kept the paragraph or found no definition, and two runtimes with different Unicode versions can disagree with each other (no file moves). |",
+    "new": "",
+    "tests": "test/readme.test.ts",
+    "red": "Stand-in for L1-REV-M10, whose old text was PD9 row before it was reworded: the PD9 row is removed."
+  },
+  {
+    "id": "L1-R458-R-L1-T12-M33",
+    "file": "README.md",
+    "old": "| PD6 | Reference labels and emphasis:",
+    "new": "| PD6. | Reference labels and emphasis:",
+    "tests": "test/readme.test.ts",
+    "red": "Stand-in for L1-T12-M33, whose old text was the PD6 row start before it was reworded: the PD6 row no longer starts with the category cell."
+  },
+  {
+    "id": "L1-R458-R18-M1",
+    "file": "test/browser-parity.test.ts",
+    "old": "return vm.runInContext(`(${JSON.stringify(value)})`, context) as T;",
+    "new": "return JSON.parse(JSON.stringify(value)) as T;",
+    "tests": "test/browser-parity.test.ts",
+    "red": "The helper copies in the host realm: the constructor-chain probe reaches the host process, and the recorded options are host-realm objects."
+  },
+  {
+    "id": "L1-R458-R18-M2",
+    "file": "test/browser-parity.test.ts",
+    "old": "(input, options) => bundle.render(input, inContext(b.context, options))",
+    "new": "(input, options) => bundle.render(input, options)",
+    "tests": "test/browser-parity.test.ts",
+    "red": "The corpus run passes the manifest options straight into the bundle: the wrapper records host-realm options, and the corpus test finds them."
+  },
+  {
+    "id": "L1-R458-R18-M4",
+    "file": "test/browser-parity.test.ts",
+    "old": "const v = bundle.render(c.input, inContext(b.context, c.options));",
+    "new": "const v = bundle.render(c.input, c.options);",
+    "tests": "test/browser-parity.test.ts",
+    "red": "The byte-for-byte loop passes render options straight in: recorded as host-realm."
+  },
+  {
+    "id": "L1-R458-R18-M5",
+    "file": "test/browser-parity.test.ts",
+    "old": "bundle.scanRefs(c.input, inContext(b.context, scanOptions))",
+    "new": "bundle.scanRefs(c.input, scanOptions)",
+    "tests": "test/browser-parity.test.ts",
+    "red": "The byte-for-byte loop passes scanRefs options straight in: recorded as host-realm."
+  },
+  {
+    "id": "L1-R458-R18-M6",
+    "file": "test/browser-parity.test.ts",
+    "old": "bundle.render(doc, inContext(b.context, { lineAttrs: false }))",
+    "new": "bundle.render(doc, { lineAttrs: false })",
+    "tests": "test/browser-parity.test.ts",
+    "red": "The data-line case passes a host-realm object: recorded."
+  },
+  {
+    "id": "L1-R458-R18-M7",
+    "file": "test/browser-parity.test.ts",
+    "old": "bundle.render('x'.repeat(10), inContext(b.context, { maxBytes: 9 }))",
+    "new": "bundle.render('x'.repeat(10), { maxBytes: 9 })",
+    "tests": "test/browser-parity.test.ts",
+    "red": "The byte-cap case passes a host-realm object: recorded."
+  }
+]
+```
+
+### Review 464, C39 and R7: front matter
+
+6 rows.
+
+```json
+[
+  {
+    "id": "L1-R464-C39-M1",
+    "file": "src/render/frontMatter.ts",
+    "old": "      if (seen === undefined) refuseMerge(m);\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The merge refusal is dropped: a sequence in a << list (aliased, inline, empty, mixed, block style) loads as a mapping with the keys 0, 1, ... and the C39 cases render a strip where the reference renders nothing."
+  },
+  {
+    "id": "L1-R464-C39-M2",
+    "file": "src/render/frontMatter.ts",
+    "old": "    for (const a of refusing) Reflect.deleteProperty(a, MERGE_REFUSAL);\n",
+    "new": "",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The refusal property is left on the loaded sequences: the C39 plain-array case and the C33 plain-objects walk see an extra enumerable key."
+  },
+  {
+    "id": "L1-R464-C39-M3",
+    "file": "src/render/frontMatter.ts",
+    "old": "{ get: refuseMergeSource, enumerable: true, configurable: true }",
+    "new": "{ get: refuseMergeSource, enumerable: false, configurable: true }",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The refusal property is not enumerable, so js-yaml never reads it as a merge source key and the C39 cases load."
+  },
+  {
+    "id": "L1-R464-C39-M4",
+    "file": "src/render/frontMatter.ts",
+    "old": "  throw new TypeError('expected a mapping for merging');",
+    "new": "  return undefined as never;",
+    "tests": "test/frontmatter.test.ts",
+    "red": "The getter does not throw: merging reads it and carries on, so the C39 cases load."
+  },
+  {
+    "id": "L1-R464-C39-M5",
+    "file": "src/render/frontMatter.ts",
+    "old": "      if (seen === undefined) refuseMerge(m);\n",
+    "new": "      if (seen === undefined && m.length > 0) refuseMerge(m);\n",
+    "tests": "test/frontmatter.test.ts",
+    "red": "An empty sequence is left unrefused: <<: [[]] loads, where the reference refuses it."
+  },
+  {
+    "id": "L1-R464-R7-M1",
+    "file": "src/render/frontMatter.ts",
+    "old": "    } else if (!isNested(v) && v !== null) {",
+    "new": "    } else if (!isNested(v)) {",
+    "tests": "test/frontmatter.test.ts",
+    "red": "A null value is listed in meta.frontList: the collision case sees a second, empty entry for the later null key."
+  }
+]
+```
+

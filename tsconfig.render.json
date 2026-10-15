@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022"],
+    "types": [],
+    "paths": {
+      "highlight.js/lib/core": ["./src/types/purity/highlight-core.d.ts"],
+      "highlight.js/lib/languages/*": ["./src/types/purity/highlight-language.d.ts"]
+    }
+  },
+  "include": ["src/render/**/*.ts", "src/types/**/*.d.ts"]
+}

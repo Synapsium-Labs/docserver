@@ -1,0 +1,111 @@
+{
+  "front": {
+    "title": "Spec, revised",
+    "tags": [
+      "a",
+      "b",
+      "c"
+    ],
+    "num": "3",
+    "date": "2026-10-12",
+    "items": [
+      "a",
+      "b"
+    ],
+    "quoted": "T",
+    "base": "common value",
+    "copy": "common value",
+    "mixed": [
+      "one",
+      "four"
+    ],
+    "owner": "it's <b>here</b> & there"
+  },
+  "frontList": [
+    {
+      "key": "title",
+      "list": false,
+      "vals": [
+        "Spec, revised"
+      ]
+    },
+    {
+      "key": "tags",
+      "list": true,
+      "vals": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "key": "num",
+      "list": false,
+      "vals": [
+        "3"
+      ]
+    },
+    {
+      "key": "date",
+      "list": false,
+      "vals": [
+        "2026-10-12"
+      ]
+    },
+    {
+      "key": "items",
+      "list": true,
+      "vals": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "key": "quoted",
+      "list": false,
+      "vals": [
+        "T"
+      ]
+    },
+    {
+      "key": "base",
+      "list": false,
+      "vals": [
+        "common value"
+      ]
+    },
+    {
+      "key": "copy",
+      "list": false,
+      "vals": [
+        "common value"
+      ]
+    },
+    {
+      "key": "mixed",
+      "list": true,
+      "vals": [
+        "one",
+        "four"
+      ]
+    },
+    {
+      "key": "owner",
+      "list": false,
+      "vals": [
+        "it's <b>here</b> & there"
+      ]
+    }
+  ],
+  "title": "Heading",
+  "headings": [
+    {
+      "level": 1,
+      "id": "heading",
+      "text": "Heading"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

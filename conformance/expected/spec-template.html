@@ -1,0 +1,56 @@
+<dl class="doc-meta" data-line="1-4"><div><dt>status</dt><dd>Draft</dd></div><div><dt>owner</dt><dd>Docs team</dd></div></dl>
+
+<h1 id="shared-renderer-for-team-notes" data-line="6-6">Shared renderer for team notes</h1>
+<p data-line="8-8"><strong>Spec</strong> · 2026-01-15 · Status: Draft</p>
+<h2 id="in-short" data-line="10-10">In short</h2>
+<ul data-line="12-15">
+<li data-line="12-12"><strong>What:</strong> one renderer for every notes page.</li>
+<li data-line="13-13"><strong>Why:</strong> two renderers drift apart.</li>
+<li data-line="14-15"><strong>Cost:</strong> a corpus of examples kept in step.</li>
+</ul>
+<h2 id="1-context" data-line="16-16">1. Context</h2>
+<p data-line="18-18">Each page is written in Markdown. Two programs render it today, and their output differs in small ways.</p>
+<span class="doc-anchor" id="R1"></span>
+<p data-line="21-21"><code>RULE-ONE</code> — <strong>One renderer.</strong> Every page renders through the same library.</p>
+<h2 id="2-design" data-line="23-23">2. Design</h2>
+<p data-line="25-25">The flow below shows a page from source to screen.</p>
+<figure class="mermaid-figure" data-line="27-31"><pre class="mermaid">flowchart LR
+  A[Source] --&gt; B[Renderer]
+  B --&gt; C[Page]
+</pre><figcaption>Figure 1. A page from source to screen.</figcaption></figure>
+<h3 id="21-options" data-line="34-34">2.1 Options</h3>
+<div class="table-wrapper"><table data-line="36-39">
+<thead>
+<tr data-line="36-36">
+<th>Option</th>
+<th>Choice</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="38-38">
+<td>One library</td>
+<td>Shared package</td>
+<td>Agreed</td>
+</tr>
+<tr data-line="39-39">
+<td>Two renderers</td>
+<td>Keep both</td>
+<td>Rejected</td>
+</tr>
+</tbody>
+</table></div>
+<div class="gh-alert gh-warning" data-line="41-42"><p class="gh-alert-title">Warning</p><p>A change to the renderer moves the examples.</p>
+</div>
+<div class="codehilite" data-line="44-46"><pre>+ D1: one renderer for every page
+</pre></div>
+<h2 id="3-where-things-stand" data-line="48-48">3. Where things stand</h2>
+<details>
+<summary>History</summary>
+<p data-line="53-53">Drafted, reviewed, revised.</p>
+</details>
+<ul class="contains-task-list" data-line="57-59">
+<li class="task-list-item" data-line="57-57"><input class="task-list-item-checkbox" checked="checked" disabled="disabled" type="checkbox"> <strong>Agreed:</strong> one renderer.</li>
+<li class="task-list-item" data-line="58-58"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>Waiting on you:</strong> the review.</li>
+<li class="task-list-item" data-line="59-59"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>Later:</strong> a second theme.</li>
+</ul>

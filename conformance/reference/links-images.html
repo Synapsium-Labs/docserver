@@ -1,0 +1,17 @@
+<p data-line="1-1">Probe: links.</p>
+<p data-line="3-3"><a href="http://x" title="title">a</a> [b](javascript:alert(1)) [c](data:text/html,x) <img src="a.png" alt="img" title="t" /> <img src="data:image/png;base64,AAAA" alt="d" /> <a href="http://r">r</a> <a href="a%20b">e</a></p>
+<p data-line="7-7">Probe: link_file.</p>
+<p data-line="9-9">[f](file:///etc/passwd) [v](vbscript:x) [d](data:image/svg+xml,x) <a href="data:image/gif;base64,AA">g</a> [h](JAVASCRIPT:x) <a href="mailto:a@b.c">m</a> <a href="tel:1">tel</a></p>
+<p data-line="11-11">Probe: link_rel.</p>
+<p data-line="13-13"><a href="./b.md#x">a</a> <a href="../d.md?ref=x">c</a> <a href="#frag">e</a></p>
+<p data-line="15-15">Probe: link_title_esc.</p>
+<p data-line="17-17"><a href="http://x" title="t &quot;q&quot; &amp;">a</a></p>
+<p data-line="19-19">Probe: link_ref_html.</p>
+<p data-line="21-21"><a href="http://x" title="t">a</a></p>
+<p data-line="25-25">Probe: ref_def_only.</p>
+<p data-line="29-29">Probe: autolink.</p>
+<p data-line="31-31">bare http://example.com/a?b=1&amp;c=2 and <a href="http://example.com">http://example.com</a> and <a href="mailto:me@example.invalid">me@example.invalid</a> and www.x.com</p>
+<p data-line="33-33">Probe: autolink_odd.</p>
+<p data-line="35-35"><a href="ftp://a.b">ftp://a.b</a> &lt;a:b&gt; &lt;javascript:x&gt;</p>
+<p data-line="37-37">Probe: img_alt.</p>
+<p data-line="39-39"><img src="x.png" alt="a b " /></p>

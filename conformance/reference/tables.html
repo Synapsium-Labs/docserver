@@ -1,0 +1,202 @@
+<p data-line="1-1">Probe: table.</p>
+<div class="table-wrapper"><table data-line="3-6">
+<thead>
+<tr data-line="3-3">
+<th>A</th>
+<th style="text-align:center">B</th>
+<th style="text-align:right">C</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="5-5">
+<td>1</td>
+<td style="text-align:center"><code>x|y</code></td>
+<td style="text-align:right">z|w</td>
+</tr>
+<tr data-line="6-6">
+<td><strong>b</strong></td>
+<td style="text-align:center"><br />
+</td>
+<td style="text-align:right">• a<br />
+• b</td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-wrapper"><table data-line="8-9">
+<thead>
+<tr data-line="8-8">
+<th>only</th>
+</tr>
+</thead>
+</table></div>
+<p data-line="11-11">Probe: table_align_none.</p>
+<div class="table-wrapper"><table data-line="13-15">
+<thead>
+<tr data-line="13-13">
+<th>a</th>
+<th>b</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="15-15">
+<td>1</td>
+<td>2</td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="17-17">Probe: table_cell_code_multi.</p>
+<div class="table-wrapper"><table data-line="19-21">
+<thead>
+<tr data-line="19-19">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="21-21">
+<td><code>x</code> <code>y|z</code></td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="23-23">Probe: table_cell_pipes.</p>
+<div class="table-wrapper"><table data-line="25-27">
+<thead>
+<tr data-line="25-25">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="27-27">
+<td><code>a|b</code> and | x</td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="29-29"><code>not in table a\|b</code></p>
+<p data-line="31-31">Probe: table_in_bq.</p>
+<blockquote data-line="33-35">
+<div class="table-wrapper"><table data-line="33-35">
+<thead>
+<tr data-line="33-33">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="35-35">
+<td>b</td>
+</tr>
+</tbody>
+</table></div>
+</blockquote>
+<p data-line="37-37">Probe: table_text_table.</p>
+<p data-line="39-39">Use <code>&lt;table&gt;</code> tags.</p>
+<div class="table-wrapper"><table data-line="41-43">
+<thead>
+<tr data-line="41-41">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="43-43">
+<td>b</td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="45-45">Probe: table_wrap_in_code.</p>
+<div class="codehilite" data-line="47-49"><pre><span></span><span class="p">&lt;</span><span class="nt">table</span><span class="p">&gt;&lt;</span><span class="nt">tr</span><span class="p">&gt;&lt;/</span><span class="nt">tr</span><span class="p">&gt;&lt;/</span><span class="nt">table</span><span class="p">&gt;</span>
+</pre></div>
+<p data-line="51-51">Probe: tbl_br_only.</p>
+<div class="table-wrapper"><table data-line="53-55">
+<thead>
+<tr data-line="53-53">
+<th>a</th>
+<th>b</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="55-55">
+<td><br />
+</td>
+<td>x</td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="57-57">Probe: tbl_comment_cell.</p>
+<div class="table-wrapper"><table data-line="59-61">
+<thead>
+<tr data-line="59-59">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="61-61">
+<td>x  y</td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="63-63">Probe: html_in_code_table.</p>
+<p data-line="65-65">text <code>&lt;/table&gt;</code> and <code>&lt;table&gt;</code> x</p>
+<p data-line="67-67">Probe: footnote_in_table.</p>
+<div class="table-wrapper"><table data-line="69-71">
+<thead>
+<tr data-line="69-69">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="71-71">
+<td>x<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup></td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="75-75">Probe: tbl_pipe_dbl.</p>
+<div class="table-wrapper"><table data-line="77-79">
+<thead>
+<tr data-line="77-77">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="79-79">
+<td><code>a|b</code></td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="81-81">Probe: tbl_pipe_in_code_html.</p>
+<div class="table-wrapper"><table data-line="83-85">
+<thead>
+<tr data-line="83-83">
+<th>a</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="85-85">
+<td><code>a|b</code> <br />
+ x</td>
+</tr>
+</tbody>
+</table></div>
+<p data-line="87-87">Probe: table_ragged.</p>
+<div class="table-wrapper"><table data-line="89-92">
+<thead>
+<tr data-line="89-89">
+<th>a</th>
+<th>b</th>
+</tr>
+</thead>
+<tbody>
+<tr data-line="91-91">
+<td>1</td>
+<td></td>
+</tr>
+<tr data-line="92-92">
+<td>1</td>
+<td>2</td>
+</tr>
+</tbody>
+</table></div>
+<hr class="footnotes-sep" />
+<section class="footnotes">
+<ol class="footnotes-list">
+<li id="fn1" class="footnote-item"><p data-line="73-73">n <a href="#fnref1" class="footnote-backref">↩︎</a></p>
+</li>
+</ol>
+</section>

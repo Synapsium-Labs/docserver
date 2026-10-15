@@ -1,0 +1,25 @@
+{
+  "front": {
+    "title": "Byte order mark"
+  },
+  "frontList": [
+    {
+      "key": "title",
+      "list": false,
+      "vals": [
+        "Byte order mark"
+      ]
+    }
+  ],
+  "title": "After the mark",
+  "headings": [
+    {
+      "level": 1,
+      "id": "after-the-mark",
+      "text": "After the mark"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

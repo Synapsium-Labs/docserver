@@ -1,0 +1,85 @@
+{
+  "front": {
+    "a": [
+      "x",
+      "x",
+      "x",
+      "x",
+      "x",
+      "x",
+      "x",
+      "x",
+      "x"
+    ],
+    "b": [],
+    "c": [],
+    "d": [],
+    "e": [],
+    "f": [],
+    "g": [],
+    "h": [],
+    "i": []
+  },
+  "frontList": [
+    {
+      "key": "a",
+      "list": true,
+      "vals": [
+        "x",
+        "x",
+        "x",
+        "x",
+        "x",
+        "x",
+        "x",
+        "x",
+        "x"
+      ]
+    },
+    {
+      "key": "b",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "c",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "d",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "e",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "f",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "g",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "h",
+      "list": true,
+      "vals": []
+    },
+    {
+      "key": "i",
+      "list": true,
+      "vals": []
+    }
+  ],
+  "title": null,
+  "headings": [],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

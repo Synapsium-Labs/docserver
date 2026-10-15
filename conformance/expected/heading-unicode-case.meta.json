@@ -1,0 +1,70 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": "ΟΔΟΣ",
+  "headings": [
+    {
+      "level": 1,
+      "id": "οδος",
+      "text": "ΟΔΟΣ"
+    },
+    {
+      "level": 2,
+      "id": "straße-strasse",
+      "text": "Straße STRASSE"
+    },
+    {
+      "level": 2,
+      "id": "istanbul",
+      "text": "İstanbul"
+    },
+    {
+      "level": 2,
+      "id": "𐐨𐐩-deseret",
+      "text": "𐐀𐐁 Deseret"
+    },
+    {
+      "level": 2,
+      "id": "𝐀𝐁-bold-math",
+      "text": "𝐀𝐁 bold math"
+    },
+    {
+      "level": 2,
+      "id": "cafe-combining",
+      "text": "Café combining"
+    },
+    {
+      "level": 2,
+      "id": "file-separator",
+      "text": "file separator"
+    },
+    {
+      "level": 2,
+      "id": "next-line",
+      "text": "next line"
+    },
+    {
+      "level": 2,
+      "id": "ideographic-space",
+      "text": "ideographic space"
+    },
+    {
+      "level": 2,
+      "id": "innernbsp-andthin",
+      "text": "inner nbsp and thin"
+    },
+    {
+      "level": 2,
+      "id": "zerowidth",
+      "text": "zero﻿width"
+    },
+    {
+      "level": 2,
+      "id": "leading-mark",
+      "text": "﻿leading mark"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

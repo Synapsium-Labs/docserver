@@ -1,0 +1,494 @@
+[
+  {
+    "id": "headings",
+    "kind": "golden",
+    "pins": "The slug algorithm, -N suffixes, Same-1 after three Same headings giving same-1-1, setext h1 and h2.",
+    "probes": ["headings", "heading_dup_after_slug", "heading_emph", "heading_slug_upper_dash", "heading_trailing_hash_space", "setext_slug", "setext_etc", "setext_multiline"]
+  },
+  {
+    "id": "heading-ids-edge",
+    "kind": "golden",
+    "pins": "id=\"\" then -1 and on; only text and code_inline enter the title; CJK, fractions, superscripts and dotted numbers; a tab is dropped.",
+    "probes": ["heading_empty_dups", "heading_cjk", "heading_tab", "heading_entity", "heading_img", "heading_html_inline", "heading_footnote", "br_in_heading_slug", "sup_in_heading", "heading_in_list_bq"]
+  },
+  {
+    "id": "heading-unicode-case",
+    "kind": "golden",
+    "pins": "Python lower() of the whole title (the final sigma becomes ς), İ, ß and astral letters, combining marks dropped from slugs, \\x1c \\x85 and U+3000 stripped Python-style at heading and paragraph edges, U+FEFF kept by strip and dropped by the slug.",
+    "probes": []
+  },
+  {
+    "id": "inline-allowlist",
+    "kind": "golden",
+    "pins": "The inline allowlist exactly: br forms, bare sup/sub/kbd, orphan closers, comments vanish, everything else escaped.",
+    "probes": ["paras_inline", "br_forms", "orphan_close_inline", "kbd_in_code", "entity_br", "mdx_angle", "inline_comment_multi", "comment_inline_id", "comment_in_para"]
+  },
+  {
+    "id": "comment-anchors",
+    "kind": "golden",
+    "pins": "Anchor grammar 1..100 characters; 101 dropped; bad ids dropped; an unterminated comment is text; indent 3 is still a block.",
+    "probes": ["comment_id_long", "comment_dash", "comment_indent3", "comment_two_lines", "comment_after_list", "comment_between_table", "comment_in_list", "comment_in_bq", "comment_id", "comment_block_unterminated_end"]
+  },
+  {
+    "id": "details/main",
+    "kind": "golden",
+    "pins": "Line forms, summary text through Python html.escape (' becomes &#x27;), a stray closer dropped, an unclosed opener forced open and closed at the end.",
+    "probes": ["details_open_forms", "details_summary_inline", "details_summary_empty", "details_trailing_space", "summary_quote", "summary_trailing_space", "long_line_summary", "details_nested_misc", "details"]
+  },
+  {
+    "id": "details/placement",
+    "kind": "golden",
+    "pins": "Details lines interrupt a paragraph, sit in a list item or a blockquote, and are code at indent 4.",
+    "probes": ["details_interrupt", "details_after_list", "details_in_bq", "details_indent4", "details_list"]
+  },
+  {
+    "id": "fences/main",
+    "kind": "golden",
+    "pins": "The codehilite wrapper and data-line; stripnl plus one newline; info split on a space only; unknown languages are plain text.",
+    "probes": ["code_py", "code_ts", "code_unknown", "code_none", "code_info", "fence_info_upper", "fence_lang_alias", "fence_nl_trail", "fence_in_list", "html_entity_in_code_fence_info", "fence_info_firstword_tab"]
+  },
+  {
+    "id": "fences/empty",
+    "kind": "golden",
+    "pins": "An empty fence renders one newline inside the wrapper.",
+    "probes": ["fence_empty"]
+  },
+  {
+    "id": "fences/unclosed",
+    "kind": "golden",
+    "pins": "An unclosed fence runs to the end of the document.",
+    "probes": ["fence_unclosed"]
+  },
+  {
+    "id": "code-indented-breaks",
+    "kind": "golden",
+    "pins": "Indented code is <pre data-line><code> with no codehilite; hard and soft break forms; \\| outside a table is untouched.",
+    "probes": ["code_indented", "trailing_spaces_eol", "hardbreak_backslash_end", "softbreak", "code_inline_pipe"]
+  },
+  {
+    "id": "mermaid-figures",
+    "kind": "golden",
+    "pins": "Figure shape, Python-escaped source, 'mermaid extra' and ' mermaid' are figures and 'Mermaid' is not, figures in a list or blockquote, meta.figures and meta.mermaidKinds.",
+    "probes": ["mermaid", "mermaid_nocap", "mermaid_capsep", "fig_after_two_blank", "fig_two_in_row", "fig_empty", "fig_tilde", "mermaid_in_list", "fig_bq", "mermaid_info"]
+  },
+  {
+    "id": "figure-captions",
+    "kind": "golden",
+    "pins": "The caption rule: a caption is one emphasis span, so a two-span paragraph stays a paragraph (ruling C25); non-captions stay paragraphs.",
+    "probes": ["mermaid_badcap", "fig_cap_two_em", "fig_cap_3a", "fig_cap_link", "fig_cap_lower", "fig_cap_strong", "fig_cap_underscore", "fig_cap_with_em", "fig_caption_multiline", "fig_caption_nodot", "fig_caption_para_two"]
+  },
+  {
+    "id": "alerts",
+    "kind": "golden",
+    "pins": "All five kinds, uppercase only, the marker-only alert, <br> after the marker, a nested alert not converted, an alert inside a plain blockquote converted, data-line on the div and none on the rebuilt <p>.",
+    "probes": ["alert", "alert_newline", "alert_br_inline", "alert_code", "alert_heading", "alert_list", "alert_nbsp", "alert_marker_mid", "alert_marker_trailing_text_br", "alert_two_adjacent", "alert_loose", "alert_in_alert_text", "alert_nested_bq_prior", "blockquote", "nested_bq_list"]
+  },
+  {
+    "id": "tables",
+    "kind": "golden",
+    "pins": "The wrapper, alignment styles, \\\\| in table code becomes |, ragged rows padded and truncated, <br> cells, meta.tables.",
+    "probes": ["table", "table_align_none", "table_cell_code_multi", "table_cell_pipes", "table_in_bq", "table_text_table", "table_wrap_in_code", "tbl_br_only", "tbl_comment_cell", "html_in_code_table", "footnote_in_table", "tbl_pipe_dbl", "tbl_pipe_in_code_html", "table_ragged"]
+  },
+  {
+    "id": "lists-tasks",
+    "kind": "golden",
+    "pins": "Tight versus loose, start before data-line, task-list classes and checkbox attributes, [X] checked.",
+    "probes": ["lists", "nest_list", "ordered_start", "tasklist_nested"]
+  },
+  {
+    "id": "doc-shapes/plan",
+    "kind": "golden",
+    "pins": "A loose task list with a fence and a Task heading, as the reading layout reads it.",
+    "probes": ["plan"]
+  },
+  {
+    "id": "doc-shapes/byline-status",
+    "kind": "golden",
+    "pins": "A byline paragraph led by <strong>, a status table, <code>RULE-ID</code> paragraphs.",
+    "probes": ["byline", "status_table", "rule_para"]
+  },
+  {
+    "id": "footnotes",
+    "kind": "golden",
+    "pins": "Footnote markup, fnref1:1, the backref glyph, an inline note with no data-line, an undefined reference stays text.",
+    "probes": ["footnote_multi_ref", "footnote", "footnote_inline", "footnote_undefined"]
+  },
+  {
+    "id": "frontmatter",
+    "kind": "golden",
+    "pins": "The dl strip, list joining with nested items skipped, a block list, a YAML anchor and alias, a duplicate key (last value wins, first position kept), ' through Python html.escape, the hidden-token leading newline, meta.front and meta.frontList.",
+    "probes": ["frontmatter", "yaml_anchor_list", "fm_repr"]
+  },
+  {
+    "id": "frontmatter-types",
+    "kind": "golden",
+    "pins": "Departure PD2 (ruled in Task 9): null, booleans, `flag: yes` staying `yes`, floats, dates and datetimes, nested list items skipped, html escaping, and 500-code-point truncation.",
+    "probes": ["fm_yaml_types"]
+  },
+  {
+    "id": "frontmatter-openers/dashes4",
+    "kind": "golden",
+    "pins": "Four dashes open and close front matter; departure PD3 on its meta (Task 9).",
+    "probes": ["fm_dashes4"]
+  },
+  {
+    "id": "frontmatter-openers/dots",
+    "kind": "golden",
+    "pins": "A ... line closes front matter; departure PD3 on its meta (Task 9).",
+    "probes": ["fm_dots"]
+  },
+  {
+    "id": "frontmatter-openers/space-open",
+    "kind": "golden",
+    "pins": "The rest of the opening line is unchecked (--- x opens); departure PD3 on its meta (Task 9).",
+    "probes": ["fm_space_open"]
+  },
+  {
+    "id": "frontmatter-openers/unclosed",
+    "kind": "golden",
+    "pins": "Unclosed front matter is ordinary Markdown: a rule and paragraphs.",
+    "probes": ["fm_unclosed"]
+  },
+  {
+    "id": "frontmatter-openers/not-first",
+    "kind": "golden",
+    "pins": "Front matter only at line 0: a later --- block is a rule and a setext heading.",
+    "probes": ["fm_not_first", "hr_not_fm", "hr_after_para_fm_like"]
+  },
+  {
+    "id": "frontmatter-openers/hr-eats",
+    "kind": "golden",
+    "pins": "A leading rule swallows the text up to the next --- as front matter, which renders nothing.",
+    "probes": ["fm_hr_eats"]
+  },
+  {
+    "id": "frontmatter-openers/bad-yaml",
+    "kind": "golden",
+    "pins": "YAML that does not parse renders nothing, leaving the leading newline.",
+    "probes": ["frontmatter_bad"]
+  },
+  {
+    "id": "frontmatter-openers/list-root",
+    "kind": "golden",
+    "pins": "A list at the YAML root renders nothing, and meta.front is null.",
+    "probes": ["frontmatter_list"]
+  },
+  {
+    "id": "links-images",
+    "kind": "golden",
+    "pins": "validateLink, data:image allowed, normalizeLink (<a b> becomes a%20b), title escaping, alt flattening, image sources for scanRefs.",
+    "probes": ["links", "link_file", "link_rel", "link_title_esc", "link_ref_html", "ref_def_only", "autolink", "autolink_odd", "img_alt"]
+  },
+  {
+    "id": "text-edges",
+    "kind": "golden",
+    "pins": "Escapes, &#0; and &#xD800; become U+FFFD, NUL normalisation, strikethrough, emphasis edges, thematic breaks.",
+    "probes": ["escape", "escaped_chars", "entity", "text_entities_special", "emphasis_edge", "strike_single", "emoji_unicode", "nul", "hr"]
+  },
+  {
+    "id": "empty-docs/empty",
+    "kind": "golden",
+    "pins": "An empty document renders the empty string.",
+    "probes": ["empty"]
+  },
+  {
+    "id": "empty-docs/whitespace-only",
+    "kind": "golden",
+    "pins": "A whitespace-only document renders the empty string.",
+    "probes": ["ws_only"]
+  },
+  {
+    "id": "nesting-limit",
+    "kind": "golden",
+    "pins": "22 nested > render 20 blockquotes (maxNesting 20).",
+    "probes": ["nest_bq"]
+  },
+  {
+    "id": "spec-template",
+    "kind": "golden",
+    "pins": "An end-to-end spec: In short, numbered sections, a Mermaid figure with a caption, a decision table, an alert, a promise-delta style fence, Where things stand.",
+    "probes": []
+  },
+  {
+    "id": "line-endings/crlf",
+    "kind": "golden",
+    "pins": "CRLF HTML matches LF HTML; departure PD3 on its meta (Task 9).",
+    "probes": ["crlf"]
+  },
+  {
+    "id": "line-endings/bom",
+    "kind": "golden",
+    "pins": "A leading BOM: the reference renders the front matter as body text; departure PD4 (Task 9).",
+    "probes": []
+  },
+  {
+    "id": "h-script-and-tags",
+    "kind": "hostile",
+    "pins": "Script, style, iframe, div, table and svg tags in inline, block, list and blockquote positions are all escaped text.",
+    "probes": ["html_block_raw"]
+  },
+  {
+    "id": "h-attr-smuggle",
+    "kind": "hostile",
+    "pins": "No on* attribute reaches the output from img, sup, kbd, br, image titles, table cells or a details line.",
+    "probes": []
+  },
+  {
+    "id": "h-js-links",
+    "kind": "hostile",
+    "pins": "javascript:, vbscript:, file: and non-image data: never become an href or src, in any case, entity-encoded, as autolinks, reference definitions or images.",
+    "probes": []
+  },
+  {
+    "id": "h-comment-anchor-injection",
+    "kind": "hostile",
+    "pins": "Only [A-Za-z0-9_-]{1,100} ids are emitted; quotes, spaces, look-alike letters and 101 characters vanish; markup after a comment is escaped.",
+    "probes": []
+  },
+  {
+    "id": "h-details-hostile",
+    "kind": "hostile",
+    "pins": "Fifty stray closers dropped, fifty unclosed openers forced open and closed, attribute forms escaped, summary text escaped including U+2028.",
+    "probes": []
+  },
+  {
+    "id": "h-fence-injection",
+    "kind": "hostile",
+    "pins": "The language class only from the registry; info-string markup never reaches an attribute; Mermaid and code source are escaped text.",
+    "probes": []
+  },
+  {
+    "id": "h-frontmatter-hostile/proto-keys",
+    "kind": "hostile",
+    "pins": "__proto__, constructor, toString and prototype keys are ordinary keys.",
+    "probes": []
+  },
+  {
+    "id": "h-frontmatter-hostile/caps",
+    "kind": "hostile",
+    "pins": "40 keys, 500 code points per value, 50 list items in the strip and 300 in meta, astral characters at both cuts.",
+    "probes": []
+  },
+  {
+    "id": "h-frontmatter-hostile/alias-bomb",
+    "kind": "hostile",
+    "pins": "Nine levels of aliases (9^9 leaves if expanded) load as shared references and render in bounded time.",
+    "probes": []
+  },
+  {
+    "id": "h-frontmatter-hostile/yaml-tags",
+    "kind": "hostile",
+    "pins": "Language-specific YAML tags fail the load, so nothing renders.",
+    "probes": []
+  },
+  {
+    "id": "h-frontmatter-hostile/oversize",
+    "kind": "hostile",
+    "pins": "A front-matter block of 20000 code points or more is not loaded, so nothing renders and meta.front is null.",
+    "probes": []
+  },
+  {
+    "id": "h-frontmatter-hostile/markup-keys",
+    "kind": "hostile",
+    "pins": "Markup in keys and values is escaped.",
+    "probes": []
+  },
+  {
+    "id": "h-dom-clobber-names",
+    "kind": "hostile",
+    "pins": "Ids that name DOM or object properties are emitted exactly by the slug and anchor grammars, and nothing more.",
+    "probes": []
+  },
+  {
+    "id": "h-alert-caption-spoof",
+    "kind": "hostile",
+    "pins": "Alert spoofs stay text, 25 nested alerts stay bounded, and a caption carries escaped text only.",
+    "probes": []
+  },
+  {
+    "id": "h-anchor-after-summary-nested",
+    "kind": "hostile",
+    "pins": "An id comment after a blockquote that a details line ends is still an anchor: the comment search covers the whole document even when its first use comes from inside the quote.",
+    "probes": []
+  },
+  {
+    "id": "x-blockquote-10000",
+    "kind": "generated",
+    "pins": "Ten thousand nested blockquote markers: maxNesting (20) bounds the depth.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/star-4096",
+    "kind": "generated",
+    "pins": "4096 emphasis openers with no closer stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/underscore-4096",
+    "kind": "generated",
+    "pins": "4096 emphasis closers with no opener stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/bracket-4096",
+    "kind": "generated",
+    "pins": "4096 nested link brackets stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/backtick-4096",
+    "kind": "generated",
+    "pins": "4096 backtick runs pair into code spans in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-delimiters/emph-nest-100",
+    "kind": "generated",
+    "pins": "Emphasis and strong emphasis nested 100 deep each.",
+    "probes": []
+  },
+  {
+    "id": "x-hr-90000",
+    "kind": "generated",
+    "pins": "90000 thematic breaks: a bounded output ratio.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/wide-header",
+    "kind": "generated",
+    "pins": "A table with a 2000-column header and one body row stays balanced.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/ragged-rows",
+    "kind": "generated",
+    "pins": "A 2000-column header with 2000 one-cell rows: the padding stops at the autofill limit.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/many-tables",
+    "kind": "generated",
+    "pins": "1000 small tables, each wrapped and balanced.",
+    "probes": []
+  },
+  {
+    "id": "x-details-10000-unclosed",
+    "kind": "generated",
+    "pins": "10000 unclosed details lines: 64 are forced open and closed at the end, the rest are escaped text (ruling C21, departure PD8).",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/headings-20000",
+    "kind": "generated",
+    "pins": "20000 equal headings get the ids a, a-1, a-2 and on, from the memoised uniquifier.",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/footnote-refs-10000",
+    "kind": "generated",
+    "pins": "10000 references to one footnote, each with its own back-reference id.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/over-limit",
+    "kind": "generated",
+    "pins": "DEFAULT_MAX_BYTES + 1 bytes, a two-byte character at the end: nothing is parsed and the html is empty.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/images-many",
+    "kind": "generated",
+    "pins": "10000 distinct images: scanRefs keeps the first 512 and says it cut the list.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-pathological",
+    "kind": "generated",
+    "pins": "About 200 KB each of quote and backslash runs in Python and template openers in TypeScript: highlighting stays bounded.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/block-20000",
+    "kind": "generated",
+    "pins": "20000 unterminated comment openers, one per line, stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/inline-40000",
+    "kind": "generated",
+    "pins": "40000 unterminated inline comment openers on one line stay text in linear time.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/inline-image-alt",
+    "kind": "generated",
+    "pins": "20000 images whose alt text opens a comment, each followed by an unterminated <!--: each inline text keeps its own comment search, so the paragraph's is never evicted and the time stays linear.",
+    "probes": []
+  },
+  {
+    "id": "x-comments/closing-line",
+    "kind": "generated",
+    "pins": "8000 <!-- lines that all reach one closing line with 50000 characters before its --> and 50000 spaces after: the closing line is read once, not once per <!--.",
+    "probes": []
+  },
+  {
+    "id": "x-tables/many-ragged",
+    "kind": "generated",
+    "pins": "Four tables that each reach markdown-it's 65536 empty-cell limit: the limit holds for the whole document, so the html stays bounded.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-long-lines",
+    "kind": "generated",
+    "pins": "A 30000-character line in an ini, a java, a typescript and a javascript fence: a fence with a line over 256 code units is escaped text, never highlighted, so no grammar spends quadratic time on it.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-budget",
+    "kind": "generated",
+    "pins": "A java fence of 4096 lines of 255 characters (1 MiB): a fence past the document's 256 KiB highlighting budget is escaped text.",
+    "probes": []
+  },
+  {
+    "id": "x-inline-unclosed/sup-100000",
+    "kind": "generated",
+    "pins": "100000 unclosed <sup> tags: 64 nest and the rest are escaped text (ruling C21, departure PD8).",
+    "probes": []
+  },
+  {
+    "id": "x-limits/html-expansion",
+    "kind": "generated",
+    "pins": "A 4000-character destination defined once and used 100000 times (304 KB) would render 200 MB of html: it stops at the 16 MiB html bound with outcome output-over-limit (ruling C20, departure PD8).",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-shell-subst",
+    "kind": "generated",
+    "pins": "600 lines of `$ ${` in a shell fence (3 KB): a fence over 256 characters is highlighted one line at a time (ruling C24), so the html stays linear, 22.7 times the input; highlighted as one block it is 2110 times (6.4 MB).",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-ini-quotes",
+    "kind": "generated",
+    "pins": "A 128-line ini fence of `\\\"` runs, 127 pairs and a backslash a line (32 KB): highlighted one line at a time (ruling C24), so the time stays linear, 34 ms; highlighted as one block it took 2.9 s.",
+    "probes": []
+  },
+  {
+    "id": "x-limits/code-js-script",
+    "kind": "generated",
+    "pins": "400 `<script></script>` lines in a javascript fence (7 KB): highlighted one line at a time (ruling C24), the html is 1.7 times the input; highlighted as one block it is 10.3 times. This one is held by its output bound: the time the same shape costs as one block (seconds) needs about 256 KiB, more than the 8 MiB total of generated inputs can carry.",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/footnote-inline-8000",
+    "kind": "generated",
+    "pins": "8000 inline notes `^[a]` in one paragraph (32 KB): the footnote tail appends each note once (ruling C26), so the time stays linear, 93 ms; the plugin's own tail copies the token array once per note and took 2.8 s.",
+    "probes": []
+  },
+  {
+    "id": "x-collisions/footnote-defs-7000",
+    "kind": "generated",
+    "pins": "7000 ordinary `[^n]` references, each with its definition (124 KB): the footnote tail appends each note once (ruling C26), so the time stays linear, 71 ms; the plugin's own tail copies the token array once per note and took 2.0 s.",
+    "probes": []
+  }
+]

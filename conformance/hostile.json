@@ -1,0 +1,212 @@
+[
+  {
+    "id": "h-script-and-tags",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["<script", "<style", "<iframe", "<svg", "<circle", "<div", "<table"], "exact": true}
+  },
+  {
+    "id": "h-attr-smuggle",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": [" onerror=\"", " onclick=\"", " onload=\"", " onmouseover=\"", " ontoggle=\"", "<details"], "require": ["<img src=\"b\" alt=\"a\" title=\"c&quot; onerror=x\" />"], "exact": true}
+  },
+  {
+    "id": "h-js-links",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["href=\"javascript", "src=\"javascript", "href=\"vbscript", "href=\"file", "href=\"data:text", "src=\"data:image/svg"], "require": ["<img src=\"data:image/png;base64,iVBORw0KGgo=\" alt=\"k\" />"], "exact": true}
+  },
+  {
+    "id": "h-comment-anchor-injection",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["<script", "<img", "onmouseover", "id=\"a\"", "id=\"x\"", "<!--"], "require": ["<span class=\"doc-anchor\" id=\"__proto__\"></span>", "<span class=\"doc-anchor\" id=\"kept-1\"></span>"], "exact": true}
+  },
+  {
+    "id": "h-details-hostile",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxTagDepth": {"details": 50}, "forbid": ["<img", " onclick=\"", "<details class", "<details open onclick"], "require": ["<summary>&lt;img src=x onerror=1&gt;</summary>"], "balanced": ["details"], "exact": true}
+  },
+  {
+    "id": "h-fence-injection",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["<script", "onload", "class=\"y", " onclick=\"", "language-x"], "require": ["<code class=\"hljs language-python\">", "<pre class=\"mermaid\">%%{init: {&quot;themeCSS&quot;"], "exact": true}
+  },
+  {
+    "id": "h-frontmatter-hostile/proto-keys",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "require": ["<dt>__proto__</dt><dd>polluted</dd>"], "nullPrototypeFront": true, "exact": true}
+  },
+  {
+    "id": "h-frontmatter-hostile/caps",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "exact": true}
+  },
+  {
+    "id": "h-frontmatter-hostile/alias-bomb",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "exact": true}
+  },
+  {
+    "id": "h-frontmatter-hostile/yaml-tags",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["<dl", "function"], "exact": true}
+  },
+  {
+    "id": "h-frontmatter-hostile/oversize",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 1, "forbid": ["<dl"], "exact": true}
+  },
+  {
+    "id": "h-frontmatter-hostile/markup-keys",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["<script", "<img", "<b>"], "require": ["<dt>&lt;script&gt;alert(1)&lt;/script&gt;</dt>", "<dt>it&#x27;s</dt>"], "exact": true}
+  },
+  {
+    "id": "h-dom-clobber-names",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "require": ["<h1 id=\"location\"", "<h1 id=\"document\"", "<h1 id=\"__proto__\"", "<h1 id=\"constructor\"", "<h1 id=\"doc-meta\"", "<span class=\"doc-anchor\" id=\"doc-progress\"></span>", "<span class=\"doc-anchor\" id=\"toString\"></span>"], "exact": true}
+  },
+  {
+    "id": "h-alert-caption-spoof",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxTagDepth": {"blockquote": 20}, "forbid": ["<script"], "require": ["[!NOTE&quot;&gt;&lt;script&gt;", "<p data-line=\"4-5\">[!note]", "<figcaption>Figure 1. &lt;script&gt;"], "exact": true}
+  },
+  {
+    "id": "h-anchor-after-summary-nested",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "forbid": ["<p data-line=\"4-4\"></p>"], "require": ["<summary>s</summary>\n<span class=\"doc-anchor\" id=\"b\"></span>\n"], "exact": true}
+  },
+  {
+    "id": "x-blockquote-10000",
+    "input": {"parts": [{"text": "> ", "times": 10000}, {"text": "x"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 1, "maxTagDepth": {"blockquote": 20}}
+  },
+  {
+    "id": "x-delimiters/star-4096",
+    "input": {"parts": [{"text": "*a ", "times": 4096}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "maxTagDepth": {"em": 100, "strong": 100}}
+  },
+  {
+    "id": "x-delimiters/underscore-4096",
+    "input": {"parts": [{"text": "a_ ", "times": 4096}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "maxTagDepth": {"em": 100, "strong": 100}}
+  },
+  {
+    "id": "x-delimiters/bracket-4096",
+    "input": {"parts": [{"text": "[", "times": 4096}, {"text": "a"}, {"text": "]", "times": 4096}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "maxTagDepth": {"em": 100, "strong": 100}}
+  },
+  {
+    "id": "x-delimiters/backtick-4096",
+    "input": {"parts": [{"text": "`a", "times": 4096}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 5, "maxTagDepth": {"em": 100, "strong": 100}}
+  },
+  {
+    "id": "x-delimiters/emph-nest-100",
+    "input": {"parts": [{"text": "*a **b ", "times": 100}, {"text": "c"}, {"text": " d** e*", "times": 100}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 4, "maxTagDepth": {"em": 100, "strong": 100}}
+  },
+  {
+    "id": "x-hr-90000",
+    "input": {"parts": [{"text": "***\n", "times": 90000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 2900, "maxOutputRatio": 10}
+  },
+  {
+    "id": "x-tables/wide-header",
+    "input": {"parts": [{"text": "|"}, {"text": " h |", "times": 2000}, {"text": "\n|"}, {"text": "---|", "times": 2000}, {"text": "\n| b |\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 4, "balanced": ["div", "table", "thead", "tbody", "tr", "th", "td"]}
+  },
+  {
+    "id": "x-tables/ragged-rows",
+    "input": {"parts": [{"text": "|"}, {"text": " h |", "times": 2000}, {"text": "\n|"}, {"text": "---|", "times": 2000}, {"text": "\n"}, {"text": "| b |\n", "times": 2000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1800, "maxOutputRatio": 31, "balanced": ["div", "table", "thead", "tbody", "tr", "th", "td"]}
+  },
+  {
+    "id": "x-tables/many-tables",
+    "input": {"parts": [{"text": "| a | b |\n|---|---|\n| c | d |\n\n", "times": 1000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 9, "balanced": ["div", "table", "thead", "tbody", "tr", "th", "td"]}
+  },
+  {
+    "id": "x-details-10000-unclosed",
+    "input": {"parts": [{"text": "<details>\n", "times": 10000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 3, "maxTagDepth": {"details": 64}, "require": ["<details open>", "&lt;details&gt;"], "balanced": ["details"]}
+  },
+  {
+    "id": "x-collisions/headings-20000",
+    "input": {"parts": [{"text": "# a\n", "times": 20000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1600, "maxOutputRatio": 15, "headingIds": {"base": "a", "count": 20000}}
+  },
+  {
+    "id": "x-collisions/footnote-refs-10000",
+    "input": {"parts": [{"text": "[^1]", "times": 10000}, {"text": "\n\n[^1]: n\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 43, "require": ["id=\"fnref1:9999\""]}
+  },
+  {
+    "id": "x-limits/over-limit",
+    "input": {"parts": [{"text": "a", "times": 4194303}, {"text": "\u00e9"}]},
+    "verdict": {"outcome": "over-limit", "maxMs": 1000}
+  },
+  {
+    "id": "x-limits/images-many",
+    "input": {"parts": [{"text": "![i](@.png)\n", "times": 10000, "index": "@"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 3, "scan": {"maxImages": 512, "imagesTruncated": true}}
+  },
+  {
+    "id": "x-limits/code-pathological",
+    "input": {"parts": [{"text": "```python\n"}, {"text": "\"\\", "times": 100000}, {"text": "\n```\n\n```typescript\n"}, {"text": "`${", "times": 60000}, {"text": "\n```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 7700, "maxOutputRatio": 3, "require": ["<code class=\"hljs language-python\">", "<code class=\"hljs language-typescript\">"], "balanced": ["div", "pre", "code"]}
+  },
+  {
+    "id": "x-comments/block-20000",
+    "input": {"parts": [{"text": "<!--\n", "times": 20000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 3, "forbid": ["<!--"]}
+  },
+  {
+    "id": "x-comments/inline-40000",
+    "input": {"parts": [{"text": "<!-- ", "times": 40000}, {"text": "\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 3, "forbid": ["<!--"]}
+  },
+  {
+    "id": "x-comments/inline-image-alt",
+    "input": {"parts": [{"text": "![<!--](b) <!-- ", "times": 20000}, {"text": "\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 3000, "maxOutputRatio": 3, "forbid": ["<!--"], "require": ["<img src=\"b\" alt=\"&lt;!--\" /> &lt;!--"]}
+  },
+  {
+    "id": "x-comments/closing-line",
+    "input": {"parts": [{"text": "<!--\n", "times": 8000}, {"text": "x", "times": 50000}, {"text": "-->"}, {"text": " ", "times": 50000}, {"text": "y\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 1, "forbid": ["<!--"]}
+  },
+  {
+    "id": "x-tables/many-ragged",
+    "input": {"parts": [{"text": "|"}, {"text": "a|", "times": 128}, {"text": "\n|"}, {"text": ":-:|", "times": 128}, {"text": "\n"}, {"text": "b\n", "times": 517}, {"text": "\n"}, {"text": "|"}, {"text": "a|", "times": 128}, {"text": "\n|"}, {"text": ":-:|", "times": 128}, {"text": "\n"}, {"text": "b\n", "times": 517}, {"text": "\n"}, {"text": "|"}, {"text": "a|", "times": 128}, {"text": "\n|"}, {"text": ":-:|", "times": 128}, {"text": "\n"}, {"text": "b\n", "times": 517}, {"text": "\n"}, {"text": "|"}, {"text": "a|", "times": 128}, {"text": "\n|"}, {"text": ":-:|", "times": 128}, {"text": "\n"}, {"text": "b\n", "times": 517}, {"text": "\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 3400, "maxOutputRatio": 418, "balanced": ["div", "table", "thead", "tbody", "tr", "th", "td"]}
+  },
+  {
+    "id": "x-limits/code-long-lines",
+    "input": {"parts": [{"text": "```ini\nx = 1\n"}, {"text": "_", "times": 30000}, {"text": "\n```\n\n```java\nx = 1;\n"}, {"text": "_", "times": 30000}, {"text": "\n```\n\n```typescript\nlet x = 1;\n"}, {"text": "_", "times": 30000}, {"text": "\n```\n\n```javascript\nlet x = 1;\n"}, {"text": "_", "times": 30000}, {"text": "\n```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "forbid": ["<span"], "require": ["<code class=\"hljs language-ini\">", "<code class=\"hljs language-java\">", "<code class=\"hljs language-typescript\">", "<code class=\"hljs language-javascript\">"], "balanced": ["div", "pre", "code"]}
+  },
+  {
+    "id": "x-limits/code-budget",
+    "input": {"parts": [{"text": "```java\nx = 1;\n"}, {"text": "_______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________\n", "times": 4096}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "forbid": ["<span"], "require": ["<code class=\"hljs language-java\">"], "balanced": ["div", "pre", "code"]}
+  },
+  {
+    "id": "x-inline-unclosed/sup-100000",
+    "input": {"parts": [{"text": "<sup>", "times": 100000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1700, "maxOutputRatio": 3, "maxTagDepth": {"sup": 64}, "require": ["<sup>&lt;sup&gt;"]}
+  },
+  {
+    "id": "x-limits/html-expansion",
+    "input": {"parts": [{"text": "[a]: /"}, {"text": "u", "times": 4000}, {"text": "\n\n"}, {"text": "[a]", "times": 100000}, {"text": "\n"}]},
+    "verdict": {"outcome": "output-over-limit", "maxMs": 2000, "maxOutputRatio": 2, "forbid": ["<a "], "require": ["<p class=\"page-subtitle\">This document could not be rendered; its source follows.</p><pre>[a]: /uuuu"], "balanced": ["p", "pre"]}
+  },
+  {
+    "id": "x-limits/code-shell-subst",
+    "input": {"parts": [{"text": "```shell\n"}, {"text": "$ ${\n", "times": 600}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 29, "require": ["<code class=\"hljs language-shell\">", "<span class=\"hljs-"], "balanced": ["div", "pre", "code", "span"]}
+  },
+  {
+    "id": "x-limits/code-ini-quotes",
+    "input": {"parts": [{"text": "```ini\n[a]\nx = 1\n"}, {"text": "\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\n", "times": 128}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 5, "require": ["<code class=\"hljs language-ini\">", "<span class=\"hljs-"], "balanced": ["div", "pre", "code", "span"]}
+  },
+  {
+    "id": "x-limits/code-js-script",
+    "input": {"parts": [{"text": "```javascript\nlet x = 1;\n"}, {"text": "<script></script>\n", "times": 400}, {"text": "```\n"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 3, "require": ["<code class=\"hljs language-javascript\">", "<span class=\"hljs-"], "balanced": ["div", "pre", "code", "span"]}
+  },
+  {
+    "id": "x-collisions/footnote-inline-8000",
+    "input": {"parts": [{"text": "^[a]", "times": 8000}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 58, "require": ["<li id=\"fn8000\""]}
+  },
+  {
+    "id": "x-collisions/footnote-defs-7000",
+    "input": {"parts": [{"text": "[^@]", "times": 7000, "index": "@"}, {"text": "\n\n"}, {"text": "[^@]: a\n", "times": 7000, "index": "@"}]},
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 15, "require": ["<li id=\"fn7000\""]}
+  }
+]

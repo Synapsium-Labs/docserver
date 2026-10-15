@@ -1,0 +1,15 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": null,
+  "headings": [
+    {
+      "level": 3,
+      "id": "task-p0-1-do-it",
+      "text": "Task P0-1: Do it"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}
