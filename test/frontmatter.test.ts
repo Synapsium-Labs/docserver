@@ -252,12 +252,16 @@ describe('PD2: scalars render their source text, without Python (rulings C1 and 
   it("C17 (e): a multi-source `<<` list keeps its sources' order, where the reference reversed the sources", () => {
     // Reference (PyYAML), measured on the same inputs: the keys come out b, a, x for the first and a, b, c for
     // the second.
+    const referenceFirst = dl('1-4', item('b', '2') + item('a', '1') + item('x', '0'));
+    const referenceSecond = dl('1-3', item('a', '1') + item('b', '2') + item('c', '1'));
     const first = render('---\nx: 0\n<<: [{a: 1}, {b: 2}]\n---\n');
     expect(first.html).toBe(dl('1-4', item('x', '0') + item('a', '1') + item('b', '2')));
+    expect(first.html).not.toBe(referenceFirst);
     expect(first.meta.frontList?.map((e) => e.key)).toEqual(['x', 'a', 'b']);
     // Both sources give `a`: the earlier source wins, a=1, in the reference and here; only the order differs.
     const second = render('---\n<<: [{a: 1, c: 1}, {a: 2, b: 2}]\n---\n');
     expect(second.html).toBe(dl('1-3', item('a', '1') + item('c', '1') + item('b', '2')));
+    expect(second.html).not.toBe(referenceSecond);
     expect(second.meta.frontList).toEqual([scalar('a', '1'), scalar('c', '1'), scalar('b', '2')]);
   });
 
@@ -444,30 +448,41 @@ describe('PD2: U+2028 and U+2029 are not line breaks (ruling C32)', () => {
     ['U+2029', '\u2029'],
   ] as const) {
     it(`${name} in the middle of a line: the load fails, where the reference read two keys`, () => {
-      // Reference: <dl><div><dt>a</dt><dd>x</dd></div><div><dt>b</dt><dd>y</dd></div></dl>, meta a: x and b: y.
+      // Reference (measured): two keys, a: x and b: y, in the strip and in meta.
+      const reference = { html: dl('1-3', item('a', 'x') + item('b', 'y')), frontList: [scalar('a', 'x'), scalar('b', 'y')] };
       const r = render(`---\na: x${ch}b: y\n---\n`);
       expect([r.html, r.meta.frontList]).toEqual(['', null]);
+      expect([r.html, r.meta.frontList]).not.toEqual([reference.html, reference.frontList]);
     });
 
     it(`${name} at the end of a value is part of the value, where the reference ended the line there`, () => {
-      // Reference: the value is `x`, with no trailing character.
+      // Reference (measured): the value is `x`, with no trailing character.
+      const reference = { html: dl('1-4', item('a', 'x') + item('b', 'y')), frontList: [scalar('a', 'x'), scalar('b', 'y')] };
       const r = render(`---\na: x${ch}\nb: y\n---\n`);
       expect(r.html).toBe(dl('1-4', item('a', `x${ch}`) + item('b', 'y')));
       expect(r.meta.frontList).toEqual([scalar('a', `x${ch}`), scalar('b', 'y')]);
+      expect(r.html).not.toBe(reference.html);
+      expect(r.meta.frontList).not.toEqual(reference.frontList);
     });
 
     it(`${name} inside a block scalar is part of its text, where the reference refused the whole block`, () => {
-      // Reference: the block renders nothing, and meta is null.
+      // Reference (measured): the block renders nothing, and meta is null.
+      const reference = { html: '', frontList: null };
       const r = render(`---\na: |\n  x${ch}y\n---\n`);
       expect(r.html).toBe(dl('1-4', item('a', `x${ch}y\n`)));
       expect(r.meta.frontList).toEqual([scalar('a', `x${ch}y\n`)]);
+      expect(r.html).not.toBe(reference.html);
+      expect(r.meta.frontList).not.toEqual(reference.frontList);
     });
 
     it(`${name} inside a comment does not end it, where the reference read the key after it`, () => {
-      // Reference: the keys b and a, in that order (b: y is read as a key after the comment's break).
+      // Reference (measured): the keys b and a, in that order (b: y is read as a key after the comment's break).
+      const reference = { html: dl('1-4', item('b', 'y') + item('a', '1')), frontList: [scalar('b', 'y'), scalar('a', '1')] };
       const r = render(`---\n# c${ch}b: y\na: 1\n---\n`);
       expect(r.html).toBe(dl('1-4', item('a', '1')));
       expect(r.meta.frontList).toEqual([scalar('a', '1')]);
+      expect(r.html).not.toBe(reference.html);
+      expect(r.meta.frontList).not.toEqual(reference.frontList);
     });
 
     it(`${name} inside a quoted scalar is kept, as in the reference`, () => {

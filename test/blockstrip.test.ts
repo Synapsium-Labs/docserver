@@ -110,7 +110,10 @@ describe("emphasis flanking: markdown-it's own Unicode tables (departure PD6)", 
   for (const code of [0x2ffc, 0x2ffd, 0x2ffe, 0x2fff, 0x31ef]) {
     const c = String.fromCodePoint(code);
     it(`U+${code.toString(16).toUpperCase()} makes the asterisk before it flank as punctuation`, () => {
-      expect(render(`a*${c}b*\n`).html).toBe(`<p data-line="1-1">a*${c}b*</p>\n`);
+      const reference = `<p data-line="1-1">a<em>${c}b</em></p>\n`;
+      const html = render(`a*${c}b*\n`).html;
+      expect(html).toBe(`<p data-line="1-1">a*${c}b*</p>\n`);
+      expect(html).not.toBe(reference);
     });
   }
 });
