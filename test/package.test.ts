@@ -17,6 +17,7 @@ interface Manifest {
   sideEffects: boolean;
   engines: { node: string };
   exports: Record<string, unknown>;
+  files: string[];
   scripts: Record<string, string>;
   dependencies: Deps;
   devDependencies: Deps;
@@ -77,8 +78,26 @@ describe('package.json: the types the packed declarations import', () => {
 });
 
 describe('package.json: exports keys', () => {
-  it('exposes exactly ./render, ./conformance and ./package.json', () => {
-    expect(Object.keys(pkg.exports).sort()).toEqual(['./conformance', './package.json', './render']);
+  it('exposes exactly ./render, ./conformance, ./enhance, ./assets/* and ./package.json', () => {
+    expect(Object.keys(pkg.exports).sort()).toEqual(['./assets/*', './conformance', './enhance', './package.json', './render']);
+  });
+
+  it("the README's exports sentence names exactly those keys", () => {
+    const sentence = readText('README.md').split('\n').find((l) => l.startsWith('The package exports exactly ')) ?? '';
+    const named = [...sentence.matchAll(/`([^`]+)`/g)].map((m) => m[1]).sort();
+    expect(named).toEqual(Object.keys(pkg.exports).sort());
+  });
+
+  it('./enhance names its types first and its ESM build second; ./assets/* maps to the assets directory', () => {
+    expect(pkg.exports['./enhance']).toEqual({
+      types: './dist/enhance/index.d.ts',
+      import: './dist/enhance/index.js',
+    });
+    expect(pkg.exports['./assets/*']).toBe('./assets/*');
+  });
+
+  it('ships the assets directory', () => {
+    expect(pkg.files).toContain('assets');
   });
 
   it('each code entry names its types first and its ESM build second', () => {
@@ -107,9 +126,9 @@ describe('package.json: identity', () => {
     expect(pkg.engines.node).toBe('>=22');
   });
 
-  it('typecheck runs both the whole-tree and the render-purity projects', () => {
+  it('typecheck runs the whole-tree, the render-purity and the enhance (DOM) projects', () => {
     expect(pkg.scripts['typecheck']).toBe(
-      'tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json',
+      'tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json',
     );
   });
 });

@@ -22,10 +22,17 @@
       "types": "./dist/conformance/index.d.ts",
       "import": "./dist/conformance/index.js"
     },
+    "./enhance": {
+      "types": "./dist/enhance/index.d.ts",
+      "import": "./dist/enhance/index.js"
+    },
+    "./assets/*": "./assets/*",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "assets",
+    "THIRD-PARTY-NOTICES",
     "conformance/manifest.json",
     "conformance/corpus",
     "conformance/expected",
@@ -35,7 +42,7 @@
     "README.md"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json",
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json",
     "check": "npm run typecheck && npm run test && npm run build"
@@ -51,6 +58,7 @@
   "devDependencies": {
     "@types/node": "22.20.4",
     "esbuild": "0.28.2",
+    "jsdom": "29.1.1",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   }

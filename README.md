@@ -12,11 +12,12 @@ It is pure. It does no network, storage, auth, git or hosting. Each product that
 |---|---|---|
 | Markdown rules (markdown-it, TypeScript): GitHub-style Markdown, alerts, figure captions, front matter, heading ids, a short raw-HTML allowlist | `@synapsium-labs/docserver/render`: `render()`, `scanRefs()` | Built |
 | The conformance corpus: Markdown in, expected HTML out, plus hostile cases | `@synapsium-labs/docserver/conformance`: `runCorpus()`, `loadCorpus()` | Built |
-| The rich layout | `enhance(root, options)` | Planned |
-| Fonts, a self-hosted Mermaid, and an asset manifest with hashes | `assets/` | Planned |
+| The rich layout over a rendered document: its lifecycle, reader prefs, per-document state and section folds so far | `@synapsium-labs/docserver/enhance`: `enhance()`, `destroyEnhancement()`, `setEnhancementPrefs()`, `EnhanceError` | Prototype |
+| The layout's stylesheet and its fonts | `@synapsium-labs/docserver/assets/*`: `assets/reader.css`, `assets/fonts/` | Prototype |
+| A self-hosted Mermaid, and an asset manifest with hashes | `assets/` | Planned |
 | A sandboxed-frame document builder, and a host helper | `frameDocument()`, `mountDocFrame()` | Planned |
 
-The package exports exactly `./render`, `./conformance` and `./package.json`; nothing else is importable.
+The package exports exactly `./render`, `./conformance`, `./enhance`, `./assets/*` and `./package.json`; nothing else is importable.
 
 ## Rendering: `./render`
 
@@ -85,6 +86,52 @@ The same list in every environment, exported as `ALLOWLIST`. Each form is matche
 | `<details>`, `<details open>`, `</details>` alone on a line | block | the same tag; a stray closer is dropped, a details left open is closed at the end of the document, and past 64 open levels the opener and the closer that pairs with it stay text |
 | `<summary>text</summary>` alone on a line | block | the same, with the text escaped |
 
+## Embedding: `./enhance`
+
+```ts
+import { render } from '@synapsium-labs/docserver/render';
+import { destroyEnhancement, enhance, setEnhancementPrefs } from '@synapsium-labs/docserver/enhance';
+// Link @synapsium-labs/docserver/assets/reader.css as a stylesheet; its fonts load from ./fonts/ beside it.
+
+const r = render(markdown);
+showFragment(root, r.html); // the host inserts the safe html into its own root element
+await enhance(root, {
+  info: { title: r.meta.title, frontList: r.meta.frontList },
+  storageKey: 'project-a:specs:example.md',
+  storage: { snapshot: storedEntries, set: (key, value) => hostStore.write(key, value) },
+});
+setEnhancementPrefs(root, { theme: 'dark' }); // from the host's own settings control
+await destroyEnhancement(root); // before the root is reused or removed
+```
+
+**`enhance(root, options?)`** returns a `Promise<void>` that resolves once the layout is built. Importing the entry does nothing: no DOM, storage, timer or network is touched until `enhance` is called. The library owns `root` and what it creates inside it, and nothing else. It marks `root` with `data-docreader-root` (the stylesheet's scope) and the prefs as `data-theme` (absent for `auto`, so the system colour scheme applies), `data-width` and `data-font`. Every element it creates carries `data-docreader-chrome`. The document's own nodes are only moved, never edited or re-created. It never writes `document.title`, `location`, `history` or any storage API, never looks an element up by a document id, and writes no HTML strings, so it runs under a strict Content Security Policy.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `prefs` | none | Starting prefs (`theme`: `auto`, `light` or `dark`; `width`: `standard` or `wide`; `font`: `serif` or `sans`). They override stored prefs and are not written back. |
+| `storage` | none | The host's storage: `snapshot`, what it holds under this reader's keys, read during startup only; and `set(key, value)`, called after each local change (`null` deletes). Without it nothing persists and the reader still works. |
+| `storageKey` | none | This document's key namespace, such as `project-a:specs:example.md`. Without it no per-document state persists. |
+| `info` | from the DOM | `{ title, frontList }`, as `render()`'s `meta` holds them. Without it the title is the root's first `h1`. |
+| `folds` | `true` | Section folding. |
+| `signal` | none | An `AbortSignal`: aborting it during startup is `destroyEnhancement(root)`. Once `enhance` has resolved it does nothing. |
+
+Options are read once, as plain data. A wrong type or an unknown key rejects with an `EnhanceError` whose `code` is `'invalid-options'`, and nothing is reserved. One root has one owner: calling `enhance` again on an enhanced root with the same options object (or with options omitted both times) returns the same promise; other options, or a root inside or around an enhanced one, reject with `'ownership'`. A destroy or abort during startup rejects with `'aborted'`, and a failure with `'initialization'`; either rejection comes after everything built so far has been undone.
+
+**`destroyEnhancement(root)`** returns a `Promise<void>` that settles once cleanup has finished. Everything `enhance` did is undone, in reverse: what it created is removed, the document's nodes go back where they were, and every attribute and class it wrote is restored, unless the host has changed that value since, in which case the host's value stays. A destroy requested from inside one of the reader's own actions (a `set` call, say) stops that action at once, so nothing more is written, and the cleanup runs as the action returns. It does not wait for a pending `set` promise, and issues no new call. Repeated calls return the same promise; a root never enhanced resolves at once. If a cleanup step throws, the others still run and the promise rejects with an `AggregateError`; the root is released either way.
+
+**`setEnhancementPrefs(root, prefs)`** changes the prefs of an enhanced root at once and writes them behind. A bad value throws `'invalid-options'`; a root that is not enhanced is left alone.
+
+**Storage keys.** The reader's state lives under its own keys, and only those are read from `snapshot`:
+
+| Key | Holds |
+|---|---|
+| `docreader:prefs` | The prefs, reader-wide: a JSON object such as `{"theme":"dark","width":"wide"}`. Fields this version does not know are kept when it is written back. |
+| `docreader:doc:<storageKey>:folds` | The folded sections of one document: a JSON array of heading ids. |
+
+A stored value that is not valid JSON, or not of its shape, is ignored. Writes go behind the local change: the reader changes at once, then calls `set`. Calls for one key are serialized, so a newer value never lands before an older one; while a call is pending only the newest waiting value is sent. A `set` that throws or rejects is ignored and changes nothing locally.
+
+**Folds.** Each level-2 section of a document gets a Fold button beside its heading. Folding hides the section's blocks with `hidden="until-found"`, so find-in-page still reaches them and opens the fold; a block the author hid stays hidden. Printing shows every section.
+
 ## The conformance corpus: `./conformance`
 
 The corpus is the contract: what `render()` must produce, shipped with the package so any host can check its own renderer or build against it.
@@ -134,7 +181,7 @@ Node 22 or later. Every dependency is pinned to an exact version and installed f
 
 ```sh
 npm ci                            # install exactly what package-lock.json records
-npm run typecheck                 # the whole tree, then src/render alone with no host types
+npm run typecheck                 # the whole tree, src/render alone with no host types, src/enhance with the DOM
 ./node_modules/.bin/vitest run    # every test; one file: ./node_modules/.bin/vitest run test/package.test.ts
 npm run build                     # dist/ from src/
 ```
