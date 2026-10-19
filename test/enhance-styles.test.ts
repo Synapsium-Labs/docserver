@@ -4,7 +4,8 @@
 // @supports blocks, @font-face and @keyframes, and gives back each style rule with its selectors, so a rule hidden in
 // a block, a second selector after a comma or a brace inside a string cannot slip past the way it can in a regex over
 // the whole text. The @font-face source URLs must be relative ./fonts/ files that exist.
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -302,6 +303,27 @@ describe('reader stylesheet: fonts', () => {
     for (const f of faces.flatMap((x) => [...x.body.matchAll(/url\("\.\/fonts\/([^"]+)"\)/g)].map((m) => m[1] ?? ''))) {
       expect(readme).toContain(f);
     }
-    expect(readme.match(/\b[0-9a-f]{64}\b/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+  });
+
+  it('every woff2 in assets/fonts is one the README lists, with the sha256 it records, and none is missing', () => {
+    // The public-ready scan does not read these binary files as text, so this is what pins them: a changed,
+    // replaced or extra font fails here.
+    const readme = readFileSync(path.join(fontsDir, 'README.md'), 'utf8');
+    const listed = Object.fromEntries(
+      [...readme.matchAll(/^\|[^|\n]*\|[^|\n]*\|\s*`([^`]+\.woff2)`\s*\|\s*`([0-9a-f]{64})`\s*\|/gm)].map((m) => [m[1], m[2]]),
+    );
+    const shipped = Object.fromEntries(
+      readdirSync(fontsDir)
+        .filter((f) => f.endsWith('.woff2'))
+        .map((f) => [f, createHash('sha256').update(readFileSync(path.join(fontsDir, f))).digest('hex')]),
+    );
+    expect(Object.keys(listed)).toHaveLength(4);
+    expect(shipped).toEqual(listed);
+  });
+
+  it('every @font-face family is the library\'s own (Docreader ...), so no host face of the same name is taken over', () => {
+    const families = faces.map((f) => /font-family:\s*"([^"]+)"/.exec(f.body)?.[1] ?? '(none)');
+    expect(families).toHaveLength(8);
+    expect(families.filter((f) => !f.startsWith('Docreader '))).toEqual([]);
   });
 });

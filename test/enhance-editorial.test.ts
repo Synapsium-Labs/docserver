@@ -301,6 +301,22 @@ describe('status words in table cells', () => {
     expect(root.querySelectorAll('table')[1]?.querySelector('.pill')).toBeNull();
   });
 
+  it('a header names a status as a whole word: Statement and Restated do not, Current status and States do', async () => {
+    const md = [
+      '# T',
+      '',
+      '| ID | Statement | Restated | Current status | States |',
+      '|---|---|---|---|---|',
+      '| R1 | No user may log in twice | Open files are closed | Agreed | Done |',
+      '| R2 | Open files are closed on exit | No change | Pending | Open |',
+      '',
+    ].join('\n');
+    const root = mount(md);
+    await enhance(root);
+    const marked = (ci: number): number => Array.from(root.querySelectorAll('tbody tr')).filter((r) => (r.children[ci] as Element).querySelector('.pill') !== null).length;
+    expect([1, 2, 3, 4].map(marked)).toEqual([0, 0, 2, 2]);
+  });
+
   it('short cells mostly opening on a status word mark a column whatever its header; the first column never', async () => {
     const md = '# T\n\n| Status | Item | Answer? |\n|---|---|---|\n| Done | Open | Yes |\n| Open | Done | No |\n| Done | Agreed | maybe |\n';
     const root = mount(md);

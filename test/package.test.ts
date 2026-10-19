@@ -14,7 +14,7 @@ interface Manifest {
   private: boolean;
   type: string;
   license: string;
-  sideEffects: boolean;
+  sideEffects: boolean | string[];
   engines: { node: string };
   exports: Record<string, unknown>;
   files: string[];
@@ -119,7 +119,13 @@ describe('package.json: identity', () => {
     expect(pkg.private).toBe(true);
     expect(pkg.type).toBe('module');
     expect(pkg.license).toBe('MIT');
-    expect(pkg.sideEffects).toBe(false);
+  });
+
+  it('declares its modules free of side effects, but not its stylesheets', () => {
+    // A bundler drops a bare import of a file the package calls side-effect free, so with `false` webpack would
+    // drop `import '@synapsium-labs/docserver/assets/reader.css'` and ship no stylesheet. No module of the
+    // package has a side effect on import (test/enhance-walls.test.ts and the render purity tests hold that).
+    expect(pkg.sideEffects).toEqual(['*.css']);
   });
 
   it('engines.node is >=22', () => {

@@ -5,7 +5,9 @@
   "description": "A pure Markdown renderer with a conformance corpus.",
   "license": "MIT",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
   "engines": {
     "node": ">=22"
   },

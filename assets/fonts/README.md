@@ -10,9 +10,14 @@ by relative URL (`./fonts/...`).
 | `@fontsource-variable/source-sans-3` | 5.3.0 | `source-sans-3-latin-wght-normal.woff2` | `7a19a7027e125257d310c6dbd78ae3a30b5ea1e3794d60b12bb28227a003bfda` | SIL OFL 1.1 |
 | `@fontsource-variable/source-sans-3` | 5.3.0 | `source-sans-3-latin-wght-italic.woff2` | `9a15dafc2c2b2414aaa9d6c30830d9aab4361329d8495b1574633603b994b411` | SIL OFL 1.1 |
 
-The families are Source Serif 4 and Source Sans 3; the packages name "Google Inc." as author and carry the SIL OFL 1.1.
-The licence is in `OFL.txt`, copied from each package's `LICENSE`; the two files are byte-identical (sha256
-`18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3`), so one copy is kept.
+The families are Source Serif 4 and Source Sans 3, in the Latin subsets Fontsource publishes; the packages name "Google
+Inc." as author and carry the SIL OFL 1.1. The fonts' own copyright notices (name ID 0 of each file) are Adobe's:
+
+- Source Serif 4: `© 2014 - 2021 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name ‘Source’.`
+- Source Sans 3: `© 2023 Adobe (http://www.adobe.com/), with Reserved Font Name ‘Source’`
+
+`THIRD-PARTY-NOTICES` repeats them. The licence is in `OFL.txt`, copied from each package's `LICENSE`; the two files
+are byte-identical (sha256 `18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3`), so one copy is kept.
 
 ## Provenance
 

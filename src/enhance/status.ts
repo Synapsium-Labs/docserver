@@ -3,10 +3,11 @@
 // that reads as a status column, a cell's leading status word ("Agreed", "Pending, see below") is shown as a
 // dot-and-word mark, `span.pill.<ok|wait|no|info>`.
 //
-// A column qualifies when (a) its header names a status ("Status", "State", "Result", "Verdict", "Outcome",
-// "Stands", "Fate"), or (b) its header names a ruling or asks a question and at least half its filled cells open on
-// a status word, or (c) at least 60% of its filled cells (three or more, none over three words) open on one. The
-// first column never does. Only the cell's first text (directly, or alone inside a strong, em or b) is read.
+// A column qualifies when (a) its header holds one of the words Status, State, Result, Verdict, Outcome (each also
+// plural), Stands or Fate as a whole word ("Current status" does, "Statement" does not), or (b) its header names a
+// ruling or asks a question and at least half its filled cells open on a status word, or (c) at least 60% of its
+// filled cells (three or more, none over three words) open on one. The first column never does. Only the cell's
+// first text (directly, or alone inside a strong, em or b) is read.
 //
 // The text is never edited: the word's text node is split off (journal.split) and moved into the mark (journal.wrap);
 // a comma, semicolon, colon or full stop right after it joins the mark in a `span.pill-wrap`, so it never wraps to
@@ -15,12 +16,17 @@ import { chrome, type Journal } from './journal.js';
 import { words } from './reading.js';
 
 /** The status words, each with its colour role. A word must open the cell's text. */
+// Open before v1: the status words and the header patterns are this format's defaults, built in; the public
+// release makes them an option (the word table and the patterns), with a neutral documented default.
 const STATUS: readonly (readonly [RegExp, string])[] = [
   [/^(ruled|accepted|agreed|kept|confirmed|measured|done|verified|yes|implemented|approved)\b/i, 'ok'],
   [/^(awaiting|proposed|pending|open|waiting|partly|partial|to do|in review|draft)\b/i, 'wait'],
   [/^(rejected|withdrawn|dropped|removed|refused|no|diverges|blocked)\b/i, 'no'],
   [/^(changed|amended|deferred|later|pinned|judgement|sourced|reported|superseded)\b/i, 'info'],
 ];
+
+/** A header that names a status column, as a whole word (so "Statement" or "Restated" does not). */
+const STATUS_HEADER = /\b(?:status(?:es)?|states?|results?|verdicts?|outcomes?|stands|fate)\b/i;
 
 /** The status word a text opens with, and its role; null when it opens with none. */
 export function statusOf(s: string): { readonly word: string; readonly role: string } | null {
@@ -107,7 +113,7 @@ export function buildStatusMarks(root: Element, journal: Journal): void {
         const l = leadText(c);
         return l !== null && statusOf(l.data) !== null;
       });
-      const named = /status|state|result|verdict|outcome|stands|fate/i.test(head);
+      const named = STATUS_HEADER.test(head);
       const asked = /ruling|ruled|answer|\?$/i.test(head) && hits.length >= cells.length * 0.5;
       const short = hits.length >= cells.length * 0.6 && cells.length >= 3 && cells.every((c) => words(c.textContent ?? '') <= 3);
       if (!named && !asked && !short) return;

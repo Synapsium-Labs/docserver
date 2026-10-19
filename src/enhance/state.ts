@@ -25,6 +25,7 @@ import type { Journal } from './journal.js';
 import { isPrefValue, PREF_VALUES } from './options.js';
 import type { Prefs, ReaderStorage } from './types.js';
 
+// Open before v1: the `docreader:` prefix is fixed; the public release gives it a namespace option or states why not.
 export const PREFS_KEY = 'docreader:prefs';
 
 /** The storage key of a per-document value: docreader:doc:<storageKey>:<name>. */

@@ -91,7 +91,8 @@ The same list in every environment, exported as `ALLOWLIST`. Each form is matche
 ```ts
 import { render } from '@synapsium-labs/docserver/render';
 import { destroyEnhancement, enhance, setEnhancementPrefs } from '@synapsium-labs/docserver/enhance';
-// Link @synapsium-labs/docserver/assets/reader.css as a stylesheet; its fonts load from ./fonts/ beside it.
+// Link @synapsium-labs/docserver/assets/reader.css as a stylesheet, or import it where a bundler handles CSS
+// (the package marks its .css files as having side effects, so the import is kept); its fonts load from ./fonts/.
 
 const r = render(markdown);
 showFragment(root, r.html); // the host inserts the safe html into its own root element
@@ -104,7 +105,7 @@ setEnhancementPrefs(root, { theme: 'dark' }); // from the host's own settings co
 await destroyEnhancement(root); // before the root is reused or removed
 ```
 
-**`enhance(root, options?)`** returns a `Promise<void>` that resolves once the layout is built. Importing the entry does nothing: no DOM, storage, timer or network is touched until `enhance` is called. The library owns `root` and what it creates inside it, and nothing else. It marks `root` with `data-docreader-root` (the stylesheet's scope) and the prefs as `data-theme` (absent for `auto`, so the system colour scheme applies), `data-width` and `data-font`. Every element it creates carries `data-docreader-chrome`. The document's own nodes are only moved, never edited or re-created. It never writes `document.title`, `location`, `history` or any storage API, never looks an element up by a document id, and writes no HTML strings, so it runs under a strict Content Security Policy.
+**`enhance(root, options?)`** returns a `Promise<void>` that resolves once the layout is built. Importing the entry does nothing: no DOM, storage, timer or network is touched until `enhance` is called. The library owns `root` and what it creates inside it; outside it, it only listens for `beforeprint` and `afterprint` on the root's window, to show folded sections in print. It marks `root` with `data-docreader-root` (the stylesheet's scope) and the prefs as `data-theme` (absent for `auto`, so the system colour scheme applies), `data-width` and `data-font`. Every element it creates carries `data-docreader-chrome`. The document's own nodes are never re-created and their text is never re-typed: they are moved, and where a word moves into a mark or a number its text node is split in two without changing a character. On the document's own elements the reader also sets `hidden` (the meta line, folded blocks), `aria-label` (headings), `data-label` (the cells of a table that stacks on a phone) and classes (`folded`, `stack`). Destroy joins every split and restores every attribute and class. It never writes `document.title`, `location`, `history` or any storage API, never looks an element up by a document id, and writes no HTML strings, so it runs under a strict Content Security Policy. Its type declarations name DOM types, so a TypeScript consumer of `./enhance` needs the DOM library (`"lib": ["ES2022", "DOM"]`, say).
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -201,7 +202,7 @@ npm run build                     # dist/ from src/
 
 - Run the local `vitest` binary, never a bare `npx vitest`, which can resolve a different global copy.
 - Tests never reach a network: `test/setup/no-network.ts` makes `fetch` and every socket connect throw, and the packing test runs npm offline.
-- CI (`.github/workflows/ci.yml`) runs those four steps on Node 22 and 24, on pull requests and on `main`, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry (with `--before` set 14 days back, so its transitive dependencies obey the age rule too) and runs the corpus through the package's public entries.
+- CI (`.github/workflows/ci.yml`) runs those four steps on Node 22 and 24, on pull requests and on `main`, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry (with `--before` set 14 days back, so its transitive dependencies obey the age rule too) typechecks a strict consumer of the three code entries, imports `./enhance` in Node, resolves the stylesheet and the font licence through `./assets/*`, checks that deep imports are refused, and runs the corpus through the package's public entries.
 - A new or bumped dependency is an exact version at least 14 days old. Add it with
   `npm install --save-exact --before=<a date 14 days back> <name>@<x.y.z>`; npm then refuses a younger version.
 
@@ -211,4 +212,4 @@ The design lives in ccrc's spec: [Rich Docs reader and a shared renderer](https:
 
 ## Licence
 
-MIT. See [`LICENSE`](LICENSE). Bundled third-party files keep their own licences, listed in `THIRD-PARTY-NOTICES` once they ship.
+MIT. See [`LICENSE`](LICENSE). Bundled third-party files keep their own licences, listed in `THIRD-PARTY-NOTICES`: the fonts in `assets/fonts/` are Adobe's Source Serif 4 and Source Sans 3 under the SIL Open Font License 1.1.

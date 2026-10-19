@@ -2,10 +2,16 @@ Third-party files shipped with @synapsium-labs/docserver
 
 Fonts (assets/fonts/)
 ---------------------
-Source Serif 4 (variable, Latin subset) and Source Sans 3 (variable, Latin subset),
-version 5.3.0 of the @fontsource-variable/source-serif-4 and @fontsource-variable/source-sans-3
-packages (author given by the packages: Google Inc.). Licensed under the SIL Open Font
-License, Version 1.1. The licence text is in assets/fonts/OFL.txt. Hashes and provenance are in
-assets/fonts/README.md.
+Source Serif 4 (variable, Latin subset) and Source Sans 3 (variable, Latin subset): the Latin
+subsets that Fontsource publishes as version 5.3.0 of the @fontsource-variable/source-serif-4
+and @fontsource-variable/source-sans-3 packages (the packages give Google Inc. as their author),
+bundled unmodified.
+
+The fonts' own copyright notices, as their name tables carry them:
+  Source Serif 4: © 2014 - 2021 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name ‘Source’.
+  Source Sans 3:  © 2023 Adobe (http://www.adobe.com/), with Reserved Font Name ‘Source’
+
+Licensed under the SIL Open Font License, Version 1.1. The licence text is in
+assets/fonts/OFL.txt. Hashes and provenance are in assets/fonts/README.md.
 
 The Font Software is bundled unmodified and is not sold on its own.
