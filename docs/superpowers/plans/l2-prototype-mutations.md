@@ -15,7 +15,8 @@ restore rule only differs from "restore the original" when the library's last wr
 folds, unfolds, then lets the host add the class) and L2P-M21 (a second destroy at depth 0 is answered by the
 post-teardown memo, so the knot test now calls destroy twice inside the action).
 
-The stylesheet scoping check is the sibling task's (`test/enhance-styles.test.ts`) and is not measured here.
+The stylesheet scoping check is the sibling task's (`test/enhance-styles.test.ts`) and is not measured here; its rows are
+L2P-M78 to L2P-M82, measured with the review fixes (the last section).
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
@@ -428,3 +429,435 @@ restored byte for byte and compared with `cmp`, then green again).
 | L2P-V1 | only a table of three or more columns stacks | `src/enhance/status.ts` | `if (heads.length < 3) return;` → deleted | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "a table of three columns takes the stack class and labels each cell; two columns stay a table" |
 | L2P-V2 | the stack class goes through the journal | `src/enhance/status.ts` | `journal.toggleClass(wrapper, 'stack', true);` → `wrapper.classList.add('stack');` | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "destroy takes the class and the labels away again" |
 | L2P-V3 | the cell labels go through the journal | `src/enhance/status.ts` | `journal.setAttribute(c, 'data-label', label);` → `c.setAttribute('data-label', label);` | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "destroy takes the class and the labels away again" |
+
+## Review fixes (L2P-M42 to L2P-M86)
+
+The guards that the review fixes added or changed (lifecycle, safety and visual), with the stylesheet's scoping check,
+which the first table left to its sibling task, measured 2026-10-19 on branch `l2-prototype` with the same `mutate.mjs`,
+unchanged, against the working tree that the three review-fix commits record. All 45 rows went red (`rc=1`) in three
+foreground runs (21 rows, 21 rows, and the 3 `test/pack.test.ts` rows), each run exited 0, and `git status --porcelain`
+read the same before and after.
+
+Rows that weaken a test's own check (L2P-M58, L2P-M59, L2P-M64, L2P-M65, L2P-M81) go red on that test's probe, as L2P-M10
+does; rows that plant a violation in the shipped tree (L2P-M60 to L2P-M63, L2P-M76, L2P-M78 to L2P-M80, L2P-M82) go red on
+the scan of the shipped files, as L2P-M11 does. L2P-M69 reports one skipped test: a copy has no `.git`, so the
+tracked-path case skips there, as its own condition says.
+
+Five guards were right before the review and only lacked a red case: L2P-M53 to L2P-M57 (the abort listener removed once
+startup ends, the registry releasing a torn-down instance, the destroy promise's own rejection handler, and the two print
+conditions). Their tests are new; the guards are unchanged. The scoping rows are L2P-M78 to L2P-M82.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2P-M42 | write-behind: the slot is claimed before set() is called (a nested write waits) | `src/enhance/state.ts` | `slot.busy = true; ⏎ let result: unknown; ⏎ try { ⏎ result = writer.set(key, value);` → `let result: unknown; ⏎ try { ⏎ result = writer.set(key, value); ⏎ slot.busy = true;` | `test/enhance-state.test.ts`: 1 failed \| 27 passed (28). "a set() that calls back into the reader queues the nested write: the older value lands first" |
+| L2P-M43 | write-behind: one queue per storage object, shared by every instance given it | `src/enhance/state.ts` | `const slot = slotOf(storage, key);` → `const slot = slotOf(writer, key);` | `test/enhance-state.test.ts`: 2 failed \| 26 passed (28). "two roots on one storage object: each write keeps the fields the other wrote"; "a successor on the same storage object waits for its predecessor's pending call" |
+| L2P-M44 | write-behind: the stored prefs are merged with the newest value written on that storage object | `src/enhance/state.ts` | `const latest = storage === null \|\| writer === null ? undefined : slotOf(storage, PREFS_KEY).latest;` → `const latest = undefined as string \| null \| undefined;` | `test/enhance-state.test.ts`: 1 failed \| 27 passed (28). "two roots on one storage object: each write keeps the fields the other wrote" |
+| L2P-M45 | ownership checked again after the options are read | `src/enhance/lifecycle.ts` | `const takenSince = claimed(root, options); ⏎ if (takenSince !== null) return takenSince;` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "host code run while the options are read cannot make a second owner: the outer call rejects ownership" |
+| L2P-M46 | a root is found by itself, wherever it moved (not by its current document) | `src/enhance/lifecycle.ts` | `const on = byRoot?.get(root as Element);` → `const on = new Set(Array.from(registry?.get((root as Element).ownerDocument as Document) ?? []).filter((i) => …` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "a root moved to another document is still its instance's: enhance refuses a second owner, destroy tears it down" |
+| L2P-M47 | ownership: an enhanced ancestor is found through the new root's ancestors | `src/enhance/lifecycle.ts` | `for (let n: Node \| null = root.parentNode; n !== null; n = n.parentNode) { ⏎ const up = findByRoot(n); ⏎ if (u…` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "a root moved to another document is still its instance's: enhance refuses a second owner, destroy tears it down" |
+| L2P-M48 | prefs set before the state exists are applied once it does | `src/enhance/lifecycle.ts` | `if (pending !== null) { ⏎ state.setPrefs(pending); // may call the host's set() ⏎ if (!live()) return; ⏎ }` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "prefs set while startup waits for an earlier teardown apply once it builds" |
+| L2P-M49 | options: inherited properties are never read | `src/enhance/options.ts` | `for (const k of names) { ⏎ const d = Object.getOwnPropertyDescriptor(v, k);` → `for (const k of allowed) { ⏎ const d = { value: (v as Record<string, unknown>)[k] };` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "options are own data properties: an inherited key is not read, an unknown own key is refused, a getter is refused unread" |
+| L2P-M50 | options: a getter is refused, unread | `src/enhance/options.ts` | `` if (!('value' in d)) throw invalid(`${where}.${k} must be a plain value, not a getter`); `` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "options are own data properties: an inherited key is not read, an unknown own key is refused, a getter is refused unread" |
+| L2P-M51 | options: a non-enumerable own key is read and checked | `src/enhance/options.ts` | `const names = Object.getOwnPropertyNames(v);` → `const names = Object.keys(v);` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "options are own data properties: an inherited key is not read, an unknown own key is refused, a getter is refused unread" |
+| L2P-M52 | journal.move undo: a node whose next sibling left still goes back into its parent | `src/enhance/journal.ts` | `from.insertBefore(node, prev !== null && prev.parentNode === from ? prev.nextSibling : null);` → `(deleted)` | `test/enhance-editorial.test.ts`: 2 failed \| 20 passed (22). "a moved node whose next sibling left goes back into its parent, after its old previous sibling, and says so"; "a host that merges the meta line's text nodes while enhanced loses none of its text on destroy" |
+| L2P-M53 | an abort after enhance has resolved does nothing (the listener is removed) | `src/enhance/lifecycle.ts` | `signal?.removeEventListener('abort', onAbort);` → `void 0;` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "an abort after enhance has resolved does nothing: the layout stays and prefs still apply" |
+| L2P-M54 | teardown releases the registry's hold on the instance | `src/enhance/lifecycle.ts` | `all.delete(inst);` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "teardown releases the registry's hold on the instance" |
+| L2P-M55 | an unawaited cleanup fault is no unhandled rejection | `src/enhance/lifecycle.ts` | `destroyed.catch(() => undefined);` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "a cleanup fault nobody awaits is no unhandled rejection" |
+| L2P-M56 | print: a block the host hid itself while folded stays hidden | `src/enhance/folds.ts` | `for (const m of s.hid) if (m.getAttribute('hidden') === 'until-found') journal.setAttribute(m, 'hidden', null)…` → `for (const m of s.hid) if (m.localName !== '') journal.setAttribute(m, 'hidden', null);` | `test/enhance-folds.test.ts`: 1 failed \| 14 passed (15). "a block the host hid itself while its section was folded stays hidden when printing starts" |
+| L2P-M57 | print: a block the host hid while printing is not folded over | `src/enhance/folds.ts` | `for (const m of s.hid) if (!m.hasAttribute('hidden')) journal.setAttribute(m, 'hidden', 'until-found');` → `for (const m of s.hid) if (m.localName !== '') journal.setAttribute(m, 'hidden', 'until-found');` | `test/enhance-folds.test.ts`: 1 failed \| 14 passed (15). "a block the host hid while printing is not folded over when printing ends" |
+| L2P-M58 | CSP wall: a string key is read like a dot (wall weakened) | `test/enhance-walls.test.ts` | `` if (banned.has(key.text) \|\| members.has(key.text)) at(key, `['${key.text}']`); `` → `void key;` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "the scan sees string keys, keys built at run time, page members, URL and handler attributes, and id matches" |
+| L2P-M59 | CSP wall: a member name built from strings (wall weakened) | `test/enhance-walls.test.ts` | `} else if (builtString(key)) at(key, '[<member built at run time>]');` → `}` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "the scan sees string keys, keys built at run time, page members, URL and handler attributes, and id matches" |
+| L2P-M60 | CSP wall: a page member (.body) planted in src/enhance | `src/enhance/editorial.ts` | `const { root, journal } = ctx; ⏎ const doc = root.ownerDocument;` → `const { root, journal } = ctx; ⏎ const doc = root.ownerDocument; ⏎ void doc.body;` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2P-M61 | CSP wall: the root's window used at a second site | `src/enhance/folds.ts` | `const view = doc.defaultView;` → `const view = doc.defaultView; ⏎ void doc.defaultView;` | `test/enhance-walls.test.ts`: 2 failed \| 9 passed (11). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string"; "the one allowed site is used exactly as allowed, so the exception cannot widen unseen" |
+| L2P-M62 | CSP wall: an inline-handler attribute planted in src/enhance | `src/enhance/editorial.ts` | `ctx.journal.setAttribute(ctx.root, 'data-docreader-root', '');` → `ctx.journal.setAttribute(ctx.root, 'data-docreader-root', ''); ⏎ ctx.journal.setAttribute(ctx.root, 'onclick',…` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2P-M63 | globals wall: a DOM global no name list holds (a timer) planted in src/enhance | `src/enhance/folds.ts` | `const view = doc.defaultView;` → `setTimeout(() => undefined, 0); ⏎ const view = doc.defaultView;` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "no source file names a DOM-library global beyond the language's own objects" |
+| L2P-M64 | globals wall: the check itself (wall weakened) | `test/enhance-walls.test.ts` | `if (isGlobal && !GLOBALS.has(node.text)) {` → `if (isGlobal && GLOBALS.has('never')) {` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "the global scan resolves names: a global is caught however it is named, a local of the same name is not" |
+| L2P-M65 | id-lookup wall: an [id=...] selector (wall weakened) | `test/enhance-walls.test.ts` | `const ID_SELECTOR = /#\|\[\s*id\s*[~\|^$*]?=/i;` → `const ID_SELECTOR = /#/;` | `test/enhance-walls.test.ts`: 1 failed \| 10 passed (11). "the scan sees string keys, keys built at run time, page members, URL and handler attributes, and id matches" |
+| L2P-M66 | status marks: a header names a status as a whole word | `src/enhance/status.ts` | `const STATUS_HEADER = /\b(?:status(?:es)?\|states?\|results?\|verdicts?\|outcomes?\|stands\|fate)\b/i;` → `const STATUS_HEADER = /status\|state\|result\|verdict\|outcome\|stands\|fate/i;` | `test/enhance-editorial.test.ts`: 1 failed \| 21 passed (22). "a header names a status as a whole word: Statement and Restated do not, Current status and States do" |
+| L2P-M67 | package: the stylesheets keep their side effects | `package.json` | `"sideEffects": [ ⏎ "*.css" ⏎ ],` → `"sideEffects": false,` | `test/package.test.ts`: 1 failed \| 15 passed (16). "declares its modules free of side effects, but not its stylesheets" |
+| L2P-M68 | fonts: each woff2 carries the sha256 its README records | `assets/fonts/README.md` | `` `f2ea9c12d2fe9bd3a9589b02ad2c0909da88f30938c91adc838c4f4098f9f9e0` `` → `` `02ea9c12d2fe9bd3a9589b02ad2c0909da88f30938c91adc838c4f4098f9f9e0` `` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "every woff2 in assets/fonts is one the README lists, with the sha256 it records, and none is missing" |
+| L2P-M69 | public-ready: only woff2 files directly in assets/fonts are left unread | `test/public-ready.test.ts` | `const SKIP_PATH = /^assets\/fonts\/[^/]+\.woff2$/;` → `const SKIP_PATH = /\.woff2$/;` | `test/public-ready.test.ts`: 1 failed \| 7 passed \| 1 skipped (9). "a woff2 is skipped only directly in assets/fonts: one anywhere else, or deeper, is scanned" |
+| L2P-M70 | pack: THIRD-PARTY-NOTICES ships with the fonts | `package.json` | `"THIRD-PARTY-NOTICES",` → `(deleted)` | `test/pack.test.ts`: 1 failed \| 9 passed (10). "holds the three entries with their types, the corpus files, the licence, the readme, the assets and their notices" |
+| L2P-M71 | consumer smoke: the assets resolve through ./assets/* to the installed files | `package.json` | `"./assets/*": "./assets/*",` → `"./assets/*": "./dist/*",` | `test/pack.test.ts`: 2 failed \| 8 passed (10). "passes the whole corpus through the consumer smoke"; "fails, naming the case, when the packed corpus does not pass" |
+| L2P-M72 | consumer smoke: ./enhance imports in Node from the installed package | `package.json` | `"import": "./dist/enhance/index.js"` → `"import": "./dist/enhance/missing.js"` | `test/pack.test.ts`: 2 failed \| 8 passed (10). "passes the whole corpus through the consumer smoke"; "fails, naming the case, when the packed corpus does not pass" |
+| L2P-M73 | tables: two columns take cols-2 | `src/enhance/status.ts` | `if (heads.length === 2) journal.toggleClass(wrapper, 'cols-2', true);` → `(deleted)` | `test/enhance-tables.test.ts`: 1 failed \| 4 passed (5). "a table of two columns keeps to the reading column: its wrapper takes cols-2, and only it" |
+| L2P-M74 | tables: cols-2 goes through the journal | `src/enhance/status.ts` | `if (heads.length === 2) journal.toggleClass(wrapper, 'cols-2', true);` → `if (heads.length === 2) wrapper.classList.add('cols-2');` | `test/enhance-tables.test.ts`: 1 failed \| 4 passed (5). "destroy takes the class and the labels away again" |
+| L2P-M75 | tables: a row whose only filled cell is the first is tr.group | `src/enhance/status.ts` | `if (first !== undefined && rest.length > 0 && txt(first) !== '' && rest.every((c) => txt(c) === '')) journal.t…` → `void first; ⏎ void rest;` | `test/enhance-tables.test.ts`: 1 failed \| 4 passed (5). "a body row whose only filled cell is the first is a group heading" |
+| L2P-M76 | Mermaid: enhance never marks the root for the Mermaid feature | `src/enhance/editorial.ts` | `ctx.journal.setAttribute(ctx.root, 'data-docreader-root', '');` → `ctx.journal.setAttribute(ctx.root, 'data-docreader-root', ''); ⏎ ctx.journal.setAttribute(ctx.root, 'data-docr…` | `test/enhance-tables.test.ts`: 1 failed \| 4 passed (5). "a Mermaid figure keeps its source readable: enhance does not mark the root for the Mermaid feature" |
+| L2P-M77 | stylesheet: the source under a diagram is hidden only on a marked root | `assets/reader.css` | `[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure pre.mermaid:no…` → `[data-docreader-root][data-docreader-root][data-docreader-root]:not(i) figure.mermaid-figure pre.mermaid:not([…` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "hides a diagram's source only where the Mermaid feature has marked the root, so an unmarked root shows it" |
+| L2P-M78 | scoping: a second selector of a list without the root | `assets/reader.css` | `[data-docreader-root] .h-mark:hover, ⏎ [data-docreader-root] .h-fold:hover {` → `[data-docreader-root] .h-mark:hover, ⏎ .h-fold:hover {` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "the shipped sheet has no scope problem" |
+| L2P-M79 | scoping: a selector inside the dark media block without the root | `assets/reader.css` | `[data-docreader-root]:not([data-theme="light"]) .codehilite .language-python .hljs-meta {` → `.codehilite .language-python .hljs-meta {` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "the shipped sheet has no scope problem" |
+| L2P-M80 | scoping: a sibling combinator leaves the root (planted in the sheet) | `assets/reader.css` | `[data-docreader-root] .fold-note[hidden] { display: none; }` → `[data-docreader-root] ~ .fold-note[hidden] { display: none; }` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "the shipped sheet has no scope problem" |
+| L2P-M81 | scoping: the sibling-combinator check itself (wall weakened) | `test/enhance-styles.test.ts` | `return rest === '' \|\| selector[i] === ' ' ? !/^[~+]/.test(rest) : rest.startsWith('>');` → `return true;` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "flags a selector that leaves the root for its siblings, and passes one that stays on it or goes inside" |
+| L2P-M82 | stylesheet: keyframes are docreader-prefixed | `assets/reader.css` | `@keyframes docreader-flow {` → `@keyframes doc-flow {` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "the shipped sheet has no scope problem" |
+| L2P-M83 | stylesheet: every custom property read is declared on the root | `assets/reader.css` | `--fig-w: initial; --thead-h: initial;` → `(deleted)` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "reads no custom property it does not declare, so none inherits in from the host page" |
+| L2P-M84 | stylesheet: every @font-face family is the library's own | `assets/reader.css` | `font-family: "Docreader Sans"; font-style: italic;` → `font-family: "Source Sans 3"; font-style: italic;` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "every @font-face family is the library's own (Docreader ...), so no host face of the same name is taken over" |
+| L2P-M85 | stylesheet: no size in rem | `assets/reader.css` | `--measure: calc(44 * var(--rem)); /* about 80 characters of 18px serif */` → `--measure: 44rem; /* about 80 characters of 18px serif */` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "sizes nothing in rem: rem follows the host page's html font-size, which the reader does not own" |
+| L2P-M86 | stylesheet: the root's gutter is its own, not a percentage of its parent | `assets/reader.css` | `padding: 52px var(--pad) 96px; }` → `padding: 52px max(var(--pad), calc((100% - var(--wide)) / 2)) 96px; }` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "pads the root by its own gutter, never by a percentage, which would be of the host's width" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2P-M42",
+    "guard": "write-behind: the slot is claimed before set() is called (a nested write waits)",
+    "file": "src/enhance/state.ts",
+    "old": "  slot.busy = true;\n  let result: unknown;\n  try {\n    result = writer.set(key, value);\n",
+    "new": "  let result: unknown;\n  try {\n    result = writer.set(key, value);\n    slot.busy = true;\n",
+    "tests": "test/enhance-state.test.ts"
+  },
+  {
+    "id": "L2P-M43",
+    "guard": "write-behind: one queue per storage object, shared by every instance given it",
+    "file": "src/enhance/state.ts",
+    "old": "    const slot = slotOf(storage, key);\n",
+    "new": "    const slot = slotOf(writer, key);\n",
+    "tests": "test/enhance-state.test.ts"
+  },
+  {
+    "id": "L2P-M44",
+    "guard": "write-behind: the stored prefs are merged with the newest value written on that storage object",
+    "file": "src/enhance/state.ts",
+    "old": "    const latest = storage === null || writer === null ? undefined : slotOf(storage, PREFS_KEY).latest;\n",
+    "new": "    const latest = undefined as string | null | undefined;\n",
+    "tests": "test/enhance-state.test.ts"
+  },
+  {
+    "id": "L2P-M45",
+    "guard": "ownership checked again after the options are read",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "  const takenSince = claimed(root, options);\n  if (takenSince !== null) return takenSince;\n",
+    "new": "",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M46",
+    "guard": "a root is found by itself, wherever it moved (not by its current document)",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "  const on = byRoot?.get(root as Element);\n",
+    "new": "  const on = new Set(Array.from(registry?.get((root as Element).ownerDocument as Document) ?? []).filter((i) => i.root === root));\n",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M47",
+    "guard": "ownership: an enhanced ancestor is found through the new root's ancestors",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "  for (let n: Node | null = root.parentNode; n !== null; n = n.parentNode) {\n    const up = findByRoot(n);\n    if (up !== undefined && isLive(up)) return refuse();\n  }\n",
+    "new": "",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M48",
+    "guard": "prefs set before the state exists are applied once it does",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "  if (pending !== null) {\n    state.setPrefs(pending); // may call the host's set()\n    if (!live()) return;\n  }\n",
+    "new": "",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M49",
+    "guard": "options: inherited properties are never read",
+    "file": "src/enhance/options.ts",
+    "old": "  for (const k of names) {\n    const d = Object.getOwnPropertyDescriptor(v, k);\n",
+    "new": "  for (const k of allowed) {\n    const d = { value: (v as Record<string, unknown>)[k] };\n",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M50",
+    "guard": "options: a getter is refused, unread",
+    "file": "src/enhance/options.ts",
+    "old": "    if (!('value' in d)) throw invalid(`${where}.${k} must be a plain value, not a getter`);\n",
+    "new": "",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M51",
+    "guard": "options: a non-enumerable own key is read and checked",
+    "file": "src/enhance/options.ts",
+    "old": "  const names = Object.getOwnPropertyNames(v);\n",
+    "new": "  const names = Object.keys(v);\n",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M52",
+    "guard": "journal.move undo: a node whose next sibling left still goes back into its parent",
+    "file": "src/enhance/journal.ts",
+    "old": "        from.insertBefore(node, prev !== null && prev.parentNode === from ? prev.nextSibling : null);\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M53",
+    "guard": "an abort after enhance has resolved does nothing (the listener is removed)",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "    signal?.removeEventListener('abort', onAbort);",
+    "new": "    void 0;",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M54",
+    "guard": "teardown releases the registry's hold on the instance",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "    all.delete(inst);\n",
+    "new": "",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M55",
+    "guard": "an unawaited cleanup fault is no unhandled rejection",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "  destroyed.catch(() => undefined);\n",
+    "new": "",
+    "tests": "test/enhance-lifecycle.test.ts"
+  },
+  {
+    "id": "L2P-M56",
+    "guard": "print: a block the host hid itself while folded stays hidden",
+    "file": "src/enhance/folds.ts",
+    "old": "        for (const m of s.hid) if (m.getAttribute('hidden') === 'until-found') journal.setAttribute(m, 'hidden', null);",
+    "new": "        for (const m of s.hid) if (m.localName !== '') journal.setAttribute(m, 'hidden', null);",
+    "tests": "test/enhance-folds.test.ts"
+  },
+  {
+    "id": "L2P-M57",
+    "guard": "print: a block the host hid while printing is not folded over",
+    "file": "src/enhance/folds.ts",
+    "old": "        for (const m of s.hid) if (!m.hasAttribute('hidden')) journal.setAttribute(m, 'hidden', 'until-found');",
+    "new": "        for (const m of s.hid) if (m.localName !== '') journal.setAttribute(m, 'hidden', 'until-found');",
+    "tests": "test/enhance-folds.test.ts"
+  },
+  {
+    "id": "L2P-M58",
+    "guard": "CSP wall: a string key is read like a dot (wall weakened)",
+    "file": "test/enhance-walls.test.ts",
+    "old": "        if (banned.has(key.text) || members.has(key.text)) at(key, `['${key.text}']`);\n",
+    "new": "        void key;\n",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M59",
+    "guard": "CSP wall: a member name built from strings (wall weakened)",
+    "file": "test/enhance-walls.test.ts",
+    "old": "      } else if (builtString(key)) at(key, '[<member built at run time>]');\n",
+    "new": "      }\n",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M60",
+    "guard": "CSP wall: a page member (.body) planted in src/enhance",
+    "file": "src/enhance/editorial.ts",
+    "old": "  const { root, journal } = ctx;\n  const doc = root.ownerDocument;\n",
+    "new": "  const { root, journal } = ctx;\n  const doc = root.ownerDocument;\n  void doc.body;\n",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M61",
+    "guard": "CSP wall: the root's window used at a second site",
+    "file": "src/enhance/folds.ts",
+    "old": "  const view = doc.defaultView;\n",
+    "new": "  const view = doc.defaultView;\n  void doc.defaultView;\n",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M62",
+    "guard": "CSP wall: an inline-handler attribute planted in src/enhance",
+    "file": "src/enhance/editorial.ts",
+    "old": "  ctx.journal.setAttribute(ctx.root, 'data-docreader-root', '');",
+    "new": "  ctx.journal.setAttribute(ctx.root, 'data-docreader-root', '');\n  ctx.journal.setAttribute(ctx.root, 'onclick', '');",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M63",
+    "guard": "globals wall: a DOM global no name list holds (a timer) planted in src/enhance",
+    "file": "src/enhance/folds.ts",
+    "old": "  const view = doc.defaultView;\n",
+    "new": "  setTimeout(() => undefined, 0);\n  const view = doc.defaultView;\n",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M64",
+    "guard": "globals wall: the check itself (wall weakened)",
+    "file": "test/enhance-walls.test.ts",
+    "old": "        if (isGlobal && !GLOBALS.has(node.text)) {",
+    "new": "        if (isGlobal && GLOBALS.has('never')) {",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M65",
+    "guard": "id-lookup wall: an [id=...] selector (wall weakened)",
+    "file": "test/enhance-walls.test.ts",
+    "old": "const ID_SELECTOR = /#|\\[\\s*id\\s*[~|^$*]?=/i;",
+    "new": "const ID_SELECTOR = /#/;",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2P-M66",
+    "guard": "status marks: a header names a status as a whole word",
+    "file": "src/enhance/status.ts",
+    "old": "const STATUS_HEADER = /\\b(?:status(?:es)?|states?|results?|verdicts?|outcomes?|stands|fate)\\b/i;",
+    "new": "const STATUS_HEADER = /status|state|result|verdict|outcome|stands|fate/i;",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M67",
+    "guard": "package: the stylesheets keep their side effects",
+    "file": "package.json",
+    "old": "  \"sideEffects\": [\n    \"*.css\"\n  ],\n",
+    "new": "  \"sideEffects\": false,\n",
+    "tests": "test/package.test.ts"
+  },
+  {
+    "id": "L2P-M68",
+    "guard": "fonts: each woff2 carries the sha256 its README records",
+    "file": "assets/fonts/README.md",
+    "old": "`f2ea9c12d2fe9bd3a9589b02ad2c0909da88f30938c91adc838c4f4098f9f9e0`",
+    "new": "`02ea9c12d2fe9bd3a9589b02ad2c0909da88f30938c91adc838c4f4098f9f9e0`",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M69",
+    "guard": "public-ready: only woff2 files directly in assets/fonts are left unread",
+    "file": "test/public-ready.test.ts",
+    "old": "const SKIP_PATH = /^assets\\/fonts\\/[^/]+\\.woff2$/;",
+    "new": "const SKIP_PATH = /\\.woff2$/;",
+    "tests": "test/public-ready.test.ts"
+  },
+  {
+    "id": "L2P-M70",
+    "guard": "pack: THIRD-PARTY-NOTICES ships with the fonts",
+    "file": "package.json",
+    "old": "    \"THIRD-PARTY-NOTICES\",\n",
+    "new": "",
+    "tests": "test/pack.test.ts"
+  },
+  {
+    "id": "L2P-M71",
+    "guard": "consumer smoke: the assets resolve through ./assets/* to the installed files",
+    "file": "package.json",
+    "old": "    \"./assets/*\": \"./assets/*\",",
+    "new": "    \"./assets/*\": \"./dist/*\",",
+    "tests": "test/pack.test.ts"
+  },
+  {
+    "id": "L2P-M72",
+    "guard": "consumer smoke: ./enhance imports in Node from the installed package",
+    "file": "package.json",
+    "old": "      \"import\": \"./dist/enhance/index.js\"",
+    "new": "      \"import\": \"./dist/enhance/missing.js\"",
+    "tests": "test/pack.test.ts"
+  },
+  {
+    "id": "L2P-M73",
+    "guard": "tables: two columns take cols-2",
+    "file": "src/enhance/status.ts",
+    "old": "  if (heads.length === 2) journal.toggleClass(wrapper, 'cols-2', true);\n",
+    "new": "",
+    "tests": "test/enhance-tables.test.ts"
+  },
+  {
+    "id": "L2P-M74",
+    "guard": "tables: cols-2 goes through the journal",
+    "file": "src/enhance/status.ts",
+    "old": "  if (heads.length === 2) journal.toggleClass(wrapper, 'cols-2', true);\n",
+    "new": "  if (heads.length === 2) wrapper.classList.add('cols-2');\n",
+    "tests": "test/enhance-tables.test.ts"
+  },
+  {
+    "id": "L2P-M75",
+    "guard": "tables: a row whose only filled cell is the first is tr.group",
+    "file": "src/enhance/status.ts",
+    "old": "    if (first !== undefined && rest.length > 0 && txt(first) !== '' && rest.every((c) => txt(c) === '')) journal.toggleClass(r, 'group', true);\n",
+    "new": "    void first;\n    void rest;\n",
+    "tests": "test/enhance-tables.test.ts"
+  },
+  {
+    "id": "L2P-M76",
+    "guard": "Mermaid: enhance never marks the root for the Mermaid feature",
+    "file": "src/enhance/editorial.ts",
+    "old": "  ctx.journal.setAttribute(ctx.root, 'data-docreader-root', '');",
+    "new": "  ctx.journal.setAttribute(ctx.root, 'data-docreader-root', '');\n  ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', '');",
+    "tests": "test/enhance-tables.test.ts"
+  },
+  {
+    "id": "L2P-M77",
+    "guard": "stylesheet: the source under a diagram is hidden only on a marked root",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed])",
+    "new": "[data-docreader-root][data-docreader-root][data-docreader-root]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed])",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M78",
+    "guard": "scoping: a second selector of a list without the root",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root] .h-mark:hover,\n[data-docreader-root] .h-fold:hover {",
+    "new": "[data-docreader-root] .h-mark:hover,\n.h-fold:hover {",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M79",
+    "guard": "scoping: a selector inside the dark media block without the root",
+    "file": "assets/reader.css",
+    "old": "  [data-docreader-root]:not([data-theme=\"light\"]) .codehilite .language-python .hljs-meta {",
+    "new": "  .codehilite .language-python .hljs-meta {",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M80",
+    "guard": "scoping: a sibling combinator leaves the root (planted in the sheet)",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root] .fold-note[hidden] { display: none; }",
+    "new": "[data-docreader-root] ~ .fold-note[hidden] { display: none; }",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M81",
+    "guard": "scoping: the sibling-combinator check itself (wall weakened)",
+    "file": "test/enhance-styles.test.ts",
+    "old": "  return rest === '' || selector[i] === ' ' ? !/^[~+]/.test(rest) : rest.startsWith('>');",
+    "new": "  return true;",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M82",
+    "guard": "stylesheet: keyframes are docreader-prefixed",
+    "file": "assets/reader.css",
+    "old": "@keyframes docreader-flow {",
+    "new": "@keyframes doc-flow {",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M83",
+    "guard": "stylesheet: every custom property read is declared on the root",
+    "file": "assets/reader.css",
+    "old": "  --fig-w: initial; --thead-h: initial;\n",
+    "new": "",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M84",
+    "guard": "stylesheet: every @font-face family is the library's own",
+    "file": "assets/reader.css",
+    "old": "font-family: \"Docreader Sans\"; font-style: italic;",
+    "new": "font-family: \"Source Sans 3\"; font-style: italic;",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M85",
+    "guard": "stylesheet: no size in rem",
+    "file": "assets/reader.css",
+    "old": "  --measure: calc(44 * var(--rem)); /* about 80 characters of 18px serif */",
+    "new": "  --measure: 44rem; /* about 80 characters of 18px serif */",
+    "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M86",
+    "guard": "stylesheet: the root's gutter is its own, not a percentage of its parent",
+    "file": "assets/reader.css",
+    "old": "padding: 52px var(--pad) 96px; }",
+    "new": "padding: 52px max(var(--pad), calc((100% - var(--wide)) / 2)) 96px; }",
+    "tests": "test/enhance-styles.test.ts"
+  }
+]
+```
