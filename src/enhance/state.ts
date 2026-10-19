@@ -18,9 +18,11 @@
 // into the reader queues its nested write instead of issuing it inside the outer call. A throwing or rejecting
 // set() is swallowed and leaves local state as it is. A waiting value is issued inside the operation of the
 // instance that queued it, so once that instance is not live it is dropped; destroy does not wait for a pending
-// call. The stored prefs object is written merged with the newest value written or queued on that storage object
-// (else with this instance's snapshot), so a root never drops a field another root wrote. A host that shares one
-// store between several enhance() calls passes the same storage object to each; two objects are two queues.
+// call. The stored prefs object is this instance's snapshot of it, merged with the newest value queued on that
+// storage object when that value is one the snapshot cannot hold (queued after this instance read it, or still in
+// flight then), so a root never drops a field another root wrote, and never writes back a value its host's store
+// has since replaced. A host that shares one store between several enhance() calls passes the same storage object
+// to each; two objects are two queues.
 import type { Journal } from './journal.js';
 import { isPrefValue, PREF_VALUES } from './options.js';
 import type { Prefs, ReaderStorage } from './types.js';
@@ -61,12 +63,16 @@ interface Writer {
   readonly operate: (fn: () => void) => void;
 }
 
-/** One key of one storage object: whether a call is in flight, the newest value waiting, the newest value seen. */
+/** One key of one storage object: whether a call is in flight, the newest value waiting, the newest value queued. */
 interface Slot {
   busy: boolean;
-  waiting: { readonly value: string | null; readonly writer: Writer } | null;
-  /** The newest value written or queued for this key, by any instance; undefined until there is one. */
+  waiting: { readonly value: string | null; readonly writer: Writer; readonly seq: number } | null;
+  /** The newest value queued for this key, by any instance; undefined until there is one. */
   latest: string | null | undefined;
+  /** How many values have been queued for this key: `latest` is number `queued`. */
+  queued: number;
+  /** The number of the newest value whose call has completed (landed, failed, or was refused). */
+  landed: number;
 }
 
 /** The slots of each storage object, shared by every instance given that object. Created on first use. */
@@ -77,12 +83,12 @@ function slotOf(storage: object, key: string): Slot {
   let slots = stores.get(storage);
   if (slots === undefined) stores.set(storage, (slots = new Map()));
   let slot = slots.get(key);
-  if (slot === undefined) slots.set(key, (slot = { busy: false, waiting: null, latest: undefined }));
+  if (slot === undefined) slots.set(key, (slot = { busy: false, waiting: null, latest: undefined, queued: 0, landed: 0 }));
   return slot;
 }
 
-/** Call the writer's set() for a value. The slot is claimed first, so a write queued from inside set() waits. */
-function issue(key: string, slot: Slot, value: string | null, writer: Writer): void {
+/** Call the writer's set() for value number `seq`. The slot is claimed first, so a write queued from inside set() waits. */
+function issue(key: string, slot: Slot, value: string | null, writer: Writer, seq: number): void {
   if (!writer.live()) return;
   slot.busy = true;
   let result: unknown;
@@ -92,23 +98,24 @@ function issue(key: string, slot: Slot, value: string | null, writer: Writer): v
     result = undefined; // swallowed: local state stays as it is
   }
   if (!isThenable(result)) {
-    release(key, slot);
+    release(key, slot, seq);
     return;
   }
   const done = (): void => {
-    release(key, slot);
+    release(key, slot, seq);
   };
   Promise.resolve(result).then(done, done);
 }
 
-/** The call in flight is over: send the newest waiting value, inside the operation of the instance that queued it. */
-function release(key: string, slot: Slot): void {
+/** Call `seq` is over: send the newest waiting value, inside the operation of the instance that queued it. */
+function release(key: string, slot: Slot, seq: number): void {
   slot.busy = false;
+  slot.landed = Math.max(slot.landed, seq);
   const next = slot.waiting;
   slot.waiting = null;
   if (next !== null) {
     next.writer.operate(() => {
-      issue(key, slot, next.value, next.writer);
+      issue(key, slot, next.value, next.writer, next.seq);
     });
   }
 }
@@ -186,16 +193,22 @@ export function createReaderState(args: StateArgs): ReaderState {
   const writeBehind = (key: string, value: string | null): void => {
     if (storage === null || writer === null) return;
     const slot = slotOf(storage, key);
+    slot.queued += 1;
     slot.latest = value;
-    if (slot.busy) slot.waiting = { value, writer };
-    else issue(key, slot, value, writer);
+    if (slot.busy) slot.waiting = { value, writer, seq: slot.queued };
+    else issue(key, slot, value, writer, slot.queued);
   };
-  /** The stored prefs object a change is merged into: the newest one written or queued, else this snapshot's. */
+  // What this instance's snapshot can hold: every prefs value whose call had completed when it was read.
+  const prefsSlot = storage === null || writer === null ? null : slotOf(storage, PREFS_KEY);
+  const seenLanded = prefsSlot?.landed ?? 0;
+  /**
+   * The stored prefs object a change is merged into: this instance's (its snapshot, then its own changes), with the
+   * newest value queued on this storage object over it when the snapshot cannot hold that value.
+   */
   const prefsBase = (): Record<string, unknown> => {
-    const latest = storage === null || writer === null ? undefined : slotOf(storage, PREFS_KEY).latest;
-    if (typeof latest === 'string') {
-      const r = parseJson(latest);
-      if (isPlainRecord(r)) return r;
+    if (prefsSlot !== null && prefsSlot.queued > seenLanded && typeof prefsSlot.latest === 'string') {
+      const r = parseJson(prefsSlot.latest);
+      if (isPlainRecord(r)) return { ...persisted, ...r };
     }
     return persisted;
   };

@@ -355,6 +355,31 @@ describe('write-behind', () => {
     expect(s.landed.map(([, v]) => v)).toEqual(['{"theme":"dark"}', '{"theme":"light"}']);
   });
 
+  it('a later instance merges with a write still in flight when it started, but not with one its snapshot holds', async () => {
+    // In flight: the predecessor's call has not landed, so the successor's snapshot cannot hold it.
+    const root = mount();
+    const s = slowStorage();
+    await enhance(root, { storage: s.storage });
+    setEnhancementPrefs(root, { theme: 'dark' });
+    await destroyEnhancement(root);
+    await enhance(root, { storage: s.storage });
+    setEnhancementPrefs(root, { width: 'wide' });
+    await s.settle(0);
+    expect(s.calls.map(([, v]) => v)).toEqual(['{"theme":"dark"}', '{"theme":"dark","width":"wide"}']);
+    await destroyEnhancement(root);
+    // Landed: the host's store moved on since (another window chose light and sans), and the snapshot says so.
+    const calls: (string | null)[] = [];
+    const snapshot: Record<string, string> = {};
+    const storage = { snapshot, set: (_k: string, v: string | null) => void calls.push(v) };
+    await enhance(root, { storage });
+    setEnhancementPrefs(root, { theme: 'dark' });
+    await destroyEnhancement(root);
+    snapshot[PREFS_KEY] = '{"theme":"light","font":"sans"}';
+    await enhance(root, { storage });
+    setEnhancementPrefs(root, { width: 'wide' });
+    expect(calls).toEqual(['{"theme":"dark"}', '{"theme":"light","font":"sans","width":"wide"}']);
+  });
+
   it('without storage nothing persists and the reader still works', async () => {
     const root = mount();
     await enhance(root, { storageKey: 'k' });
