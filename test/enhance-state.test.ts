@@ -302,6 +302,59 @@ describe('write-behind', () => {
     expect(s.calls.map(([, v]) => v)).toEqual(['{"theme":"dark"}']);
   });
 
+  it('a set() that calls back into the reader queues the nested write: the older value lands first', async () => {
+    const root = mount();
+    const log: string[] = [];
+    let stored: string | null = null;
+    let first = true;
+    const storage = {
+      async set(_key: string, value: string | null): Promise<void> {
+        const theme = (JSON.parse(String(value)) as { theme: string }).theme;
+        log.push(`start ${theme}`);
+        if (first) {
+          first = false;
+          setEnhancementPrefs(root, { theme: 'light' }); // a host that re-applies its own settings on a change
+        }
+        await Promise.resolve();
+        log.push(`land ${theme}`);
+        stored = value;
+      },
+    };
+    await enhance(root, { storage });
+    setEnhancementPrefs(root, { theme: 'dark' });
+    for (let k = 0; k < 10; k += 1) await Promise.resolve();
+    expect(log).toEqual(['start dark', 'land dark', 'start light', 'land light']);
+    expect(root.getAttribute('data-theme')).toBe('light');
+    expect(stored).toBe('{"theme":"light"}');
+  });
+
+  it('two roots on one storage object: each write keeps the fields the other wrote', async () => {
+    const a = mount();
+    const b = mount();
+    const calls: (string | null)[] = [];
+    const storage = { snapshot: {}, set: (_k: string, v: string | null) => void calls.push(v) };
+    await enhance(a, { storage });
+    await enhance(b, { storage });
+    setEnhancementPrefs(a, { theme: 'dark' });
+    setEnhancementPrefs(b, { width: 'wide' });
+    expect(calls).toEqual(['{"theme":"dark"}', '{"theme":"dark","width":"wide"}']);
+  });
+
+  it('a successor on the same storage object waits for its predecessor\'s pending call', async () => {
+    const root = mount();
+    const s = slowStorage();
+    await enhance(root, { storage: s.storage });
+    setEnhancementPrefs(root, { theme: 'dark' });
+    await destroyEnhancement(root); // does not wait for the pending call
+    await enhance(root, { storage: s.storage });
+    setEnhancementPrefs(root, { theme: 'light' });
+    expect(s.calls.map(([, v]) => v)).toEqual(['{"theme":"dark"}']); // the newer value waits
+    await s.settle(0);
+    expect(s.calls.map(([, v]) => v)).toEqual(['{"theme":"dark"}', '{"theme":"light"}']);
+    await s.settle(1);
+    expect(s.landed.map(([, v]) => v)).toEqual(['{"theme":"dark"}', '{"theme":"light"}']);
+  });
+
   it('without storage nothing persists and the reader still works', async () => {
     const root = mount();
     await enhance(root, { storageKey: 'k' });

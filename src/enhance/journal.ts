@@ -29,6 +29,8 @@ export interface Journal {
   /**
    * Move one source node to a new place (into chrome, usually). Undo puts it back where it was: before the
    * sibling that followed it then, in the parent it had then. Undone in reverse order, every move lands exactly.
+   * If that sibling has left the parent since, undo still puts the node back in the parent (after its old previous
+   * sibling, or at the end) and then throws, so teardown reports the fault and no text is lost with the chrome.
    */
   move(node: Node, parent: Node, before: Node | null): void;
   /**
@@ -166,10 +168,18 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
       const from = node.parentNode;
       if (from === null) throw new Error('docreader: journal.move takes an attached node');
       const next = node.nextSibling;
+      const prev = node.previousSibling;
       parent.insertBefore(node, before);
       undo.push(() => {
-        if (next !== null && next.parentNode !== from) throw new Error('docreader: a moved node has lost its place; it stays where it is');
-        from.insertBefore(node, next);
+        if (next === null || next.parentNode === from) {
+          from.insertBefore(node, next);
+          return;
+        }
+        // The node that followed it has left (the host removed it, or merged adjacent text nodes): the node still
+        // goes back into the parent it came from, after the node that preceded it if that one is still there, else
+        // at the end, so none of the document is left inside chrome that teardown removes. Then it is reported.
+        from.insertBefore(node, prev !== null && prev.parentNode === from ? prev.nextSibling : null);
+        throw new Error('docreader: a moved node lost its place (the node after it left); it went back into its parent');
       });
     },
 

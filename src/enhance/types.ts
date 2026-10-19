@@ -23,7 +23,8 @@ export interface ReaderStorage {
   readonly snapshot?: Readonly<Record<string, string>>;
   /**
    * Write-behind: called after a local change; null deletes. A rejected or throwing call is swallowed and does
-   * not change local state. Calls for one key are serialized: a newer value is never overtaken by an older one.
+   * not change local state. Calls for one key are serialized per storage object, across every enhance() given the
+   * same object: a newer value is never overtaken by an older one.
    */
   set?(key: string, value: string | null): void | Promise<void>;
 }
@@ -43,7 +44,7 @@ export interface DocumentInfo {
   readonly frontList?: readonly FrontListEntry[] | null;
 }
 
-/** The options of enhance(). Read once, as plain data, when enhance() is called. */
+/** The options of enhance(). Read once, as plain data (own data properties only), when enhance() is called. */
 export interface EnhanceOptions {
   /** Explicit starting prefs; they override stored ones. */
   prefs?: Partial<Prefs>;

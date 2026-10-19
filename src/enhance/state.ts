@@ -11,11 +11,16 @@
 // that, the first time it is needed, and only during startup (`seal()` closes the snapshot). Only this reader's
 // keys are read, so a host may pass its whole store.
 //
-// Writing: the local value changes first, synchronously; set() is called after. Calls for one key are serialized:
-// while a call's promise is pending, a newer value waits (only the newest waiting value is sent), so an older
-// value can never land after a newer one. A throwing or rejecting set() is swallowed and leaves local state as it
-// is. Completions run inside the instance's operation, so once the instance is not live no new call is issued;
-// destroy does not wait for a pending one.
+// Writing: the local value changes first, synchronously; set() is called after. Calls for one key are serialized
+// per storage object, across every instance that shares it (two roots on one page, or a root enhanced again after
+// a destroy): while a call is in flight, a newer value waits (only the newest waiting value is sent), so an older
+// value can never land after a newer one. The slot is claimed before set() is called, so a set() that calls back
+// into the reader queues its nested write instead of issuing it inside the outer call. A throwing or rejecting
+// set() is swallowed and leaves local state as it is. A waiting value is issued inside the operation of the
+// instance that queued it, so once that instance is not live it is dropped; destroy does not wait for a pending
+// call. The stored prefs object is written merged with the newest value written or queued on that storage object
+// (else with this instance's snapshot), so a root never drops a field another root wrote. A host that shares one
+// store between several enhance() calls passes the same storage object to each; two objects are two queues.
 import type { Journal } from './journal.js';
 import { isPrefValue, PREF_VALUES } from './options.js';
 import type { Prefs, ReaderStorage } from './types.js';
@@ -48,9 +53,63 @@ export interface ReaderState {
   seal(): void;
 }
 
+/** The instance a write belongs to: its host set(), its live check and its operation. */
+interface Writer {
+  readonly set: (key: string, value: string | null) => unknown;
+  readonly live: () => boolean;
+  readonly operate: (fn: () => void) => void;
+}
+
+/** One key of one storage object: whether a call is in flight, the newest value waiting, the newest value seen. */
 interface Slot {
   busy: boolean;
-  waiting: { value: string | null } | null;
+  waiting: { readonly value: string | null; readonly writer: Writer } | null;
+  /** The newest value written or queued for this key, by any instance; undefined until there is one. */
+  latest: string | null | undefined;
+}
+
+/** The slots of each storage object, shared by every instance given that object. Created on first use. */
+let stores: WeakMap<object, Map<string, Slot>> | undefined;
+
+function slotOf(storage: object, key: string): Slot {
+  stores ??= new WeakMap();
+  let slots = stores.get(storage);
+  if (slots === undefined) stores.set(storage, (slots = new Map()));
+  let slot = slots.get(key);
+  if (slot === undefined) slots.set(key, (slot = { busy: false, waiting: null, latest: undefined }));
+  return slot;
+}
+
+/** Call the writer's set() for a value. The slot is claimed first, so a write queued from inside set() waits. */
+function issue(key: string, slot: Slot, value: string | null, writer: Writer): void {
+  if (!writer.live()) return;
+  slot.busy = true;
+  let result: unknown;
+  try {
+    result = writer.set(key, value);
+  } catch {
+    result = undefined; // swallowed: local state stays as it is
+  }
+  if (!isThenable(result)) {
+    release(key, slot);
+    return;
+  }
+  const done = (): void => {
+    release(key, slot);
+  };
+  Promise.resolve(result).then(done, done);
+}
+
+/** The call in flight is over: send the newest waiting value, inside the operation of the instance that queued it. */
+function release(key: string, slot: Slot): void {
+  slot.busy = false;
+  const next = slot.waiting;
+  slot.waiting = null;
+  if (next !== null) {
+    next.writer.operate(() => {
+      issue(key, slot, next.value, next.writer);
+    });
+  }
 }
 
 function isThenable(v: unknown): v is PromiseLike<unknown> {
@@ -79,7 +138,7 @@ export interface StateArgs {
   readonly storageKey: string | null;
   /** options.prefs: they override stored values, and are not themselves written back. */
   readonly explicit: Readonly<Partial<Prefs>>;
-  /** Run a storage completion as an operation of the instance (refused once it is not live). */
+  /** Run a queued write as an operation of the instance (refused once it is not live). */
   readonly operate: (fn: () => void) => void;
   /** Whether the instance is still live. */
   readonly live: () => boolean;
@@ -122,33 +181,22 @@ export function createReaderState(args: StateArgs): ReaderState {
     return raw;
   };
 
-  const slots = new Map<string, Slot>();
-  const issue = (key: string, slot: Slot, value: string | null): void => {
-    if (set === null || !live()) return;
-    let result: unknown;
-    try {
-      result = set(key, value);
-    } catch {
-      return; // swallowed: local state stays as it is
-    }
-    if (!isThenable(result)) return;
-    slot.busy = true;
-    const done = (): void => {
-      operate(() => {
-        slot.busy = false;
-        const next = slot.waiting;
-        slot.waiting = null;
-        if (next !== null) issue(key, slot, next.value);
-      });
-    };
-    Promise.resolve(result).then(done, done);
-  };
+  const writer: Writer | null = set === null ? null : { set, live, operate };
   const writeBehind = (key: string, value: string | null): void => {
-    if (set === null) return;
-    let slot = slots.get(key);
-    if (slot === undefined) slots.set(key, (slot = { busy: false, waiting: null }));
-    if (slot.busy) slot.waiting = { value };
-    else issue(key, slot, value);
+    if (storage === null || writer === null) return;
+    const slot = slotOf(storage, key);
+    slot.latest = value;
+    if (slot.busy) slot.waiting = { value, writer };
+    else issue(key, slot, value, writer);
+  };
+  /** The stored prefs object a change is merged into: the newest one written or queued, else this snapshot's. */
+  const prefsBase = (): Record<string, unknown> => {
+    const latest = storage === null || writer === null ? undefined : slotOf(storage, PREFS_KEY).latest;
+    if (typeof latest === 'string') {
+      const r = parseJson(latest);
+      if (isPlainRecord(r)) return r;
+    }
+    return persisted;
   };
 
   // Prefs: the stored object (unknown fields are kept when it is written back), its valid fields, then explicit.
@@ -172,8 +220,9 @@ export function createReaderState(args: StateArgs): ReaderState {
       const next: Prefs = { ...prefs, ...change };
       const changed = next.theme !== prefs.theme || next.width !== prefs.width || next.font !== prefs.font;
       prefs = next;
-      const before = JSON.stringify(persisted);
-      persisted = { ...persisted, ...change };
+      const base = prefsBase();
+      const before = JSON.stringify(base);
+      persisted = { ...base, ...change };
       const after = JSON.stringify(persisted);
       if (after !== before) writeBehind(PREFS_KEY, after);
       return changed;

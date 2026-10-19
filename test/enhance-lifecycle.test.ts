@@ -4,8 +4,9 @@
 // output, parsed by the test and moved into a root; a subtree is compared before enhance and after destroy by its
 // serialization (the tests read outerHTML; the library never touches it).
 import { afterEach, describe, expect, it } from 'vitest';
-import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR, chrome, createJournal, siblingRun } from '../src/enhance/journal.js';
+import { registrySize } from '../src/enhance/lifecycle.js';
 import { render } from '../src/render/index.js';
 
 const DOC = [
@@ -167,6 +168,51 @@ describe('enhance: one owner per root', () => {
     expect(await outcome(enhance(root))).toBe('resolved');
   });
 
+  it('host code run while the options are read cannot make a second owner: the outer call rejects ownership', async () => {
+    const root = mount();
+    const before = root.outerHTML;
+    // A Proxy's ownKeys trap runs while the options are read; here it enhances the same root first.
+    let inner: Promise<void> | null = null;
+    const same = new Proxy({}, { ownKeys: (t) => ((inner ??= enhance(root)), Reflect.ownKeys(t)) }) as EnhanceOptions;
+    expect(await outcome(enhance(root, same))).toBe('ownership');
+    expect(await outcome(inner as unknown as Promise<void>)).toBe('resolved');
+    expect(root.querySelectorAll('button.h-fold').length).toBe(3);
+    await destroyEnhancement(root);
+    expect(root.outerHTML).toBe(before);
+    // ... and here a root inside it.
+    const p = root.querySelector('p') as HTMLElement;
+    let innerP: Promise<void> | null = null;
+    const around = new Proxy({}, { ownKeys: (t) => ((innerP ??= enhance(p)), Reflect.ownKeys(t)) }) as EnhanceOptions;
+    expect(await outcome(enhance(root, around))).toBe('ownership');
+    expect(await outcome(innerP as unknown as Promise<void>)).toBe('resolved');
+    expect(root.hasAttribute('data-docreader-root')).toBe(false);
+    await destroyEnhancement(p);
+    expect(root.outerHTML).toBe(before);
+  });
+
+  it('options are own data properties: an inherited key is not read, an unknown own key is refused, a getter is refused unread', async () => {
+    const root = mount();
+    await enhance(root, Object.create({ folds: false, bogus: 1 }) as EnhanceOptions);
+    expect(root.querySelectorAll('button.h-fold').length).toBe(3); // the inherited folds: false is not an option
+    await destroyEnhancement(root);
+    expect(await outcome(enhance(root, Object.defineProperty({}, 'bogus', { value: 1 }) as EnhanceOptions))).toBe('invalid-options');
+    await enhance(root, Object.defineProperty({}, 'folds', { value: false }) as EnhanceOptions);
+    expect(root.querySelectorAll('button.h-fold').length).toBe(0); // an own key is read, enumerable or not
+    await destroyEnhancement(root);
+    let called = false;
+    const getter = {
+      get folds(): boolean {
+        called = true;
+        return true;
+      },
+    };
+    expect(await outcome(enhance(root, getter))).toBe('invalid-options');
+    expect(called).toBe(false);
+    expect(await outcome(enhance(root, { info: Object.create({ title: 'Inherited' }) as never }))).toBe('resolved');
+    setEnhancementPrefs(root, Object.create({ theme: 'dark' }) as never);
+    expect(root.hasAttribute('data-theme')).toBe(false);
+  });
+
   it('a root that is not an element rejects invalid-options', async () => {
     expect(await outcome(enhance(null as never))).toBe('invalid-options');
     expect(await outcome(enhance(document.createTextNode('x') as never))).toBe('invalid-options');
@@ -214,6 +260,52 @@ describe('destroyEnhancement', () => {
     const d2 = destroyEnhancement(root);
     expect(d2).not.toBe(d1);
     await d2;
+    expect(root.outerHTML).toBe(before);
+  });
+
+  it('teardown releases the registry\'s hold on the instance', async () => {
+    const root = mount();
+    const held = registrySize(document);
+    await enhance(root);
+    expect(registrySize(document)).toBe(held + 1);
+    await destroyEnhancement(root);
+    expect(registrySize(document)).toBe(held);
+  });
+
+  it('a cleanup fault nobody awaits is no unhandled rejection', async () => {
+    const root = mount();
+    await enhance(root);
+    Object.defineProperty(root, 'removeAttribute', {
+      configurable: true,
+      value: () => {
+        throw new Error('host refuses');
+      },
+    });
+    const seen: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      seen.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      void destroyEnhancement(root);
+      await new Promise((r) => setTimeout(r, 30));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+      delete (root as unknown as Record<string, unknown>)['removeAttribute'];
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('a root moved to another document is still its instance\'s: enhance refuses a second owner, destroy tears it down', async () => {
+    const root = mount();
+    const before = root.outerHTML;
+    await enhance(root);
+    const other = document.implementation.createHTMLDocument('other');
+    other.body.append(other.adoptNode(root));
+    expect(await outcome(enhance(root, {}))).toBe('ownership');
+    expect(await outcome(enhance(root.querySelector('p') as HTMLElement))).toBe('ownership');
+    await destroyEnhancement(root);
+    expect(chromeCount(root)).toBe(0);
     expect(root.outerHTML).toBe(before);
   });
 
@@ -412,6 +504,35 @@ describe('destroy or abort during startup', () => {
     (root.querySelector('button.h-fold') as HTMLButtonElement).click();
     expect(await outcome(again as unknown as Promise<void>)).toBe('aborted');
     expect(root.outerHTML).toBe(before);
+  });
+});
+
+describe('after startup', () => {
+  it('an abort after enhance has resolved does nothing: the layout stays and prefs still apply', async () => {
+    const root = mount();
+    const ctl = new AbortController();
+    await enhance(root, { signal: ctl.signal });
+    ctl.abort();
+    expect(root.querySelectorAll('button.h-fold').length).toBe(3);
+    setEnhancementPrefs(root, { theme: 'dark' });
+    expect(root.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('prefs set while startup waits for an earlier teardown apply once it builds', async () => {
+    const root = mount();
+    let again: Promise<void> | null = null;
+    const storage = {
+      set(key: string, value: string | null): void {
+        if (!key.endsWith(':folds') || value === null || again !== null) return;
+        void destroyEnhancement(root);
+        again = enhance(root);
+        setEnhancementPrefs(root, { theme: 'dark', font: 'sans' });
+      },
+    };
+    await enhance(root, { storage, storageKey: 'k' });
+    (root.querySelector('button.h-fold') as HTMLButtonElement).click();
+    expect(await outcome(again as unknown as Promise<void>)).toBe('resolved');
+    expect([root.getAttribute('data-theme'), root.getAttribute('data-font')]).toEqual(['dark', 'sans']);
   });
 });
 

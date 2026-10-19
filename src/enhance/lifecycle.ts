@@ -1,14 +1,19 @@
 // The lifecycle of an enhancement: ownership, startup, operations, destroy and teardown.
 //
-// Registry: one WeakMap from a document to the instances whose roots live in it, created on first use. An
-// instance is live while it is initializing or active; destroying and destroyed instances are not.
+// Registry: one WeakMap from a document to the instances whose roots live in it, created on first use, and one from
+// a root to its instances that are not yet torn down, so a root is found by itself even after it moved to another
+// document. An instance is live while it is initializing or active; destroying and destroyed instances are not.
 //
 // enhance(root, options):
 //   1. A live instance on `root` itself: the same options object (or both omitted) returns that instance's
 //      original promise; anything else rejects 'ownership'.
-//   2. A live instance whose root contains `root`, or lies inside it: rejects 'ownership'.
-//   3. The options are normalized (pure); a refusal rejects 'invalid-options' and reserves nothing. An options
-//      signal that is already aborted rejects 'aborted', reserving nothing.
+//   2. A live instance whose root contains `root`, or lies inside it: rejects 'ownership'. (A root moved to another
+//      document while enhanced is still seen around a new root, through its ancestors, but not inside one: keep an
+//      enhanced root in its document, or destroy it before moving it.)
+//   3. The options are normalized (own data properties only, so no host getter runs; a Proxy's traps still can);
+//      a refusal rejects 'invalid-options' and reserves nothing. An options signal that is already aborted rejects
+//      'aborted', reserving nothing. Steps 1 and 2 then run again, because reading the options may have run host
+//      code that enhanced this root, or one around or inside it.
 //   4. The instance is reserved (added to the registry) before any DOM write, host callback or await.
 //   5. Startup runs as one operation: read state, apply prefs, the editorial core, folds; then the instance is
 //      active. If an instance on an overlapping root is still being torn down (a destroy requested inside one of
@@ -50,12 +55,16 @@ interface Instance {
   /** A destroy was requested inside an operation: the outermost one tears down as it unwinds. */
   teardownPending: boolean;
   state: ReaderState | null;
+  /** setEnhancementPrefs changes made before startup created the state; applied as soon as it exists. */
+  pendingPrefs: Partial<Prefs> | null;
   /** destroyEnhancement's promise, once a destroy was requested. */
   destroyed: Promise<void> | null;
   settle: ((faults: unknown[]) => void) | null;
 }
 
 let registry: WeakMap<Document, Set<Instance>> | undefined;
+/** The instances on each root that are not yet torn down (live, or still destroying), wherever the root is now. */
+let byRoot: WeakMap<Element, Set<Instance>> | undefined;
 /** The last destroy promise of each root, so repeated calls return the same promise. */
 let lastDestroy: WeakMap<Element, Promise<void>> | undefined;
 
@@ -79,16 +88,42 @@ function instancesOf(doc: Document): Set<Instance> {
 }
 
 /** The instance on exactly this root: the live one if any, else one still tearing down. */
-function findByRoot(root: Element): Instance | undefined {
-  const all = registry?.get(root.ownerDocument);
-  if (all === undefined) return undefined;
+function findByRoot(root: Node): Instance | undefined {
+  const on = byRoot?.get(root as Element);
+  if (on === undefined) return undefined;
   let tearing: Instance | undefined;
-  for (const inst of all) {
-    if (inst.root !== root) continue;
+  for (const inst of on) {
     if (isLive(inst)) return inst;
     tearing = inst;
   }
   return tearing;
+}
+
+/** For tests: how many instances the registry holds for a document (teardown releases each one). */
+export function registrySize(doc: Document): number {
+  return registry?.get(doc)?.size ?? 0;
+}
+
+/**
+ * Steps 1 and 2 of enhance(): the promise to answer with when `root` is taken (the same promise, or a refusal),
+ * or null when it is free.
+ */
+function claimed(root: HTMLElement, options: EnhanceOptions | undefined): Promise<void> | null {
+  const same = findByRoot(root);
+  if (same !== undefined && isLive(same)) {
+    if (same.identity === options) return same.promise;
+    return Promise.reject(new EnhanceError('ownership', 'docreader: this root is already enhanced, with other options'));
+  }
+  const refuse = (): Promise<void> =>
+    Promise.reject(new EnhanceError('ownership', 'docreader: an enhanced root contains this one, or lies inside it'));
+  for (let n: Node | null = root.parentNode; n !== null; n = n.parentNode) {
+    const up = findByRoot(n);
+    if (up !== undefined && isLive(up)) return refuse();
+  }
+  for (const other of registry?.get(root.ownerDocument) ?? []) {
+    if (isLive(other) && overlaps(other.root, root)) return refuse();
+  }
+  return null;
 }
 
 function operate<T>(inst: Instance, fn: () => T): T | undefined {
@@ -113,6 +148,11 @@ function teardown(inst: Instance): void {
   if (all !== undefined) {
     all.delete(inst);
     if (all.size === 0) registry?.delete(inst.doc);
+  }
+  const on = byRoot?.get(inst.root);
+  if (on !== undefined) {
+    on.delete(inst);
+    if (on.size === 0) byRoot?.delete(inst.root);
   }
   inst.phase = 'destroyed';
   inst.settle?.(faults);
@@ -177,6 +217,13 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   });
   inst.state = state;
   if (!live()) return; // the snapshot is host code
+  // setEnhancementPrefs calls made before the state existed (while startup waited, or from the snapshot's code)
+  const pending = inst.pendingPrefs;
+  inst.pendingPrefs = null;
+  if (pending !== null) {
+    state.setPrefs(pending); // may call the host's set()
+    if (!live()) return;
+  }
   const ctx: FeatureContext = {
     root,
     journal: inst.control.journal,
@@ -251,19 +298,8 @@ async function startup(inst: Instance, opts: NormalizedOptions, blockers: readon
  */
 export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<void> {
   if (!isElement(root)) return Promise.reject(new EnhanceError('invalid-options', 'docreader: root must be an element'));
-  const all = registry?.get(root.ownerDocument);
-  if (all !== undefined) {
-    for (const other of all) {
-      if (other.root !== root || !isLive(other)) continue;
-      if (other.identity === options) return other.promise;
-      return Promise.reject(new EnhanceError('ownership', 'docreader: this root is already enhanced, with other options'));
-    }
-    for (const other of all) {
-      if (isLive(other) && overlaps(other.root, root)) {
-        return Promise.reject(new EnhanceError('ownership', 'docreader: an enhanced root contains this one, or lies inside it'));
-      }
-    }
-  }
+  const taken = claimed(root, options);
+  if (taken !== null) return taken;
   let opts: NormalizedOptions;
   try {
     opts = normalizeOptions(options);
@@ -273,6 +309,10 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
   if (opts.signal?.aborted === true) {
     return Promise.reject(new EnhanceError('aborted', 'docreader: the signal was already aborted', { cause: opts.signal.reason as unknown }));
   }
+  // Reading the options can run host code (a Proxy's traps, a signal's getters) that enhanced this root, or one
+  // around or inside it, since the check above: check again, right before the reservation.
+  const takenSince = claimed(root, options);
+  if (takenSince !== null) return takenSince;
 
   // Reserve, before any write, host callback or await.
   let resolve: () => void = () => undefined;
@@ -297,6 +337,7 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
     depth: 0,
     teardownPending: false,
     state: null,
+    pendingPrefs: null,
     destroyed: null,
     settle: null,
   };
@@ -305,7 +346,13 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
   for (const other of set) {
     if (other.phase === 'destroying' && other.destroyed !== null && overlaps(other.root, root)) blockers.push(other.destroyed);
   }
+  const tearing = findByRoot(root); // the same root, moved here from another document while it tears down
+  if (tearing !== undefined && tearing.destroyed !== null && !blockers.includes(tearing.destroyed)) blockers.push(tearing.destroyed);
   set.add(inst);
+  byRoot ??= new WeakMap();
+  let on = byRoot.get(root);
+  if (on === undefined) byRoot.set(root, (on = new Set()));
+  on.add(inst);
   lastDestroy?.delete(root);
   startup(inst, opts, blockers).then(resolve, reject);
   return promise;
@@ -321,7 +368,8 @@ export function destroyEnhancement(root: HTMLElement): Promise<void> {
 
 /**
  * Change the reader's prefs on an enhanced root: applied at once, then written behind to storage. Throws
- * EnhanceError('invalid-options') for a bad value; does nothing for a root that is not enhanced (or no longer).
+ * EnhanceError('invalid-options') for a bad value; does nothing for a root that is not enhanced (or no longer). A
+ * change made while enhance() is still starting is kept and applied as soon as the reader state exists.
  */
 export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): void {
   const change = normalizePrefs(prefs);
@@ -330,7 +378,12 @@ export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): v
   if (inst === undefined) return;
   operate(inst, () => {
     const state = inst.state;
-    if (state === null) return; // called back from inside the state's own startup read: nothing to change yet
+    if (state === null) {
+      // Startup has not created the state yet (it waits for an earlier teardown, or the snapshot's own code called
+      // back): the change is kept and applied as soon as the state exists.
+      inst.pendingPrefs = { ...inst.pendingPrefs, ...change };
+      return;
+    }
     const generation = inst.generation;
     state.setPrefs(change); // may call the host's set()
     if (inst.generation !== generation || !isLive(inst)) return;

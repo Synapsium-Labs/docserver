@@ -1,9 +1,12 @@
 // Option normalization for enhance() and setEnhancementPrefs(): pure, touching no DOM and calling no host code
-// that a plain data object would not run. Unknown keys and wrong types throw EnhanceError('invalid-options');
+// that a plain data object would not run. The options, `prefs`, `info` and each `info.frontList` entry are read as
+// own data properties only: an inherited property is not an option (it comes from a prototype, not from the host's
+// object), an own property is read whether it is enumerable or not, and a getter is refused without being called.
+// Unknown own keys (in the options, `prefs` and `info`) and wrong types throw EnhanceError('invalid-options');
 // enhance() calls this before it reserves anything, so a refused call leaves no trace. A key whose value is
 // undefined counts as absent. The storage object is only checked to be an object here: its snapshot and set are
 // read during startup, inside the startup operation (state.ts), so a storage hook can never run before the
-// instance is reserved.
+// instance is reserved. The signal is a host object read through its own interface (`aborted`, its listeners).
 import { EnhanceError, type FrontListEntry, type Prefs, type ReaderStorage } from './types.js';
 
 /** The options after normalization: every field present, absent ones as null or their default. */
@@ -40,9 +43,28 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function checkKeys(where: string, v: Record<string, unknown>, allowed: readonly string[]): void {
-  const unknown = Object.keys(v).filter((k) => !allowed.includes(k));
+/**
+ * The own data properties of `v`, by name: unknown names refused (enumerable or not), getters refused unread, and
+ * inherited properties never read.
+ */
+function ownFields(where: string, v: object, allowed: readonly string[]): Record<string, unknown> {
+  const names = Object.getOwnPropertyNames(v);
+  const unknown = names.filter((k) => !allowed.includes(k));
   if (unknown.length > 0) throw invalid(`${where} has unknown keys: ${unknown.join(', ')}`);
+  const out: Record<string, unknown> = {};
+  for (const k of names) {
+    const d = Object.getOwnPropertyDescriptor(v, k);
+    if (d === undefined) continue;
+    if (!('value' in d)) throw invalid(`${where}.${k} must be a plain value, not a getter`);
+    out[k] = d.value;
+  }
+  return out;
+}
+
+/** One own data property of `v`, or undefined (absent, inherited or a getter, which is never called). */
+function ownValue(v: object, k: string): unknown {
+  const d = Object.getOwnPropertyDescriptor(v, k);
+  return d !== undefined && 'value' in d ? d.value : undefined;
 }
 
 function isPrefName(k: string): k is keyof Prefs {
@@ -57,9 +79,9 @@ export function isPrefValue<K extends keyof Prefs>(name: K, v: unknown): v is Pr
 /** A Partial<Prefs> from host input, or EnhanceError('invalid-options'). Undefined fields are left out. */
 export function normalizePrefs(prefs: unknown, where = 'prefs'): Partial<Prefs> {
   if (!isRecord(prefs)) throw invalid(`${where} must be an object`);
-  checkKeys(where, prefs, Object.keys(PREF_VALUES));
+  const fields = ownFields(where, prefs, Object.keys(PREF_VALUES));
   const out: Partial<Prefs> = {};
-  for (const [k, v] of Object.entries(prefs)) {
+  for (const [k, v] of Object.entries(fields)) {
     if (v === undefined || !isPrefName(k)) continue;
     if (!isPrefValue(k, v)) throw invalid(`${where}.${k} must be one of ${PREF_VALUES[k].join(', ')}`);
     Object.assign(out, { [k]: v });
@@ -71,23 +93,23 @@ function normalizeFrontList(v: unknown): readonly FrontListEntry[] | null | unde
   if (v === undefined || v === null) return v;
   if (!Array.isArray(v)) throw invalid('info.frontList must be an array or null');
   return v.map((e: unknown, i) => {
+    const [key, list, vals] = isRecord(e) ? [ownValue(e, 'key'), ownValue(e, 'list'), ownValue(e, 'vals')] : [];
     const ok =
-      isRecord(e) &&
-      typeof e['key'] === 'string' &&
-      typeof e['list'] === 'boolean' &&
-      Array.isArray(e['vals']) &&
-      (e['vals'] as unknown[]).every((s) => typeof s === 'string');
+      typeof key === 'string' &&
+      typeof list === 'boolean' &&
+      Array.isArray(vals) &&
+      (vals as unknown[]).every((s) => typeof s === 'string');
     if (!ok) throw invalid(`info.frontList[${String(i)}] must be { key: string, list: boolean, vals: string[] }`);
-    return { key: e['key'] as string, list: e['list'] as boolean, vals: [...(e['vals'] as string[])] };
+    return { key, list, vals: [...(vals as string[])] };
   });
 }
 
 function normalizeInfo(v: unknown): NormalizedInfo {
   if (!isRecord(v)) throw invalid('info must be an object');
-  checkKeys('info', v, INFO_KEYS);
-  const title = v['title'];
+  const fields = ownFields('info', v, INFO_KEYS);
+  const title = fields['title'];
   if (title !== undefined && title !== null && typeof title !== 'string') throw invalid('info.title must be a string or null');
-  return { title, frontList: normalizeFrontList(v['frontList']) };
+  return { title, frontList: normalizeFrontList(fields['frontList']) };
 }
 
 function isSignal(v: unknown): v is AbortSignal {
@@ -106,8 +128,7 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
     return { prefs: {}, storage: null, storageKey: null, info: null, folds: true, signal: null };
   }
   if (!isRecord(options)) throw invalid('options must be an object');
-  checkKeys('options', options, OPTION_KEYS);
-  const { prefs, storage, storageKey, info, folds, signal } = options;
+  const { prefs, storage, storageKey, info, folds, signal } = ownFields('options', options, OPTION_KEYS);
   if (storage !== undefined && (typeof storage !== 'object' || storage === null)) throw invalid('storage must be an object');
   if (storageKey !== undefined && (typeof storageKey !== 'string' || storageKey === '')) {
     throw invalid('storageKey must be a non-empty string');

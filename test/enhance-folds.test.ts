@@ -175,6 +175,32 @@ describe('folding and unfolding', () => {
   });
 });
 
+describe('printing and the host', () => {
+  it('a block the host hid itself while its section was folded stays hidden when printing starts', async () => {
+    const root = mount();
+    await enhance(root);
+    const h = heading(root, '1-scope');
+    foldButton(h).click();
+    const [first, second] = blocks(h) as [Element, Element];
+    first.setAttribute('hidden', ''); // the host's own hide, not the fold's
+    (root.ownerDocument.defaultView as Window).dispatchEvent(new Event('beforeprint'));
+    expect([first.getAttribute('hidden'), second.getAttribute('hidden')]).toEqual(['', null]);
+  });
+
+  it('a block the host hid while printing is not folded over when printing ends', async () => {
+    const root = mount();
+    await enhance(root);
+    const h = heading(root, '1-scope');
+    foldButton(h).click();
+    const view = root.ownerDocument.defaultView as Window;
+    view.dispatchEvent(new Event('beforeprint'));
+    const [first, second] = blocks(h) as [Element, Element];
+    first.setAttribute('hidden', '');
+    view.dispatchEvent(new Event('afterprint'));
+    expect([first.getAttribute('hidden'), second.getAttribute('hidden')]).toEqual(['', 'until-found']);
+  });
+});
+
 describe('folds are per-document state', () => {
   it('a fold is written behind under docreader:doc:<storageKey>:folds, in document order; none folded deletes it', async () => {
     const root = mount();

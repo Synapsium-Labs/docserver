@@ -367,6 +367,31 @@ describe('the journal\'s move and split', () => {
     expect([p.childNodes.length, p.firstChild]).toEqual([3, t]);
   });
 
+  it('a moved node whose next sibling left goes back into its parent, after its old previous sibling, and says so', () => {
+    const { control, p } = setup();
+    const [a, b, g] = Array.from(p.childNodes) as unknown as [Node, Node, Node];
+    control.journal.move(b, document.createElement('div'), null);
+    p.removeChild(g); // the host removes the node that followed it
+    const faults = control.undoAll();
+    expect(faults.map(String)).toEqual([expect.stringMatching(/lost its place/)]);
+    expect(Array.from(p.childNodes)).toEqual([a, b]);
+  });
+
+  it('a host that merges the meta line\'s text nodes while enhanced loses none of its text on destroy', async () => {
+    const md = '# Example spec\n\n**Spec** · 2026-10-19 · Status: Draft\n\n## 1. Scope\n\nText.\n';
+    const root = mount(md);
+    await enhance(root);
+    root.normalize(); // merges the separators left in the hidden meta line
+    const err = await destroyEnhancement(root).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(AggregateError);
+    expect(root.querySelectorAll(`[${CHROME_ATTR}]`).length).toBe(0);
+    const meta = text(child(root, 'p'));
+    expect(['Spec', '2026-10-19', 'Status', 'Draft'].filter((w) => !meta.includes(w))).toEqual([]);
+  });
+
   it('a split whose second half the host moved stays split: the host wins', () => {
     const { control, p } = setup();
     const t = p.firstChild as Text;
