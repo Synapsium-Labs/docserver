@@ -28,8 +28,12 @@ const ROOT_SKIP: Readonly<Record<string, string>> = {
   '.superpowers': 'scratch that a planning workflow creates and git never tracks',
   'graphify-out': 'scratch that a code-graph tool creates and git never tracks',
 };
-/** Ignored files: logs, editor litter and packed tarballs. */
-const SKIP_FILE = /(?:\.log|\.tgz|^\.DS_Store)$/;
+/**
+ * Files never read as text: ignored logs, editor litter and packed tarballs; and the shipped woff2 fonts, whose
+ * bytes are Brotli-compressed binary, so a text check only finds noise there (byte runs such as a tilde and a
+ * slash). Their provenance is pinned by hash in assets/fonts/README.md instead.
+ */
+const SKIP_FILE = /(?:\.log|\.tgz|\.woff2|^\.DS_Store)$/;
 
 /** Every regular file under `root` that the scan reads, relative to `root` with forward slashes, sorted. */
 function scannedFiles(dir = ROOT, root = ROOT): string[] {
@@ -151,7 +155,7 @@ describe('public-ready: the scanner', () => {
     }
     expect(
       files.filter(
-        (f) => /^(?:node_modules|dist|docs|\.git|\.superpowers|graphify-out)\//.test(f) || f === '.git' || f.endsWith('.tgz'),
+        (f) => /^(?:node_modules|dist|docs|\.git|\.superpowers|graphify-out)\//.test(f) || f === '.git' || f.endsWith('.tgz') || f.endsWith('.woff2'),
       ),
     ).toEqual([]);
   });
