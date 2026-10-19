@@ -1,5 +1,6 @@
-// Table marks, ported from the reference reader's section 8: a table of three or more columns stacks into cards on a phone
-// (`stackOnPhone`), and status words in table cells (below). In a column
+// Table marks, ported from the reference reader's section 8: a body row whose only filled cell is the first is a group
+// heading (`tr.group`); a table of two columns keeps to the reading column (`cols-2`), and one of three or more stacks
+// into cards on a phone (`shapeTable`); and status words in table cells (below). In a column
 // that reads as a status column, a cell's leading status word ("Agreed", "Pending, see below") is shown as a
 // dot-and-word mark, `span.pill.<ok|wait|no|info>`.
 //
@@ -76,11 +77,19 @@ function mark(journal: Journal, doc: Document, node: Text): void {
 }
 
 /**
- * A table of three or more columns stacks into cards on a phone (the stylesheet's `.stack` rules, under 700px wide):
- * the wrapper takes the class, and each body cell carries its column's name in `data-label`, which the card shows
- * above the cell. Two columns stay a table.
+ * The table's shape, for the stylesheet. A body row with more than one cell whose only filled cell is the first is a
+ * group heading inside the table (`tr.group`: set in the prose face, never a card of its own on a phone). A table of
+ * two columns (Term | Meaning and the like) reads as prose and keeps to the reading column (`cols-2` on the wrapper).
+ * A table of three or more columns stacks into cards on a phone (the `.stack` rules, under 701px wide): the wrapper
+ * takes the class, and each body cell carries its column's name in `data-label`, which the card shows above the cell.
  */
-function stackOnPhone(wrapper: Element, heads: readonly string[], rows: readonly HTMLTableRowElement[], journal: Journal): void {
+function shapeTable(wrapper: Element, heads: readonly string[], rows: readonly HTMLTableRowElement[], journal: Journal): void {
+  for (const r of rows) {
+    const cells = Array.from(r.cells);
+    const [first, ...rest] = cells;
+    if (first !== undefined && rest.length > 0 && txt(first) !== '' && rest.every((c) => txt(c) === '')) journal.toggleClass(r, 'group', true);
+  }
+  if (heads.length === 2) journal.toggleClass(wrapper, 'cols-2', true);
   if (heads.length < 3) return;
   journal.toggleClass(wrapper, 'stack', true);
   for (const r of rows) {
@@ -100,7 +109,7 @@ export function buildStatusMarks(root: Element, journal: Journal): void {
     const headRow = table.tHead?.rows[0];
     const heads = headRow === undefined ? [] : Array.from(headRow.cells).map(txt);
     const rows = Array.from(table.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
-    stackOnPhone(w, heads, rows, journal);
+    shapeTable(w, heads, rows, journal);
     heads.forEach((head, ci) => {
       if (ci === 0) return;
       const cells: Element[] = [];

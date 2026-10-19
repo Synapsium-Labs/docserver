@@ -157,9 +157,33 @@ function parseCss(source: string): Node[] {
   return nodes;
 }
 
-/** True when a selector starts with the root attribute, as a whole attribute selector. */
+/**
+ * True when a selector starts with the root attribute and then stays on the root or goes inside it: after the
+ * leading compound (the root attribute, then any attributes, classes, pseudo-classes such as :not(i) on the same
+ * element) comes the end, a descendant space or a child `>`. A sibling combinator (`~`, `+`) would select the
+ * host's elements beside the root, outside it.
+ */
 function startsWithScope(selector: string): boolean {
-  return selector.startsWith(SCOPE);
+  if (!selector.startsWith(SCOPE)) return false;
+  let i = SCOPE.length;
+  // the rest of the leading compound: [...], (...) after a pseudo-class, and name characters, up to a combinator
+  while (i < selector.length) {
+    const c = selector[i] ?? '';
+    if (c === '[' || c === '(') {
+      const close = c === '[' ? ']' : ')';
+      let depth = 0;
+      for (; i < selector.length; i += 1) {
+        const d = selector[i];
+        if (d === '"' || d === "'") i = skipString(selector, i) - 1;
+        else if (d === c) depth += 1;
+        else if (d === close && (depth -= 1) === 0) break;
+      }
+      i += 1;
+    } else if (/[\s>~+]/.test(c)) break;
+    else i += 1;
+  }
+  const rest = selector.slice(i).trimStart();
+  return rest === '' || selector[i] === ' ' ? !/^[~+]/.test(rest) : rest.startsWith('>');
 }
 
 /** Every reason a sheet escapes its scope or its asset rules, as readable lines; empty when it does not. */
@@ -169,8 +193,8 @@ function scopeProblems(css: string, fontsDir: string): string[] {
   for (const node of parseCss(css)) {
     if (node.kind === 'at') {
       if (!allowedAt.has(node.name)) problems.push(`at-rule not allowed: ${node.prelude}`);
-      if (node.name === '@keyframes' && !/^@keyframes\s+doc-[\w-]+$/.test(node.prelude)) {
-        problems.push(`keyframes name is not doc-prefixed: ${node.prelude}`);
+      if (node.name === '@keyframes' && !/^@keyframes\s+docreader-[\w-]+$/.test(node.prelude)) {
+        problems.push(`keyframes name is not docreader-prefixed: ${node.prelude}`);
       }
       if (node.name === '@font-face') {
         for (const m of node.body.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)/g)) {
@@ -263,8 +287,20 @@ describe('reader stylesheet: scope', () => {
   });
 
   it('flags a keyframes name that is not prefixed, because keyframe names are global', () => {
-    expect(scopeProblems('@keyframes spin { to { x: y } }', fontsDir)).toEqual(['keyframes name is not doc-prefixed: @keyframes spin']);
-    expect(scopeProblems('@keyframes doc-spin { to { x: y } }', fontsDir)).toEqual([]);
+    expect(scopeProblems('@keyframes spin { to { x: y } }', fontsDir)).toEqual(['keyframes name is not docreader-prefixed: @keyframes spin']);
+    expect(scopeProblems('@keyframes doc-spin { to { x: y } }', fontsDir)).toEqual(['keyframes name is not docreader-prefixed: @keyframes doc-spin']);
+    expect(scopeProblems('@keyframes docreader-spin { to { x: y } }', fontsDir)).toEqual([]);
+  });
+
+  it('flags a selector that leaves the root for its siblings, and passes one that stays on it or goes inside', () => {
+    const sel = (s: string): string[] => scopeProblems(`${s} { x: y }`, fontsDir);
+    expect(sel(`${SCOPE} ~ p`)).toEqual([`unscoped selector: ${SCOPE} ~ p`]);
+    expect(sel(`${SCOPE} + div`)).toEqual([`unscoped selector: ${SCOPE} + div`]);
+    expect(sel(`${SCOPE}:not(i) ~ *`)).toEqual([`unscoped selector: ${SCOPE}:not(i) ~ *`]);
+    expect(sel(`${SCOPE}[data-theme="a ~ b"]+p`)).toEqual([`unscoped selector: ${SCOPE}[data-theme="a ~ b"]+p`]);
+    for (const ok of [SCOPE, `${SCOPE}:not(i)`, `${SCOPE} p ~ p`, `${SCOPE} > h2 + p`, `${SCOPE}>p`, `${SCOPE}[data-theme="dark"] .x`, `${SCOPE} :is(a, b) ~ c`]) {
+      expect(sel(ok)).toEqual([]);
+    }
   });
 
   it('declares the colour tokens on the root, with the dark block guarded and an explicit dark block', () => {
@@ -275,6 +311,38 @@ describe('reader stylesheet: scope', () => {
     expect(decl(`${SCOPE}:not([data-theme="light"])`, 'prefers-color-scheme: dark')).toMatch(/--bg:\s*#161514/);
     expect(decl(`${SCOPE}[data-theme="dark"]`)).toMatch(/--bg:\s*#161514/);
     expect(decl(`${SCOPE}[data-theme="light"]`)).toMatch(/color-scheme:\s*light/);
+  });
+});
+
+describe('reader stylesheet: what the host page may not change', () => {
+  const css = readFileSync(CSS_PATH, 'utf8');
+  const rules = parseCss(css).filter((n): n is Rule => n.kind === 'rule');
+
+  it('sizes nothing in rem: rem follows the host page\'s html font-size, which the reader does not own', () => {
+    // A size the layout gave in rem is calc(N * var(--rem)), --rem being declared on the root.
+    const rem = rules.filter((r) => /\d(?:\.\d+)?rem\b/.test(r.body)).map((r) => r.selectors[0] ?? '');
+    expect(rem).toEqual([]);
+    const root = rules.find((r) => r.within.length === 0 && r.selectors.length === 1 && r.selectors[0] === SCOPE && /--rem:/.test(r.body));
+    expect(root?.body).toMatch(/--rem:\s*16px;/);
+  });
+
+  it('reads no custom property it does not declare, so none inherits in from the host page', () => {
+    const read = new Set([...stripComments(css).matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1] ?? ''));
+    const declared = new Set(rules.flatMap((r) => [...r.body.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1] ?? '')));
+    expect([...read].filter((v) => !declared.has(v)).sort()).toEqual([]);
+  });
+
+  it('pads the root by its own gutter, never by a percentage, which would be of the host\'s width', () => {
+    const own = rules.filter((r) => r.selectors.some((s) => /^(?:\[data-docreader-root\])+(?::not\(i\))?$/.test(s)));
+    expect(own.length).toBeGreaterThan(0);
+    const pct = own.filter((r) => /(?:^|;)\s*padding(?:-[a-z]+)?\s*:[^;]*%/.test(r.body)).map((r) => r.selectors.join(', '));
+    expect(pct).toEqual([]);
+  });
+
+  it('hides a diagram\'s source only where the Mermaid feature has marked the root, so an unmarked root shows it', () => {
+    const hiding = rules.filter((r) => /color:\s*transparent/.test(r.body) && r.selectors.some((s) => s.includes('pre.mermaid')));
+    expect(hiding.length).toBeGreaterThan(0);
+    for (const r of hiding) for (const s of r.selectors) expect(s).toMatch(/^\[data-docreader-root\][^ ]*\[data-docreader-mermaid\]/);
   });
 });
 

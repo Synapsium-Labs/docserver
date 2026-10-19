@@ -31,7 +31,22 @@
      - first paint: the visibility gate and the content-visibility estimate that the page script lifts once it has built
        the page (body:not(.mdoc-shown), body:not(.laid-out)). Showing the root when it is ready is the host's call;
      - html-level rules (scroll-padding, text-size-adjust moves to the root).
-   Highlighted code: the sheet colours highlight.js classes (hljs-*) inside .codehilite.
+   Highlighted code: the sheet colours highlight.js classes (hljs-*) inside .codehilite. highlight.js marks a shebang, a
+   Python decorator and a diff hunk header alike as hljs-meta, where Pygments named them apart (a comment, a decorator,
+   a subheading), so those three are coloured per language (.language-bash, .language-python, .language-diff).
+
+   Sizes. The layout was drawn in rem against a 16px page. rem follows the html element of the host's page, which the
+   reader does not own (a host's html { font-size: 62.5% } would shrink every heading below the body text), so each
+   such size is calc(N * var(--rem)), with --rem: 16px declared on the root.
+
+   Breakpoints follow the viewport, not the root: the section numbers stop hanging under 900px (1020px when wide) and
+   the phone rules (a 16px gutter, smaller type, tables of three or more columns as cards) apply under 701px. A root
+   that fills its frame or its page gets them right; a root much narrower than the viewport keeps the wide layout, so
+   a host that shows the reader in a narrow column of a wide page gives it a frame of its own.
+
+   Diagrams. A Mermaid figure's source stays readable text until the Mermaid feature (a later version) marks the root
+   with data-docreader-mermaid; from then on the source of a figure not yet drawn (pre.mermaid without
+   data-processed) is hidden under the drawing's plate. Nothing in this version sets that mark.
 
    Specificity. The rules keep the cascade order of the layout they were ported from, so a prose rule, a component rule
    and a state rule beat or lose to each other exactly as before. Each selector carries the root attribute once (a class
@@ -75,13 +90,16 @@
   --sans: "Docreader Sans", "Docreader Sans Fallback Arial", "Docreader Sans Fallback DejaVu", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --prose: var(--serif);
-  --measure: 44rem;          /* about 80 characters of 18px serif */
+  --rem: 16px;               /* the layout's rem: sizes given in rem are calc(N * var(--rem)), see the header */
+  --measure: calc(44 * var(--rem)); /* about 80 characters of 18px serif */
   --wide: 1120px;            /* tables, figures and long code break out to this */
   --pad: 40px;               /* gutter */
   --gut: 76px;               /* beside the contents: room for the hanging section numbers */
   --toc-w: 272px;
   --bar-h: 48px;
   --radius: 8px;
+  /* set by later features on their own elements; unset here, so a host's property of the same name never inherits in */
+  --fig-w: initial; --thead-h: initial;
 
   --bg: #fcfbf8; --surface: #f5f3ee; --surface2: #ebe8e0; --paper: #ffffff;
   --text: #1d1c1a; --text-muted: #5e5951; --text-faint: #6f695f;
@@ -97,10 +115,10 @@
   --plate: #ffffff; --fig-filter: none; --pop-shadow: 0 14px 40px rgba(30, 25, 15, .16), 0 2px 6px rgba(30, 25, 15, .08);
 }
 [data-docreader-root][data-theme="light"] { color-scheme: light; }
-[data-docreader-root][data-width="wide"] { --measure: 52rem; --wide: 1200px; }
+[data-docreader-root][data-width="wide"] { --measure: calc(52 * var(--rem)); --wide: 1200px; }
 /* Sans (a crisper look, by the reader's choice), in the same column: about 78 characters a line at 17.5px */
-[data-docreader-root][data-font="sans"] { --prose: var(--sans); --measure: 42rem; }
-[data-docreader-root][data-font="sans"][data-width="wide"] { --measure: 50rem; }
+[data-docreader-root][data-font="sans"] { --prose: var(--sans); --measure: calc(42 * var(--rem)); }
+[data-docreader-root][data-font="sans"][data-width="wide"] { --measure: calc(50 * var(--rem)); }
 @media (prefers-color-scheme: dark) {
   [data-docreader-root]:not([data-theme="light"]) {
     color-scheme: dark;
@@ -139,12 +157,12 @@
 [data-docreader-root] *::before,
 [data-docreader-root] *::after { box-sizing: border-box; }
 [data-docreader-root] h1, [data-docreader-root] h2, [data-docreader-root] h3, [data-docreader-root] h4, [data-docreader-root] h5, [data-docreader-root] h6 {
-  font-weight: 600; line-height: 1.3; margin-top: 2rem; margin-bottom: 0.75rem; color: var(--text); }
-[data-docreader-root] h1 { font-size: 2rem; padding-bottom: 0.4em; border-bottom: 2px solid var(--border); margin-top: 0.5rem; }
-[data-docreader-root] h2 { font-size: 1.45rem; padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
-[data-docreader-root] h3 { font-size: 1.2rem; }
-[data-docreader-root] h4 { font-size: 1.05rem; }
-[data-docreader-root] h5, [data-docreader-root] h6 { font-size: 0.95rem; color: var(--text-muted); }
+  font-weight: 600; line-height: 1.3; margin-top: calc(2 * var(--rem)); margin-bottom: calc(0.75 * var(--rem)); color: var(--text); }
+[data-docreader-root] h1 { font-size: calc(2 * var(--rem)); padding-bottom: 0.4em; border-bottom: 2px solid var(--border); margin-top: calc(0.5 * var(--rem)); }
+[data-docreader-root] h2 { font-size: calc(1.45 * var(--rem)); padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
+[data-docreader-root] h3 { font-size: calc(1.2 * var(--rem)); }
+[data-docreader-root] h4 { font-size: calc(1.05 * var(--rem)); }
+[data-docreader-root] h5, [data-docreader-root] h6 { font-size: calc(0.95 * var(--rem)); color: var(--text-muted); }
 [data-docreader-root] p { margin: 0 0 1em; }
 [data-docreader-root] ul, [data-docreader-root] ol { padding-left: 2em; margin: 0 0 1em; }
 [data-docreader-root] li { margin-bottom: 0.3em; }
@@ -170,7 +188,7 @@
 [data-docreader-root] blockquote { margin: 1.25em 0; padding: 0.6em 1em 0.6em 1.25em; color: var(--text-muted); border-left: 4px solid var(--border);
   background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
 [data-docreader-root] blockquote p:last-child { margin-bottom: 0; }
-[data-docreader-root] hr { border: none; border-top: 2px solid var(--border); margin: 2.5rem 0; }
+[data-docreader-root] hr { border: none; border-top: 2px solid var(--border); margin: calc(2.5 * var(--rem)) 0; }
 [data-docreader-root] .task-list-item { list-style: none; margin-left: -1.4em; }
 [data-docreader-root] .task-list-item input[type="checkbox"] { margin-right: 0.5em; vertical-align: middle; width: 15px; height: 15px;
   accent-color: var(--accent); cursor: default; }
@@ -195,8 +213,11 @@
 [data-docreader-root]:not(i) { background: var(--bg); color: var(--text); font-family: var(--prose); font-size: 18px; line-height: 1.62; font-optical-sizing: auto; font-kerning: normal; text-rendering: optimizeLegibility; font-variant-numeric: oldstyle-nums proportional-nums; }
 [data-docreader-root] ::selection { background: rgba(35, 85, 159, .2); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .doc-progress { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--accent); opacity: .7; z-index: 1000; }
-[data-docreader-root][data-docreader-root]:not(i) { overflow-wrap: break-word; max-width: none; margin: 0; padding: 52px max(var(--pad), calc((100% - var(--wide)) / 2)) 96px; }
-/* every block sits in the reading column; the wide ones break out (below) */
+/* The root's gutter is its own --pad: a percentage here would be of the root's parent, not of the root, and squeeze the
+   column of a root narrower than its parent. Each block centres itself in the root (below), so a wide root puts the
+   reading column and the wide blocks where a centred --wide box would. */
+[data-docreader-root][data-docreader-root]:not(i) { overflow-wrap: break-word; max-width: none; margin: 0; padding: 52px var(--pad) 96px; }
+/* every block sits in the reading column, centred; the wide ones break out (below) */
 [data-docreader-root][data-docreader-root]:not(i) > * { max-width: var(--measure); margin-left: auto; margin-right: auto; }
 [data-docreader-root][data-docreader-root]:not(i) p { margin-top: 0; margin-bottom: 1.05em; hyphens: manual; -webkit-hyphens: manual; hanging-punctuation: first; }
 [data-docreader-root][data-docreader-root]:not(i) ul,
@@ -225,21 +246,21 @@
 [data-docreader-root][data-docreader-root]:not(i) h2,
 [data-docreader-root][data-docreader-root]:not(i) h3,
 [data-docreader-root][data-docreader-root]:not(i) h4 { font-family: var(--prose); color: var(--text); border: 0; font-variant-numeric: lining-nums; text-wrap: balance; }
-[data-docreader-root][data-docreader-root]:not(i) h1 { font-size: clamp(2.05rem, 1.3rem + 2.6vw, 3.05rem); line-height: 1.1; font-weight: 600; letter-spacing: -.017em; margin: 0 auto .5em; padding: 0; }
-[data-docreader-root][data-docreader-root]:not(i) h2 { position: relative; font-size: 1.62rem; line-height: 1.22; font-weight: 600; letter-spacing: -.01em; margin-top: 2.35em; margin-bottom: .6em; padding: .8em 0 0; border-top: 1px solid var(--border); }
-[data-docreader-root][data-docreader-root]:not(i) h3 { font-size: 1.26rem; line-height: 1.3; font-weight: 600; margin-top: 1.8em; margin-bottom: .5em; }
-[data-docreader-root][data-docreader-root]:not(i) h4 { font-family: var(--sans); font-size: .84rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); margin-top: 1.8em; margin-bottom: .5em; }
+[data-docreader-root][data-docreader-root]:not(i) h1 { font-size: clamp(calc(2.05 * var(--rem)), calc(1.3 * var(--rem)) + 2.6vw, calc(3.05 * var(--rem))); line-height: 1.1; font-weight: 600; letter-spacing: -.017em; margin: 0 auto .5em; padding: 0; }
+[data-docreader-root][data-docreader-root]:not(i) h2 { position: relative; font-size: calc(1.62 * var(--rem)); line-height: 1.22; font-weight: 600; letter-spacing: -.01em; margin-top: 2.35em; margin-bottom: .6em; padding: .8em 0 0; border-top: 1px solid var(--border); }
+[data-docreader-root][data-docreader-root]:not(i) h3 { font-size: calc(1.26 * var(--rem)); line-height: 1.3; font-weight: 600; margin-top: 1.8em; margin-bottom: .5em; }
+[data-docreader-root][data-docreader-root]:not(i) h4 { font-family: var(--sans); font-size: calc(.84 * var(--rem)); font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); margin-top: 1.8em; margin-bottom: .5em; }
 [data-docreader-root][data-docreader-root]:not(i) h5,
-[data-docreader-root][data-docreader-root]:not(i) h6 { font-family: var(--sans); font-size: .9rem; }
+[data-docreader-root][data-docreader-root]:not(i) h6 { font-family: var(--sans); font-size: calc(.9 * var(--rem)); }
 /* section numbers hang in the margin like a book's; inline on narrow screens */
-[data-docreader-root] h2 .sec-no { position: absolute; right: calc(100% + 22px); top: 1.02em; font-family: var(--sans); font-size: .9rem; font-weight: 600; color: var(--accent); font-variant-numeric: lining-nums tabular-nums; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
+[data-docreader-root] h2 .sec-no { position: absolute; right: calc(100% + 22px); top: 1.02em; font-family: var(--sans); font-size: calc(.9 * var(--rem)); font-weight: 600; color: var(--accent); font-variant-numeric: lining-nums tabular-nums; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
 [data-docreader-root] h2 .sec-no::before { content: "§ "; font-weight: 400; }
 /* (media queries, not container queries: a size container makes every layout of a long page markedly slower) */
 @media (max-width: 899px) {
-  [data-docreader-root] h2 .sec-no { position: static; display: block; margin: 0 0 .5em; font-size: .78rem; }
+  [data-docreader-root] h2 .sec-no { position: static; display: block; margin: 0 0 .5em; font-size: calc(.78 * var(--rem)); }
 }
 @media (max-width: 1019px) {
-  [data-docreader-root]:not(i)[data-width="wide"] h2 .sec-no { position: static; display: block; margin: 0 0 .5em; font-size: .78rem; }
+  [data-docreader-root]:not(i)[data-width="wide"] h2 .sec-no { position: static; display: block; margin: 0 0 .5em; font-size: calc(.78 * var(--rem)); }
 }
 /* quiet heading controls beside the title (link, read mark, fold), shown on hover or focus; never part of the title's
    name or its copied text */
@@ -249,9 +270,9 @@
 [data-docreader-root] .h-fold { font-family: var(--sans); font-weight: 400; color: var(--text-faint); opacity: 0; transition: opacity .15s; }
 [data-docreader-root] .h-anchor { margin-left: .4em; font-size: .7em; text-decoration: none; }
 [data-docreader-root] .h-mark,
-[data-docreader-root] .h-fold { margin-left: .6em; font-size: .78rem; font-weight: 600; letter-spacing: .02em; vertical-align: .2em; background: none; border: 1px solid var(--border); border-radius: 3px; padding: 1px 7px; cursor: pointer; white-space: nowrap; }
+[data-docreader-root] .h-fold { margin-left: .6em; font-size: calc(.78 * var(--rem)); font-weight: 600; letter-spacing: .02em; vertical-align: .2em; background: none; border: 1px solid var(--border); border-radius: 3px; padding: 1px 7px; cursor: pointer; white-space: nowrap; }
 [data-docreader-root][data-docreader-root]:not(i) h3 .h-mark,
-[data-docreader-root][data-docreader-root]:not(i) h3 .h-fold { font-size: .72rem; }
+[data-docreader-root][data-docreader-root]:not(i) h3 .h-fold { font-size: calc(.72 * var(--rem)); }
 [data-docreader-root] .h-mark:hover,
 [data-docreader-root] .h-fold:hover { color: var(--text); border-color: var(--rule); }
 [data-docreader-root] .h-mark.on { color: var(--ok); }
@@ -266,7 +287,7 @@
   [data-docreader-root] .h-fold { display: none; }
 }
 /* a folded section: the heading stays, with a quiet line under it that says so */
-[data-docreader-root] .fold-note { display: flex; align-items: baseline; gap: .7em; font-family: var(--sans); font-size: .82rem; color: var(--text-muted); background: none; border: 0; border-left: 2px solid var(--rule); padding: .15em 0 .15em .8em; margin-top: -.2em !important; margin-bottom: -1.2em !important; cursor: pointer; text-align: left; }
+[data-docreader-root] .fold-note { display: flex; align-items: baseline; gap: .7em; font-family: var(--sans); font-size: calc(.82 * var(--rem)); color: var(--text-muted); background: none; border: 0; border-left: 2px solid var(--rule); padding: .15em 0 .15em .8em; margin-top: -.2em !important; margin-bottom: -1.2em !important; cursor: pointer; text-align: left; }
 [data-docreader-root] .fold-note[hidden] { display: none; }
 [data-docreader-root] .fold-note .fn-m { color: var(--text-faint); font-variant-numeric: lining-nums tabular-nums; }
 [data-docreader-root] .fold-note .fn-s { color: var(--accent); text-decoration: underline; text-underline-offset: .18em; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -274,16 +295,16 @@
 /* hidden="until-found" keeps a box; it must take no room at all */
 [data-docreader-root][data-docreader-root]:not(i) > [hidden] { content-visibility: hidden !important; contain-intrinsic-size: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; min-height: 0 !important; }
 [data-docreader-root][data-docreader-root]:not(i) > [hidden]:not([hidden="until-found"]) { display: none !important; }
-[data-docreader-root] .flash { animation: doc-flash 1.8s ease-out; }
-[data-docreader-root] tr.flash > td { animation: doc-flash-cell 1.8s ease-out; }
-@keyframes doc-flash { 0% { background-color: var(--accent-soft); box-shadow: 0 0 0 8px var(--accent-soft); } 100% { background-color: transparent; box-shadow: 0 0 0 8px transparent; } }
-@keyframes doc-flash-cell { 0% { background-color: var(--accent-soft); } 100% { background-color: transparent; } }
+[data-docreader-root] .flash { animation: docreader-flash 1.8s ease-out; }
+[data-docreader-root] tr.flash > td { animation: docreader-flash-cell 1.8s ease-out; }
+@keyframes docreader-flash { 0% { background-color: var(--accent-soft); box-shadow: 0 0 0 8px var(--accent-soft); } 100% { background-color: transparent; box-shadow: 0 0 0 8px transparent; } }
+@keyframes docreader-flash-cell { 0% { background-color: var(--accent-soft); } 100% { background-color: transparent; } }
 /* ─── title block: eyebrow, title, byline ────────────────────────────────── */
-[data-docreader-root] .eyebrow { font-family: var(--sans); font-size: .8rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: .9em !important; }
+[data-docreader-root] .eyebrow { font-family: var(--sans); font-size: calc(.8 * var(--rem)); font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: .9em !important; }
 [data-docreader-root] .eyebrow span + span::before { content: "·"; margin: 0 .55em; color: var(--text-faint); }
-[data-docreader-root] .byline { display: flex; flex-wrap: wrap; gap: .55em 2.2em; font-family: var(--sans); font-size: .9rem; line-height: 1.45; color: var(--text); padding: 1.05em 0 1.15em; margin-top: 1.2em !important; margin-bottom: 2.2em !important; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--border); font-variant-numeric: lining-nums; }
+[data-docreader-root] .byline { display: flex; flex-wrap: wrap; gap: .55em 2.2em; font-family: var(--sans); font-size: calc(.9 * var(--rem)); line-height: 1.45; color: var(--text); padding: 1.05em 0 1.15em; margin-top: 1.2em !important; margin-bottom: 2.2em !important; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--border); font-variant-numeric: lining-nums; }
 [data-docreader-root] .byline > div { min-width: 0; max-width: 100%; }
-[data-docreader-root] .byline dt { font-size: .7rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 .15em; }
+[data-docreader-root] .byline dt { font-size: calc(.7 * var(--rem)); font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 .15em; }
 [data-docreader-root] .byline dd { margin: 0; }
 [data-docreader-root] .byline code { font-size: .86em; }
 [data-docreader-root] .byline .wide { flex-basis: 100%; }
@@ -296,17 +317,17 @@
 /* ─── the review strip: what waits on you, the doc's own counts, what changed ─ */
 [data-docreader-root] .review-strip { font-family: var(--sans); margin-top: -.6em !important; margin-bottom: 2.4em !important; }
 [data-docreader-root] .rs-wait { background: var(--wait-soft); border-left: 3px solid var(--wait); border-radius: 0 3px 3px 0; padding: .75em 1.1em .6em 1.05em; margin: 0 0 .8em; }
-[data-docreader-root] .rs-label { display: flex; align-items: center; gap: .5em; font-size: .72rem !important; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--wait); margin: 0 0 .35em !important; }
+[data-docreader-root] .rs-label { display: flex; align-items: center; gap: .5em; font-size: calc(.72 * var(--rem)) !important; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--wait); margin: 0 0 .35em !important; }
 [data-docreader-root] .rs-label .dot,
 [data-docreader-root] .rs-notice .dot { width: .5em; height: .5em; border-radius: 50%; background: currentColor; flex: none; }
-[data-docreader-root] .rs-wait ol { margin: 0 !important; padding-left: 1.5em !important; font-size: .95rem; line-height: 1.42; }
+[data-docreader-root] .rs-wait ol { margin: 0 !important; padding-left: 1.5em !important; font-size: calc(.95 * var(--rem)); line-height: 1.42; }
 [data-docreader-root] .rs-wait li { margin: 0 0 .3em !important; }
 [data-docreader-root] .rs-wait li::marker { color: var(--wait); font-weight: 600; font-size: .85em; }
 [data-docreader-root] .rs-wait a { color: var(--text); text-decoration-line: none; }
 [data-docreader-root] .rs-wait a:hover,
 [data-docreader-root] .rs-wait a:focus-visible { text-decoration-line: underline; }
 [data-docreader-root] .rs-wait a:hover { color: var(--text); text-decoration-color: var(--wait); }
-[data-docreader-root] .rs-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25em .6em; font-size: .84rem; line-height: 1.5; color: var(--text-muted); margin: 0 !important; font-variant-numeric: lining-nums tabular-nums; }
+[data-docreader-root] .rs-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25em .6em; font-size: calc(.84 * var(--rem)); line-height: 1.5; color: var(--text-muted); margin: 0 !important; font-variant-numeric: lining-nums tabular-nums; }
 [data-docreader-root] .rs-facts:empty { display: none; }
 [data-docreader-root] .rs-facts .sep { color: var(--rule); }
 [data-docreader-root] .rs-facts .fact { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .2em .55em; }
@@ -326,7 +347,7 @@
 [data-docreader-root] .pill.ok::before { background: var(--ok); }
 /* "Changes since…": a menu button, then a small menu grouped by day (since = until now; only = that day's version) */
 [data-docreader-root] .chg-pick { position: relative; min-width: 0; max-width: 100%; margin-left: auto; }
-[data-docreader-root] .chg-trig { font: inherit; font-size: .84rem; color: var(--text-muted); background: none; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: .05em .1em .05em 0; cursor: pointer; display: inline-flex; align-items: baseline; gap: .45em; max-width: 100%; }
+[data-docreader-root] .chg-trig { font: inherit; font-size: calc(.84 * var(--rem)); color: var(--text-muted); background: none; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: .05em .1em .05em 0; cursor: pointer; display: inline-flex; align-items: baseline; gap: .45em; max-width: 100%; }
 [data-docreader-root] .chg-trig .ct-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 [data-docreader-root] .chg-trig .ct-caret { font-size: .8em; color: var(--text-faint); }
 [data-docreader-root] .chg-trig:hover,
@@ -382,12 +403,12 @@
   [data-docreader-root] .ver-banner .vb-long { display: none; }
   [data-docreader-root] .ver-banner .vb-short { display: inline; }
 }
-[data-docreader-root] .rs-notice { display: flex; flex-wrap: wrap; align-items: center; gap: .1em .45em; font-size: .86rem !important; color: var(--chg); margin: 0 0 .7em !important; background: var(--chg-tint); border-left: 3px solid var(--chg); padding: .45em .9em; border-radius: 0 3px 3px 0; }
+[data-docreader-root] .rs-notice { display: flex; flex-wrap: wrap; align-items: center; gap: .1em .45em; font-size: calc(.86 * var(--rem)) !important; color: var(--chg); margin: 0 0 .7em !important; background: var(--chg-tint); border-left: 3px solid var(--chg); padding: .45em .9em; border-radius: 0 3px 3px 0; }
 [data-docreader-root] .rs-notice .linkish { color: var(--chg); text-decoration-color: color-mix(in srgb, var(--chg) 45%, transparent); }
 [data-docreader-root] .linkish { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: .18em; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); cursor: pointer; }
 [data-docreader-root] .linkish:hover { color: var(--accent-hover); text-decoration-color: currentColor; }
 /* ─── front matter: document facts and a rules index ─── */
-[data-docreader-root] .doc-facts { font-family: var(--sans); font-size: .92rem; margin-bottom: 2.2em !important; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--border); padding: .2em 0; }
+[data-docreader-root] .doc-facts { font-family: var(--sans); font-size: calc(.92 * var(--rem)); margin-bottom: 2.2em !important; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--border); padding: .2em 0; }
 [data-docreader-root] .byline + .doc-facts { margin-top: -1.2em !important; border-top: 0; }
 [data-docreader-root] .doc-facts > summary { cursor: pointer; padding: .7em 0; color: var(--text-muted); font-weight: 600; list-style: none; }
 [data-docreader-root] .doc-facts > summary::-webkit-details-marker { display: none; }
@@ -399,40 +420,40 @@
 [data-docreader-root] .doc-facts dl:last-child { margin-bottom: 0; }
 [data-docreader-root] .doc-facts ol li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .1em 1em; padding: .5em 0; margin: 0; border-top: 1px solid var(--border); }
 [data-docreader-root] .doc-facts ol li:first-child { border-top: 0; }
-[data-docreader-root] .doc-facts .rid { display: block; font-family: var(--mono); font-size: .74rem; color: var(--id); letter-spacing: .01em; overflow-wrap: anywhere; }
-[data-docreader-root] .doc-facts .rtitle { display: block; font-family: var(--prose); font-size: 1rem; line-height: 1.4; color: var(--text); }
+[data-docreader-root] .doc-facts .rid { display: block; font-family: var(--mono); font-size: calc(.74 * var(--rem)); color: var(--id); letter-spacing: .01em; overflow-wrap: anywhere; }
+[data-docreader-root] .doc-facts .rtitle { display: block; font-family: var(--prose); font-size: calc(1 * var(--rem)); line-height: 1.4; color: var(--text); }
 [data-docreader-root] .doc-facts a.rlink { text-decoration: none; color: inherit; display: block; }
 [data-docreader-root] .doc-facts a.rlink:hover .rtitle { color: var(--accent); }
 [data-docreader-root] .doc-facts ol li > .pill { align-self: start; margin-top: .15em; }
 [data-docreader-root] .doc-facts dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .35em 1.4em; margin: 0; }
-[data-docreader-root] .doc-facts dt { font-size: .7rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); padding-top: .25em; }
+[data-docreader-root] .doc-facts dt { font-size: calc(.7 * var(--rem)); font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); padding-top: .25em; }
 [data-docreader-root] .doc-facts dd { margin: 0; overflow-wrap: anywhere; }
 [data-docreader-root] .doc-facts dd code { font-size: .82em; }
 [data-docreader-root] .byline + .review-strip + .doc-facts { margin-top: 0 !important; }
 /* ─── rule paragraphs: R1, R2 … ───────────────────────────────────────── */
 [data-docreader-root] p.rule { position: relative; padding-left: 1.1em; border-left: 2px solid color-mix(in srgb, var(--id) 35%, transparent); }
 [data-docreader-root] p.rule > .rule-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2em .8em; margin: 0 0 .3em; font-family: var(--sans); }
-[data-docreader-root] p.rule > .rule-head code { background: none; padding: 0; font-size: .76rem; color: var(--id); letter-spacing: .01em; }
-[data-docreader-root] p.rule > .rule-head .pill { font-size: .72rem; }
+[data-docreader-root] p.rule > .rule-head code { background: none; padding: 0; font-size: calc(.76 * var(--rem)); color: var(--id); letter-spacing: .01em; }
+[data-docreader-root] p.rule > .rule-head .pill { font-size: calc(.72 * var(--rem)); }
 /* ─── In short: a standfirst, not an alert ───────────────────────────────── */
 [data-docreader-root] .short { background: var(--short-bg); border: 0; border-radius: 3px; padding: 1.4em 1.9em .5em !important; margin-top: 0 !important; margin-bottom: 2.6em !important; box-shadow: inset 0 3px 0 var(--accent); }
-[data-docreader-root][data-docreader-root]:not(i) .short h2 { font-family: var(--sans); font-size: .8rem !important; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--accent) !important; border: 0 !important; padding: 0 !important; margin: 0 0 1em !important; }
+[data-docreader-root][data-docreader-root]:not(i) .short h2 { font-family: var(--sans); font-size: calc(.8 * var(--rem)) !important; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--accent) !important; border: 0 !important; padding: 0 !important; margin: 0 0 1em !important; }
 [data-docreader-root] .short h2 .h-anchor,
 [data-docreader-root] .short h2 .h-mark { display: none; }
 [data-docreader-root] .short > ul,
 [data-docreader-root] .short > p,
-[data-docreader-root] .short > ol { font-size: 1.04rem; line-height: 1.58; }
+[data-docreader-root] .short > ol { font-size: calc(1.04 * var(--rem)); line-height: 1.58; }
 [data-docreader-root] .short > ul { padding-left: 1.1em; }
 [data-docreader-root] .short li { margin-bottom: .7em; }
 /* ─── Where things stand: Agreed / Waiting on you / Later ────────────────── */
-[data-docreader-root] .stand-index { display: flex; flex-wrap: wrap; gap: .5em 1.8em; font-family: var(--sans); font-size: .9rem; margin-bottom: 1.6em !important; }
+[data-docreader-root] .stand-index { display: flex; flex-wrap: wrap; gap: .5em 1.8em; font-family: var(--sans); font-size: calc(.9 * var(--rem)); margin-bottom: 1.6em !important; }
 [data-docreader-root] .stand-index a { text-decoration: none; color: var(--text); display: inline-flex; align-items: baseline; gap: .45em; }
 [data-docreader-root] .stand-index a:hover { color: var(--accent); }
-[data-docreader-root] .stand-index b { font-size: 1.35rem; font-weight: 600; font-variant-numeric: lining-nums; }
+[data-docreader-root] .stand-index b { font-size: calc(1.35 * var(--rem)); font-weight: 600; font-variant-numeric: lining-nums; }
 [data-docreader-root] .stand-index .dot,
 [data-docreader-root] .callout h3::before { display: inline-block; width: .55em; height: .55em; border-radius: 50%; background: currentColor; }
 [data-docreader-root] .callout { border: 0 !important; border-radius: 0; background: none !important; padding: 0 !important; margin-top: 2em !important; margin-bottom: 2em !important; }
-[data-docreader-root][data-docreader-root]:not(i) .callout h3 { font-family: var(--sans); font-size: .8rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 .9em !important; padding-top: .9em; border-top: 2px solid currentColor; display: flex; align-items: center; gap: .6em; }
+[data-docreader-root][data-docreader-root]:not(i) .callout h3 { font-family: var(--sans); font-size: calc(.8 * var(--rem)); font-weight: 650; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 .9em !important; padding-top: .9em; border-top: 2px solid currentColor; display: flex; align-items: center; gap: .6em; }
 [data-docreader-root] .callout h3::before { content: ""; }
 [data-docreader-root] .callout.agreed h3,
 [data-docreader-root] .stand-index .agreed { color: var(--ok); }
@@ -445,7 +466,7 @@
 [data-docreader-root][data-docreader-root]:not(i) .callout.waiting h3 { border-top: 0; }
 [data-docreader-root] .callout.waiting > ul,
 [data-docreader-root] .callout.waiting > p,
-[data-docreader-root] .callout.waiting > ol { font-size: 1.04rem; }
+[data-docreader-root] .callout.waiting > ol { font-size: calc(1.04 * var(--rem)); }
 [data-docreader-root] .stand-index a b,
 [data-docreader-root] .stand-index a span:not(.dot) { color: var(--text); }
 /* ─── wide elements break out of the reading column ──────────────────────── */
@@ -462,8 +483,8 @@
 /* ─── tables: book rules, sans, sticky header ────────────────────────────── */
 [data-docreader-root] .table-wrapper { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; margin-top: 2em; margin-bottom: 2.4em; border-top: 1.5px solid var(--text) !important; border-bottom: 1.5px solid var(--text) !important; overflow: auto; }
 [data-docreader-root] .table-wrapper.fits { overflow: visible; }
-[data-docreader-root] .table-wrapper table { font-family: var(--sans); font-size: .92rem; line-height: 1.45; font-variant-numeric: lining-nums; width: 100%; hyphens: manual; }
-[data-docreader-root] .table-wrapper th { font-size: .72rem; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); background: var(--th-bg) !important; padding: .9em 1em .7em; border-bottom: 1px solid var(--rule) !important; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+[data-docreader-root] .table-wrapper table { font-family: var(--sans); font-size: calc(.92 * var(--rem)); line-height: 1.45; font-variant-numeric: lining-nums; width: 100%; hyphens: manual; }
+[data-docreader-root] .table-wrapper th { font-size: calc(.72 * var(--rem)); font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); background: var(--th-bg) !important; padding: .9em 1em .7em; border-bottom: 1px solid var(--rule) !important; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
 [data-docreader-root] .table-wrapper.fits th { top: var(--bar-h); }
 [data-docreader-root] .table-wrapper td { padding: .75em 1em; border-bottom: 1px solid var(--border) !important; background: transparent !important; }
 [data-docreader-root] .table-wrapper tr:last-child td { border-bottom: 0 !important; }
@@ -479,7 +500,7 @@
 [data-docreader-root] .table-wrapper tr.attn > td:first-child { box-shadow: inset 3px 0 0 var(--wait); }
 [data-docreader-root] .table-wrapper tr.risk > td { background: var(--no-tint) !important; }
 [data-docreader-root] .table-wrapper tr.risk > td:first-child { box-shadow: inset 2px 0 0 var(--no); }
-[data-docreader-root] .table-wrapper tr.group td { font-family: var(--prose); font-size: 1.06rem; font-weight: 600; padding-top: 1.3em; color: var(--text); border-bottom-color: var(--rule) !important; }
+[data-docreader-root] .table-wrapper tr.group td { font-family: var(--prose); font-size: calc(1.06 * var(--rem)); font-weight: 600; padding-top: 1.3em; color: var(--text); border-bottom-color: var(--rule) !important; }
 [data-docreader-root] .table-wrapper tr.group:hover td { background: transparent !important; }
 [data-docreader-root][data-docreader-root]:not(i) .table-wrapper tr[id] { scroll-margin-top: calc(var(--bar-h) + var(--thead-h, 40px)); }
 /* "• a<br>• b" cells become hanging lines */
@@ -489,8 +510,8 @@
 [data-docreader-root] .cell-line.b::before { content: ""; position: absolute; left: .1em; top: .62em; width: .32em; height: .32em; border-radius: 50%; background: var(--text-faint); }
 [data-docreader-root] .tbl-block { margin-top: 2em; margin-bottom: 2.4em; }
 [data-docreader-root] .tbl-block > .table-wrapper { margin: 0; }
-[data-docreader-root] .tbl-tools { display: flex; justify-content: flex-end; align-items: baseline; gap: .8em; font-family: var(--sans); font-size: .82rem; color: var(--text-muted); margin: 0 0 .5em; }
-[data-docreader-root] .tbl-tools input { font: inherit; font-size: .84rem; padding: .3em .2em; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; color: var(--text); width: min(15em, 60%); }
+[data-docreader-root] .tbl-tools { display: flex; justify-content: flex-end; align-items: baseline; gap: .8em; font-family: var(--sans); font-size: calc(.82 * var(--rem)); color: var(--text-muted); margin: 0 0 .5em; }
+[data-docreader-root] .tbl-tools input { font: inherit; font-size: calc(.84 * var(--rem)); padding: .3em .2em; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; color: var(--text); width: min(15em, 60%); }
 [data-docreader-root] .tbl-tools input:focus { outline: none; border-bottom-color: var(--accent); }
 /* status words: a coloured dot and the word, not a badge */
 [data-docreader-root] .pill { display: inline-flex; align-items: baseline; gap: .38em; font-family: var(--sans); font-weight: 650; font-size: .82em; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; background: none !important; padding: 0; }
@@ -529,15 +550,16 @@
 /* ─── figures: plates with book captions ─────────────────────────────────── */
 [data-docreader-root] figure.mermaid-figure { position: relative; background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; margin-top: 2.4em !important; margin-bottom: 2.6em !important; overflow: visible !important; }
 [data-docreader-root] figure.mermaid-figure pre.mermaid { background: var(--plate) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 34px 24px 26px !important; margin: 0 !important; overflow-x: auto; font-family: var(--sans); font-size: 13px !important; color: var(--text-muted); }
-[data-docreader-root][data-docreader-root][data-docreader-root]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed]) { color: transparent !important; min-height: 180px; user-select: none; }
+/* the source under a diagram that is about to be drawn; only where the Mermaid feature marked the root (see the header) */
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed]) { color: transparent !important; min-height: 180px; user-select: none; }
 [data-docreader-root] figure.mermaid-figure svg { cursor: zoom-in; filter: var(--fig-filter); }
-[data-docreader-root] figure.mermaid-figure figcaption { font-family: var(--prose) !important; font-size: .95rem !important; line-height: 1.5; color: var(--text-muted) !important; margin: .95em 0 0 !important; max-width: var(--measure); }
+[data-docreader-root] figure.mermaid-figure figcaption { font-family: var(--prose) !important; font-size: calc(.95 * var(--rem)) !important; line-height: 1.5; color: var(--text-muted) !important; margin: .95em 0 0 !important; max-width: var(--measure); }
 [data-docreader-root] figure.mermaid-figure figcaption a { color: var(--accent); }
-[data-docreader-root] figure.mermaid-figure figcaption .fig-no { font-family: var(--sans); font-size: .74rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-right: .35em; }
+[data-docreader-root] figure.mermaid-figure figcaption .fig-no { font-family: var(--sans); font-size: calc(.74 * var(--rem)); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-right: .35em; }
 [data-docreader-root] figure.mermaid-figure figcaption .cap-text { font-style: italic; }
 /* the tools: visible but quiet, and they stay in reach down a tall figure */
 [data-docreader-root] figure.mermaid-figure .tools { position: sticky; top: calc(var(--bar-h) + 6px); z-index: 3; height: 0; margin: 0 !important; display: flex; justify-content: flex-end; align-items: flex-start; gap: 4px; padding: 0 7px; overflow: visible; }
-[data-docreader-root] figure.mermaid-figure .tools button { position: relative; top: 7px; font-family: var(--sans) !important; font-size: .72rem !important; font-weight: 600; padding: 2px 8px !important; border-radius: 3px !important; border: 1px solid var(--border) !important; background: color-mix(in srgb, var(--bg) 92%, transparent) !important; color: var(--text-muted) !important; cursor: pointer; line-height: 1.5; }
+[data-docreader-root] figure.mermaid-figure .tools button { position: relative; top: 7px; font-family: var(--sans) !important; font-size: calc(.72 * var(--rem)) !important; font-weight: 600; padding: 2px 8px !important; border-radius: 3px !important; border: 1px solid var(--border) !important; background: color-mix(in srgb, var(--bg) 92%, transparent) !important; color: var(--text-muted) !important; cursor: pointer; line-height: 1.5; }
 [data-docreader-root] figure.mermaid-figure .tools button:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 [data-docreader-root] figure.mermaid-figure .tools button.on { background: var(--accent) !important; color: var(--bg) !important; border-color: var(--accent) !important; }
 [data-docreader-root] figure.mermaid-figure svg g.node,
@@ -556,15 +578,15 @@
 [data-docreader-root] svg .dnode[aria-expanded="true"] > .dn-ring { opacity: 1; }
 [data-docreader-root] svg .dnode:focus-visible > .dn-ring { stroke-dasharray: none !important; }
 [data-docreader-root] svg path.flowchart-link.rv-draw { transition: stroke-dashoffset .55s ease; }
-[data-docreader-root] svg.flowing path.flowchart-link:not(.edge-pattern-dotted):not(.edge-pattern-dashed) { stroke-dasharray: 7 5 !important; animation: doc-flow .9s linear infinite; }
-[data-docreader-root] svg.flowing path.flowchart-link.edge-pattern-dotted { stroke-dasharray: 2 5 !important; animation: doc-flow-dot 1.2s linear infinite; }
-[data-docreader-root] svg.flowing path.flowchart-link.edge-pattern-dashed { stroke-dasharray: 3 3 !important; animation: doc-flow-dot 1.2s linear infinite; }
-@keyframes doc-flow { to { stroke-dashoffset: -12; } }
-@keyframes doc-flow-dot { to { stroke-dashoffset: -14; } }
-[data-docreader-root] .fig-error { border: 1px solid var(--border); border-left: 2px solid var(--no); border-radius: 0 4px 4px 0; padding: .8em 1.1em; font-family: var(--sans); font-size: .9rem; }
+[data-docreader-root] svg.flowing path.flowchart-link:not(.edge-pattern-dotted):not(.edge-pattern-dashed) { stroke-dasharray: 7 5 !important; animation: docreader-flow .9s linear infinite; }
+[data-docreader-root] svg.flowing path.flowchart-link.edge-pattern-dotted { stroke-dasharray: 2 5 !important; animation: docreader-flow-dot 1.2s linear infinite; }
+[data-docreader-root] svg.flowing path.flowchart-link.edge-pattern-dashed { stroke-dasharray: 3 3 !important; animation: docreader-flow-dot 1.2s linear infinite; }
+@keyframes docreader-flow { to { stroke-dashoffset: -12; } }
+@keyframes docreader-flow-dot { to { stroke-dashoffset: -14; } }
+[data-docreader-root] .fig-error { border: 1px solid var(--border); border-left: 2px solid var(--no); border-radius: 0 4px 4px 0; padding: .8em 1.1em; font-family: var(--sans); font-size: calc(.9 * var(--rem)); }
 [data-docreader-root] .fig-error p { margin: 0 0 .4em !important; color: var(--text); }
 [data-docreader-root] .fig-error summary { cursor: pointer; color: var(--text-muted); }
-[data-docreader-root] .fig-error pre.fig-src { margin: .6em 0 0; text-align: left; white-space: pre; overflow: auto; max-height: 50vh; background: var(--code-block-bg); padding: 12px 14px; font-size: .78rem; border: 0; border-radius: 3px; }
+[data-docreader-root] .fig-error pre.fig-src { margin: .6em 0 0; text-align: left; white-space: pre; overflow: auto; max-height: 50vh; background: var(--code-block-bg); padding: 12px 14px; font-size: calc(.78 * var(--rem)); border: 0; border-radius: 3px; }
 /* full screen */
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay { position: fixed; inset: 0; z-index: 2000; background: #161514; display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay.open { display: block; }
@@ -585,18 +607,18 @@
 [data-docreader-root][data-docreader-root]:not(i) pre { border: 0 !important; border-radius: 3px !important; background: var(--code-block-bg) !important; }
 [data-docreader-root] .codehilite { position: relative; overflow: visible !important; margin-top: 2em; margin-bottom: 1.5em; }
 [data-docreader-root] .codehilite pre,
-[data-docreader-root][data-docreader-root]:not(i) pre { font-family: var(--mono); font-size: .78rem !important; line-height: 1.6 !important; padding: 16px 20px !important; font-variant-numeric: normal; overflow-x: auto; }
+[data-docreader-root][data-docreader-root]:not(i) pre { font-family: var(--mono); font-size: calc(.78 * var(--rem)) !important; line-height: 1.6 !important; padding: 16px 20px !important; font-variant-numeric: normal; overflow-x: auto; }
 [data-docreader-root] .codehilite pre code,
 [data-docreader-root][data-docreader-root]:not(i) pre code { font-size: inherit; }
 /* Copy sits just above the block's right corner, so it never covers code */
-[data-docreader-root] .code-copy { position: absolute; bottom: 100%; right: 0; margin-bottom: 3px; font-family: var(--sans); font-size: .7rem; font-weight: 600; line-height: 1.4; padding: 1px 7px; border-radius: 3px; border: 1px solid transparent; background: none; color: var(--text-faint); cursor: pointer; }
+[data-docreader-root] .code-copy { position: absolute; bottom: 100%; right: 0; margin-bottom: 3px; font-family: var(--sans); font-size: calc(.7 * var(--rem)); font-weight: 600; line-height: 1.4; padding: 1px 7px; border-radius: 3px; border: 1px solid transparent; background: none; color: var(--text-faint); cursor: pointer; }
 [data-docreader-root] .code-copy:hover,
 [data-docreader-root] .code-copy:focus-visible { color: var(--text); border-color: var(--border); }
 [data-docreader-root] .code-copy.end { bottom: auto; top: 100%; margin: 3px 0 0; }
 [data-docreader-root] .codehilite.tall { margin-bottom: 2.6em; }
 /* ─── plans: tasks and steps, outline mode ───────────────────────────────── */
 [data-docreader-root] h3.task { padding-top: 1.1em; border-top: 1px solid var(--border); }
-[data-docreader-root] :is(h2, h3).task .task-id { display: block; font-family: var(--sans); font-size: .74rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: .35em; }
+[data-docreader-root] :is(h2, h3).task .task-id { display: block; font-family: var(--sans); font-size: calc(.74 * var(--rem)); font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: .35em; }
 [data-docreader-root] :is(h2, h3).task .task-id .tmeta { color: var(--text-faint); font-weight: 600; }
 [data-docreader-root] :is(h2, h3).task .task-id .tmeta::before { content: "·"; margin: 0 .55em; }
 [data-docreader-root][data-docreader-root]:not(i) li.task-list-item { list-style: none; margin-left: -1.4em; position: relative; padding: .9em 0 .5em 2.1em; border-top: 1px solid var(--border); margin-bottom: 0; }
@@ -607,22 +629,22 @@
 [data-docreader-root] li.task-list-item > input[type="checkbox"]:checked,
 [data-docreader-root] li.task-list-item.loose > p:first-child > input:checked { background: var(--ok); border-color: var(--ok); }
 [data-docreader-root] li.task-list-item > strong:first-of-type,
-[data-docreader-root] li.task-list-item.loose > p:first-child > strong:first-of-type { display: block; font-size: 1.04rem; line-height: 1.4; margin-bottom: .35em; }
+[data-docreader-root] li.task-list-item.loose > p:first-child > strong:first-of-type { display: block; font-size: calc(1.04 * var(--rem)); line-height: 1.4; margin-bottom: .35em; }
 [data-docreader-root] li.task-list-item.loose > p:first-child { margin-bottom: .5em; }
 /* act on this: a step that is the reader's own */
 [data-docreader-root][data-docreader-root]:not(i) li.task-list-item.attn { background: var(--wait-tint); box-shadow: inset 3px 0 0 var(--wait); padding-right: .8em; border-radius: 0 3px 3px 0; }
 [data-docreader-root] h3.task .task-id .tmeta.yours,
 [data-docreader-root] h2.task .task-id .tmeta.yours { color: var(--wait); }
-[data-docreader-root] li.task-list-item .step-no { display: block; font-family: var(--sans); font-size: .72rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .1em; }
-[data-docreader-root] li.task-list-item .who { display: inline-block; margin-left: .7em; font-family: var(--sans); font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wait); border: 1px solid currentColor; border-radius: 2px; padding: 0 .4em; vertical-align: .1em; }
+[data-docreader-root] li.task-list-item .step-no { display: block; font-family: var(--sans); font-size: calc(.72 * var(--rem)); font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .1em; }
+[data-docreader-root] li.task-list-item .who { display: inline-block; margin-left: .7em; font-family: var(--sans); font-size: calc(.68 * var(--rem)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wait); border: 1px solid currentColor; border-radius: 2px; padding: 0 .4em; vertical-align: .1em; }
 [data-docreader-root] li.task-list-item > .step-rest:last-child { margin-bottom: .4em; }
 [data-docreader-root] ul.contains-task-list { padding-left: 1.4em; }
-[data-docreader-root] .task-open { display: none; margin-left: .8em; font-family: var(--sans); font-size: .74rem; font-weight: 600; color: var(--accent); background: none; border: 1px solid var(--border); border-radius: 3px; padding: 1px 8px; cursor: pointer; vertical-align: .2em; }
+[data-docreader-root] .task-open { display: none; margin-left: .8em; font-family: var(--sans); font-size: calc(.74 * var(--rem)); font-weight: 600; color: var(--accent); background: none; border: 1px solid var(--border); border-radius: 3px; padding: 1px 8px; cursor: pointer; vertical-align: .2em; }
 [data-docreader-root]:not(i).outline .task-open { display: inline-block; }
 [data-docreader-root]:not(i).outline .task-part:not(.contains-task-list):not(.t-open) { display: none; }
 [data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li > .step-rest { display: none; }
 [data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li { padding-top: .45em; padding-bottom: .2em; }
-[data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li > strong:first-of-type { margin-bottom: .1em; font-size: 1rem; }
+[data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li > strong:first-of-type { margin-bottom: .1em; font-size: calc(1 * var(--rem)); }
 [data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li > input { top: .75em; }
 [data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li:not(.loose) { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: .7em; align-items: baseline; }
 [data-docreader-root]:not(i).outline .task-part.contains-task-list:not(.t-open) > li > .step-no { min-width: 6.2em; margin: 0; }
@@ -632,7 +654,7 @@
 [data-docreader-root]:not(i).outline h3.task { margin-top: 1.3em; }
 /* ─── GitHub alerts, calmer ──────────────────────────────────────────────── */
 [data-docreader-root] .gh-alert { border-left: 2px solid; border-radius: 0; padding: .2em 0 .1em 1.2em; margin: 1.8em auto; background: none; }
-[data-docreader-root] .gh-alert .gh-alert-title { font-family: var(--sans); font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin: .3em 0 .4em; }
+[data-docreader-root] .gh-alert .gh-alert-title { font-family: var(--sans); font-size: calc(.78 * var(--rem)); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin: .3em 0 .4em; }
 [data-docreader-root] .gh-note { border-color: var(--accent); }
 [data-docreader-root] .gh-note .gh-alert-title { color: var(--accent); }
 [data-docreader-root] .gh-tip { border-color: var(--ok); }
@@ -656,7 +678,7 @@
 [data-docreader-root][data-docreader-root]:not(i) .short li.chg,
 [data-docreader-root][data-docreader-root]:not(i) .callout.waiting li.chg { --chg-bg: color-mix(in srgb, var(--chg) 7%, var(--short-bg)); }
 [data-docreader-root][data-docreader-root]:not(i) .chg.flash,
-[data-docreader-root][data-docreader-root]:not(i) .chg-del.flash { animation-name: doc-flash-cell; }
+[data-docreader-root][data-docreader-root]:not(i) .chg-del.flash { animation-name: docreader-flash-cell; }
 [data-docreader-root][data-docreader-root]:not(i) tr.chg > td { background-color: var(--chg-tint) !important; }
 [data-docreader-root][data-docreader-root]:not(i) tr.chg > td:first-child { box-shadow: inset 3px 0 0 var(--chg); }
 [data-docreader-root][data-docreader-root]:not(i) .chg-del:not(tr) { background-image: repeating-linear-gradient(90deg, var(--chg) 0 6px, transparent 6px 10px); background-size: 100% 2px; background-position: 0 100%; background-repeat: no-repeat; }
@@ -786,10 +808,10 @@
   [data-docreader-root] .short > p,
   [data-docreader-root] .short > ol,
   [data-docreader-root] .callout.waiting > ul,
-  [data-docreader-root] .callout.waiting > p { font-size: 1rem; }
+  [data-docreader-root] .callout.waiting > p { font-size: calc(1 * var(--rem)); }
   [data-docreader-root][data-docreader-root]:not(i) { padding-top: 28px; padding-bottom: 64px; }
-  [data-docreader-root][data-docreader-root]:not(i) h2 { font-size: 1.42rem; margin-top: 2.1em; }
-  [data-docreader-root][data-docreader-root]:not(i) h3 { font-size: 1.16rem; }
+  [data-docreader-root][data-docreader-root]:not(i) h2 { font-size: calc(1.42 * var(--rem)); margin-top: 2.1em; }
+  [data-docreader-root][data-docreader-root]:not(i) h3 { font-size: calc(1.16 * var(--rem)); }
   [data-docreader-root] .short { padding: 1.15em 1.1em .35em !important; }
   [data-docreader-root] .byline { gap: .5em 1.4em; }
   [data-docreader-root] .rs-wait { padding: .7em .9em .5em .9em; }
@@ -800,7 +822,7 @@
   [data-docreader-root][data-docreader-root][data-docreader-root] .jump-btn::before { content: "⌕"; font-size: 17px; line-height: 1; }
   [data-docreader-root] .chg-nav .what { display: none; }
   [data-docreader-root] .chg-pick { flex-basis: 100%; margin-left: 0; }
-  [data-docreader-root] .table-wrapper table { font-size: .86rem; }
+  [data-docreader-root] .table-wrapper table { font-size: calc(.86 * var(--rem)); }
   [data-docreader-root] .table-wrapper th,
   [data-docreader-root] .table-wrapper td { padding-left: .7em; padding-right: .7em; }
   [data-docreader-root] .callout.waiting { padding: 0 1em .3em !important; }
@@ -823,8 +845,8 @@
   [data-docreader-root] .stack tr.group td { padding: 0 !important; border: 0 !important; }
   [data-docreader-root] .stack td { padding: .12em 0 .32em !important; border: 0 !important; }
   [data-docreader-root] .stack td:empty { display: none; }
-  [data-docreader-root] .stack td[data-label]::before { content: attr(data-label); display: block; font-size: .64rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .1em; }
-  [data-docreader-root] .stack tr:not(.group) td:first-child { font-size: 1rem; font-weight: 650; padding-bottom: .45em !important; margin-bottom: .4em; border-bottom: 1px solid var(--border) !important; white-space: normal; }
+  [data-docreader-root] .stack td[data-label]::before { content: attr(data-label); display: block; font-size: calc(.64 * var(--rem)); font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .1em; }
+  [data-docreader-root] .stack tr:not(.group) td:first-child { font-size: calc(1 * var(--rem)); font-weight: 650; padding-bottom: .45em !important; margin-bottom: .4em; border-bottom: 1px solid var(--border) !important; white-space: normal; }
   [data-docreader-root] .stack td:first-child::before { display: none; }
   [data-docreader-root] .stack tbody tr:hover td { background: transparent !important; }
   [data-docreader-root][data-docreader-root]:not(i) .stack tr.chg > td:first-child { box-shadow: none; }
@@ -836,8 +858,8 @@
 /* ─── Sans, by the reader's choice: a crisper look in the same palette ───────────── */
 [data-docreader-root]:not(i):not(i)[data-font="sans"] { font-size: 17.5px; line-height: 1.6; font-variant-numeric: lining-nums proportional-nums; }
 [data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] h1 { font-weight: 700; letter-spacing: -.022em; }
-[data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] h2 { font-size: 1.5rem; font-weight: 680; letter-spacing: -.014em; }
-[data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] h3 { font-size: 1.17rem; font-weight: 680; letter-spacing: -.008em; }
+[data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] h2 { font-size: calc(1.5 * var(--rem)); font-weight: 680; letter-spacing: -.014em; }
+[data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] h3 { font-size: calc(1.17 * var(--rem)); font-weight: 680; letter-spacing: -.008em; }
 [data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] strong { font-weight: 680; }
 [data-docreader-root][data-docreader-root]:not(i):not(i)[data-font="sans"] blockquote { font-style: normal; }
 [data-docreader-root]:not(i)[data-font="sans"] .short { box-shadow: inset 3px 0 0 var(--accent); }
@@ -893,6 +915,10 @@
 [data-docreader-root] .codehilite .hljs-meta .hljs-keyword { color: inherit; font-weight: inherit; }
 [data-docreader-root] .codehilite .hljs-meta .hljs-string { color: var(--code-comment); font-style: italic; }
 [data-docreader-root] .codehilite .hljs-meta.prompt_ { color: #9e4805; font-weight: bold; }
+[data-docreader-root] .codehilite .language-bash .hljs-meta,
+[data-docreader-root] .codehilite .language-shell .hljs-meta:not(.prompt_) { color: var(--code-comment) !important; font-weight: normal; font-style: italic; }
+[data-docreader-root] .codehilite .language-python .hljs-meta { color: #555555; font-weight: bold; font-style: normal; }
+[data-docreader-root] .codehilite .language-diff .hljs-meta { color: #800080; font-weight: bold; font-style: normal; }
 [data-docreader-root] .codehilite .hljs-addition { color: #1b7a1b; }
 [data-docreader-root] .codehilite .hljs-deletion { color: #a00000; }
 [data-docreader-root] .codehilite .hljs-emphasis { font-style: italic; }
@@ -944,6 +970,10 @@
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta .hljs-keyword { color: inherit; font-weight: inherit; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta .hljs-string { color: var(--code-comment); font-style: italic; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta.prompt_ { color: #8b949e; font-weight: bold; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .language-bash .hljs-meta,
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .language-shell .hljs-meta:not(.prompt_) { color: var(--code-comment) !important; font-weight: normal; font-style: italic; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .language-python .hljs-meta { color: #d2a8ff; font-weight: bold; font-style: normal; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .language-diff .hljs-meta { color: #79c0ff; font-weight: normal; font-style: normal; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-addition { color: #56d364; background-color: #0f5323; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-deletion { color: #ffa198; background-color: #490202; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-emphasis { font-style: italic; }
@@ -991,6 +1021,10 @@
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-meta .hljs-keyword { color: inherit; font-weight: inherit; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-meta .hljs-string { color: var(--code-comment); font-style: italic; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-meta.prompt_ { color: #8b949e; font-weight: bold; }
+[data-docreader-root][data-theme="dark"] .codehilite .language-bash .hljs-meta,
+[data-docreader-root][data-theme="dark"] .codehilite .language-shell .hljs-meta:not(.prompt_) { color: var(--code-comment) !important; font-weight: normal; font-style: italic; }
+[data-docreader-root][data-theme="dark"] .codehilite .language-python .hljs-meta { color: #d2a8ff; font-weight: bold; font-style: normal; }
+[data-docreader-root][data-theme="dark"] .codehilite .language-diff .hljs-meta { color: #79c0ff; font-weight: normal; font-style: normal; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-addition { color: #56d364; background-color: #0f5323; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-deletion { color: #ffa198; background-color: #490202; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-emphasis { font-style: italic; }
