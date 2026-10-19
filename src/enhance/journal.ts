@@ -3,8 +3,9 @@
 //
 // Restores are conditional: an attribute or class the library wrote is put back only while it still holds what
 // the library last wrote, so a change the host made since wins. Source nodes (the rendered document) are only
-// moved, by `wrap`, and moved back on undo; chrome (what the library creates) is inserted by `insert` and removed
-// on undo. Listeners run inside the instance's operation, so a handler does nothing once the instance is not live.
+// moved, by `wrap` and `move`, and moved back on undo; a source text node may be partitioned by `split` (no
+// character changes) and is joined again on undo; chrome (what the library creates) is inserted by `insert` and
+// removed on undo. Listeners run inside the instance's operation, so a handler does nothing once the instance is not live.
 //
 // While the instance is not live, every write method refuses (does nothing), so no DOM write can follow a
 // destroy, whatever a feature forgets to check.
@@ -25,6 +26,17 @@ export interface Journal {
    * the wrapper sits, in order, then removes the wrapper.
    */
   wrap(nodes: readonly Node[], wrapper: Element): void;
+  /**
+   * Move one source node to a new place (into chrome, usually). Undo puts it back where it was: before the
+   * sibling that followed it then, in the parent it had then. Undone in reverse order, every move lands exactly.
+   */
+  move(node: Node, parent: Node, before: Node | null): void;
+  /**
+   * Partition a source text node at `offset` (0 < offset < length) without changing a character: the node keeps
+   * the text before `offset`, and a new text node right after it holds the rest, which is returned. Undo joins the
+   * two again, only while the new node still follows the first (a host that moved it wins).
+   */
+  split(text: Text, offset: number): Text;
   /** addEventListener with the handler run inside the instance's operation; undo removes the listener. */
   listen(
     target: EventTarget,
@@ -147,6 +159,30 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
         while (wrapper.firstChild !== null) at.insertBefore(wrapper.firstChild, wrapper);
         at.removeChild(wrapper);
       });
+    },
+
+    move(node, parent, before) {
+      if (!live()) return;
+      const from = node.parentNode;
+      if (from === null) throw new Error('docreader: journal.move takes an attached node');
+      const next = node.nextSibling;
+      parent.insertBefore(node, before);
+      undo.push(() => {
+        if (next !== null && next.parentNode !== from) throw new Error('docreader: a moved node has lost its place; it stays where it is');
+        from.insertBefore(node, next);
+      });
+    },
+
+    split(text, offset) {
+      if (!live()) throw new Error('docreader: journal.split after a destroy');
+      if (!(offset > 0 && offset < text.data.length)) throw new Error('docreader: journal.split takes an offset inside the text');
+      const tail = text.splitText(offset);
+      undo.push(() => {
+        if (text.nextSibling !== tail) return; // the host moved one of them since: the host wins
+        text.appendData(tail.data);
+        tail.parentNode?.removeChild(tail);
+      });
+      return tail;
     },
 
     listen(target, type, handler, options) {

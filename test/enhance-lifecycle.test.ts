@@ -78,7 +78,7 @@ describe('enhance: the layout exists when it resolves', () => {
     await enhance(root).then(() => {
       seen = [root.hasAttribute('data-docreader-root'), root.getAttribute('data-width'), root.getAttribute('data-font'), root.hasAttribute('data-theme'), root.querySelectorAll('button.h-fold').length];
     });
-    expect(seen).toEqual([true, 'standard', 'serif', false, 4]);
+    expect(seen).toEqual([true, 'standard', 'serif', false, 3]); // "In short" sits in its box, with no fold
     expect(chromeCount(root)).toBeGreaterThan(0);
   });
 
@@ -210,7 +210,7 @@ describe('destroyEnhancement', () => {
     const d1 = destroyEnhancement(root);
     await d1;
     await enhance(root);
-    expect(root.querySelectorAll('button.h-fold').length).toBe(4);
+    expect(root.querySelectorAll('button.h-fold').length).toBe(3);
     const d2 = destroyEnhancement(root);
     expect(d2).not.toBe(d1);
     await d2;
@@ -389,7 +389,7 @@ describe('destroy or abort during startup', () => {
     (root.querySelector('button.h-fold') as HTMLButtonElement).click();
     expect(chromeWhenCalled).toBeGreaterThan(0); // the old chrome was still there: the new one could not have built
     expect(await outcome(again as unknown as Promise<void>)).toBe('resolved');
-    expect(root.querySelectorAll('button.h-fold').length).toBe(4);
+    expect(root.querySelectorAll('button.h-fold').length).toBe(3);
     expect(root.querySelectorAll('.folded').length).toBe(0);
     await destroyEnhancement(root);
     expect(root.outerHTML).toBe(before);

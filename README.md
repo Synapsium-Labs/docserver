@@ -12,7 +12,7 @@ It is pure. It does no network, storage, auth, git or hosting. Each product that
 |---|---|---|
 | Markdown rules (markdown-it, TypeScript): GitHub-style Markdown, alerts, figure captions, front matter, heading ids, a short raw-HTML allowlist | `@synapsium-labs/docserver/render`: `render()`, `scanRefs()` | Built |
 | The conformance corpus: Markdown in, expected HTML out, plus hostile cases | `@synapsium-labs/docserver/conformance`: `runCorpus()`, `loadCorpus()` | Built |
-| The rich layout over a rendered document: its lifecycle, reader prefs, per-document state and section folds so far | `@synapsium-labs/docserver/enhance`: `enhance()`, `destroyEnhancement()`, `setEnhancementPrefs()`, `EnhanceError` | Prototype |
+| The rich layout over a rendered document: its lifecycle, reader prefs, per-document state, the title block, facts panel, "In short" and "Where things stand" boxes, section numbers, status marks in tables, and section folds so far | `@synapsium-labs/docserver/enhance`: `enhance()`, `destroyEnhancement()`, `setEnhancementPrefs()`, `EnhanceError` | Prototype |
 | The layout's stylesheet and its fonts | `@synapsium-labs/docserver/assets/*`: `assets/reader.css`, `assets/fonts/` | Prototype |
 | A self-hosted Mermaid, and an asset manifest with hashes | `assets/` | Planned |
 | A sandboxed-frame document builder, and a host helper | `frameDocument()`, `mountDocFrame()` | Planned |
@@ -129,6 +129,19 @@ Options are read once, as plain data. A wrong type or an unknown key rejects wit
 | `docreader:doc:<storageKey>:folds` | The folded sections of one document: a JSON array of heading ids. |
 
 A stored value that is not valid JSON, or not of its shape, is ignored. Writes go behind the local change: the reader changes at once, then calls `set`. Calls for one key are serialized, so a newer value never lands before an older one; while a call is pending only the newest waiting value is sent. A `set` that throws or rejects is ignored and changes nothing locally.
+
+**What it builds so far.**
+
+| Part | What the reader sees |
+|---|---|
+| Title block | An eyebrow above the title (the meta line's leading bold word, such as `**Spec**`, then the front matter's `type`, `area`, `status` and `kind`), and a byline below it. The byline is made from the meta line under the title, `**Spec** · 2026-10-19 · Status: Draft · **Owner:** project-a`: one fact per part, labelled by its `Label:` (a date is `Date`, and the first unlabelled part is `Status`), plus the reading time from three minutes up. The meta line itself is hidden. |
+| Facts panel | The front matter's list keys (from `info.frontList`), in a closed `details` after the byline: `2 rules · 2 tags`, then each key and its values. Given `info.frontList`, `render()`'s front-matter strip is hidden. |
+| "In short" | A level-2 heading named "In short" and its blocks, in a box. |
+| "Where things stand" | Under a level-2 heading of that name, each level-3 heading and its blocks in a callout (Agreed, Waiting on you, Later, or other), and a line of counts before them when two or more have items. |
+| Section numbers | A level-2 heading such as `3. Design` shows its number hanging in the margin. |
+| Status marks | In a table column that reads as a status column (its header says Status, State, Result, Verdict, Outcome, Stands or Fate; or most of its short cells open on a status word), a cell's leading status word (agreed, done, pending, open, rejected, deferred, …) shows as a coloured mark. |
+
+The document's text is never rewritten: where a word moves into a mark or a number, its text node is split and moved, and destroy joins it again.
 
 **Folds.** Each level-2 section of a document gets a Fold button beside its heading. Folding hides the section's blocks with `hidden="until-found"`, so find-in-page still reaches them and opens the fold; a block the author hid stays hidden. Printing shows every section.
 

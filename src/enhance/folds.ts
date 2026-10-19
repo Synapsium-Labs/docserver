@@ -15,10 +15,14 @@
 // A fold action changes the local state first, writes it behind (the host's set() may run there, and may destroy
 // the instance), and only then, if the instance is still live, changes the DOM.
 import { chrome } from './journal.js';
+import { formatMinutes, sectionMinutes } from './reading.js';
 import type { FeatureContext } from './types.js';
 
 /** The per-document state name of the folds. */
 export const FOLDS = 'folds';
+
+// The reading-time helpers moved to reading.ts; re-exported here for the callers that import them from folds.
+export { formatMinutes, sectionMinutes } from './reading.js';
 
 interface Section {
   readonly heading: Element;
@@ -29,52 +33,6 @@ interface Section {
   folded: boolean;
   /** The members this library hid. */
   readonly hid: Set<Element>;
-}
-
-/** Words in a text: runs of characters other than space, tab, line feed, carriage return and no-break space. */
-function words(s: string): number {
-  let n = 0;
-  let inWord = false;
-  for (let i = 0; i < s.length; i += 1) {
-    const c = s.charCodeAt(i);
-    const space = c === 32 || c === 10 || c === 9 || c === 13 || c === 160;
-    if (!space && !inWord) n += 1;
-    inWord = !space;
-  }
-  return n;
-}
-
-/** The reference's reading time of a section, in minutes: prose at 230 words a minute, code at 520, half a minute a figure. */
-export function sectionMinutes(heading: Element, members: readonly Element[]): number {
-  let prose = words(heading.textContent ?? '');
-  let code = 0;
-  let figs = 0;
-  for (const n of members) {
-    if (n.localName === 'script' || n.localName === 'dl') continue;
-    if (n.localName === 'figure') {
-      figs += 1;
-      continue;
-    }
-    const all = words(n.textContent ?? '');
-    if (n.classList.contains('codehilite') || n.localName === 'pre') {
-      code += all;
-      continue;
-    }
-    let inner = 0;
-    if (n.firstElementChild !== null) {
-      for (const x of Array.from(n.querySelectorAll('.codehilite'))) inner += words(x.textContent ?? '');
-      figs += n.getElementsByTagName('figure').length;
-    }
-    code += inner;
-    prose += Math.max(0, all - inner);
-  }
-  return prose / 230 + code / 520 + figs * 0.5;
-}
-
-/** "12 min", "1.5 h", or '' under a minute. */
-export function formatMinutes(m: number): string {
-  if (m < 1) return '';
-  return m < 59.5 ? `${String(Math.round(m))} min` : `${String(Math.round(m / 6) / 10)} h`;
 }
 
 /** The heading's text: each child's text trimmed, joined by spaces; chrome left out when `withChrome` is false. */

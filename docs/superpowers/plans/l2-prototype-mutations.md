@@ -251,3 +251,169 @@ The stylesheet scoping check is the sibling task's (`test/enhance-styles.test.ts
   }
 ]
 ```
+
+## Editorial core (L2P-M26 to L2P-M41)
+
+The guards of the editorial core (`src/enhance/editorial.ts`, `src/enhance/status.ts`) and of the two journal entries it
+added (`move`, `split`), measured 2026-10-19 on branch `l2-prototype` with the same `mutate.mjs`, unchanged, against
+the working tree that the editorial commit records. All 16 rows went red (`rc=1`), the run exited 0, and
+`git status --porcelain` read the same before and after.
+
+One row stayed green on the first run and was made red by a stronger test, not by changing the guard: L2P-M33 (a
+meta line opening on `**Status:** Draft` never makes a lone bold label, so the test now adds `**Note:** · …`, whose
+first part is the label alone). L2P-M27 is the row the node-level round trip exists for: with the join deleted, the
+serialization after destroy is still identical, and only the comparison of node objects and their text goes red.
+
+| Row | Guard | File | Change | Red (tests in `test/enhance-editorial.test.ts`) |
+|---|---|---|---|---|
+| L2P-M26 | journal.move: undo puts a moved node back in its place | `src/enhance/journal.ts` | `from.insertBefore(node, next); ⏎` → `(deleted)` | 2 failed \| 17 passed (19). "destroy restores the subtree exactly: the same nodes, with the same text, in the same order"; "split partitions a text node and undo joins it; move undo puts a node back in its place" |
+| L2P-M27 | journal.split: undo joins the text again | `src/enhance/journal.ts` | `text.appendData(tail.data); ⏎ tail.parentNode?.removeChild(tail); ⏎` → `(deleted)` | 2 failed \| 17 passed (19). "destroy restores the subtree exactly: the same nodes, with the same text, in the same order"; "split partitions a text node and undo joins it; move undo puts a node back in its place" |
+| L2P-M28 | journal.split: a host that moved the second half wins | `src/enhance/journal.ts` | `if (text.nextSibling !== tail) return; // the host moved one of them since: the host wins ⏎` → `(deleted)` | 1 failed \| 18 passed (19). "a split whose second half the host moved stays split: the host wins" |
+| L2P-M29 | journal.move refuses once the instance is not live | `src/enhance/journal.ts` | `move(node, parent, before) { ⏎ if (!live()) return;` → `move(node, parent, before) {` | 1 failed \| 18 passed (19). "move does nothing and split throws once the instance is not live" |
+| L2P-M30 | journal.split refuses once the instance is not live | `src/enhance/journal.ts` | `if (!live()) throw new Error('docreader: journal.split after a destroy'); ⏎` → `(deleted)` | 1 failed \| 18 passed (19). "move does nothing and split throws once the instance is not live" |
+| L2P-M31 | meta line: a paragraph ending on a dangling label is left alone | `src/enhance/editorial.ts` | `if (/ · /.test(t) && !/:\s*$/.test(t)) return n;` → `if (/ · /.test(t)) return n;` | 1 failed \| 18 passed (19). "a paragraph that ends on a dangling label introduces a list, and is not a meta line" |
+| L2P-M32 | meta line: hidden once its facts are in the byline | `src/enhance/editorial.ts` | `journal.setAttribute(metaP, 'hidden', ''); ⏎` → `(deleted)` | 1 failed \| 18 passed (19). "turns the meta line into a byline of facts, moving its own nodes, and hides what is left of it" |
+| L2P-M33 | meta line: a leading label is a fact, not the kind | `src/enhance/editorial.ts` | `isStrong(lone ?? null) && lone !== undefined && !/:\s*$/.test(lone.textContent ?? '')` → `isStrong(lone ?? null) && lone !== undefined` | 1 failed \| 18 passed (19). "a meta line that opens on a label has no kind: its first fact is that label" |
+| L2P-M34 | reading time: only from three minutes up | `src/enhance/editorial.ts` | `if (minutes >= 3) {` → `if (minutes >= 0) {` | 3 failed \| 16 passed (19). "a byline with only the reading time is solo; a short document without a meta line gets none"; "a paragraph that ends on a dangling label introduces a list, and is not a meta line"; "a meta line that opens on a label has no kind: its first fact is that label" |
+| L2P-M35 | front-matter strip hidden only when the host gives info.frontList | `src/enhance/editorial.ts` | `if (given !== undefined) {` → `if (true) {` | 1 failed \| 18 passed (19). "without info, render()'s strip stays as it is, and there is no facts panel or front-matter kind" |
+| L2P-M36 | byline after the hidden meta line (sibling rules see no hidden paragraph) | `src/enhance/editorial.ts` | `if (meta !== null && h1.nextElementSibling === meta) after = meta; ⏎` → `(deleted)` | 2 failed \| 17 passed (19). "turns the meta line into a byline of facts, moving its own nodes, and hides what is left of it"; "lists the front matter's list keys in a closed details after the byline, and hides render()'s strip" |
+| L2P-M37 | "In short" moves into its box | `src/enhance/editorial.ts` | `if (short !== undefined) box(short, 'short', ['h1', 'h2', 'hr']);` → `(deleted)` | 2 failed \| 17 passed (19). "lists the front matter's list keys in a closed details after the byline, and hides render()'s strip"; ""In short" and its blocks move into a div.short, which gets no fold" |
+| L2P-M38 | stand index only with two or more counts | `src/enhance/editorial.ts` | `counts.children.length > 1 &&` → `counts.children.length > 0 &&` | 1 failed \| 18 passed (19). "one callout with items gets no index" |
+| L2P-M39 | section number: '. ' hidden | `src/enhance/editorial.ts` | `journal.wrap([sep], chrome(doc, 'span', { attrs: { hidden: '' } })); ⏎` → `(deleted)` | 1 failed \| 18 passed (19). "the number moves into a span.sec-no and ". " into a hidden span; the heading's text and name stay whole" |
+| L2P-M40 | status marks: only a column that reads as a status column | `src/enhance/status.ts` | `if (!named && !asked && !short) return; ⏎` → `(deleted)` | 1 failed \| 18 passed (19). "a column that does not read as a status column gets no marks" |
+| L2P-M41 | status marks: never the first column | `src/enhance/status.ts` | `if (ci === 0) return; ⏎` → `(deleted)` | 1 failed \| 18 passed (19). "short cells mostly opening on a status word mark a column whatever its header; the first column never" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2P-M26",
+    "guard": "journal.move: undo puts a moved node back in its place",
+    "file": "src/enhance/journal.ts",
+    "old": "        from.insertBefore(node, next);\n",
+    "new": "\n",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M27",
+    "guard": "journal.split: undo joins the text again",
+    "file": "src/enhance/journal.ts",
+    "old": "        text.appendData(tail.data);\n        tail.parentNode?.removeChild(tail);\n",
+    "new": "\n",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M28",
+    "guard": "journal.split: a host that moved the second half wins",
+    "file": "src/enhance/journal.ts",
+    "old": "        if (text.nextSibling !== tail) return; // the host moved one of them since: the host wins\n",
+    "new": "\n",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M29",
+    "guard": "journal.move refuses once the instance is not live",
+    "file": "src/enhance/journal.ts",
+    "old": "    move(node, parent, before) {\n      if (!live()) return;",
+    "new": "    move(node, parent, before) {",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M30",
+    "guard": "journal.split refuses once the instance is not live",
+    "file": "src/enhance/journal.ts",
+    "old": "      if (!live()) throw new Error('docreader: journal.split after a destroy');\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M31",
+    "guard": "meta line: a paragraph ending on a dangling label is left alone",
+    "file": "src/enhance/editorial.ts",
+    "old": "    if (/ · /.test(t) && !/:\\s*$/.test(t)) return n;",
+    "new": "    if (/ · /.test(t)) return n;",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M32",
+    "guard": "meta line: hidden once its facts are in the byline",
+    "file": "src/enhance/editorial.ts",
+    "old": "    journal.setAttribute(metaP, 'hidden', '');\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M33",
+    "guard": "meta line: a leading label is a fact, not the kind",
+    "file": "src/enhance/editorial.ts",
+    "old": "isStrong(lone ?? null) && lone !== undefined && !/:\\s*$/.test(lone.textContent ?? '')",
+    "new": "isStrong(lone ?? null) && lone !== undefined",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M34",
+    "guard": "reading time: only from three minutes up",
+    "file": "src/enhance/editorial.ts",
+    "old": "  if (minutes >= 3) {",
+    "new": "  if (minutes >= 0) {",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M35",
+    "guard": "front-matter strip hidden only when the host gives info.frontList",
+    "file": "src/enhance/editorial.ts",
+    "old": "  if (given !== undefined) {",
+    "new": "  if (true) {",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M36",
+    "guard": "byline after the hidden meta line (sibling rules see no hidden paragraph)",
+    "file": "src/enhance/editorial.ts",
+    "old": "    if (meta !== null && h1.nextElementSibling === meta) after = meta;\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M37",
+    "guard": "\"In short\" moves into its box",
+    "file": "src/enhance/editorial.ts",
+    "old": "  if (short !== undefined) box(short, 'short', ['h1', 'h2', 'hr']);",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M38",
+    "guard": "stand index only with two or more counts",
+    "file": "src/enhance/editorial.ts",
+    "old": "counts.children.length > 1 &&",
+    "new": "counts.children.length > 0 &&",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M39",
+    "guard": "section number: '. ' hidden",
+    "file": "src/enhance/editorial.ts",
+    "old": "    journal.wrap([sep], chrome(doc, 'span', { attrs: { hidden: '' } }));\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M40",
+    "guard": "status marks: only a column that reads as a status column",
+    "file": "src/enhance/status.ts",
+    "old": "      if (!named && !asked && !short) return;\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  },
+  {
+    "id": "L2P-M41",
+    "guard": "status marks: never the first column",
+    "file": "src/enhance/status.ts",
+    "old": "      if (ci === 0) return;\n",
+    "new": "",
+    "tests": "test/enhance-editorial.test.ts"
+  }
+]
+```
