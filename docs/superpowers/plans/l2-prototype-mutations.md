@@ -430,13 +430,14 @@ restored byte for byte and compared with `cmp`, then green again).
 | L2P-V2 | the stack class goes through the journal | `src/enhance/status.ts` | `journal.toggleClass(wrapper, 'stack', true);` → `wrapper.classList.add('stack');` | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "destroy takes the class and the labels away again" |
 | L2P-V3 | the cell labels go through the journal | `src/enhance/status.ts` | `journal.setAttribute(c, 'data-label', label);` → `c.setAttribute('data-label', label);` | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "destroy takes the class and the labels away again" |
 
-## Review fixes (L2P-M42 to L2P-M86)
+## Review fixes (L2P-M42 to L2P-M88)
 
 The guards that the review fixes added or changed (lifecycle, safety and visual), with the stylesheet's scoping check,
 which the first table left to its sibling task, measured 2026-10-19 on branch `l2-prototype` with the same `mutate.mjs`,
-unchanged, against the working tree that the three review-fix commits record. All 45 rows went red (`rc=1`) in three
-foreground runs (21 rows, 21 rows, and the 3 `test/pack.test.ts` rows), each run exited 0, and `git status --porcelain`
-read the same before and after.
+unchanged, against the working tree that the review-fix commits record. All 47 rows went red (`rc=1`) in four
+foreground runs (21 rows, 21 rows, the 3 `test/pack.test.ts` rows, and the 5 write-behind rows L2P-M42 to L2P-M44,
+L2P-M87 and L2P-M88, measured again after the last fix commit changed how stored prefs merge), each run exited 0, and
+`git status --porcelain` read the same before and after each run.
 
 Rows that weaken a test's own check (L2P-M58, L2P-M59, L2P-M64, L2P-M65, L2P-M81) go red on that test's probe, as L2P-M10
 does; rows that plant a violation in the shipped tree (L2P-M60 to L2P-M63, L2P-M76, L2P-M78 to L2P-M80, L2P-M82) go red on
@@ -449,9 +450,9 @@ conditions). Their tests are new; the guards are unchanged. The scoping rows are
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2P-M42 | write-behind: the slot is claimed before set() is called (a nested write waits) | `src/enhance/state.ts` | `slot.busy = true; ⏎ let result: unknown; ⏎ try { ⏎ result = writer.set(key, value);` → `let result: unknown; ⏎ try { ⏎ result = writer.set(key, value); ⏎ slot.busy = true;` | `test/enhance-state.test.ts`: 1 failed \| 27 passed (28). "a set() that calls back into the reader queues the nested write: the older value lands first" |
-| L2P-M43 | write-behind: one queue per storage object, shared by every instance given it | `src/enhance/state.ts` | `const slot = slotOf(storage, key);` → `const slot = slotOf(writer, key);` | `test/enhance-state.test.ts`: 2 failed \| 26 passed (28). "two roots on one storage object: each write keeps the fields the other wrote"; "a successor on the same storage object waits for its predecessor's pending call" |
-| L2P-M44 | write-behind: the stored prefs are merged with the newest value written on that storage object | `src/enhance/state.ts` | `const latest = storage === null \|\| writer === null ? undefined : slotOf(storage, PREFS_KEY).latest;` → `const latest = undefined as string \| null \| undefined;` | `test/enhance-state.test.ts`: 1 failed \| 27 passed (28). "two roots on one storage object: each write keeps the fields the other wrote" |
+| L2P-M42 | write-behind: the slot is claimed before set() is called (a nested write waits) | `src/enhance/state.ts` | `slot.busy = true; ⏎ let result: unknown; ⏎ try { ⏎ result = writer.set(key, value);` → `let result: unknown; ⏎ try { ⏎ result = writer.set(key, value); ⏎ slot.busy = true;` | `test/enhance-state.test.ts`: 1 failed \| 28 passed (29). "a set() that calls back into the reader queues the nested write: the older value lands first" |
+| L2P-M43 | write-behind: one queue per storage object, shared by every instance given it | `src/enhance/state.ts` | `const slot = slotOf(storage, key);` → `const slot = slotOf(writer, key);` | `test/enhance-state.test.ts`: 3 failed \| 26 passed (29). "two roots on one storage object: each write keeps the fields the other wrote"; "a successor on the same storage object waits for its predecessor's pending call"; "a later instance merges with a write still in flight when it started, but not with one its snapshot holds" |
+| L2P-M44 | write-behind: a change is merged with a newer value another instance queued on that storage object | `src/enhance/state.ts` | `if (prefsSlot !== null && prefsSlot.queued > seenLanded && typeof prefsSlot.latest === 'string') {` → `if (prefsSlot !== null && prefsSlot.queued < 0 && typeof prefsSlot.latest === 'string') {` | `test/enhance-state.test.ts`: 2 failed \| 27 passed (29). "two roots on one storage object: each write keeps the fields the other wrote"; "a later instance merges with a write still in flight when it started, but not with one its snapshot holds" |
 | L2P-M45 | ownership checked again after the options are read | `src/enhance/lifecycle.ts` | `const takenSince = claimed(root, options); ⏎ if (takenSince !== null) return takenSince;` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "host code run while the options are read cannot make a second owner: the outer call rejects ownership" |
 | L2P-M46 | a root is found by itself, wherever it moved (not by its current document) | `src/enhance/lifecycle.ts` | `const on = byRoot?.get(root as Element);` → `const on = new Set(Array.from(registry?.get((root as Element).ownerDocument as Document) ?? []).filter((i) => …` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "a root moved to another document is still its instance's: enhance refuses a second owner, destroy tears it down" |
 | L2P-M47 | ownership: an enhanced ancestor is found through the new root's ancestors | `src/enhance/lifecycle.ts` | `for (let n: Node \| null = root.parentNode; n !== null; n = n.parentNode) { ⏎ const up = findByRoot(n); ⏎ if (u…` → `(deleted)` | `test/enhance-lifecycle.test.ts`: 1 failed \| 42 passed (43). "a root moved to another document is still its instance's: enhance refuses a second owner, destroy tears it down" |
@@ -494,6 +495,8 @@ conditions). Their tests are new; the guards are unchanged. The scoping rows are
 | L2P-M84 | stylesheet: every @font-face family is the library's own | `assets/reader.css` | `font-family: "Docreader Sans"; font-style: italic;` → `font-family: "Source Sans 3"; font-style: italic;` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "every @font-face family is the library's own (Docreader ...), so no host face of the same name is taken over" |
 | L2P-M85 | stylesheet: no size in rem | `assets/reader.css` | `--measure: calc(44 * var(--rem)); /* about 80 characters of 18px serif */` → `--measure: 44rem; /* about 80 characters of 18px serif */` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "sizes nothing in rem: rem follows the host page's html font-size, which the reader does not own" |
 | L2P-M86 | stylesheet: the root's gutter is its own, not a percentage of its parent | `assets/reader.css` | `padding: 52px var(--pad) 96px; }` → `padding: 52px max(var(--pad), calc((100% - var(--wide)) / 2)) 96px; }` | `test/enhance-styles.test.ts`: 1 failed \| 17 passed (18). "pads the root by its own gutter, never by a percentage, which would be of the host's width" |
+| L2P-M87 | write-behind: the snapshot wins over a value that had landed before it was read | `src/enhance/state.ts` | `const seenLanded = prefsSlot?.landed ?? 0;` → `const seenLanded = 0;` | `test/enhance-state.test.ts`: 1 failed \| 28 passed (29). "a later instance merges with a write still in flight when it started, but not with one its snapshot holds" |
+| L2P-M88 | write-behind: each completed call counts as landed | `src/enhance/state.ts` | `slot.landed = Math.max(slot.landed, seq);` → `(deleted)` | `test/enhance-state.test.ts`: 1 failed \| 28 passed (29). "a later instance merges with a write still in flight when it started, but not with one its snapshot holds" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -517,10 +520,10 @@ conditions). Their tests are new; the guards are unchanged. The scoping rows are
   },
   {
     "id": "L2P-M44",
-    "guard": "write-behind: the stored prefs are merged with the newest value written on that storage object",
+    "guard": "write-behind: a change is merged with a newer value another instance queued on that storage object",
     "file": "src/enhance/state.ts",
-    "old": "    const latest = storage === null || writer === null ? undefined : slotOf(storage, PREFS_KEY).latest;\n",
-    "new": "    const latest = undefined as string | null | undefined;\n",
+    "old": "    if (prefsSlot !== null && prefsSlot.queued > seenLanded && typeof prefsSlot.latest === 'string') {",
+    "new": "    if (prefsSlot !== null && prefsSlot.queued < 0 && typeof prefsSlot.latest === 'string') {",
     "tests": "test/enhance-state.test.ts"
   },
   {
@@ -858,6 +861,22 @@ conditions). Their tests are new; the guards are unchanged. The scoping rows are
     "old": "padding: 52px var(--pad) 96px; }",
     "new": "padding: 52px max(var(--pad), calc((100% - var(--wide)) / 2)) 96px; }",
     "tests": "test/enhance-styles.test.ts"
+  },
+  {
+    "id": "L2P-M87",
+    "guard": "write-behind: the snapshot wins over a value that had landed before it was read",
+    "file": "src/enhance/state.ts",
+    "old": "  const seenLanded = prefsSlot?.landed ?? 0;\n",
+    "new": "  const seenLanded = 0;\n",
+    "tests": "test/enhance-state.test.ts"
+  },
+  {
+    "id": "L2P-M88",
+    "guard": "write-behind: each completed call counts as landed",
+    "file": "src/enhance/state.ts",
+    "old": "  slot.landed = Math.max(slot.landed, seq);\n",
+    "new": "",
+    "tests": "test/enhance-state.test.ts"
   }
 ]
 ```
