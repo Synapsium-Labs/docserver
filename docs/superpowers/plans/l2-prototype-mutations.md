@@ -417,3 +417,14 @@ serialization after destroy is still identical, and only the comparison of node 
   }
 ]
 ```
+
+## Visual pass: tables that stack on a phone
+
+Measured 2026-10-19 by hand (each change applied to `src/enhance/status.ts`, `test/enhance-tables.test.ts` run, the file
+restored byte for byte and compared with `cmp`, then green again).
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2P-V1 | only a table of three or more columns stacks | `src/enhance/status.ts` | `if (heads.length < 3) return;` → deleted | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "a table of three columns takes the stack class and labels each cell; two columns stay a table" |
+| L2P-V2 | the stack class goes through the journal | `src/enhance/status.ts` | `journal.toggleClass(wrapper, 'stack', true);` → `wrapper.classList.add('stack');` | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "destroy takes the class and the labels away again" |
+| L2P-V3 | the cell labels go through the journal | `src/enhance/status.ts` | `journal.setAttribute(c, 'data-label', label);` → `c.setAttribute('data-label', label);` | `test/enhance-tables.test.ts`: 1 failed \| 1 passed (2). "destroy takes the class and the labels away again" |

@@ -195,7 +195,7 @@
 [data-docreader-root]:not(i) { background: var(--bg); color: var(--text); font-family: var(--prose); font-size: 18px; line-height: 1.62; font-optical-sizing: auto; font-kerning: normal; text-rendering: optimizeLegibility; font-variant-numeric: oldstyle-nums proportional-nums; }
 [data-docreader-root] ::selection { background: rgba(35, 85, 159, .2); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .doc-progress { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--accent); opacity: .7; z-index: 1000; }
-[data-docreader-root][data-docreader-root]:not(i) { overflow-wrap: break-word; max-width: calc(var(--wide) + 2 * var(--pad)); margin: 0 auto; padding: 52px var(--pad) 96px; }
+[data-docreader-root][data-docreader-root]:not(i) { overflow-wrap: break-word; max-width: none; margin: 0; padding: 52px max(var(--pad), calc((100% - var(--wide)) / 2)) 96px; }
 /* every block sits in the reading column; the wide ones break out (below) */
 [data-docreader-root][data-docreader-root]:not(i) > * { max-width: var(--measure); margin-left: auto; margin-right: auto; }
 [data-docreader-root][data-docreader-root]:not(i) p { margin-top: 0; margin-bottom: 1.05em; hyphens: manual; -webkit-hyphens: manual; hanging-punctuation: first; }
@@ -849,8 +849,9 @@
 /* ─── code and paths: a cool grey-blue surface; paths in a slate tone ───────── */
 [data-docreader-root][data-docreader-root]:not(i) code.path { color: var(--path); }
 /* ─── highlighted code: highlight.js classes, coloured like the Pygments palettes an earlier reader used (light: "friendly",
-   darkened where it fell under 4.5:1 on the code surface; dark: "github-dark"). Dark rules set bold and italic explicitly,
-   so a light value never leaks into dark. ─── */
+   darkened where it fell under 4.5:1 on the code surface; dark: "github-dark"). In dark, the bold of the light palette stays on the
+   classes the dark palette does not restyle (keywords, constants, tag names, escapes, prompts), as it did in the earlier
+   reader; every other bold and italic is set explicitly. ─── */
 [data-docreader-root] .codehilite .hljs-keyword,
 [data-docreader-root] .codehilite .hljs-bullet,
 [data-docreader-root] .codehilite .hljs-template-tag { color: #007020; font-weight: bold; }
@@ -904,8 +905,8 @@
   [data-docreader-root]:not([data-theme="light"]) .codehilite { color: #e6edf3; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-keyword,
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-bullet,
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-template-tag { color: #ff7b72; font-weight: normal; }
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-literal { color: #79c0ff; font-weight: normal; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-template-tag { color: #ff7b72; font-weight: bold; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-literal { color: #79c0ff; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-type { color: #ff7b72; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-built_in { color: #e6edf3; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-number { color: #a5d6ff; }
@@ -915,7 +916,7 @@
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-formula,
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-link { color: #a5d6ff; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-link { text-decoration: underline; }
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-char.escape_ { color: #79c0ff; font-weight: normal; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-char.escape_ { color: #79c0ff; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-regexp { color: #79c0ff; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-symbol { color: #a5d6ff; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-subst { color: #e6edf3; font-style: normal; }
@@ -926,11 +927,11 @@
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-section { color: #79c0ff; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-attr { color: #e6edf3; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .language-json .hljs-attr,
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .language-yaml .hljs-attr { color: #7ee787; font-weight: normal; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .language-yaml .hljs-attr { color: #7ee787; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-attribute { color: #e6edf3; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-name,
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-tag { color: #7ee787; font-weight: normal; }
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-id { color: #ff7b72; font-weight: normal; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-tag { color: #7ee787; font-weight: bold; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-id { color: #ff7b72; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-class { color: #f0883e; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-attr,
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-selector-pseudo { color: #d2a8ff; font-weight: bold; }
@@ -942,7 +943,7 @@
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta { color: #8b949e; font-weight: bold; font-style: italic; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta .hljs-keyword { color: inherit; font-weight: inherit; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta .hljs-string { color: var(--code-comment); font-style: italic; }
-  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta.prompt_ { color: #8b949e; font-weight: normal; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-meta.prompt_ { color: #8b949e; font-weight: bold; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-addition { color: #56d364; background-color: #0f5323; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-deletion { color: #ffa198; background-color: #490202; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-emphasis { font-style: italic; }
@@ -951,8 +952,8 @@
 [data-docreader-root][data-theme="dark"] .codehilite { color: #e6edf3; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-keyword,
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-bullet,
-[data-docreader-root][data-theme="dark"] .codehilite .hljs-template-tag { color: #ff7b72; font-weight: normal; }
-[data-docreader-root][data-theme="dark"] .codehilite .hljs-literal { color: #79c0ff; font-weight: normal; }
+[data-docreader-root][data-theme="dark"] .codehilite .hljs-template-tag { color: #ff7b72; font-weight: bold; }
+[data-docreader-root][data-theme="dark"] .codehilite .hljs-literal { color: #79c0ff; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-type { color: #ff7b72; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-built_in { color: #e6edf3; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-number { color: #a5d6ff; }
@@ -962,7 +963,7 @@
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-formula,
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-link { color: #a5d6ff; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-link { text-decoration: underline; }
-[data-docreader-root][data-theme="dark"] .codehilite .hljs-char.escape_ { color: #79c0ff; font-weight: normal; }
+[data-docreader-root][data-theme="dark"] .codehilite .hljs-char.escape_ { color: #79c0ff; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-regexp { color: #79c0ff; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-symbol { color: #a5d6ff; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-subst { color: #e6edf3; font-style: normal; }
@@ -973,11 +974,11 @@
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-section { color: #79c0ff; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-attr { color: #e6edf3; }
 [data-docreader-root][data-theme="dark"] .codehilite .language-json .hljs-attr,
-[data-docreader-root][data-theme="dark"] .codehilite .language-yaml .hljs-attr { color: #7ee787; font-weight: normal; }
+[data-docreader-root][data-theme="dark"] .codehilite .language-yaml .hljs-attr { color: #7ee787; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-attribute { color: #e6edf3; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-name,
-[data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-tag { color: #7ee787; font-weight: normal; }
-[data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-id { color: #ff7b72; font-weight: normal; }
+[data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-tag { color: #7ee787; font-weight: bold; }
+[data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-id { color: #ff7b72; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-class { color: #f0883e; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-attr,
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-selector-pseudo { color: #d2a8ff; font-weight: bold; }
@@ -989,7 +990,7 @@
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-meta { color: #8b949e; font-weight: bold; font-style: italic; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-meta .hljs-keyword { color: inherit; font-weight: inherit; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-meta .hljs-string { color: var(--code-comment); font-style: italic; }
-[data-docreader-root][data-theme="dark"] .codehilite .hljs-meta.prompt_ { color: #8b949e; font-weight: normal; }
+[data-docreader-root][data-theme="dark"] .codehilite .hljs-meta.prompt_ { color: #8b949e; font-weight: bold; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-addition { color: #56d364; background-color: #0f5323; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-deletion { color: #ffa198; background-color: #490202; }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-emphasis { font-style: italic; }

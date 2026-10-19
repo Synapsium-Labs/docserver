@@ -1,4 +1,5 @@
-// Status words in table cells, ported from the reference reader's section 8 (its status marks only): in a column
+// Table marks, ported from the reference reader's section 8: a table of three or more columns stacks into cards on a phone
+// (`stackOnPhone`), and status words in table cells (below). In a column
 // that reads as a status column, a cell's leading status word ("Agreed", "Pending, see below") is shown as a
 // dot-and-word mark, `span.pill.<ok|wait|no|info>`.
 //
@@ -68,6 +69,22 @@ function mark(journal: Journal, doc: Document, node: Text): void {
   }
 }
 
+/**
+ * A table of three or more columns stacks into cards on a phone (the stylesheet's `.stack` rules, under 700px wide):
+ * the wrapper takes the class, and each body cell carries its column's name in `data-label`, which the card shows
+ * above the cell. Two columns stay a table.
+ */
+function stackOnPhone(wrapper: Element, heads: readonly string[], rows: readonly HTMLTableRowElement[], journal: Journal): void {
+  if (heads.length < 3) return;
+  journal.toggleClass(wrapper, 'stack', true);
+  for (const r of rows) {
+    Array.from(r.cells).forEach((c, i) => {
+      const label = heads[i];
+      if (label !== undefined && label !== '') journal.setAttribute(c, 'data-label', label);
+    });
+  }
+}
+
 /** Mark the status words of every table under `root` (render()'s `div.table-wrapper > table`). */
 export function buildStatusMarks(root: Element, journal: Journal): void {
   const doc = root.ownerDocument;
@@ -77,6 +94,7 @@ export function buildStatusMarks(root: Element, journal: Journal): void {
     const headRow = table.tHead?.rows[0];
     const heads = headRow === undefined ? [] : Array.from(headRow.cells).map(txt);
     const rows = Array.from(table.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
+    stackOnPhone(w, heads, rows, journal);
     heads.forEach((head, ci) => {
       if (ci === 0) return;
       const cells: Element[] = [];
