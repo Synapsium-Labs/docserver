@@ -60,16 +60,28 @@ interface Cost {
   steps: number;
 }
 
-/** One run on `root`: enhance it (plans' build timed), turn the outline on and off with `o` (timed), destroy it. */
+/** The outline toggles (on and off) timed together, and the batches of them in each run: one toggle is too quick. */
+const TOGGLES = 10;
+const BATCHES = 8;
+
+/**
+ * One run on `root`: enhance it (plans' build timed), turn the outline on and off with `o` in BATCHES batches of
+ * TOGGLES (each batch timed, its time per toggle kept), destroy it. The quickest batch counts: a pause for garbage
+ * collection or another process only ever slows one down.
+ */
 async function run(root: HTMLElement, best: Cost): Promise<void> {
   hooks.timed = [];
   await enhance(root);
   best.build = Math.min(best.build, hooks.timed[0] ?? Infinity);
   best.steps = contextOf(root)?.plan.steps.length ?? 0;
-  const t0 = performance.now();
-  key('o');
-  key('o');
-  best.toggle = Math.min(best.toggle, performance.now() - t0);
+  for (let j = 0; j < BATCHES; j += 1) {
+    const t0 = performance.now();
+    for (let i = 0; i < TOGGLES; i += 1) {
+      key('o');
+      key('o');
+    }
+    best.toggle = Math.min(best.toggle, (performance.now() - t0) / TOGGLES);
+  }
   await destroyEnhancement(root);
 }
 
@@ -87,12 +99,13 @@ it('RF3: the build and an outline toggle stay within a measured budget, and a 2Ã
     await run(two, b);
   }
   expect([a.steps, b.steps]).toEqual([1000, 2000]);
-  // Measured in jsdom on a heavily loaded machine (load average near 60), best of four: the build about 400 ms on the
-  // large plan and 750 ms on the plan twice its size (a ratio under 1.9), a toggle about 1 ms at both sizes. The
-  // budgets leave room for a slower machine; the ratio is what catches a cost that grows faster than the plan. A toggle
-  // is too quick to time closely, so its ratio has a 5 ms floor.
+  // Measured in jsdom on a heavily loaded machine (load average 30 to 60), best of four: the build about 400 ms on the
+  // large plan and 750 ms on the plan twice its size (a ratio under 1.9); a toggle (on and off), timed in batches of
+  // TOGGLES, about 0.6 ms on the large plan and 0.7 to 1.0 ms on the plan twice its size (ratios 1.1 to 1.8), so its
+  // ratio needs no floor. The budgets leave room for a slower machine; the ratios are what catch a cost that grows
+  // faster than the plan.
   expect(a.build).toBeLessThan(1500);
   expect(a.toggle).toBeLessThan(50);
   expect(b.build).toBeLessThanOrEqual(2.5 * a.build);
-  expect(b.toggle).toBeLessThanOrEqual(Math.max(2.5 * a.toggle, 5));
+  expect(b.toggle).toBeLessThanOrEqual(2.5 * a.toggle);
 }, 600_000);
