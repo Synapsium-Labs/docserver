@@ -1,7 +1,8 @@
 // The types of `./enhance`: the public ones (re-exported by index.ts) and the context every feature builds with.
 // Import-inert: declarations only.
+import type { Host } from './host.js';
 import type { Journal } from './journal.js';
-import type { NormalizedOptions } from './options.js';
+import type { FeatureOptions } from './options.js';
 import type { ReaderState } from './state.js';
 
 /** The reader's settings, reader-wide (not per document). */
@@ -12,13 +13,16 @@ export interface Prefs {
   width: 'standard' | 'wide';
   /** The body face. */
   font: 'serif' | 'sans';
+  /** The reading lens: 'all' shows everything; 'product' quiets implementation detail, never removing it. */
+  lens: 'all' | 'product';
 }
 
 /** The host's storage, seen through two calls. The library never touches a storage API itself. */
 export interface ReaderStorage {
   /**
    * What the host already has stored under this reader's keys. Read during startup only: the object once, then
-   * each key this document needs once (`docreader:prefs`, then `docreader:doc:<storageKey>:<name>`).
+   * each key this document needs once (`docreader:prefs`, then `docreader:doc:<storageKey>:<name>`; the reading
+   * position's `docreader:pos:<posKey>` and the reader-wide `docreader:ui` are reserved for later versions).
    */
   readonly snapshot?: Readonly<Record<string, string>>;
   /**
@@ -36,12 +40,59 @@ export interface FrontListEntry {
   vals: string[];
 }
 
+/**
+ * One commit of the document, as the host's version control lists it. A sha is 7 to 40 hex characters, or exactly
+ * 64 (a SHA-256 repository).
+ */
+export interface CommitEntry {
+  readonly sha: string;
+  /** The commit's subject line, cut to 200 code units. */
+  readonly subject: string;
+  /** When it was made, as an ISO 8601 date and time; at most 64 characters. */
+  readonly date: string;
+  /** Its parents' shas, first parent first; the first 16 are kept. */
+  readonly parents: readonly string[];
+}
+
 /** What the host knows about the document. The library never reads document.title, location or a JSON script. */
 export interface DocumentInfo {
   /** render()'s meta.title or null. */
   readonly title?: string | null;
   /** render()'s meta.frontList or null. */
   readonly frontList?: readonly FrontListEntry[] | null;
+  /** The commit of the version shown, or null. */
+  readonly sha?: string | null;
+  /** True when the version shown is not a commit (a working copy): no "what changed" then. Default false. */
+  readonly draft?: boolean;
+  /**
+   * The document's commits, newest first, or null; only the first 100 are read. (Named `commits`, not `history`:
+   * the reader never names the page's history, and its source walls refuse that name.)
+   */
+  readonly commits?: readonly CommitEntry[] | null;
+  /** The base commit of a one-day view: the version shown is `sha`, with the changes since `only` marked. */
+  readonly only?: string | null;
+}
+
+/** Which parts of the reader's own chrome it builds; each defaults to true (a host may build its own bar). */
+export interface ChromeOptions {
+  /** The bar at the top of the root: tools, progress and the running head. */
+  readonly bar?: boolean;
+  /** The contents rail, or its drawer on a narrow screen. */
+  readonly rail?: boolean;
+  /** The reading settings menu. */
+  readonly settings?: boolean;
+}
+
+/** Drawing Mermaid figures. The host passes the module, never a URL. */
+export interface MermaidOptions {
+  /** Resolve with Mermaid's module; called when drawing starts, never while the options are read. */
+  load(): Promise<unknown>;
+  /** The largest diagram source, in characters: an integer from 1 to 1048576. Default: the library's pinned value. */
+  readonly maxTextSize?: number;
+  /** The most edges a diagram may draw: an integer from 1 to 50000. Default: the library's pinned value. */
+  readonly maxEdges?: number;
+  /** Configuration keys a diagram's own directive may not set, added to the library's list (never removing one). */
+  readonly secure?: readonly string[];
 }
 
 /** The options of enhance(). Read once, as plain data (own data properties only), when enhance() is called. */
@@ -58,6 +109,33 @@ export interface EnhanceOptions {
   folds?: boolean;
   /** Aborting it during startup is destroyEnhancement(root); once enhance() has resolved, it does nothing. */
   signal?: AbortSignal;
+  /** The reading position's key; default storageKey. Absent with storageKey: the position does not persist. */
+  posKey?: string;
+  /** Single-key shortcuts; default true. */
+  keyboard?: boolean;
+  /** Which parts of its own chrome the reader builds; each defaults to true. */
+  chrome?: ChromeOptions;
+  /** Rule paragraphs and the rules index; default false. */
+  rules?: boolean;
+  /** The id to open the document at, without '#' (a heading id or a defined ID); empty or null for none. */
+  initialHash?: string | null;
+  /** A link the reader was asked to follow. Absent: the browser follows it. */
+  onLink?(href: string, how: { readonly newTab: boolean }): void;
+  /**
+   * The reader went to `id` (null: back to no section). `push` asks for a new entry in the host's own navigation
+   * history; `from` is an opaque token for the place being left, which the host hands back when it returns there.
+   */
+  onHash?(id: string | null, entry: { readonly push: boolean; readonly from: string | null }): void;
+  /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
+  copy?(text: string): void | Promise<void>;
+  /** The document's changes since commit `sha`, for "what changed". Absent: no comparison. */
+  changes?(sha: string): Promise<unknown>;
+  /** Show another version: `{ sha, only }` a day's version; `{ sha: null, only: null }` back to the latest. */
+  openVersion?(v: { readonly sha: string | null; readonly only: string | null }): void;
+  /** The link for an item key the document names, or null for none. Absent: no item links. */
+  itemLink?(key: string): string | null;
+  /** Drawing Mermaid figures. Absent: no drawing; a figure shows its source. */
+  mermaid?: MermaidOptions;
 }
 
 /** Why enhance() (or setEnhancementPrefs) refused or failed. */
@@ -79,6 +157,14 @@ export interface ResolvedInfo {
   readonly title: string | null;
   /** info.frontList when given; otherwise null (the DOM's front-matter strip is not parsed back). */
   readonly frontList: readonly FrontListEntry[] | null;
+  /** info.sha, or null. */
+  readonly sha: string | null;
+  /** info.draft, or false. */
+  readonly draft: boolean;
+  /** info.commits (at most 100), or null. */
+  readonly commits: readonly CommitEntry[] | null;
+  /** info.only, or null. */
+  readonly only: string | null;
   /**
    * Port of the reference's document check, measured before any feature moves a node: a level-1 heading among
    * the root's children, and either three or more level-2 headings, or at least one level-2 and four level-3
@@ -101,8 +187,10 @@ export interface FeatureContext {
   readonly state: ReaderState;
   /** Title, front matter and the document check. */
   readonly info: ResolvedInfo;
-  /** The options, normalized. */
-  readonly options: NormalizedOptions;
+  /** The options, normalized. The host's functions are not here: they are reached through `host`. */
+  readonly options: FeatureOptions;
+  /** The host's callbacks, one wrapper each: safe when absent, silent once not live, called inside an operation. */
+  readonly host: Host;
   /**
    * False once the instance is being destroyed. Check it after anything that can call out (a host callback, a
    * storage read or write, a dispatched event) and stop early when it is false.
