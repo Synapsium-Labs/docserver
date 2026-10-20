@@ -257,6 +257,12 @@ describe('the reading line and the spy event', () => {
     expect(log).toEqual([{ section: 'in-short', unit: null }]);
     await scrollTo(0, place(160));
     expect(log.at(-1)).toEqual({ section: null, unit: null });
+    await scrollTo(0, place(149));
+    await scrollTo(0, place(150)); // on the line is not above it
+    expect(log.slice(-2)).toEqual([
+      { section: 'in-short', unit: null },
+      { section: null, unit: null },
+    ]);
   });
 
   it('on a plan, each task is a unit and the section that holds them is not; a hidden task is skipped once relayout ran', async () => {
@@ -282,6 +288,47 @@ describe('the reading line and the spy event', () => {
     await frames();
     await scrollTo(1250, place); // task 2 at 150 (hidden), task 1 at -250
     expect(log.at(-1)).toEqual({ section: '2-tasks', unit: 'task-1-first-part' });
+  });
+
+  it('on a plan too short for the outline mode, the tasks are no units: the section that holds them is', async () => {
+    planProbe();
+    const short = PLAN.split('\n').filter((l) => !/\*\*Step ([4-9]|10):/.test(l)).join('\n'); // three steps a task
+    const root = mount(short);
+    await enhance(root);
+    expect(ctxOf(root).plan.outlineable).toBe(false);
+    await frames();
+    const log = spyLog(root);
+    const place = placer(root, { 'in-short': 300, '1-scope': 600, '2-tasks': 900, 'task-1-first-part': 1000, 'task-2-second-part': 1400, '3-notes': 1800 });
+    await scrollTo(800, place); // task 1 at 200
+    expect(log.at(-1)).toEqual({ section: '2-tasks', unit: '2-tasks' });
+    await scrollTo(1200, place); // task 2 at 200: no change
+    expect(log).toHaveLength(1);
+  });
+
+  it('the spy runs at the first frame and after every relayout, with no scroll', async () => {
+    const root = mount();
+    let tops = [100, 800, 1200, 1600];
+    const place = (): void => {
+      Array.from(root.querySelectorAll('h2')).forEach((h, i) => rects.set(h, { top: tops[i] ?? 0 }));
+    };
+    place();
+    const log: (string | null)[] = [];
+    hooks.probes.push({
+      name: 'spy-probe',
+      build: (ctx: FeatureContext) => {
+        ctx.events.on('spy', (p) => log.push(p.section?.id ?? null));
+      },
+    } satisfies Feature);
+    await enhance(root);
+    expect(log).toEqual([]);
+    await frames(); // the first frame: relayout('start')
+    expect(log).toEqual(['in-short']);
+    tops = [-500, 200, 1200, 1600]; // a block above grew (a diagram drew, say), with no scroll
+    place();
+    ctxOf(root).relayout('content');
+    await frames();
+    expect(log).toEqual(['in-short', '1-context']);
+    expect(head(root)).toBe('§ 1|Context');
   });
 
   it('a page that is not a document has sections but no units', async () => {
@@ -384,6 +431,8 @@ describe('the root classes and the progress line', () => {
     const h1 = root.querySelector('h1') as HTMLElement;
     await scrollTo(10, () => rects.set(h1, { top: 0, height: 41 }));
     expect(root.classList.contains('scrolled')).toBe(false);
+    await scrollTo(10, () => rects.set(h1, { top: 0, height: 40 })); // at 40 px is not above it
+    expect(root.classList.contains('scrolled')).toBe(false);
     await scrollTo(11, () => rects.set(h1, { top: 0, height: 39 }));
     expect(root.classList.contains('scrolled')).toBe(true);
     await scrollTo(0, () => rects.set(h1, { top: 100, height: 40 }));
@@ -419,6 +468,8 @@ describe('the root classes and the progress line', () => {
     await scrollTo(0, at(300, 4768)); // the root below the window's top
     expect(progress.style.width).toBe('0%');
     await scrollTo(0, at(0, 700)); // the root fits the window
+    expect(progress.style.width).toBe('0%');
+    await scrollTo(5, at(-5, 768)); // exactly the window's height: nothing can be scrolled
     expect(progress.style.width).toBe('0%');
     await destroyEnhancement(root);
     expect(progress.hasAttribute('style')).toBe(false);
@@ -460,6 +511,12 @@ describe('the phone bar', () => {
     expect(hidden()).toBe(false);
     await go(700);
     expect(hidden()).toBe(true);
+    await go(200);
+    await go(302); // down, just past 300
+    expect(hidden()).toBe(true);
+    await go(298); // up by less than the slack, but above 300 again
+    expect(hidden()).toBe(false);
+    await go(700);
     await destroyEnhancement(root);
     expect(hidden()).toBe(false);
   });
@@ -532,17 +589,17 @@ describe('the bar: --bar-h and its landmark', () => {
     await frames();
     const ctx = ctxOf(root);
     const bar = ctx.slots?.bar as HTMLElement;
-    let height = 100;
+    let height = 102;
     Object.defineProperty(bar, 'clientHeight', { configurable: true, get: () => height });
     const values = new Map<Element, Record<string, string>>([
       [root, { '--bar-h': '48px' }],
-      [bar, { 'padding-top': '0px', 'padding-bottom': '52px' }],
+      [bar, { 'padding-top': '2px', 'padding-bottom': '52px' }],
     ]);
     computed(values);
     ctx.relayout('content');
     await frames();
-    expect(root.hasAttribute('style')).toBe(false); // 100 less 52 is the 48 the stylesheet gives
-    height = 130; // a banner of 30 px joined the bar
+    expect(root.hasAttribute('style')).toBe(false); // 102 less 54 is the 48 the stylesheet gives
+    height = 132; // a banner of 30 px joined the bar
     ctx.relayout('content');
     await frames();
     expect(root.style.getPropertyValue('--bar-h')).toBe('78px');
@@ -551,7 +608,7 @@ describe('the bar: --bar-h and its landmark', () => {
     ctx.relayout('content');
     await frames();
     expect(root.style.getPropertyValue('--bar-h')).toBe('78px');
-    height = 100.4;
+    height = 102.4;
     ctx.relayout('content');
     await frames();
     expect(root.style.getPropertyValue('--bar-h')).toBe('48px');
@@ -610,6 +667,71 @@ describe('the bar: --bar-h and its landmark', () => {
   });
 });
 
+describe('the running head\'s labels, read when the feature builds', () => {
+  it('a section heading the layout named keeps that name; chrome the layout put in a heading is left out', async () => {
+    hooks.beforeScroll.push({
+      name: 'label-probe',
+      build: (ctx: FeatureContext) => {
+        const [, , design, open] = Array.from(ctx.root.querySelectorAll('h2')) as HTMLElement[];
+        ctx.journal.setAttribute(design as HTMLElement, 'aria-label', '2. The design, as named');
+        ctx.journal.insert(chrome(ctx.root.ownerDocument, 'span', { className: 'badge', text: 'New ' }), open as HTMLElement, (open as HTMLElement).firstChild);
+      },
+    } satisfies Feature);
+    const root = mount();
+    await enhance(root);
+    await frames();
+    const place = ladder(root, [400, 800, 1200, 1600]);
+    await scrollTo(1000, place);
+    expect(head(root)).toBe('§ 2|The design, as named');
+    await scrollTo(1400, place);
+    expect(head(root)).toBe('|Open questions');
+  });
+});
+
+describe('each frame writes only what changed, and a burst of scroll events is one frame', () => {
+  it('the same place twice: no style, class or running head write the second time', async () => {
+    const root = mount();
+    await enhance(root);
+    await frames();
+    const h1 = root.querySelector('h1') as HTMLElement;
+    const place = (y: number): void => {
+      ladder(root, [400, 800, 1200, 1600])(y);
+      rects.set(root, { top: -y, height: 5000 });
+      rects.set(h1, { top: 50 - y, height: 40 });
+    };
+    phone = true;
+    await scrollTo(200, place);
+    await scrollTo(1000, place); // the bar hides, the title is gone, the progress moves, § 2 Design
+    expect([root.className, head(root)]).toEqual(['scrolled bar-hidden', '§ 2|Design']);
+    const writes = { style: 0, cls: 0, head: 0 };
+    vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty').mockImplementation(function (this: CSSStyleDeclaration) {
+      writes.style += 1;
+    });
+    vi.spyOn(DOMTokenList.prototype, 'toggle').mockImplementation(function (this: DOMTokenList) {
+      writes.cls += 1;
+      return true;
+    });
+    const running = ctxOf(root).slots?.running as HTMLElement;
+    vi.spyOn(running, 'replaceChildren').mockImplementation(() => {
+      writes.head += 1;
+    });
+    await scrollTo(1000, place);
+    expect(writes).toEqual({ style: 0, cls: 0, head: 0 });
+  });
+
+  it('a burst of scroll events asks for one frame', async () => {
+    const root = mount();
+    await enhance(root);
+    await frames();
+    const asked = vi.spyOn(window, 'requestAnimationFrame');
+    for (let i = 0; i < 5; i += 1) window.dispatchEvent(new Event('scroll'));
+    expect(asked).toHaveBeenCalledTimes(1);
+    await frames();
+    window.dispatchEvent(new Event('scroll')); // after the frame ran: a new one
+    expect(asked).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('RF3: rect reads per frame', () => {
   /** A document with `n` level-2 sections, each placed 100 px below the last. */
   function many(n: number): { root: HTMLElement; place: (y: number) => void } {
@@ -645,6 +767,8 @@ describe('RF3: rect reads per frame', () => {
     }
     expect(worst).toBeGreaterThan(0);
     expect(worst).toBeLessThanOrEqual(bound);
+    // Without tasks the unit is the section, so a frame searches one list: the root, the title, and that search.
+    expect(worst).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
   });
 
   it('on a plan, both searches together stay within the bound', async () => {

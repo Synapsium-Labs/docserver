@@ -133,6 +133,30 @@ const firstBlock = (page: Page): Promise<number> =>
     return (first as Element).getBoundingClientRect().top;
   });
 
+/**
+ * The sticky tops of a fitted table's head and of a figure's tools, the parts that clear the bar: made here as the
+ * table and figure features will make them (a table wrapper with `fits`, a Mermaid figure with its `.tools`).
+ */
+const stickyTops = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+    let th = root.querySelector('.probe-fits th');
+    let tools = root.querySelector('.probe-figure .tools');
+    if (th === null || tools === null) {
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrapper fits probe-fits';
+      const table = document.createElement('table');
+      th = table.createTHead().insertRow().appendChild(document.createElement('th'));
+      wrap.append(table);
+      const figure = document.createElement('figure');
+      figure.className = 'mermaid-figure probe-figure';
+      tools = figure.appendChild(document.createElement('div'));
+      tools.className = 'tools';
+      root.append(wrap, figure);
+    }
+    return [getComputedStyle(th).top, getComputedStyle(tools).top];
+  });
+
 const classes = (page: Page): Promise<string[]> =>
   page.evaluate(() => Array.from((document.querySelector('main[data-harness-root]') as HTMLElement).classList).filter((c) => c === 'scrolled' || c === 'bar-hidden'));
 
@@ -162,12 +186,14 @@ describeBrowsers((browser) => {
         await doc.page.waitForTimeout(350); // its slide
         const s = await boxes(doc.page);
         expect([s.root.top < -1000, s.bar.top, s.row.top]).toEqual([true, 0, 0]); // stuck at the window's top
-        // The padding below the row lets the pointer through: the text under it takes the click.
-        const under = await doc.page.evaluate(() => {
-          const el = document.elementFromPoint(200, 70);
-          return el === null ? 'none' : el.closest('.topbar') === null ? el.localName : 'bar';
-        });
-        expect(under).not.toBe('bar');
+        // The padding below the row lets the pointer through: the text under it takes the click; the row takes it.
+        const hit = (y: number): Promise<string> =>
+          doc.page.evaluate((at) => {
+            const el = document.elementFromPoint(200, at);
+            return el === null ? 'none' : el.closest('.topbar') === null ? el.localName : 'bar';
+          }, y);
+        expect(await hit(70)).not.toBe('bar');
+        expect(await hit(24)).toBe('bar');
       } finally {
         await doc.close();
       }
@@ -203,14 +229,17 @@ describeBrowsers((browser) => {
           const r = document.querySelector('.running-head') as HTMLElement;
           return { text: r.textContent ?? '', b: r.querySelector('b')?.textContent ?? null, opacity: getComputedStyle(r).opacity };
         });
+      const line = (): Promise<string> => doc.page.evaluate(() => getComputedStyle(document.querySelector('.topbar-inner') as Element).boxShadow);
       expect(await classes(doc.page)).toEqual([]);
       expect(await head()).toEqual({ text: 'Scrolling example', b: null, opacity: '0' });
+      expect(await line()).toBe('rgb(252, 251, 248) 0px 1px 0px 0px'); // the bar's own colour
       const tops = await doc.page.evaluate(() => Array.from(document.querySelectorAll('h2')).map((h) => h.getBoundingClientRect().top));
       const second = tops[1] as number;
       await scrollTo(doc.page, second - 200); // the second section's heading 200 px down: above the 300 px line
       await doc.page.waitForTimeout(400); // the running head's fade
       expect(await classes(doc.page)).toEqual(['scrolled']);
       expect(await head()).toEqual({ text: '§ 2Section 2', b: '§ 2', opacity: '1' });
+      expect(await line()).toBe('rgb(225, 221, 211) 0px 1px 0px 0px'); // the border colour
       await scrollTo(doc.page, (tops[4] as number) - 100);
       const log = await doc.page.evaluate(() => (window as unknown as Win).__spy);
       expect(log).toContain('2-section-2');
@@ -239,8 +268,10 @@ describeBrowsers((browser) => {
       expect([await classes(doc.page), await shown()]).toEqual([['scrolled', 'bar-hidden'], false]);
       const row = (await boxes(doc.page)).row;
       expect([row.top, row.bottom]).toEqual([-49, -1]); // the row and its line, out of view
+      expect(await stickyTops(doc.page)).toEqual(['0px', '6px']); // a fitted table's head and a figure's tools move up
       await scrollTo(doc.page, 800);
       expect([await classes(doc.page), await shown()]).toEqual([['scrolled'], true]);
+      expect(await stickyTops(doc.page)).toEqual(['48px', '54px']);
       // A dialog open: scrolling down leaves the bar as it is.
       await doc.page.evaluate(() => {
         const w = window as unknown as Win & { __open: boolean };
@@ -293,6 +324,18 @@ describeBrowsers((browser) => {
       });
       await frames(doc.page);
       expect((await barH())[1]).toBe('48px');
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('print leaves the bar out', async () => {
+    const doc = await open(DOC, browser, { width: 1440, height: 1000 });
+    try {
+      const display = (): Promise<string> => doc.page.evaluate(() => getComputedStyle(document.querySelector('.topbar') as Element).display);
+      expect(await display()).toBe('block');
+      await doc.page.emulateMedia({ media: 'print' });
+      expect(await display()).toBe('none');
     } finally {
       await doc.close();
     }
