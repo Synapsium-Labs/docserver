@@ -1,0 +1,128 @@
+dl
+  div
+    dt
+      "rules"
+    dd
+      "AB-1, a]b, AB-2"
+  div
+    dt
+      "covers"
+    dd
+      "AB-1"
+h1
+  "Hostile IDs"
+details .doc-facts chrome
+  summary chrome
+    span .fs-k chrome
+      "Covers 1 rule"
+    span .sep chrome aria-hidden="true"
+      "·"
+    span .cnt.ok chrome
+      "1 done"
+    span .sep chrome aria-hidden="true"
+      "·"
+    "3 rules"
+  div .facts-body chrome
+    ol chrome
+      li chrome
+        a .rlink chrome
+          span .rid chrome
+            "AB-1"
+          span .rtitle chrome
+            "(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"…
+        span .ok.pill chrome
+          "done in v2 now"
+    dl chrome
+      dt chrome
+        "rules"
+      dd chrome
+        code chrome
+          "AB-1"
+        ","
+        code chrome
+          "a]b"
+        ","
+        code chrome
+          "AB-2"
+p .rule
+  span .rule-head chrome
+    code
+      "AB-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"…
+    span chrome hidden=""
+      "and"
+    code
+      "AB-1"
+    span .ok.pill chrome
+      "done in"
+      code
+        "v2"
+      "now"
+    span chrome hidden=""
+      "—"
+      em
+  "(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"…
+p
+  code
+    "AB-2"
+  "—"
+  strong
+    "Bold"
+  "with no space after the dash."
+p .rule
+  span .rule-head chrome
+    code
+      "AB-3"
+    span .ok.pill chrome
+      "agreed"
+    span chrome hidden=""
+      "—"
+      em
+  strong
+    "Bold"
+  "right after the status."
+p .rule
+  span .rule-head chrome
+    code
+      "AB-4"
+    span .no.pill chrome
+      "rejected"
+    span .info.pill chrome
+      "#x [y] \"z\" <b>"
+    span chrome hidden=""
+      "—"
+      em
+      "()."
+  "Body."
+p .rule
+  span .rule-head chrome
+    code
+      "AB-5"
+    span .no.pill chrome
+      "rejected"
+    span chrome hidden=""
+      "—"
+      em
+  "(a note with \"quotes\", [brackets] and #h"…
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "What"
+    tbody
+      tr
+        td .idcell
+          "R111111111111111111111111111111111111111"…
+        td
+          "long"
+      tr
+        td .idcell
+          "R2"
+        td
+          "short"
+h2
+  "A111111111111111111111111111111111111111"…
+p
+  "Text."

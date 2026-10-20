@@ -1,0 +1,4 @@
+{
+  "options": { "rules": true, "folds": false },
+  "scope": ["rule", "rule-head", "doc-facts"]
+}

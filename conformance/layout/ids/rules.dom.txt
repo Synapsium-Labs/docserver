@@ -1,0 +1,159 @@
+dl
+  div
+    dt
+      "type"
+    dd
+      "Design"
+  div
+    dt
+      "rules"
+    dd
+      "AB-ONE, AB-TWO, AB-THREE, CD-4, EF-5"
+  div
+    dt
+      "tags"
+    dd
+      "alpha, beta"
+h1
+  "Example rules"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+details .doc-facts chrome
+  summary chrome
+    span .fs-k chrome
+      "Rules index · 5 rules"
+    span .sep chrome aria-hidden="true"
+      "·"
+    span .cnt.ok chrome
+      "2 agreed"
+    span .sep chrome aria-hidden="true"
+      "·"
+    span .cnt.info chrome
+      "1 deferred"
+    span .sep chrome aria-hidden="true"
+      "·"
+    "2 tags"
+  div .facts-body chrome
+    ol chrome
+      li chrome
+        a .rlink chrome
+          span .rid chrome
+            "AB-ONE"
+          span .rtitle chrome
+            "The first rule"
+        span chrome
+      li chrome
+        a .rlink chrome
+          span .rid chrome
+            "AB-TWO"
+          span .rtitle chrome
+            "The second and third rules share a parag"…
+        span .ok.pill chrome
+          "agreed"
+      li chrome
+        a .rlink chrome
+          span .rid chrome
+            "AB-THREE"
+          span .rtitle chrome
+            "The second and third rules share a parag"…
+        span .ok.pill chrome
+          "agreed"
+      li chrome
+        a .rlink chrome
+          span .rid chrome
+            "CD-4"
+          span .rtitle chrome
+            "the fourth rule has no bold title"
+        span .info.pill chrome
+          "deferred"
+      li chrome
+        div chrome
+          span .rid chrome
+            "EF-5"
+        span chrome
+    dl chrome
+      dt chrome
+        "tags"
+      dd chrome
+        code chrome
+          "alpha"
+        ","
+        code chrome
+          "beta"
+h2
+  "1. Rules"
+p .rule
+  span .rule-head chrome
+    code
+      "AB-ONE"
+    span chrome hidden=""
+      "—"
+  strong
+    "The first rule."
+  "It says what it says."
+p .rule
+  span .rule-head chrome
+    code
+      "AB-TWO"
+    span chrome hidden=""
+      "and"
+    code
+      "AB-THREE"
+    span .ok.pill chrome
+      "agreed"
+    span .info.pill chrome
+      "after review"
+    span chrome hidden=""
+      "—"
+      em
+      "()."
+  "The second and third rules share a parag"…
+p .rule
+  span .rule-head chrome
+    code
+      "CD-4"
+    span .info.pill chrome
+      "deferred"
+    span chrome hidden=""
+      "—"
+      em
+      ":"
+  "the fourth rule has no bold title. It go"…
+p .rule
+  span .rule-head chrome
+    code
+      "AB-ONE"
+    span chrome hidden=""
+      ","
+    code
+      "GH-6"
+    span chrome hidden=""
+      "—"
+  "A later paragraph repeats an ID."
+p .rule
+  span .rule-head chrome
+    code
+      "AB-7"
+    span chrome hidden=""
+      "—"
+  em
+    "maybe"
+  "is no status word, so this stays text."
+h2
+  "2. Not rules"
+p
+  "Text"
+  code
+    "AB-8"
+  "— a code that does not open the paragrap"…
+p
+  code
+    "AB-9"
+  "no dash after the ID."
+p
+  code
+    "ab-10"
+  "— a lower-case code."
