@@ -1493,11 +1493,13 @@ const BUDGET_MS = 20_000;
 
 /**
  * How many rounds of the large plan, then the plan twice as large. Each round is a pair, timed one right after the
- * other, so both halves of a pair run under much the same load; the ratio judged is the median of the pairs' ratios. A
- * best of each scale taken from different rounds once compared a lucky large-plan round with a plateaued 2x one, and
- * crossed the bound under load on honest code (2.58; its pairs measured 2.05 to 2.16, then 2.59).
+ * other, so both halves of a pair run under much the same load; the ratio judged is the median of the pairs' ratios,
+ * which one slowed half cannot move. A best of each scale taken from different rounds once compared a lucky large-plan
+ * round with a plateaued 2x one, and crossed the bound under load on honest code (2.58; its pairs measured 2.05 to
+ * 2.16, then 2.59). Seven, because a single pair on this box measured 1.89 to 2.70: the median fails only when four
+ * of seven pairs cross the bound.
  */
-const ROUNDS = 5;
+const ROUNDS = 7;
 
 /** The middle of `xs` (the mean of the middle two when there is an even number). */
 function median(xs: readonly number[]): number {
@@ -1508,7 +1510,7 @@ function median(xs: readonly number[]): number {
 
 /**
  * No round starts once the rounds have taken this long, in ms, so a matcher whose cost grows with the number of terms
- * is judged on the rounds it finished (one at least) rather than outrunning the test's own timeout. Five honest
+ * is judged on the rounds it finished (one at least) rather than outrunning the test's own timeout. Seven honest
  * rounds take a fraction of it.
  */
 const ROUNDS_MS = 240_000;
