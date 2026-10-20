@@ -441,7 +441,7 @@ describe('vocabulary: a whole word, in any script (a letter, digit, mark or _ en
     const v = vocabOf({
       addressees: ['вы', '@me'],
       qualifiers: ['приложения'],
-      attention: { who: ['кто'], openAnswers: ['открыто'], blocking: ['блок!'] },
+      attention: { who: ['кто'], openAnswers: ['открыто'], blocking: ['блок!', 'стоп'] },
     });
     const cases: [string, RegExp, string, boolean][] = [
       ['addressee', v.addressee, 'Кто: вы', true],
@@ -456,7 +456,9 @@ describe('vocabulary: a whole word, in any script (a letter, digit, mark or _ en
       ['openAnswers', v.attention.openAnswers, 'Открыто пока', true],
       ['openAnswers', v.attention.openAnswers, 'открытость', false],
       ['blocking', v.attention.blocking, '  блок! да', true],
-      ['blocking', v.attention.blocking, 'блоки', false],
+      ['blocking', v.attention.blocking, 'блок!и', true],
+      ['blocking', v.attention.blocking, ' стоп.', true],
+      ['blocking', v.attention.blocking, 'стопка', false],
     ];
     expect(cases.map(([name, re, s]) => [name, re, s, re.test(s)])).toEqual(cases);
   });
