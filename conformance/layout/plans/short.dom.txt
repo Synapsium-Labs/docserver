@@ -119,7 +119,7 @@ div
         td
           "Lexer"
         td
-          "you"
+          "the build team"
 h3 .task aria-label="Task P0-1 — An odd number"
   span .task-id chrome
     "Task P0-1"

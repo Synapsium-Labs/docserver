@@ -38,7 +38,7 @@ The parts it builds:
 
 | Part | Owner |
 |---|---|
-| Lexer | you |
+| Lexer | the build team |
 
 ### Task P0-1 — An odd number
 
