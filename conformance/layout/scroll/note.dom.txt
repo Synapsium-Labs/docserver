@@ -1,0 +1,6 @@
+div .running-head chrome aria-hidden="true"
+div .doc-progress chrome
+p
+  "A short note with no title and no sectio"…
+p
+  "It still gets the bar and its progress l"…
