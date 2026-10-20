@@ -222,9 +222,11 @@ describeBrowsers((browser) => {
           fetched: 'refused',
           color: csp === 'strict' ? 'rgb(0, 0, 0)' : 'rgb(255, 0, 0)',
         });
-        // Each refusal is reported; a browser may name a directive's -attr or -elem form, so the family is compared.
-        const families = [...new Set((await doc.violations()).map((v) => (v.split(' ')[0] ?? '').replace(/-(?:attr|elem)$/, '')))].sort();
-        expect(families).toEqual(csp === 'strict' ? ['connect-src', 'script-src', 'style-src'] : ['connect-src', 'script-src']);
+        // Each refusal is reported; a browser may name a directive's -attr or -elem form, so the family is compared. The
+        // reports arrive as events, later under load, so the case waits for them rather than for a fixed time.
+        const families = async (): Promise<string[]> =>
+          [...new Set((await doc.violations()).map((v) => (v.split(' ')[0] ?? '').replace(/-(?:attr|elem)$/, '')))].sort();
+        await expect.poll(families, { timeout: 10_000 }).toEqual(csp === 'strict' ? ['connect-src', 'script-src', 'style-src'] : ['connect-src', 'script-src']);
       } finally {
         await doc.close();
       }
