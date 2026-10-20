@@ -25,6 +25,9 @@ Notes on the measurement.
   two codes. L2-T9-M87 (the first cell's rest is a title only when it opens on no ID) was green because its case's rest
   was two characters, which the length check alone turns down; the rest is now longer. Both cases changed in
   `da42b76`, and every row was measured again on it.
+- `1a13cbf` changes only a comment and one case's example key (the second rule key of "a key other than rules is
+  named by itself" is now `refines`). The six rows whose red list names that case (L2-T9-M12, M21, M43, M44, M48 and
+  M49) were measured again on it: the same count lines and the same failing tests.
 - Before measuring, every check that no case could redden was removed rather than left unmeasured: the status em's
   "only after a bare dash" check (when the dash's text goes on, the node after it is that text, never an em), the
   panel's null check (a key was taken, so the panel exists), the rules index's check for an empty list key (take()
@@ -999,7 +1002,7 @@ What makes a table an index, which rows define an ID, their title, status and gr
 
 A rules list in front matter and an ID table (`scripts/demo/samples/ids.md`: eight rule IDs, five rule paragraphs with
 statuses and notes, a lettered section and an ID table with a status column), the facts panel open and closed, in
-light and dark, at both viewports. Ours was the demo page built with `rules: true` (the demo builder passes no
+light and dark, at both viewports, on the final code. Ours was the demo page built with `rules: true` (the demo builder passes no
 plugin option, so a scratch copy of it added that one option); the reference was a temporary copy of the reference
 reader serving the same sample from a temporary repository, on loopback.
 
