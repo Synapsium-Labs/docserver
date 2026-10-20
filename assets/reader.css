@@ -48,9 +48,11 @@
    that fills its frame or its page gets them right; a root much narrower than the viewport keeps the wide layout, so
    a host that shows the reader in a narrow column of a wide page gives it a frame of its own.
 
-   Diagrams. A Mermaid figure's source stays readable text until the Mermaid feature (a later version) marks the root
-   with data-docreader-mermaid; from then on the source of a figure not yet drawn (pre.mermaid without
-   data-processed) is hidden under the drawing's plate. Nothing in this version sets that mark.
+   Diagrams. A Mermaid figure's source stays readable text until the Mermaid feature marks the root with
+   data-docreader-mermaid, which it does when drawing starts (only when the host gives Mermaid). From then on, keyed on
+   the figure's class: the source (render()'s pre.mermaid, which is never drawn into) is a transparent placeholder
+   until its figure is .drawn or .draw-failed, and hidden after; the drawing, a chrome pre.mermaid beside it, takes the
+   plate once the figure is drawn; a failed figure shows its .fig-error, never a blank plate.
 
    Specificity. The rules keep the cascade order of the layout they were ported from, so a prose rule, a component rule
    and a state rule beat or lose to each other exactly as before. Each selector carries the root attribute once (a class
@@ -555,8 +557,15 @@
 [data-docreader-root] figure.mermaid-figure { position: relative; background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; margin-top: 2.4em !important; margin-bottom: 2.6em !important; overflow: visible !important; }
 /* ─── marker: the drawn figure's rules (the plate, and the source while a diagram is drawn) start below ─── */
 [data-docreader-root] figure.mermaid-figure pre.mermaid { background: var(--plate) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 34px 24px 26px !important; margin: 0 !important; overflow-x: auto; font-family: var(--sans); font-size: 13px !important; color: var(--text-muted); }
-/* the source under a diagram that is about to be drawn; only where the Mermaid feature marked the root (see the header) */
-[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed]) { color: transparent !important; min-height: 180px; user-select: none; }
+/* a diagram's source, only where the Mermaid feature marked the root (see the header): the transparent placeholder until
+   its figure is drawn or has failed, then hidden. Keyed on the figure's class, since the source is never drawn into */
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure:not(.drawn):not(.draw-failed) > pre.mermaid:not([data-docreader-chrome]) { color: transparent !important; min-height: 180px; user-select: none; }
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure.drawn > pre.mermaid:not([data-docreader-chrome]),
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure.draw-failed > pre.mermaid:not([data-docreader-chrome]) { display: none !important; }
+/* the drawing, the chrome pre.mermaid beside the source: laid out but unseen over the placeholder while Mermaid draws
+   into it (it measures what it draws), the plate once the figure is drawn, and gone when it failed (its .fig-error shows) */
+[data-docreader-root] figure.mermaid-figure:not(.drawn) > pre.mermaid[data-docreader-chrome] { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
+[data-docreader-root] figure.mermaid-figure.draw-failed > pre.mermaid[data-docreader-chrome] { display: none !important; }
 [data-docreader-root] figure.mermaid-figure svg { cursor: zoom-in; filter: var(--fig-filter); }
 [data-docreader-root] figure.mermaid-figure figcaption { font-family: var(--prose) !important; font-size: calc(.95 * var(--rem)) !important; line-height: 1.5; color: var(--text-muted) !important; margin: .95em 0 0 !important; max-width: var(--measure); }
 [data-docreader-root] figure.mermaid-figure figcaption a { color: var(--accent); }
