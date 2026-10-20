@@ -2,11 +2,11 @@
 // Plans (docserver L2, Task 11): task headings and their badges, step numbers and owners, the reader's own steps,
 // the outline mode of a long plan (the root class `outline`, the Outline button in the bar's tray, the `o` key, a
 // task's "Show all"), a stored outline applied during the build, reveal opening a collapsed task, the plan published
-// on ctx.plan, destroy restoring the text, and RF3's budget on the large plan.
+// on ctx.plan, and destroy restoring the text. RF3's budget on the large plan is test/enhance-plans-rf3.test.ts.
 //
 // The feature list is mocked with a pass-through: features() is the real list, with the probes a test adds right
-// before or right after `plans` (so a probe sees what plans built before any later feature runs), and with plans'
-// build timed when a test asks for it. The position seam is wrapped too, so a case sees what changed inside keep().
+// before or right after `plans` (so a probe sees what plans built before any later feature runs). The position seam is
+// wrapped too, so a case sees what changed inside keep().
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions, type ReaderStorage } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
@@ -17,12 +17,10 @@ import type { RelayoutReason } from '../src/enhance/registry.js';
 import { docKey } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
-import { largePlan } from './fixtures/large-plan.js';
 
 const hooks = vi.hoisted(() => ({
   beforePlans: [] as unknown[],
   afterPlans: [] as unknown[],
-  timed: null as number[] | null,
   /** Each position.keep() while `watch` is on: how many roots were outlined before and after it ran its function. */
   kept: [] as [number, number][],
   watch: false,
@@ -52,17 +50,7 @@ vi.mock('../src/enhance/nav.js', async (importOriginal) => {
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
   const features = (): Feature[] => {
-    const list = real.features().map((f): Feature => {
-      if (f.name !== 'plans') return f;
-      return {
-        ...f,
-        build: (ctx) => {
-          const t0 = performance.now();
-          f.build(ctx);
-          hooks.timed?.push(performance.now() - t0);
-        },
-      };
-    });
+    const list = real.features();
     const at = list.findIndex((f) => f.name === 'plans');
     return [...list.slice(0, at), ...(hooks.beforePlans as Feature[]), list[at] as Feature, ...(hooks.afterPlans as Feature[]), ...list.slice(at + 1)];
   };
@@ -171,7 +159,6 @@ afterEach(async () => {
   hooks.afterPlans.length = 0;
   hooks.kept.length = 0;
   hooks.watch = false;
-  hooks.timed = null;
   vi.restoreAllMocks();
 });
 
@@ -906,41 +893,4 @@ describe('teardown, names and safety', () => {
     key(document.body, 'o');
     expect(ctxOf(root).state.readDoc(OUTLINE)).toBeNull();
   });
-});
-
-describe('RF3: the large plan', () => {
-  /** Plans' build and an outline toggle (on, then off) on the large plan at `scale`, each the best of `runs`. */
-  async function cost(scale: number, runs: number): Promise<{ build: number; toggle: number; steps: number }> {
-    const root = mount(largePlan(scale).markdown);
-    let build = Infinity;
-    let toggle = Infinity;
-    let steps = 0;
-    for (let i = 0; i < runs; i += 1) {
-      hooks.timed = [];
-      await enhance(root);
-      build = Math.min(build, hooks.timed[0] ?? Infinity);
-      steps = ctxOf(root).plan.steps.length;
-      const t0 = performance.now();
-      key(document.body, 'o');
-      key(document.body, 'o');
-      toggle = Math.min(toggle, performance.now() - t0);
-      await destroyEnhancement(root);
-    }
-    hooks.timed = null;
-    root.remove();
-    return { build, toggle, steps };
-  }
-
-  it('the build and an outline toggle stay within a measured budget, and a 2× plan takes at most 2.5× the time', async () => {
-    const one = await cost(1, 3);
-    const two = await cost(2, 3);
-    expect([one.steps, two.steps]).toEqual([1000, 2000]);
-    // Measured in jsdom on a loaded box (load average 18), best of three: the build about 330 ms at scale 1 and 670 ms
-    // at scale 2, a toggle about 1 ms and 2 ms. The budgets leave room for a slower machine; the ratio is what catches
-    // a cost that grows faster than the plan. A toggle is too quick to time closely, so its ratio has a 5 ms floor.
-    expect(one.build).toBeLessThan(1500);
-    expect(one.toggle).toBeLessThan(50);
-    expect(two.build).toBeLessThanOrEqual(2.5 * one.build);
-    expect(two.toggle).toBeLessThanOrEqual(Math.max(2.5 * one.toggle, 5));
-  }, 600_000);
 });
