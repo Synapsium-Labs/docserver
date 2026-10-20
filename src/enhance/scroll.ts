@@ -148,10 +148,10 @@ export function build(ctx: FeatureContext): void {
     ? ctx.text.inOrder([...sections.filter((h) => !(heads.get(h)?.inShort ?? false) && !holders.has(h)), ...tasks])
     : [];
   const isUnit = new Set(units);
-  /** The units the search reads: every unit, less the hidden ones on a plan with tasks; made again at every relayout. */
+  /** The units the search reads (on a plan with tasks): every unit but the hidden ones; made again at every relayout. */
   let shown: readonly HTMLElement[] = units;
   const reshow = (): void => {
-    shown = tasks.length > 0 ? units.filter((u) => u.closest('[hidden]') === null) : units;
+    shown = units.filter((u) => u.closest('[hidden]') === null);
   };
   reshow();
 
