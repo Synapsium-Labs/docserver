@@ -189,6 +189,19 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     await destroyEnhancement(root);
     for (const fn of [...timers.queued, ...frames.queued]) fn(); // the window ran them anyway
     expect(ran).toEqual([]);
+    // and once the instance is gone, nothing more is scheduled or heard
+    const asked = [timers.queued.length, frames.queued.length];
+    env.timeout(() => ran.push('late timeout'), 1);
+    env.frame(() => ran.push('late frame'));
+    env.idle(() => ran.push('late idle'));
+    const view2 = viewOf(root);
+    const added: string[] = [];
+    vi.spyOn(view2, 'addEventListener').mockImplementation(((type: string) => {
+      added.push(type);
+    }) as never);
+    env.onScroll(() => ran.push('late scroll'));
+    env.onPrint(() => ran.push('late print'));
+    expect([timers.queued.length, frames.queued.length, added]).toEqual([...asked, []]);
   });
 
   it('each schedule returns its own cancel, which cancels that one alone', async () => {
@@ -484,6 +497,10 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       expect([r.disconnected, i.disconnected]).toEqual([1, 1]);
       i.cb([{ target: fig, isIntersecting: false, intersectionRatio: 0 }]); // already queued: does nothing
       expect(seen).toHaveLength(3);
+      // a disconnected observer is not started again, and none is made once the instance is gone
+      ro?.observe(fig);
+      expect(r.observed).toHaveLength(1);
+      expect([env.observeResize(() => undefined), env.observeIntersection(() => undefined), made.length]).toEqual([null, null, 2]);
     } finally {
       delete view['ResizeObserver'];
       delete view['IntersectionObserver'];
@@ -1554,6 +1571,20 @@ describe('the second phase (LD5): after(ctx), once the layout is built', () => {
       },
     );
     await expect(enhance(root)).rejects.toMatchObject({ code: 'aborted' });
+    await flush();
+    expect(seen).toEqual([]);
+    const failing = mount();
+    hooks.probes.length = 0;
+    hooks.probes.push(
+      { name: 'waits', build: () => undefined, after: async () => void seen.push('after') },
+      {
+        name: 'fails',
+        build: () => {
+          throw new Error('broken feature');
+        },
+      },
+    );
+    await expect(enhance(failing)).rejects.toMatchObject({ code: 'initialization' });
     await flush();
     expect(seen).toEqual([]);
   });

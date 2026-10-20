@@ -76,7 +76,7 @@ interface Instance {
   pendingPrefs: Partial<Prefs> | null;
   /** The context features were built with, once startup made it. */
   ctx: FeatureContext | null;
-  /** The features startup built, in order, for the second phase. */
+  /** The features startup builds, in order: the second phase starts their `after`s once startup succeeded. */
   built: readonly Feature[];
   /** destroyEnhancement's promise, once a destroy was requested. */
   destroyed: Promise<void> | null;
@@ -347,14 +347,17 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   inst.ctx = ctx;
   applyPrefs(journal, root, state.prefs);
   const list = features();
+  inst.built = list;
   for (const f of list) {
     f.build(ctx);
     if (!live()) return;
   }
-  inst.built = list;
 }
 
-/** The second phase (LD5): each built feature's `after`, inside an operation, in order; enhance() does not wait. */
+/**
+ * The second phase (LD5): each feature's `after`, inside an operation, in order; enhance() does not wait. Called only
+ * once startup has succeeded and the instance is active.
+ */
 function secondPhase(inst: Instance): void {
   const ctx = inst.ctx;
   if (ctx === null) return;
