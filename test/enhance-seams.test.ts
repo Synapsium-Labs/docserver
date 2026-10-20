@@ -398,7 +398,7 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       value: {
         load: (spec: string) => {
           loads.push(spec);
-          return gate.then(() => []);
+          return gate.then(() => [{ status: 'loaded' }]);
         },
       },
     });

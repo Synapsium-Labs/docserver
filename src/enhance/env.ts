@@ -11,7 +11,11 @@
 //   - every schedule and subscription returns its own cancel, and the instance's teardown cancels all that are left,
 //     each with the window's own cancel (journal.defer, registered when the env is made);
 //   - fonts(maxMs) waits for the reader's two faces, bounded; a wait that ends once the instance is not live never
-//     settles, so nothing after it runs (a feature still checks live() after an await, as for any call-out);
+//     settles, so nothing after it runs (a feature still checks live() after an await, as for any call-out). It
+//     answers true only once each face's load answered a face with the status 'loaded'. A load answers no face for a
+//     family no @font-face declares yet (a stylesheet still on its way): the wait then listens for the font set's next
+//     'loadingdone' and asks again, within the same bound, so it never answers true on the fallback faces
+//     (docserver L2, Task 7b: relayout's fonts trigger, LD5);
 //   - a root in a document with no window (one a DOMParser made) gets an env all the same: nothing is scheduled or
 //     heard, sizes read 0, media queries and lookups answer false or null, and nothing throws.
 // Reads are live: each call asks the window then, so a host or a test that changes the window is seen at once.
@@ -104,6 +108,11 @@ const MAX_DELAY = 2 ** 31 - 1;
 
 /** The faces fonts() waits for: the stylesheet's own (C43). */
 const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;
+
+/** Whether one face's load answered a loaded face: a list with at least one face whose status is 'loaded'. */
+function loadedFace(found: unknown): boolean {
+  return Array.isArray(found) && found.some((f: unknown) => typeof f === 'object' && f !== null && (f as { status?: unknown }).status === 'loaded');
+}
 
 /** A finite delay from 0 to MAX_DELAY. */
 function delay(ms: number): number {
@@ -286,32 +295,57 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
       new Promise<boolean>((resolve) => {
         if (!live()) return; // never settles: nothing after the wait runs
         let settled = false;
+        /** Stops listening for the font set's next load: nothing until the wait listens. */
+        let unhear: Cancel = () => undefined;
         const finish = (loaded: boolean): void => {
           if (settled) return;
           settled = true;
           stop();
+          unhear();
           if (live()) resolve(loaded);
         };
         const stop = timeout(() => {
           finish(false);
         }, maxMs);
-        // One guard for every way the font set can fail: a getter that throws, no font set, no load, a load that
-        // throws at once. Each answers false, as a load that rejects does.
-        let loads: Promise<unknown>;
-        try {
-          const set = doc.fonts;
-          loads = Promise.all(FACES.map((face) => set.load(face)));
-        } catch (e) {
-          loads = Promise.reject(e);
-        }
-        loads.then(
-          () => {
-            finish(true);
-          },
-          () => {
-            finish(false);
-          },
-        );
+        /** Listen once for the set's next 'loadingdone', then ask again; a set that cannot be listened to waits out the bound. */
+        const hear = (set: FontFaceSet): void => {
+          if (settled || !live()) return;
+          const handler = (): void => {
+            unhear();
+            run(ask);
+          };
+          try {
+            set.addEventListener('loadingdone', handler);
+          } catch {
+            return;
+          }
+          unhear = track(() => {
+            set.removeEventListener('loadingdone', handler);
+          });
+        };
+        const ask = (): void => {
+          // One guard for every way the font set can fail: a getter that throws, no font set, no load, a load that
+          // throws at once. Each answers false, as a load that rejects does.
+          let set: FontFaceSet | undefined;
+          let loads: Promise<unknown[]>;
+          try {
+            set = doc.fonts;
+            const faces = set;
+            loads = Promise.all(FACES.map((face) => faces.load(face)));
+          } catch (e) {
+            loads = Promise.reject(e);
+          }
+          loads.then(
+            (found) => {
+              if (found.every(loadedFace)) finish(true);
+              else if (set !== undefined) hear(set);
+            },
+            () => {
+              finish(false);
+            },
+          );
+        };
+        ask();
       }),
 
     observeResize: (fn) =>

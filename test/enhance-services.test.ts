@@ -908,8 +908,8 @@ describe('relayout', () => {
 
   it('a late fonts promise triggers one relayout; one that settles after destroy, none', async () => {
     let loaded: () => void = () => undefined;
-    const pending = new Promise<void>((r) => {
-      loaded = r;
+    const pending = new Promise<unknown[]>((r) => {
+      loaded = () => r([{ status: 'loaded' }]);
     });
     const load = vi.fn(() => pending);
     Object.defineProperty(document, 'fonts', { configurable: true, value: { load } });
@@ -925,8 +925,8 @@ describe('relayout', () => {
     expect(runs).toEqual([['fonts']]);
 
     let late: () => void = () => undefined;
-    const second = new Promise<void>((r) => {
-      late = r;
+    const second = new Promise<unknown[]>((r) => {
+      late = () => r([{ status: 'loaded' }]);
     });
     Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => second } });
     const gone = mount();
@@ -1698,5 +1698,111 @@ describe('assets/reader.css: the markers later tasks insert at', () => {
     ]) {
       expect(css.split(marker).length - 1, marker).toBe(1);
     }
+  });
+});
+
+describe('env.fonts: a face is loaded only when its load answers a loaded face (LD5)', () => {
+  /** A font set whose load answers `answer`, and whose 'loadingdone' listeners the case fires by hand. */
+  function fontSet(answer: () => unknown[]) {
+    const heard = new Set<() => void>();
+    const loads: string[] = [];
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: (spec: string) => {
+          loads.push(spec);
+          return Promise.resolve(answer());
+        },
+        addEventListener: (type: string, fn: () => void) => {
+          if (type === 'loadingdone') heard.add(fn);
+        },
+        removeEventListener: (type: string, fn: () => void) => {
+          if (type === 'loadingdone') heard.delete(fn);
+        },
+      },
+    });
+    const fire = (): void => {
+      for (const fn of [...heard]) fn();
+    };
+    return { heard, loads, fire };
+  }
+
+  it('a face no stylesheet declares yet answers no face: the wait listens for the next load and asks again', async () => {
+    const root = mount();
+    await enhance(root);
+    let answer: unknown[] = [];
+    const set = fontSet(() => answer);
+    let result: boolean | undefined;
+    void ctxOf(root).env.fonts(5_000).then((v) => (result = v));
+    await flush();
+    expect(result).toBeUndefined();
+    expect(set.heard.size).toBe(1);
+    set.fire(); // another font loaded: still none of the reader's
+    await flush();
+    expect(result).toBeUndefined();
+    expect(set.heard.size).toBe(1);
+    answer = [{ status: 'unloaded' }]; // declared, not loaded
+    set.fire();
+    await flush();
+    expect(result).toBeUndefined();
+    answer = [{ status: 'loaded' }];
+    set.fire();
+    await flush();
+    expect(result).toBe(true);
+    expect(set.heard.size).toBe(0);
+    expect(set.loads).toHaveLength(8);
+  });
+
+  it('a wait that runs out while no face is declared answers false and leaves no listener', async () => {
+    const root = mount();
+    await enhance(root);
+    const set = fontSet(() => []);
+    expect(await ctxOf(root).env.fonts(30)).toBe(false);
+    expect(set.heard.size).toBe(0);
+  });
+
+  it('destroy removes the listener of a wait; a load that answers after destroy adds none', async () => {
+    const root = mount();
+    await enhance(root);
+    const env = ctxOf(root).env;
+    const set = fontSet(() => []);
+    void env.fonts(5_000);
+    await flush();
+    expect(set.heard.size).toBe(1);
+    await destroyEnhancement(root);
+    expect(set.heard.size).toBe(0);
+
+    const other = mount();
+    await enhance(other);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const late = new Set<unknown>();
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: () => gate.then(() => []),
+        addEventListener: (_t: string, fn: unknown) => late.add(fn),
+        removeEventListener: (_t: string, fn: unknown) => late.delete(fn),
+      },
+    });
+    void ctxOf(other).env.fonts(5_000);
+    await destroyEnhancement(other);
+    release();
+    await flush();
+    expect(late.size).toBe(0);
+  });
+
+  it('a set that cannot be listened to waits for the bound', async () => {
+    const root = mount();
+    await enhance(root);
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => Promise.resolve([]) } });
+    let result: boolean | undefined;
+    void ctxOf(root).env.fonts(40).then((v) => (result = v));
+    await flush();
+    expect(result).toBeUndefined();
+    await wait(80);
+    expect(result).toBe(false);
   });
 });
