@@ -1,0 +1,4 @@
+{
+  "options": { "rules": true },
+  "scope": ["review-strip", "doc-facts"]
+}

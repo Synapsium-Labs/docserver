@@ -1,0 +1,46 @@
+h1
+  "A short note"
+p
+  strong
+    "Note"
+  "· · Status:"
+dl .byline chrome
+  div chrome
+    dt chrome
+      "Date"
+    dd chrome
+      "2026-10-20"
+  div chrome
+    dt chrome
+      "Status"
+    dd chrome
+      "Draft"
+h2
+  "One"
+p
+  "A paragraph with nothing to review."
+h2
+  "Two"
+div
+  table
+    thead
+      tr
+        th
+          "Name"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "Alpha"
+        td
+          "Done"
+      tr
+        td
+          "Beta"
+        td
+          "Pending"
+h2
+  "Three"
+p
+  "The end."
