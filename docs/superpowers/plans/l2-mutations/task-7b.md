@@ -5,8 +5,8 @@ Each guard of Task 7b, deleted or inverted once, with the tests that go red: the
 controls, the bar's skeleton, the folds' members API and their use of the services, the page and the facts panel's
 seam, the lifecycle's wiring and the prefs path, the stylesheet's markers, RF3's large plan, and the fonts relayout in
 a real browser; then four earlier rows whose code this task rewrote. Measured 2026-10-20 on branch `l2-t7b-services`,
-on its final code (commit `cd7fa4a`): every row, L2-T7b-M1 to L2-T7b-M241. 239 were measured, all red (`rc=1`);
-two are reported (below).
+on its final code (commit `cd7fa4a`; the one code commit after it changes a comment in `src/enhance/nav.ts` that no
+row names): every row, L2-T7b-M1 to L2-T7b-M241. 239 were measured, all red (`rc=1`); two are reported (below).
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8) with the two changes its results section records (a 512 MiB
 output buffer, and a run that ends with no exit status reported as KILLED and counted as no verdict): each row is
