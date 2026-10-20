@@ -571,7 +571,9 @@ describe('xrefs: the first mention of a defined ID in each block (the reference 
   it('with no defined ID, no text is scanned; with one, each text is scanned once', async () => {
     hooks.spy = { scans: 0, qualifier: [] };
     const none = mount(XREF_DOC);
-    await enhance(none);
+    // The document's ID table defines its IDs once ID rows are built (Task 9), so this half turns ID rows off.
+    await enhance(none, { vocabulary: { ids: false } });
+    expect(ctxOf(none).index.all()).toEqual([]);
     expect(hooks.spy.scans).toBe(0);
     expect(linked(none, 'xref')).toEqual([]);
     const some = mount(XREF_DOC);
