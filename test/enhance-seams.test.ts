@@ -421,7 +421,12 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     const gate = new Promise<void>((r) => {
       release = r;
     });
-    Object.defineProperty(root.ownerDocument, 'fonts', { configurable: true, value: { load: () => gate.then(() => []) } });
+    let loads = 0;
+    const load = (): Promise<unknown[]> => {
+      loads += 1;
+      return gate.then(() => []);
+    };
+    Object.defineProperty(root.ownerDocument, 'fonts', { configurable: true, value: { load } });
     const env = ctxOf(root).env;
     try {
       const loaded = env.fonts(40);
@@ -434,11 +439,12 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       await wait(80);
       await flush();
       expect(settled).toBe(0);
-      // and a wait asked for once the instance is gone never settles either
+      // and a wait asked for once the instance is gone never settles either, and loads nothing
+      expect(loads).toBe(4);
       let late = 0;
       void env.fonts(1).then(() => (late += 1));
       await wait(20);
-      expect(late).toBe(0);
+      expect([late, loads]).toEqual([0, 4]);
     } finally {
       delete (root.ownerDocument as { fonts?: unknown }).fonts;
     }
