@@ -226,6 +226,14 @@ const click = (el: Element): void => {
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
 };
 
+/** Every node under `root`, in document order: an element by its tag, a text by its data, one text node each. */
+function shape(root: Node): string[] {
+  const out: string[] = [];
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) out.push(n.nodeType === 3 ? JSON.stringify((n as Text).data) : `<${n.nodeName}>`);
+  return out;
+}
+
 /** Resolve after `ms` of real time. */
 const wait = (ms: number): Promise<void> =>
   new Promise((r) => {
@@ -832,9 +840,10 @@ describe('outline mode (the reference layout, section 23)', () => {
 });
 
 describe('teardown, names and safety', () => {
-  it('destroy restores the document byte for byte, after the outline was used', async () => {
+  it('destroy restores the document byte for byte, after the outline was used, and every text node is one again', async () => {
     const root = mount();
     const html = root.innerHTML;
+    const nodes = shape(root);
     const { storage } = storageWith('true');
     await enhance(root, { storage, storageKey: 'k' });
     click(heading(root, 'h3', 'Task 2').querySelector('.task-open') as Element);
@@ -843,6 +852,7 @@ describe('teardown, names and safety', () => {
     click(heading(root, 'h2', 'Task 3').querySelector('.task-open') as Element);
     await destroyEnhancement(root);
     expect(root.innerHTML).toBe(html);
+    expect(shape(root)).toEqual(nodes); // innerHTML cannot tell one text node from two
     expect(root.getAttribute('class')).toBeNull();
   });
 
