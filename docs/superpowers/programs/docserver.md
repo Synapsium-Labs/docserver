@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C52)
+### Coordinator rulings for L2 (C40-C53)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -218,6 +218,30 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   - **Merge order within a group:** a group's tasks merge in the order their reviews finish, each rebased onto `main`; disjoint files keep that mechanical. The task table's order binds across groups only, so a task starts once its "Depends on" tasks have merged.
 
   Why: each follows the code the review measured, or keeps a finished task from waiting on a slower neighbour. Cost if wrong: a feature that rebuilds a pattern from its `source` alone loses Unicode matching. The reviews of Tasks 9, 11 and 13 check for that.
+- **C53 (2026-10-20, coordinator, from the reviews of L2 Tasks 9, 11, 13 and 15): the first group C merges.**
+  - **The shared tests no longer need each task's edits.** On `main` (#22, #23), a stub is the module whose header still says it is one. A filled module only has to export `build` (and `after` when registered with one), and its header names its task. The registry cases make registries of their own. A feature task edits neither test file again.
+  - **Two coordinator commits at rebase stand, each to another task's file:**
+    - Task 15's branch: the public-readiness walk skips the built, git-ignored `assets/mermaid/` (Task 6's file; L2-T15-M66, M67).
+    - Task 11's branch: a fold is named from its heading's own label when an earlier feature gave it one, so an h2 task's fold reads "Fold or unfold: Task 3: Ship it", as in the reference (Task 7b's file; L2-T11-M71).
+  - **Mermaid's layout.** Mermaid 12.1.0's default layout is ELK, and the file leaves `elkjs` out (LD3). So Task 21 initialises Mermaid with `layout: 'dagre'`, and a diagram that asks for ELK shows the failure note. The reference draws with ELK, so the drawings differ: Task 21 measures the figure card, its caption and its tools, and names the drawing differences. LD3's cost is corrected: with the defaults, every flowchart and state diagram would fail, not only those that ask for ELK.
+  - **The Mermaid pin.** mermaid 12.2.0 (katex ^0.18, advisory GHSA-238p-pmpm-9mq7, low) becomes eligible under C7 on 2026-10-27. The pin moves then, in Task 21 or Task 24, whichever is open.
+  - **Task 20 derives the rules document kind,** with no new context field. A document is one when `rules: true` and its front matter has a list key whose values all match `vocab.ruleId`.
+  - **Carried to Task 18:** each task's members, for its read-mark fingerprint. Task 18 may add an additive `PlanInfo` field through `registry.ts`.
+  - **Carried to Task 17:**
+    - a Level 2 case for cross-references (first mention per block, a mention in its own row, a qualifier);
+    - the card's lookup through `ctx.index.get` and `ctx.terms.get`;
+    - the capture-phase click for a touch's first tap.
+  - **Carried to Task 10:** whether its filter hides together with its table in the outline mode.
+  - **Carried to Task 24:**
+    - the licence texts of the 13 packages carried inside pre-built Mermaid files (before v1);
+    - the caption word "Figure" in the word-list check (render()'s grammar, PD7);
+    - a reset for a status pill's inline code, if the parity pass measures a difference;
+    - a demo-builder flag for plugin options;
+    - a history entry for going to a target with no id (a glossary row);
+    - the double parentheses in one licence string.
+  - **Shared CSP case:** Task 6's CSP case waits a fixed 50 ms for violation reports, and it flaked once in WebKit under load. It is made to wait for the reports themselves, in the next shared fix.
+
+  Why: each follows what the reviews and the rebases measured. Cost if wrong: Task 21's drawings differ from the reference's until a host supplies ELK.
 
 ## Carried constraints (reviewers get these)
 
