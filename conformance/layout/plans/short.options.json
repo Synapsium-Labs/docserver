@@ -1,0 +1,25 @@
+{
+  "options": {
+    "storageKey": "case",
+    "storage": {
+      "snapshot": {
+        "docreader:doc:case:outline": "true"
+      }
+    }
+  },
+  "scope": [
+    "task",
+    "task-id",
+    "step-no",
+    "step-rest",
+    "loose",
+    "attn",
+    "task-part",
+    "task-open",
+    "t-open",
+    "outline-btn",
+    "input[aria-label]",
+    "h2[aria-label]",
+    "h3[aria-label]"
+  ]
+}
