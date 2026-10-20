@@ -310,9 +310,10 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
         /** Listen once for the set's next 'loadingdone', then ask again; a set that cannot be listened to waits out the bound. */
         const hear = (set: FontFaceSet): void => {
           if (settled || !live()) return;
+          // Teardown removes it (track), so it never runs once the instance is gone; ask() writes nothing.
           const handler = (): void => {
             unhear();
-            run(ask);
+            ask();
           };
           try {
             set.addEventListener('loadingdone', handler);

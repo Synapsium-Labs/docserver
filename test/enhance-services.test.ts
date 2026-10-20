@@ -1094,7 +1094,11 @@ describe('slots: the bar\'s skeleton', () => {
     const root = mount();
     await enhance(root, { onHash });
     const h1 = child(root, 'h1', 'example-spec');
+    const scrolled: unknown[] = [];
+    Object.defineProperty(h1, 'scrollIntoView', { configurable: true, value: (how: unknown) => scrolled.push(how) });
     expect(click(find(root, '.skip-link')).prevented).toBe(true);
+    expect(scrolled).toEqual([{ block: 'start' }]);
+    delete (h1 as { scrollIntoView?: unknown }).scrollIntoView;
     expect(document.activeElement).toBe(h1);
     expect(h1.getAttribute('tabindex')).toBe('-1');
     expect(root.hasAttribute('tabindex')).toBe(false);
@@ -1797,13 +1801,14 @@ describe('cancels, labels, refusals and sizes: the review round', () => {
   });
 
   it('a heading\'s label keeps its inline text as written: no space before punctuation, none for a text-less child', async () => {
-    const root = mount(['# Labels', '', '## Run `npm ci`, then **go**.', '', 'Text.', '', '## Title ![x](a.png)', '', 'More.', '', '## Third', '', 'End.', ''].join('\n'));
+    const root = mount(['# Labels', '', '## Run `npm ci`, then **go**.', '', 'Text.', '', '## Title ![x](a.png)', '', 'More.', '', '## Two  spaces', '', 'End.', ''].join('\n'));
     await enhance(root);
-    const [run, title] = Array.from(root.children).filter((c) => c.localName === 'h2');
+    const [run, title, two] = Array.from(root.children).filter((c) => c.localName === 'h2');
     expect(run?.getAttribute('aria-label')).toBe('Run npm ci, then go.');
     expect(run?.querySelector('.h-fold')?.getAttribute('aria-label')).toBe('Fold or unfold: Run npm ci, then go.');
     expect(title?.getAttribute('aria-label')).toBe('Title');
     expect(title?.querySelector('.h-fold')?.getAttribute('aria-label')).toBe('Fold or unfold: Title');
+    expect(two?.getAttribute('aria-label')).toBe('Two spaces');
   });
 
   it('folds.join takes only a node the feature put in the root: one outside it, nested, or of the document is refused', async () => {
@@ -1924,12 +1929,38 @@ describe('env.fonts: a face is loaded only when its load answers a loaded face (
     expect(set.loads).toHaveLength(8);
   });
 
-  it('a wait that runs out while no face is declared answers false and leaves no listener', async () => {
+  it('a wait that runs out while no face is declared answers false and leaves no listener, nor does a load that answers after it', async () => {
     const root = mount();
     await enhance(root);
     const set = fontSet(() => []);
     expect(await ctxOf(root).env.fonts(30)).toBe(false);
     expect(set.heard.size).toBe(0);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const late = new Set<unknown>();
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: () => gate.then(() => []),
+        addEventListener: (_t: string, fn: unknown) => late.add(fn),
+        removeEventListener: (_t: string, fn: unknown) => late.delete(fn),
+      },
+    });
+    expect(await ctxOf(root).env.fonts(20)).toBe(false);
+    release();
+    await flush();
+    expect(late.size).toBe(0);
+  });
+
+  it('an answer that is not a list of faces is no loaded face', async () => {
+    const root = mount();
+    await enhance(root);
+    for (const answer of [undefined, [null], ['loaded'], [{}], [{ status: 'error' }]]) {
+      Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => Promise.resolve(answer) } });
+      expect(await ctxOf(root).env.fonts(20), JSON.stringify(answer)).toBe(false);
+    }
   });
 
   it('destroy removes the listener of a wait; a load that answers after destroy adds none', async () => {
