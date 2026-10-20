@@ -1,0 +1,4 @@
+{
+  "options": { "keyboard": false },
+  "scope": ["jump", "jump-btn", "keys"]
+}

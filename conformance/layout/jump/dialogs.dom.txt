@@ -1,0 +1,73 @@
+button .jump-btn chrome aria-haspopup="dialog"
+  span .lbl chrome
+    "Jump to"
+  kbd .kb chrome
+    "/"
+h1
+  "Example guide"
+p
+  "A short guide with enough sections for t"…
+h2
+  "1. Getting started"
+p
+  "How to begin."
+h2
+  "2. Reading a page"
+p
+  "What each part of a page shows."
+h3
+  "Headings and numbers"
+p
+  "The numbers hang in the margin."
+h2
+  "3. Moving around"
+p
+  "The keys and the quick jump."
+h2
+  "4. Questions"
+p
+  "Two are still open."
+div .jump chrome
+  div .box chrome role="dialog" aria-label="Jump to" aria-modal="true"
+    input chrome role="combobox" aria-autocomplete="list" aria-controls="docreader.1.jump-list" aria-expanded="true" aria-label="Jump to"
+    div .jump-hint chrome
+      "Type to filter · ↑ ↓ to choose · Enter t"…
+    ul chrome role="listbox" aria-label="Matches"
+div .keys chrome
+  div .box chrome role="dialog" aria-labelledby="docreader.1.keys-heading" aria-modal="true"
+    div .kh chrome
+      h2 chrome
+        "Keyboard"
+      button .linkish chrome
+        "Close"
+    dl chrome
+    h2 .kh2 chrome
+      "Colour key"
+    ul .ckey chrome
+      li chrome
+        span .k-nav.sw chrome aria-hidden="true"
+        "Links, contents, section numbers"
+      li chrome
+        span .k-term.sw chrome aria-hidden="true"
+        "Terms defined in this doc"
+      li chrome
+        span .k-id.sw chrome aria-hidden="true"
+        "IDs: R14, F3, …"
+      li chrome
+        span .k-wait.sw chrome aria-hidden="true"
+        "Waiting on you · open · partial"
+      li chrome
+        span .k-chg.sw chrome aria-hidden="true"
+        "Changed (when you compare)"
+      li chrome
+        span .k-no.sw chrome aria-hidden="true"
+        "Rejected · diverges · risk"
+      li chrome
+        span .k-ok.sw chrome aria-hidden="true"
+        "Settled: ruled, agreed, done"
+      li chrome
+        span .k-info.sw chrome aria-hidden="true"
+        "Deferred · later · pinned"
+      li chrome
+        span .k-code.sw chrome aria-hidden="true"
+        "Code and file paths"
