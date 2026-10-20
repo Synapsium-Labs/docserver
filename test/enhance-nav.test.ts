@@ -167,6 +167,8 @@ interface Stage {
   readonly tops: Map<Element, number>;
   /** An element's left and width, where they are not 0 and 900. */
   readonly boxes: Map<Element, readonly [number, number]>;
+  /** An element's height, where it is not 20. */
+  readonly heights: Map<Element, number>;
   hit: Element | null;
   readonly points: [number, number][];
   /** scrollIntoView calls: the element and its behavior. */
@@ -180,7 +182,7 @@ const DESCRIPTORS = ['scrollY', 'innerHeight'].map((name) => [name, Object.getOw
 let current: Stage | null = null;
 
 function stage(): Stage {
-  const s: Stage = { y: 0, h: 800, tops: new Map(), boxes: new Map(), hit: null, points: [], intoView: [], scrolled: [] };
+  const s: Stage = { y: 0, h: 800, tops: new Map(), boxes: new Map(), heights: new Map(), hit: null, points: [], intoView: [], scrolled: [] };
   Object.defineProperty(window, 'scrollY', { configurable: true, get: () => s.y });
   Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => s.h });
   (document as unknown as { elementFromPoint: (x: number, y: number) => Element | null }).elementFromPoint = (x, y) => {
@@ -198,7 +200,8 @@ function stage(): Stage {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const top = (s.tops.get(this) ?? 0) - s.y;
     const [left, width] = s.boxes.get(this) ?? [0, 900];
-    return { top, bottom: top + 20, left, right: left + width, width, height: 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
+    const height = s.heights.get(this) ?? 20;
+    return { top, bottom: top + height, left, right: left + width, width, height, x: left, y: top, toJSON: () => ({}) } as DOMRect;
   });
   current = s;
   return s;
@@ -521,7 +524,7 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     expect(s.scrolled.at(-1)).toEqual([3000 - 70, 'auto']);
   });
 
-  it('RF1: __proto__, constructor and an id named like chrome are document ids; an id the document lacks lands nowhere', async () => {
+  it('RF1: __proto__, constructor and an id named like chrome are document ids; an id the document lacks lands nowhere, by initialHash or goToHash', async () => {
     const s = stage();
     const md = '# Names\n\n## \\_\\_proto\\_\\_\n\nOne.\n\n## constructor\n\nTwo.\n\n## jump\n\nThree.\n\n## toc-contents\n\nFour.\n';
     for (const [hash, id] of [['__proto__', '__proto__'], ['constructor', 'constructor'], ['jump', 'jump'], ['toString', null], ['xcard', null]] as const) {
@@ -530,6 +533,11 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
       expect(s.intoView.at(-1)?.[0].id ?? null, hash).toBe(id);
       s.intoView.length = 0;
       expect(Array.from(root.querySelectorAll('a.h-anchor')).map((a) => a.getAttribute('href'))).toEqual(['#__proto__', '#constructor', '#jump', '#toc-contents']);
+      // And through goToHash, from the top: the same answer.
+      s.y = 0;
+      goToHash(root, hash);
+      expect(s.intoView.at(-1)?.[0].id ?? null, `goToHash ${hash}`).toBe(id);
+      s.intoView.length = 0;
       await destroyEnhancement(root);
     }
     expect(Object.getPrototypeOf({}) === Object.prototype && !Object.hasOwn(Object.prototype, 'line')).toBe(true);
@@ -626,6 +634,52 @@ describe('the position written behind (LD8)', () => {
     t.run();
     expect(none.reads.filter((k) => k.includes(':pos:'))).toEqual([]);
     expect(none.calls).toEqual([]);
+  });
+
+  it('two roots in one window: only the root under the reading line keeps a place with no block; the other keeps none', async () => {
+    const s = stage();
+    const t = timers();
+    const { storage, calls } = recording();
+    const a = mount();
+    const b = mount();
+    // Laid out, one under the other: a from 0 to 3000, b from 3000 to 6000 (the page's own tops).
+    s.tops.set(a, 0);
+    s.heights.set(a, 3000);
+    s.tops.set(b, 3000);
+    s.heights.set(b, 3000);
+    const real = Element.prototype.getClientRects;
+    vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+      return this === a || this === b ? ([this.getBoundingClientRect()] as unknown as DOMRectList) : real.call(this);
+    });
+    await enhance(a, { storage, storageKey: 'a' });
+    await enhance(b, { storage, storageKey: 'b' });
+    const pa = blockAfter(a, '1-scope');
+    s.y = 900;
+    s.tops.set(pa, 930);
+    s.hit = pa;
+    window.dispatchEvent(new Event('scroll'));
+    t.run(250);
+    expect(calls).toEqual([[posKeyOf('a'), JSON.stringify({ line: pa.getAttribute('data-line'), offset: 30, y: 900 })]]);
+    // Nothing hit in a: still a's place (the reading line is in its box), and none of b's.
+    s.hit = null;
+    window.dispatchEvent(new Event('scroll'));
+    t.run(250);
+    expect(calls.slice(1)).toEqual([[posKeyOf('a'), JSON.stringify({ line: null, offset: 0, y: 900 })]]);
+    // The reader goes down into b: b's place; a, above the reading line now, deletes its own.
+    const pb = blockAfter(b, '1-scope');
+    s.y = 4000;
+    s.tops.set(pb, 4030);
+    s.hit = pb;
+    window.dispatchEvent(new Event('scroll'));
+    t.run(250);
+    expect(calls.slice(2)).toEqual([
+      [posKeyOf('a'), null],
+      [posKeyOf('b'), JSON.stringify({ line: pb.getAttribute('data-line'), offset: 30, y: 4000 })],
+    ]);
+    // And a keep in a, with the reader in b, restores nothing.
+    s.hit = null;
+    ctxOf(a).position.keep(() => undefined);
+    expect(s.scrolled).toEqual([]);
   });
 
   it('destroy cancels the pending write and the pin', async () => {
@@ -947,6 +1001,68 @@ describe('the pin', () => {
     expect(add).not.toHaveBeenCalled();
   });
 
+  it('a destroy asked for inside a keep while a pin holds: the pin is not applied after it, nor is a place restored', async () => {
+    const s = stage();
+    const root = mount();
+    await enhance(root, { initialHash: '3-plan' });
+    expect(s.intoView).toHaveLength(1);
+    const ctx = ctxOf(root);
+    ctx.operate(() =>
+      ctx.position.keep(() => {
+        void destroyEnhancement(root); // the teardown waits for the operation to unwind
+      }),
+    );
+    expect(s.intoView).toHaveLength(1);
+    // And with no pin: the place anchored before is not restored after.
+    const again = mount();
+    await enhance(again);
+    const para = blockAfter(again, '3-plan');
+    s.tops.set(para, 1000);
+    s.y = 940;
+    s.hit = para;
+    const actx = ctxOf(again);
+    actx.operate(() =>
+      actx.position.keep(() => {
+        s.tops.set(para, 1300);
+        void destroyEnhancement(again);
+      }),
+    );
+    expect(s.scrolled).toEqual([]);
+  });
+
+  it('a relayout listener that destroys the instance while the landing pin holds: nothing scrolls after it', async () => {
+    const s = stage();
+    hooks.after.push({
+      name: 'killer',
+      build: (ctx: FeatureContext) => {
+        ctx.onRelayout(() => {
+          void destroyEnhancement(ctx.root);
+        });
+      },
+    } satisfies Feature);
+    const root = mount();
+    await enhance(root, { initialHash: '3-plan' });
+    expect(s.intoView).toHaveLength(1);
+    await new Promise((r) => setTimeout(r, 100)); // the first relayout's frame
+    expect(contextOf(root)).toBeUndefined();
+    expect(s.intoView).toHaveLength(1);
+  });
+
+  it('the release listeners are on the document only while a pin holds: an instance with no pin adds none', async () => {
+    stage();
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const root = mount();
+    await enhance(root);
+    /** The pin's listeners: in the capture phase (the keyboard layer's keydown listens in the bubble phase). */
+    const pins = (calls: unknown[][]): unknown[] => calls.filter(([type, , o]) => (PIN_RELEASE as readonly string[]).includes(type as string) && (o as { capture?: boolean } | undefined)?.capture === true).map(([type]) => type);
+    expect(pins(add.mock.calls)).toEqual([]);
+    goToHash(root, '3-plan');
+    expect(pins(add.mock.calls)).toEqual([...PIN_RELEASE]);
+    document.body.dispatchEvent(new Event('wheel', { bubbles: true }));
+    expect(pins(remove.mock.calls)).toEqual([...PIN_RELEASE]);
+  });
+
   it('a new pin cancels the old one\'s timer: it holds its own PIN_MS', async () => {
     const s = stage();
     const t = timers();
@@ -1091,6 +1207,12 @@ describe('goToHash (LD7)', () => {
     goToHash(root, 7 as never);
     goToHash(root, '3-plan', 7 as never);
     expect([s.intoView.length, s.scrolled.length]).toEqual([2, 2]);
+    // A from that is not a string is no token, even one that JSON.parse would read as one (an array holding a token).
+    const token = tokenOf({ line: null, offset: 0, y: 10 });
+    goToHash(root, '2-design', [token] as never);
+    goToHash(root, '2-design', { toString: () => token } as never);
+    expect(s.intoView.slice(2).map(([e]) => e.id)).toEqual(['2-design', '2-design']);
+    expect(s.scrolled).toHaveLength(2);
     expect(onHash).not.toHaveBeenCalled();
   });
 
@@ -1244,7 +1366,7 @@ describe('j and k', () => {
 });
 
 describe('the section link', () => {
-  it('each level-2 and level-3 heading with its own id gets a # link in the anchor slot; In short and a repeated id get none', async () => {
+  it('each level-2 and level-3 heading with its own id gets a # link in the anchor slot; In short gets none, and a repeated heading\'s suffixed id gets its own', async () => {
     stage();
     const root = mount();
     await enhance(root);
@@ -1289,7 +1411,7 @@ describe('the section link', () => {
     expect(find(el(root, 'h3', 'details'), 'a.h-anchor').getAttribute('aria-label')).toBe('Link to Details');
   });
 
-  it('a heading whose id another heading holds first gets none; a click on the link goes to its heading with push', async () => {
+  it('a heading whose id an earlier anchor holds gets none; a click on the link goes to its heading with push', async () => {
     stage();
     const onHash = vi.fn();
     const root = mount('# T\n\n## One\n\nText.\n\n<!-- id:two -->\n\n## Two\n\nMore.\n\n## Three\n\nEnd.\n');
