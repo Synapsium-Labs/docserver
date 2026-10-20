@@ -954,6 +954,18 @@ describe('glossary: what makes a glossary, and its terms (the reference layout, 
     expect(two / one, `${one} then ${two}`).toBeLessThanOrEqual(2.5);
   });
 
+  it('tables under one heading share its answer: a second table in a glossary section is a glossary too, its href that heading', async () => {
+    const root = mount(['# Two tables', '', '## Words used here', '', '| Name | What |', '|---|---|', '| Lantern | A light |', '', 'Between the tables.', '', '| Name | What |', '|---|---|', '| Beacon | A signal |', '', '## 1. Text', '', 'A lantern and a beacon.', ''].join('\n'));
+    await enhance(root);
+    const h = find(root, 'h2');
+    expect(Array.from(root.querySelectorAll('table')).map((t) => t.closest('.glossary') !== null)).toEqual([true, true]);
+    expect(ctxOf(root).terms.get('beacon')?.section).toBe('Words used here');
+    expect(Array.from(root.querySelectorAll('a.term')).map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['lantern', `#${h.id}`],
+      ['beacon', `#${h.id}`],
+    ]);
+  });
+
   it('a section\'s words leave out a button the layout put in its heading', async () => {
     const root = mount(['# Button', '', '## Words used here', '', '| Part | Use |', '|---|---|', '| Lantern | A light |', ''].join('\n'));
     seed((ctx) => {
