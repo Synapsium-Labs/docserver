@@ -1,8 +1,9 @@
 // Scrolling in a real browser (docserver L2, Task 12): the bar's place in the root (sticky at the window's top, as
 // wide as the root, the reading column where it would be under a page-level bar), the progress line at three
 // positions, the running head and `scrolled`, the phone bar at 390 px (hides scrolling down past 300 px, returns
-// scrolling up, stays while a dialog is open or the bar is held), the measured --bar-h, the 'spy' events, and RF3's
-// bound on rect reads per frame on the large plan, counted in the page. What jsdom cannot show: layout, stickiness,
+// scrolling up, stays while a dialog is open or the bar is held), the bar above the text scrolling under it, two roots'
+// progress lines, the measured --bar-h, the 'spy' events, and RF3's bound on rect reads per frame on the large plan,
+// counted in the page. What jsdom cannot show: layout, stickiness,
 // real scrolling and frames.
 //
 // The public entry and the lifecycle's test hook (contextOf) are bundled here on their own and evaluated in the page
@@ -209,6 +210,57 @@ describeBrowsers((browser) => {
     }
   });
 
+  it('the bar is above the text that scrolls under it: its row takes the pointer over a section heading', async () => {
+    const doc = await open(DOC, browser, { width: 1440, height: 1000 });
+    try {
+      const top = await doc.page.evaluate(() => (document.querySelectorAll('h2')[1] as Element).getBoundingClientRect().top);
+      await scrollTo(doc.page, top - 10); // the second section's heading 10 px down: under the row
+      const hit = await doc.page.evaluate(() => {
+        const h = document.querySelectorAll('h2')[1] as Element;
+        const r = h.getBoundingClientRect();
+        const x = r.left + Math.min(40, r.width / 2); // inside the reading column, on the heading
+        const el = document.elementFromPoint(x, 24);
+        return { under: r.top < 24 && r.bottom > 24, at: el === null ? 'none' : el.closest('.topbar') === null ? el.localName : 'bar' };
+      });
+      expect(hit).toEqual({ under: true, at: 'bar' });
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('two roots in one page: a root wholly scrolled past draws no line over the line of the root being read', async () => {
+    const doc = await openDoc(DOC, {}, { browser, viewport: { width: 1440, height: 1000 }, csp: 'strict', enhance: false });
+    try {
+      await doc.page.evaluate(script);
+      const out = await doc.page.evaluate(async () => {
+        const w = window as unknown as Win;
+        const a = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const b = a.cloneNode(true) as HTMLElement;
+        b.removeAttribute('data-harness-root');
+        a.after(b);
+        await w.__scroll.enhance(a, {});
+        await w.__scroll.enhance(b, {});
+        await document.fonts.ready;
+        const settle = (): Promise<void> =>
+          new Promise<void>((r) => {
+            setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => r())), 20);
+          });
+        await settle();
+        const box = b.getBoundingClientRect();
+        window.scrollTo({ top: box.top + window.scrollY + box.height / 4, behavior: 'instant' });
+        await settle();
+        const width = (root: Element): number => (root.querySelector('.doc-progress') as Element).getBoundingClientRect().width;
+        return { aGone: a.getBoundingClientRect().bottom <= 0, a: width(a), b: width(b), full: document.documentElement.clientWidth };
+      });
+      expect(out.aGone).toBe(true);
+      expect(out.a).toBe(0);
+      expect(out.b).toBeGreaterThan(out.full / 10);
+      expect(out.b).toBeLessThan(out.full / 2);
+    } finally {
+      await doc.close();
+    }
+  });
+
   it('the progress line: 0 at the top, the share scrolled in the middle, the window\'s width at the end', async () => {
     const doc = await open(DOC, browser, { width: 1440, height: 1000 });
     try {
@@ -363,10 +415,15 @@ describeBrowsers((browser) => {
       await doc.page.evaluate(() => {
         const w = window as unknown as { __reads: number[]; __stop: boolean };
         const read = Element.prototype.getBoundingClientRect;
+        const readAll = Element.prototype.getClientRects;
         let count = 0;
         Element.prototype.getBoundingClientRect = function (this: Element): DOMRect {
           count += 1;
           return read.call(this);
+        };
+        Element.prototype.getClientRects = function (this: Element): DOMRectList {
+          count += 1;
+          return readAll.call(this);
         };
         w.__reads = [];
         w.__stop = false;
