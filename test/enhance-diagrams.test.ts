@@ -438,12 +438,13 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     const md = ['# D', '', ...['one', 'two', 'three', 'four', 'five'].map((w) => fence(`flowchart LR\n  ${w} --> X`))].join('\n');
     const root = mount(md);
     // The window is 768 px high: near means less than 1.5 screens (1152 px) away from it.
-    placeAt(root, [5000, 100, 3000, -2000, 1700]);
+    placeAt(root, [1800, 100, 3000, -2000, 5000]);
     const fake = fakeMermaid();
     await enhance(root, drawWith({ default: fake.api }));
     await settledState(root, 'drawn');
-    // two (in view) and five (932 px below it) are near, in document order; then three (2232), four (1900 above), one.
-    expect(fake.log.filter((l) => l.startsWith('run'))).toEqual(['run two', 'run five', 'run four', 'run three', 'run one']);
+    // one (1032 px below the window) and two (in it) are near, in document order; then the rest, nearest first:
+    // four (1900 above), three (2232 below), five (4232 below).
+    expect(fake.log.filter((l) => l.startsWith('run'))).toEqual(['run one', 'run two', 'run four', 'run three', 'run five']);
   });
 
   it('serialises the calls per Mermaid module across roots: one root\'s run ends before the next initialize', async () => {
