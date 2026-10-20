@@ -1,9 +1,12 @@
 // The types of `./enhance`: the public ones (re-exported by index.ts) and the context every feature builds with.
 // Import-inert: declarations only.
+import type { Env } from './env.js';
 import type { Host } from './host.js';
 import type { Journal } from './journal.js';
 import type { FeatureOptions } from './options.js';
 import type { ReaderState } from './state.js';
+import type { TextTools } from './text.js';
+import type { Vocab } from './vocab.js';
 
 /** The reader's settings, reader-wide (not per document). */
 export interface Prefs {
@@ -21,8 +24,8 @@ export interface Prefs {
 export interface ReaderStorage {
   /**
    * What the host already has stored under this reader's keys. Read during startup only: the object once, then
-   * each key this document needs once (`docreader:prefs`, then `docreader:doc:<storageKey>:<name>`; the reading
-   * position's `docreader:pos:<posKey>` and the reader-wide `docreader:ui` are reserved for later versions).
+   * each key this document needs once (`docreader:prefs`, then, as features ask, `docreader:doc:<storageKey>:<name>`,
+   * the reading position's `docreader:pos:<posKey>` and the reader-wide `docreader:ui`).
    */
   readonly snapshot?: Readonly<Record<string, string>>;
   /**
@@ -174,6 +177,23 @@ export interface ResolvedInfo {
 }
 
 /**
+ * One level-2 section of the document (the reference layout's section 0), measured before any feature moves a node:
+ * a heading with an id among the root's children, and the root's children after it up to the next h1 or h2.
+ */
+export interface SectionUnit {
+  readonly heading: HTMLElement;
+  /** The blocks of the section, in order (frozen). */
+  readonly members: readonly Element[];
+  /** Its reading time, in minutes, as reading.ts measures it (script and dl blocks left out). */
+  readonly minutes: number;
+  /**
+   * The hash (text.ts) of its source text: the heading's text, then each block's after a U+0001 separator, script and
+   * dl blocks left out. Taken before any chrome exists, so chrome text never changes it; a read mark compares it.
+   */
+  readonly fingerprint: string;
+}
+
+/**
  * What a feature (editorial.ts, folds.ts, and later ones) receives during startup. Every DOM write goes through
  * `journal`, so destroyEnhancement can undo it; every handler goes through `journal.listen`, so it runs inside an
  * operation and does nothing once the instance is not live.
@@ -202,4 +222,22 @@ export interface FeatureContext {
    * through `journal.listen` already run this way.
    */
   operate<T>(fn: () => T): T | undefined;
+  /**
+   * The root's window, behind one module (env.ts): timers, frames, idle callbacks, media queries, the viewport,
+   * scrolling, window events, the fonts, observers, text widths, the clock. Callbacks run inside operations, and
+   * destroy cancels every one still pending.
+   */
+  readonly env: Env;
+  /** The document's level-2 sections, in order, measured before any node moved (frozen). */
+  readonly sections: readonly SectionUnit[];
+  /** Every word list, compiled (vocab.ts): a feature reads its words here, never from a list of its own. */
+  readonly vocab: Vocab;
+  /**
+   * A new id for an element of this instance's chrome (a listbox option, a dialog's label): `name` is 1 to 32
+   * lower-case letters, digits and dashes, starting with a letter. The id is unique in the document, against every
+   * id it held when this instance first asked and every id another instance issued; each call answers a new one.
+   */
+  chromeId(name: string): string;
+  /** Text helpers (text.ts): clip, hash, document order, and the colour key. */
+  readonly text: TextTools;
 }

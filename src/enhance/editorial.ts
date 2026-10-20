@@ -274,5 +274,5 @@ export function buildEditorial(ctx: FeatureContext): void {
   }
 
   // ── 8 (part). status words in table cells
-  buildStatusMarks(root, journal);
+  buildStatusMarks(ctx);
 }

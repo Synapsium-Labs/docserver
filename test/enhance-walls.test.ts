@@ -1,21 +1,26 @@
-// The static walls of `./enhance` (L2 prototype), read from the sources with TypeScript's syntax tree, so
-// comments and strings do not count:
+// The static walls of `./enhance` (L2 prototype, and the seams of L2 Task 7a), read from the sources with
+// TypeScript's syntax tree, so comments and strings do not count:
 // 1. Import inertness: importing src/enhance/index.ts in the node environment (no document) succeeds, creates no
 //    global and starts no timer; and no source file runs code at its top level (a call, a `new` or a tagged
 //    template outside a function body), so that holds for every file, not only the ones this run reached.
 // 2. CSP and purity: no source names an HTML-string sink, code from strings, the network, a storage API, the
 //    page's location or history, cookies, the global document or window, or an id lookup, as an identifier or as
 //    a string key (`el['innerHTML']`), and no member name is built at run time (`el['outer' + 'HTML']`); no page
-//    part outside the root is reached (`.body`, `.head`, `.write`, `.open`, a write to `.title`), and the root's
-//    window (`.defaultView`) only at the one site that listens for printing (folds.ts); no selector string holds
-//    `#` or an `[id=...]` match, and no selector is built at run time; no attribute that runs code, loads a URL or
-//    styles is written (an `on...` name, `src`, `srcset`, `srcdoc`, `style` and the like, by `setAttribute`, in an
+//    part outside the root is reached (`.body`, `.head`, `.write`, `.open`, a write to `.title`); no selector string
+//    holds `#` or an `[id=...]` match, and no selector is built at run time; no attribute that runs code, loads a URL
+//    or styles is written (an `on...` name, `src`, `srcset`, `srcdoc`, `style` and the like, by `setAttribute`, in an
 //    attribute map or as a property), and outside journal.ts no attribute name is built at run time; no `cssText`.
-// 3. The only globals a source names are the language's own (Object, Promise, Map, ...): a TypeScript program over
-//    src/enhance with the DOM library resolves every free identifier, and one that the DOM library declares
-//    (window, document, parent, top, navigator, Image, DOMParser, setTimeout, ...) is refused unless listed.
-//    Everything of the browser the reader uses, it reaches through the root it was given.
-// 4. The import graph stays inside src/enhance.
+// 3. One module for the window, one for styles (Task 7a): the root's window (`.defaultView`, or an event's `.view`),
+//    its timers, frames and idle callbacks, its observers, its media queries, sizes and scroll position, a point
+//    lookup, computed styles and the document's fonts are reached only in env.ts, and everywhere else only through
+//    `env` (`ctx.env.fonts(...)`); the clock (`Date.now`, `Date()`, `new Date()` with no argument) likewise; and an
+//    element's inline style (`.style`) only in journal.ts, whose setStyle is the one style write (LD11). Each of those
+//    two files uses each such name exactly as often as ALLOWED_SITES says, so the exception cannot widen unseen.
+// 4. The only globals a source names are the language's own (Object, Promise, Map, Date, ...): a TypeScript program
+//    over src/enhance with the DOM library resolves every free identifier, and one that the DOM library declares
+//    (window, document, parent, top, navigator, Image, DOMParser, setTimeout, performance, ...) is refused unless
+//    listed. Everything of the browser the reader uses, it reaches through the root it was given.
+// 5. The import graph stays inside src/enhance: a sibling file, its name lower-case words joined by dashes.
 // The README names every runtime export of the entry.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -53,11 +58,53 @@ const FORBIDDEN: readonly string[] = [
 ];
 
 /** Member names src/enhance never uses, by `.name` or by a string key: the page outside the root, and document writes. */
-const FORBIDDEN_MEMBERS: readonly string[] = ['body', 'head', 'write', 'open', 'defaultView'];
+const FORBIDDEN_MEMBERS: readonly string[] = ['body', 'head', 'write', 'open'];
 
-/** Where a forbidden member is allowed all the same, and how often: the root's window, for the print listener. */
+/**
+ * Member names that reach the root's window or what it schedules and measures: used in env.ts alone, and everywhere
+ * else only on `env` itself (`ctx.env.fonts(...)`, `env.elementFromPoint(...)`), the seam that wraps them.
+ */
+const WINDOW_MEMBERS: readonly string[] = [
+  // the window
+  'defaultView', 'view',
+  // timers, frames, idle callbacks
+  'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
+  'requestIdleCallback', 'cancelIdleCallback', 'queueMicrotask',
+  // observers
+  'ResizeObserver', 'IntersectionObserver', 'MutationObserver', 'PerformanceObserver',
+  // the document's fonts, media queries, sizes, scroll position, a point lookup, computed styles
+  'fonts', 'matchMedia', 'innerWidth', 'innerHeight', 'scrollX', 'scrollY', 'pageXOffset', 'pageYOffset',
+  'elementFromPoint', 'getComputedStyle',
+];
+
+/** Member names used in journal.ts alone: an element's inline style, which setStyle alone writes (LD11). */
+const STYLE_MEMBERS: readonly string[] = ['style'];
+
+/**
+ * Where a refused name is allowed all the same, and how often, by the violation's text: env.ts reaches the window,
+ * and journal.ts an element's inline style. Exact counts, so an exception cannot widen unseen.
+ */
 const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
-  'src/enhance/folds.ts': { defaultView: 1 },
+  'src/enhance/env.ts': {
+    '.defaultView': 1,
+    '.setTimeout': 3,
+    '.clearTimeout': 3,
+    '.requestAnimationFrame': 2,
+    '.cancelAnimationFrame': 1,
+    '.requestIdleCallback': 2,
+    '.cancelIdleCallback': 1,
+    '.ResizeObserver': 2,
+    '.IntersectionObserver': 2,
+    '.fonts': 1,
+    '.matchMedia': 2,
+    '.innerWidth': 1,
+    '.innerHeight': 1,
+    '.scrollY': 1,
+    '.elementFromPoint': 2,
+    '.getComputedStyle': 2,
+    'Date.now': 1,
+  },
+  'src/enhance/journal.ts': { '.style': 1 },
 };
 
 /** Attribute names never written: inline handlers (any `on...`), what loads a URL or a frame, and style. */
@@ -66,10 +113,11 @@ const ATTRIBUTE_BANNED = /^(?:on[a-z]+|style|src|srcset|srcdoc|action|formaction
 /** Property writes that would do what a banned attribute does: an inline handler, a URL load, the page's title. */
 const PROPERTY_WRITE_BANNED = /^(?:on[a-z]+|src|srcset|srcdoc|title)$/;
 
-/** The lib globals src/enhance may name: the language's own objects. */
+/** The lib globals src/enhance may name: the language's own objects (its clock walled apart, rule 3). */
 const GLOBALS: ReadonlySet<string> = new Set([
-  'AggregateError', 'Array', 'Error', 'JSON', 'Map', 'Math', 'Number', 'Object', 'Promise', 'RegExp', 'Set', 'String',
-  'WeakMap', 'undefined',
+  'AggregateError', 'Array', 'Boolean', 'Date', 'Error', 'Infinity', 'JSON', 'Map', 'Math', 'NaN', 'Number', 'Object',
+  'Promise', 'RangeError', 'RegExp', 'Set', 'String', 'Symbol', 'TypeError', 'WeakMap', 'WeakSet', 'decodeURIComponent',
+  'encodeURIComponent', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined',
 ]);
 
 /** Calls whose first argument is a selector. */
@@ -95,7 +143,8 @@ const ID_SELECTOR = /#|\[\s*id\s*[~|^$*]?=/i;
 function violations(fileName: string, source: string): string[] {
   const sf = parse(fileName, source);
   const banned = new Set(FORBIDDEN);
-  const members = new Set(FORBIDDEN_MEMBERS);
+  const members = new Set([...FORBIDDEN_MEMBERS, ...STYLE_MEMBERS]);
+  const windowMembers = new Set(WINDOW_MEMBERS);
   const genericSetter = rel(fileName) === 'src/enhance/journal.ts';
   const out: string[] = [];
   const at = (node: ts.Node, what: string): void => {
@@ -105,11 +154,19 @@ function violations(fileName: string, source: string): string[] {
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && banned.has(node.text)) at(node, node.text);
     if (ts.isPropertyAccessExpression(node) && members.has(node.name.text)) at(node.name, `.${node.name.text}`);
+    // The window's members, except on the seam that wraps them: `env.fonts(...)`, `ctx.env.elementFromPoint(...)`.
+    if (ts.isPropertyAccessExpression(node) && windowMembers.has(node.name.text) && !/(?:^|\.)env$/.test(node.expression.getText(sf))) {
+      at(node.name, `.${node.name.text}`);
+    }
+    // The clock: Date.now, Date() and new Date() with no argument read the time; new Date(value) only converts.
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date' && node.name.text === 'now') at(node, 'Date.now');
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date') at(node, 'Date()');
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date' && (node.arguments?.length ?? 0) === 0) at(node, 'new Date()');
     // A string key reads a member as surely as a dot does; a key built at run time could be anything.
     if (ts.isElementAccessExpression(node)) {
       const key = node.argumentExpression;
       if (ts.isStringLiteralLike(key)) {
-        if (banned.has(key.text) || members.has(key.text)) at(key, `['${key.text}']`);
+        if (banned.has(key.text) || members.has(key.text) || windowMembers.has(key.text)) at(key, `['${key.text}']`);
       } else if (builtString(key)) at(key, '[<member built at run time>]');
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
@@ -155,13 +212,16 @@ function violations(fileName: string, source: string): string[] {
   return out;
 }
 
-/** What a file may use all the same: drop up to the allowed count of each allowed member from its violations. */
+/** A violation's text without its position: `.style`, `Date.now`. */
+const what = (v: string): string => v.replace(/^\d+:\d+ /, '');
+
+/** What a file may use all the same: drop up to the allowed count of each allowed violation from its violations. */
 function afterAllowed(file: string, found: readonly string[]): string[] {
-  const left = { ...(ALLOWED_SITES[file] ?? {}) };
+  const left: Record<string, number> = { ...(ALLOWED_SITES[file] ?? {}) };
   return found.filter((v) => {
-    const name = /^\d+:\d+ \.(\w+)$/.exec(v)?.[1];
-    if (name === undefined || (left[name] ?? 0) === 0) return true;
-    left[name] = (left[name] ?? 0) - 1;
+    const key = what(v);
+    if ((left[key] ?? 0) === 0) return true;
+    left[key] = (left[key] ?? 0) - 1;
     return false;
   });
 }
@@ -290,11 +350,44 @@ describe('enhance walls: CSP, purity and id lookups', () => {
     expect(found).toEqual([]);
   });
 
-  it('the one allowed site is used exactly as allowed, so the exception cannot widen unseen', () => {
+  it('each allowed site is used exactly as allowed, so an exception cannot widen unseen', () => {
+    expect(Object.keys(ALLOWED_SITES).sort()).toEqual(['src/enhance/env.ts', 'src/enhance/journal.ts']);
     for (const [file, allowed] of Object.entries(ALLOWED_SITES)) {
       const found = violations(path.join(ROOT, file), readFileSync(path.join(ROOT, file), 'utf8'));
-      for (const [name, count] of Object.entries(allowed)) expect(found.filter((v) => v.endsWith(` .${name}`))).toHaveLength(count);
+      for (const [key, count] of Object.entries(allowed)) expect(found.filter((v) => what(v) === key), `${file} ${key}`).toHaveLength(count);
     }
+  });
+
+  it('the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through', () => {
+    const probe = [
+      'const v = root.ownerDocument.defaultView; v.setTimeout(f, 1); v.requestAnimationFrame(f);',
+      "e.view.innerWidth; doc.fonts.ready; el.style.width = '1px'; el['style'];",
+      'new v.ResizeObserver(f); new v.IntersectionObserver(f); v.matchMedia(q).matches;',
+      'Date.now(); new Date(); Date(); new Date(iso); Date.parse(iso);',
+      'ctx.env.fonts(1); env.elementFromPoint(1, 2); ctx.env.timeout(f, 1);',
+      "doc.elementFromPoint(1, 2); v.scrollY; v.requestIdleCallback(f); v.getComputedStyle(el); v['matchMedia'];",
+    ].join('\n');
+    expect(violations('probe.ts', probe)).toEqual([
+      '1:30 .defaultView',
+      '1:45 .setTimeout',
+      '1:65 .requestAnimationFrame',
+      '2:8 .innerWidth',
+      '2:3 .view',
+      '2:24 .fonts',
+      '2:40 .style',
+      "2:64 ['style']",
+      '3:7 .ResizeObserver',
+      '3:32 .IntersectionObserver',
+      '3:59 .matchMedia',
+      '4:1 Date.now',
+      '4:13 new Date()',
+      '4:25 Date()',
+      '6:5 .elementFromPoint',
+      '6:31 .scrollY',
+      '6:42 .requestIdleCallback',
+      '6:68 .getComputedStyle',
+      "6:92 ['matchMedia']",
+    ]);
   });
 
   it('the scan sees string keys, keys built at run time, page members, URL and handler attributes, and id matches', () => {
@@ -368,6 +461,7 @@ describe('enhance walls: CSP, purity and id lookups', () => {
       "6:20 querySelector('#top')",
       '7:23 querySelectorAll(<built at run time>)',
       "8:17 setAttribute('style')",
+      '9:4 .style',
       '9:10 cssText',
       '10:15 Function',
       '11:1 fetch',
@@ -409,13 +503,29 @@ describe('enhance walls: globals', () => {
 
 });
 
+describe('enhance walls: the language\'s own globals', () => {
+  it('the language\'s own objects are allowed; the DOM\'s clock and timers are not', () => {
+    const probe = [
+      'export function f(s: string): unknown {',
+      '  void [Date.parse(s), new Date(s), Symbol(s), isFinite(1), parseInt(s, 10), new WeakSet(), Boolean(s), NaN, Infinity];',
+      '  void decodeURIComponent(s); void new TypeError(s); void new RangeError(s); void isNaN(1); void parseFloat(s);',
+      '  return [performance.now(), requestAnimationFrame(() => undefined)];',
+      '}',
+    ].join('\n');
+    expect(globalUses([{ name: path.join(ROOT, 'probe-language.ts'), text: probe }]).map((u) => u.replace(/^[^:]+:/, ''))).toEqual([
+      '4:11 global performance',
+      '4:30 global requestAnimationFrame',
+    ]);
+  });
+});
+
 describe('enhance walls: the import graph', () => {
-  it('every source imports only sibling files of src/enhance', () => {
+  it('every source imports only sibling files of src/enhance, named in lower-case words joined by dashes', () => {
     const outside = sources().flatMap((f) =>
       ts
         .preProcessFile(readFileSync(f, 'utf8'), true, true)
         .importedFiles.map((i) => i.fileName)
-        .filter((spec) => !/^\.\/[a-z]+\.js$/.test(spec))
+        .filter((spec) => !/^\.\/[a-z]+(?:-[a-z]+)*\.js$/.test(spec))
         .map((spec) => `${rel(f)} imports ${spec}`),
     );
     expect(outside).toEqual([]);

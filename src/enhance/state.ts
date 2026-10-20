@@ -1,17 +1,19 @@
-// Reader state: the prefs (reader-wide) and per-document state (folds today), kept locally and written behind to
-// the host's storage. The library never touches a storage API; it reads the host's snapshot during startup and
-// calls the host's set() after each local change.
+// Reader state: the prefs and the UI memory (reader-wide), the reading position (per position key), and per-document
+// state (folds today), kept locally and written behind to the host's storage. The library never touches a storage
+// API; it reads the host's snapshot during startup and calls the host's set() after each local change.
 //
-// Storage keys (the README states them):
+// Storage keys (the README states them; LD8 adds the two in the middle):
 //   docreader:prefs                      a JSON object { theme, width, font, lens }, reader-wide
+//   docreader:ui                         a JSON object of UI memory fields (which rail tab, say), reader-wide
+//   docreader:pos:<posKey>               the reading position of one document, as its feature stores it
 //   docreader:doc:<storageKey>:<name>    per-document JSON, such as docreader:doc:project-a:specs:x.md:folds
-// Two more are reserved, under the same prefix, for later versions: docreader:pos:<posKey> (the reading position)
-// and docreader:ui (reader-wide UI memory). Nothing reads or writes them yet.
-// Invalid stored JSON, or a stored value of the wrong shape, is ignored, never thrown.
+// Invalid stored JSON, or a stored value of the wrong shape, is ignored, never thrown. A stored value is returned as
+// `unknown`: the feature that reads it checks its shape, type, count and length.
 //
-// Reading: the snapshot object is read once, when the state is created; each key is read at most once after
-// that, the first time it is needed, and only during startup (`seal()` closes the snapshot). Only this reader's
-// keys are read, so a host may pass its whole store.
+// Reading: the snapshot object is read once, when the state is created, and the prefs key with it; every other key
+// is read at most once after that, the first time it is needed, and only during startup (`seal()` closes the
+// snapshot). Only this reader's keys are read, so a host may pass its whole store. A UI field or a position read
+// after startup, with its key never read during it, reads as absent.
 //
 // Writing: the local value changes first, synchronously; set() is called after. Calls for one key are serialized
 // per storage object, across every instance that shares it (two roots on one page, or a root enhanced again after
@@ -20,21 +22,30 @@
 // into the reader queues its nested write instead of issuing it inside the outer call. A throwing or rejecting
 // set() is swallowed and leaves local state as it is. A waiting value is issued inside the operation of the
 // instance that queued it, so once that instance is not live it is dropped; destroy does not wait for a pending
-// call. The stored prefs object is this instance's snapshot of it, merged with the newest value queued on that
-// storage object when that value is one the snapshot cannot hold (queued after this instance read it, or still in
-// flight then), so a root never drops a field another root wrote, and never writes back a value its host's store
-// has since replaced. A host that shares one store between several enhance() calls passes the same storage object
-// to each; two objects are two queues.
+// call. A reader-wide object (the prefs, the UI memory) is written whole: this instance's snapshot of it, merged
+// with the newest value queued on that storage object when that value is one the snapshot cannot hold (queued after
+// this instance read it, or still in flight then), so a root never drops a field another root wrote, and never
+// writes back a value its host's store has since replaced. A UI field written after startup, with the UI key never
+// read during it, stays local: the stored fields it cannot see are never overwritten. A host that shares one store
+// between several enhance() calls passes the same storage object to each; two objects are two queues.
 import type { Journal } from './journal.js';
-import { isPrefValue, PREF_VALUES, prefNames } from './options.js';
-import type { Prefs, ReaderStorage } from './types.js';
+import { isPrefValue, PREF_VALUES, prefNames, type FeatureOptions } from './options.js';
+import type { Prefs } from './types.js';
 
 // Open before v1: the `docreader:` prefix is fixed; the public release gives it a namespace option or states why not.
 export const PREFS_KEY = 'docreader:prefs';
 
+/** The storage key of the reader-wide UI memory (LD8). */
+export const UI_KEY = 'docreader:ui';
+
 /** The storage key of a per-document value: docreader:doc:<storageKey>:<name>. */
 export function docKey(storageKey: string, name: string): string {
   return `docreader:doc:${storageKey}:${name}`;
+}
+
+/** The storage key of a reading position: docreader:pos:<posKey> (LD8). */
+export function posKeyOf(posKey: string): string {
+  return `docreader:pos:${posKey}`;
 }
 
 /** The defaults: the first value each pref accepts. */
@@ -54,6 +65,23 @@ export interface ReaderState {
   readDoc(name: string): unknown;
   /** Change a per-document value locally (null clears it), then write it behind. Local only without a storageKey. */
   writeDoc(name: string, value: unknown): void;
+  /**
+   * The reading position stored under `posKey` (the options' posKey): the local one if written since startup, else
+   * the stored one parsed (read during startup only), else undefined.
+   */
+  readPos(posKey: string): unknown;
+  /** Change the position under `posKey` locally (null clears it), then write it behind. */
+  writePos(posKey: string, value: unknown): void;
+  /**
+   * One field of the reader-wide UI memory, an own field of the stored object (never an inherited name): the local
+   * one if written since startup, else the stored one (the key read during startup only), else undefined.
+   */
+  readUi(name: string): unknown;
+  /**
+   * Change one UI field (null deletes it), then write the whole object behind, merged as the prefs are. A write after
+   * startup, with the UI key never read during it, is kept locally and not written.
+   */
+  writeUi(name: string, value: unknown): void;
   /** Close the snapshot: after startup no key is read from it again. */
   seal(): void;
 }
@@ -143,11 +171,12 @@ function isPlainRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+/** The options the state reads: the storage, the per-document key and the explicit prefs (options.prefs). */
+export type StateOptions = Pick<FeatureOptions, 'storage' | 'storageKey' | 'prefs'>;
+
 export interface StateArgs {
-  readonly storage: ReaderStorage | null;
-  readonly storageKey: string | null;
-  /** options.prefs: they override stored values, and are not themselves written back. */
-  readonly explicit: Readonly<Partial<Prefs>>;
+  /** The normalized options; options.prefs override stored values, and are not themselves written back. */
+  readonly options: StateOptions;
   /** Run a queued write as an operation of the instance (refused once it is not live). */
   readonly operate: (fn: () => void) => void;
   /** Whether the instance is still live. */
@@ -156,7 +185,8 @@ export interface StateArgs {
 
 /** Create the state. Reads the snapshot object and the prefs key: host code may run (and may destroy). */
 export function createReaderState(args: StateArgs): ReaderState {
-  const { storage, storageKey, explicit, operate, live } = args;
+  const { operate, live } = args;
+  const { storage, storageKey, prefs: explicit } = args.options;
   let snapshot: Readonly<Record<string, unknown>> | null = null;
   let set: ((key: string, value: string | null) => unknown) | null = null;
   if (storage !== null) {
@@ -176,6 +206,7 @@ export function createReaderState(args: StateArgs): ReaderState {
 
   /** Each key's stored text, read at most once. */
   const read = new Map<string, string | undefined>();
+  let sealed = false;
   const readRaw = (key: string): string | undefined => {
     if (read.has(key)) return read.get(key);
     let raw: string | undefined;
@@ -200,30 +231,65 @@ export function createReaderState(args: StateArgs): ReaderState {
     if (slot.busy) slot.waiting = { value, writer, seq: slot.queued };
     else issue(key, slot, value, writer, slot.queued);
   };
-  // What this instance's snapshot can hold: every prefs value whose call had completed when it was read.
-  const prefsSlot = storage === null || writer === null ? null : slotOf(storage, PREFS_KEY);
-  const seenLanded = prefsSlot?.landed ?? 0;
   /**
-   * The stored prefs object a change is merged into: this instance's (its snapshot, then its own changes), with the
-   * newest value queued on this storage object over it when the snapshot cannot hold that value.
+   * A reader-wide JSON object under `key`, written whole. `seen` is what this instance's snapshot can hold: every value
+   * of the key whose call had completed when the snapshot was taken (at the state's creation).
    */
-  const prefsBase = (): Record<string, unknown> => {
-    if (prefsSlot !== null && prefsSlot.queued > seenLanded && typeof prefsSlot.latest === 'string') {
-      const r = parseJson(prefsSlot.latest);
-      if (isPlainRecord(r)) return { ...persisted, ...r };
-    }
-    return persisted;
+  const shared = (key: string) => {
+    const slot = storage === null || writer === null ? null : slotOf(storage, key);
+    const seen = slot?.landed ?? 0;
+    /** The stored object as this instance holds it: its snapshot's, then its own changes; null until read. */
+    let held: Record<string, unknown> | null = null;
+    return {
+      /** Read the stored object from the snapshot, once (an absent or invalid value reads as empty). */
+      load(): Record<string, unknown> {
+        if (held === null) {
+          const r = parseJson(readRaw(key));
+          held = isPlainRecord(r) ? { ...r } : {};
+        }
+        return held;
+      },
+      get loaded(): boolean {
+        return held !== null;
+      },
+      /**
+       * Merge `change` into the stored object (a field set to undefined is deleted) and write it behind when it
+       * changed: this instance's object, with the newest value queued on this storage object over it when the
+       * snapshot cannot hold that value.
+       */
+      update(change: Readonly<Record<string, unknown>>): void {
+        let base = this.load();
+        if (slot !== null && slot.queued > seen && typeof slot.latest === 'string') {
+          const r = parseJson(slot.latest);
+          if (isPlainRecord(r)) base = { ...base, ...r };
+        }
+        const before = JSON.stringify(base);
+        let next: Record<string, unknown> = { ...base };
+        for (const [k, v] of Object.entries(change)) {
+          if (v === undefined) delete next[k];
+          else next = { ...next, [k]: v };
+        }
+        held = next;
+        const after = JSON.stringify(next);
+        if (after !== before) writeBehind(key, after);
+      },
+    };
   };
 
   // Prefs: the stored object (unknown fields are kept when it is written back), its valid fields, then explicit.
-  const storedRecord = parseJson(readRaw(PREFS_KEY));
-  let persisted: Record<string, unknown> = isPlainRecord(storedRecord) ? { ...storedRecord } : {};
+  const storedPrefs = shared(PREFS_KEY);
+  const persisted = storedPrefs.load();
   let prefs: Prefs = defaultPrefs();
   for (const name of prefNames()) {
     const v = persisted[name];
     if (isPrefValue(name, v)) prefs = { ...prefs, [name]: v };
   }
   prefs = { ...prefs, ...explicit };
+
+  const ui = shared(UI_KEY);
+  /** UI fields written after startup with the UI key never read: kept here, never written. */
+  const uiLocal = new Map<string, unknown>();
+  const posLocal = new Map<string, unknown>();
 
   const docLocal = new Map<string, unknown>();
 
@@ -236,11 +302,7 @@ export function createReaderState(args: StateArgs): ReaderState {
       const next: Prefs = { ...prefs, ...change };
       const changed = prefNames().some((name) => next[name] !== prefs[name]);
       prefs = next;
-      const base = prefsBase();
-      const before = JSON.stringify(base);
-      persisted = { ...base, ...change };
-      const after = JSON.stringify(persisted);
-      if (after !== before) writeBehind(PREFS_KEY, after);
+      storedPrefs.update(change);
       return changed;
     },
 
@@ -257,8 +319,34 @@ export function createReaderState(args: StateArgs): ReaderState {
       writeBehind(docKey(storageKey, name), value === null ? null : JSON.stringify(value));
     },
 
+    readPos(posKey) {
+      if (posLocal.has(posKey)) return posLocal.get(posKey);
+      return parseJson(readRaw(posKeyOf(posKey)));
+    },
+
+    writePos(posKey, value) {
+      posLocal.set(posKey, value);
+      writeBehind(posKeyOf(posKey), value === null ? null : JSON.stringify(value));
+    },
+
+    readUi(name) {
+      if (uiLocal.has(name)) return uiLocal.get(name);
+      if (!ui.loaded && sealed) return undefined;
+      const held = ui.load();
+      return Object.hasOwn(held, name) ? held[name] : undefined;
+    },
+
+    writeUi(name, value) {
+      if (!ui.loaded && sealed) {
+        uiLocal.set(name, value === null ? undefined : value);
+        return;
+      }
+      ui.update({ [name]: value === null ? undefined : value });
+    },
+
     seal() {
       snapshot = null;
+      sealed = true;
     },
   };
 }

@@ -43,7 +43,7 @@ const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under str
 
 /** The only places a packed file may live. */
 const ALLOWED = [
-  /^dist\/(?:render|conformance|enhance)\/[A-Za-z]+\.(?:js|d\.ts)$/,
+  /^dist\/(?:render|conformance|enhance)\/[A-Za-z]+(?:-[a-z]+)*\.(?:js|d\.ts)$/,
   /^conformance\/(?:manifest|hostile|DEPARTURES)\.json$/,
   /^conformance\/(?:corpus|expected)\/[A-Za-z0-9/_-]+\.(?:md|html|meta\.json)$/,
   /^assets\/reader\.css$/,
