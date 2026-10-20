@@ -102,6 +102,15 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
     expect(normalizeOptions({ posKey: 'p' }).posKey).toBe('p');
   });
 
+  it('posKey and storageKey: at most 1024 code units, the bound inclusive; a longer key is refused', () => {
+    const at = 'k'.repeat(LIMITS.key);
+    expect([normalizeOptions({ posKey: at }).posKey, normalizeOptions({ storageKey: at }).storageKey]).toEqual([at, at]);
+    const over = 'k'.repeat(LIMITS.key + 1);
+    expect(verdict({ posKey: over })).toMatch(/^invalid-options: docreader: posKey must be a non-empty string of at most 1024/);
+    expect(verdict({ storageKey: over })).toMatch(/^invalid-options: docreader: storageKey must be a non-empty string of at most 1024/);
+    expect(verdict({ posKey: 'k'.repeat(8_000_000) })).toMatch(/^invalid-options: /);
+  });
+
   it('chrome fields default to true one by one; a mermaid object without limits leaves them to the library', () => {
     expect(normalizeOptions({ chrome: {} }).chrome).toEqual({ bar: true, rail: true, settings: true });
     expect(normalizeOptions({ chrome: { settings: false } }).chrome).toEqual({ bar: true, rail: true, settings: false });
@@ -111,8 +120,16 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
   it('what features read is frozen: chrome, the mermaid limits and keys, commits and their entries', () => {
     const n = normalizeOptions({ chrome: {}, mermaid: { load, secure: ['look'] }, info: { commits: [entry()] } });
     const commits = n.info?.commits ?? [];
-    const read = [n.chrome, n.mermaid, n.mermaid?.secure, n.callbacks, n.callbacks.mermaid, commits, commits[0], commits[0]?.parents];
+    const read = [n.chrome, n.mermaid, n.mermaid?.secure, commits, commits[0], commits[0]?.parents];
     expect(read.map((v) => [typeof v, Object.isFrozen(v)])).toEqual(read.map(() => ['object', true]));
+  });
+
+  it('defence in depth, not seen by a feature: the callbacks record handed to the host wrappers is frozen', () => {
+    // The lifecycle keeps `callbacks` off ctx.options and gives it to createHost alone, so no feature or host can
+    // observe this freeze; it only keeps a later change from mutating the record a live instance's wrappers read.
+    const n = normalizeOptions({ copy: noop, mermaid: { load } });
+    const internal = [n.callbacks, n.callbacks.copy, n.callbacks.mermaid];
+    expect(internal.map((v) => [typeof v, Object.isFrozen(v)])).toEqual(internal.map(() => ['object', true]));
   });
 
   it('enhance() takes every option at once and resolves', async () => {
@@ -253,6 +270,15 @@ describe('options: getters are refused unread, unknown keys refused, inherited p
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it.each(['subject', 'date', 'parents'])('a getter on a commit entry\'s %s is never called: the entry is refused', (field) => {
+    const spy = vi.fn(() => (field === 'parents' ? [] : 'text'));
+    const fields = entry();
+    delete fields[field];
+    const e = withGetter(fields, field, spy);
+    expect(verdict({ info: { commits: [e] } })).toMatch(new RegExp(`^invalid-options: docreader: info\\.commits\\[0\\]\\.${field} `));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('unknown keys are refused, at the top, in chrome, in mermaid and in info; a commit entry may carry more', () => {
     expect(verdict({ onClick: noop })).toMatch(/options has unknown keys: onClick/);
     expect(verdict({ chrome: { toc: true } })).toMatch(/chrome has unknown keys: toc/);
@@ -304,7 +330,85 @@ describe('options: no host function runs while the options are read', () => {
   });
 });
 
+describe('options: info.frontList is read as own data, bounded, through no method of the host\'s arrays', () => {
+  const fl = (key: string, vals: unknown): Record<string, unknown> => ({ key, list: true, vals });
+
+  it('an own map on the list is never called: its entries are read by index', () => {
+    const map = vi.fn(() => [fl('smuggled', ['x'])]);
+    const good = Object.defineProperty([fl('tags', ['a'])], 'map', { value: map });
+    expect(normalizeOptions({ info: { frontList: good } }).info?.frontList).toEqual([{ key: 'tags', list: true, vals: ['a'] }]);
+    const bad = Object.defineProperty([{ key: 42, list: 'yes', vals: 'not-an-array' }], 'map', { value: map });
+    expect(verdict({ info: { frontList: bad } })).toMatch(/^invalid-options: docreader: info\.frontList\[0\]/);
+    expect(map).not.toHaveBeenCalled();
+  });
+
+  it('an own iterator or every on vals is never called: its items are read by index', () => {
+    const iterate = vi.fn(function* (): Generator<unknown> {
+      yield { toString: () => 'SMUGGLED' };
+    });
+    const vals = Object.defineProperty(['a'], Symbol.iterator, { value: iterate });
+    expect(normalizeOptions({ info: { frontList: [fl('tags', vals)] } }).info?.frontList?.[0]?.vals).toEqual(['a']);
+    const every = vi.fn(() => true);
+    const mixed = Object.defineProperty([{}, 7], 'every', { value: every });
+    expect(verdict({ info: { frontList: [fl('tags', mixed)] } })).toMatch(/^invalid-options: docreader: info\.frontList\[0\]/);
+    expect([iterate.mock.calls.length, every.mock.calls.length]).toEqual([0, 0]);
+  });
+
+  it('a getter at an index of the list or of vals is never called: the entry is refused', () => {
+    const spy = vi.fn(() => fl('tags', ['a']));
+    expect(verdict({ info: { frontList: Object.defineProperty([], '0', { get: spy, enumerable: true }) } })).toMatch(/^invalid-options: docreader: info\.frontList\[0\]/);
+    const vals = Object.defineProperty([], '0', { get: spy, enumerable: true });
+    expect(verdict({ info: { frontList: [fl('tags', vals)] } })).toMatch(/^invalid-options: docreader: info\.frontList\[0\]/);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('a hole is refused, not filled from Array.prototype', () => {
+    const proto = Array.prototype as unknown as Record<string, unknown>;
+    try {
+      proto['0'] = fl('polluted', ['p']);
+      expect(verdict({ info: { frontList: [, fl('tags', ['a'])] } })).toMatch(/^invalid-options: docreader: info\.frontList\[0\]/);
+      proto['0'] = 'polluted';
+      expect(verdict({ info: { frontList: [fl('tags', [, 'a'])] } })).toMatch(/^invalid-options: docreader: info\.frontList\[0\]/);
+    } finally {
+      delete proto['0'];
+    }
+  });
+
+  it('the list keeps its first 40 entries and each vals its first 300 items, as render() bounds them; none past is read', () => {
+    const reads = new Set<number>();
+    const watch = <T extends object>(t: T): T =>
+      new Proxy(t, {
+        getOwnPropertyDescriptor(o, k) {
+          if (typeof k === 'string' && /^\d+$/.test(k)) reads.add(Number(k));
+          return Reflect.getOwnPropertyDescriptor(o, k);
+        },
+        get(o, k, r) {
+          if (typeof k === 'string' && /^\d+$/.test(k)) reads.add(Number(k));
+          return Reflect.get(o, k, r) as unknown;
+        },
+      });
+    const many = Array.from({ length: 200_000 }, (_, i) => fl(`k${String(i)}`, ['v']));
+    many[LIMITS.frontList] = { broken: true };
+    const kept = normalizeOptions({ info: { frontList: watch(many) } }).info?.frontList ?? [];
+    expect(kept).toHaveLength(LIMITS.frontList);
+    expect(Math.max(...reads)).toBe(LIMITS.frontList - 1);
+    reads.clear();
+    const vals = Array.from({ length: 100_000 }, (_, i) => `v${String(i)}`);
+    (vals as unknown[])[LIMITS.frontVals] = 7;
+    const one = normalizeOptions({ info: { frontList: [fl('tags', watch(vals))] } }).info?.frontList?.[0]?.vals ?? [];
+    expect(one).toHaveLength(LIMITS.frontVals);
+    expect(Math.max(...reads)).toBe(LIMITS.frontVals - 1);
+    expect([LIMITS.frontList, LIMITS.frontVals]).toEqual([40, 300]);
+  });
+});
+
 describe('options: shas, commits and the hash', () => {
+  it('a sha given in upper case is kept in lower case, wherever it is read', () => {
+    const upper = SHA40.toUpperCase();
+    const info = normalizeOptions({ info: { sha: upper, only: 'ABCDEF1', commits: [entry({ sha: upper, parents: [SHA64.toUpperCase()] })] } }).info;
+    expect([info?.sha, info?.only, info?.commits?.[0]?.sha, info?.commits?.[0]?.parents]).toEqual([SHA40, 'abcdef1', SHA40, [SHA64]]);
+  });
+
   it('a sha is 7 to 40 hex characters, or exactly 64, in either case', () => {
     for (const sha of [hex(7), hex(40), SHA64, SHA40.toUpperCase()]) {
       expect(verdict({ info: { sha, only: sha, commits: [entry({ sha, parents: [sha] })] } })).toBe('accepted');
@@ -386,12 +490,14 @@ function harness(given: Partial<Record<HostCallback, (...args: never[]) => unkno
   const self = { holder: true };
   let alive = true;
   let depth = 0;
+  let ops = 0;
   const callbacks = Object.fromEntries(HOST_CALLBACKS.map((n) => [n, given[n] === undefined ? null : { fn: given[n], self }])) as unknown as HostCallbacks;
   const host = createHost(
     callbacks,
     () => alive,
     <T>(fn: () => T): T | undefined => {
       depth += 1;
+      ops += 1;
       try {
         return fn();
       } finally {
@@ -403,6 +509,7 @@ function harness(given: Partial<Record<HostCallback, (...args: never[]) => unkno
     host,
     self,
     depth: () => depth,
+    ops: () => ops,
     kill: () => {
       alive = false;
     },
@@ -425,11 +532,12 @@ function callAll(h: ReturnType<typeof harness>['host']): unknown[] {
 const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink'];
 
 describe('host: one wrapper per host callback', () => {
-  it('absent: present is empty, each wrapper calls nothing and answers null', async () => {
-    const { host } = harness({});
+  it('absent: present is empty, each wrapper calls nothing, enters no operation and answers null', async () => {
+    const { host, ops } = harness({});
     expect(host.present.names).toEqual([]);
     expect(HOST_CALLBACKS.map((n) => host.present.has(n))).toEqual(HOST_CALLBACKS.map(() => false));
     expect(await Promise.all(callAll(host))).toEqual(HOST_CALLBACKS.map(() => null));
+    expect(ops()).toBe(0);
   });
 
   it('present is a frozen set of the callbacks given, in a fixed order; one that returns null is still present', () => {
@@ -465,6 +573,34 @@ describe('host: one wrapper per host callback', () => {
     const objects = [seen[2]?.[0], seen[3]?.[1], seen[4]?.[1]];
     expect(objects.map((o) => Object.isFrozen(o))).toEqual([true, true, true]);
     expect([objects[0] === version, objects[1] === how, objects[2] === where]).toEqual([false, false, false]);
+  });
+
+  it('a host function is called itself: its own call property is never read or run', async () => {
+    const ran: string[] = [];
+    const own = vi.fn(() => 'own call ran instead');
+    const withCall = (name: string, value: unknown) => Object.defineProperty(() => (ran.push(name), value), 'call', { value: own });
+    const { host } = harness({ itemLink: withCall('itemLink', 'link'), onLink: withCall('onLink', undefined), changes: withCall('changes', 'reply') });
+    expect([host.itemLink('K-1'), host.onLink('a.md', { newTab: false }), await host.changes(SHA40)]).toEqual(['link', undefined, 'reply']);
+    expect(ran).toEqual(['itemLink', 'onLink', 'changes']);
+    expect(own).not.toHaveBeenCalled();
+  });
+
+  it('a Function.prototype.call patched once the host is built sees none of its calls', async () => {
+    const { host } = harness({ itemLink: () => 'link', copy: noop });
+    const proto = Object.getPrototypeOf(noop) as { call: unknown };
+    const original = proto.call;
+    const patched = vi.fn(function (this: unknown, ...args: unknown[]): unknown {
+      return (original as (this: unknown, ...a: unknown[]) => unknown).apply(this, args);
+    });
+    proto.call = patched;
+    let answers: unknown[];
+    try {
+      answers = [host.itemLink('K-1'), await host.copy('t')];
+    } finally {
+      proto.call = original;
+    }
+    expect(answers).toEqual(['link', undefined]);
+    expect(patched).not.toHaveBeenCalled();
   });
 
   it('results are unknown: a value callback answers what the host returned, a void one undefined', async () => {
@@ -614,6 +750,26 @@ describe('host: the lifecycle wires it to the instance', () => {
     expect(await reply).toBeNull();
   });
 
+  it('a synchronous callback that destroys the instance itself answers null, as an asynchronous one does', async () => {
+    const root = mount();
+    const seen: boolean[] = [];
+    const destroyThen = <T>(value: T) =>
+      function (): T {
+        void destroyEnhancement(root);
+        return value;
+      };
+    await enhance(root, { itemLink: destroyThen('https://x.example/after'), onLink: destroyThen(undefined) });
+    const ctx = ctxOf(root);
+    expect(ctx.host.itemLink('K-1')).toBeNull();
+    seen.push(ctx.live());
+    const again = mount();
+    await enhance(again, { onLink: function () { void destroyEnhancement(again); } });
+    const other = ctxOf(again);
+    expect(other.host.onLink('a.md', { newTab: false })).toBeNull();
+    seen.push(other.live());
+    expect(seen).toEqual([false, false]);
+  });
+
   it('a reply after destroy is silenced on the real instance too', async () => {
     const root = mount();
     let resolve: (v: unknown) => void = noop;
@@ -688,6 +844,54 @@ describe('README: the options of ./enhance', () => {
       .map((l) => /^\| `(\w+)` \| ([^|]*) \|/.exec(l));
     expect(rows.map((m) => m?.[1]).sort()).toEqual([...OPTION_KEYS].sort());
     expect(rows.filter((m) => (m?.[2] ?? '').trim() === '')).toEqual([]);
+  });
+
+  /** The Default and Meaning cells of one option's row. */
+  const row = (key: string): [string, string] => {
+    const m = new RegExp(`^\\| \`${key}\` \\| ([^|]*) \\| (.*) \\|$`, 'm').exec(table);
+    return [m?.[1]?.trim() ?? '', m?.[2] ?? ''];
+  };
+
+  it('each stated default is the one normalizeOptions applies', () => {
+    const n = normalizeOptions({});
+    for (const k of ['keyboard', 'rules', 'folds'] as const) expect([k, row(k)[0]]).toEqual([k, `\`${String(n[k])}\``]);
+    expect(Object.values(n.chrome)).toEqual([true, true, true]);
+    expect(row('chrome')[0]).toBe('each `true`');
+    expect(normalizeOptions({ storageKey: 'k' }).posKey).toBe('k');
+    expect(row('posKey')[0]).toBe('`storageKey`');
+  });
+
+  it('each stated bound is the one LIMITS holds', () => {
+    // By phrase: a number such as 40 or 64 appears more than once in a row (the sha's bounds), so a bare number
+    // would still be found after the bound it names had drifted.
+    const bounds: [string, string][] = [
+      ['info', `first ${String(LIMITS.commits)} commits`],
+      ['info', `cut to ${String(LIMITS.subject)} code units`],
+      ['info', `first ${String(LIMITS.parents)} parents`],
+      ['info', `date over ${String(LIMITS.date)} code units`],
+      ['info', `\`frontList\` keeps its first ${String(LIMITS.frontList)} entries`],
+      ['info', `each \`vals\` its first ${String(LIMITS.frontVals)} items`],
+      ['mermaid', `from 1 to ${String(LIMITS.maxTextSize)})`],
+      ['mermaid', `from 1 to ${String(LIMITS.maxEdges)})`],
+      ['mermaid', `up to ${String(LIMITS.secure)} configuration keys`],
+      ['initialHash', `over ${String(LIMITS.hash)} code units`],
+      ['posKey', `at most ${String(LIMITS.key)} code units`],
+      ['storageKey', `at most ${String(LIMITS.key)} code units`],
+    ];
+    expect(bounds.filter(([k, phrase]) => !row(k)[1].includes(phrase))).toEqual([]);
+  });
+
+  it('says which options this version reads and checks but does not act on yet', () => {
+    const note = section.split('\n\n').find((p) => p.includes('take effect as the parts of the layout that use them land')) ?? '';
+    const named = ['posKey', 'keyboard', 'chrome', 'rules', 'initialHash', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid', 'lens', 'sha', 'draft', 'commits', 'only'];
+    expect(named.filter((k) => !note.includes(`\`${k}\``))).toEqual([]);
+  });
+
+  it('keeps the ownership rules out of the host callbacks paragraph', () => {
+    const callbacks = section.split('\n\n').find((p) => p.startsWith('**Host callbacks.**')) ?? '';
+    expect(callbacks).not.toBe('');
+    expect(callbacks).not.toContain('One root has one owner');
+    expect(section).toContain('One root has one owner');
   });
 
   it('names the lens pref and its values, and the reserved position and UI keys', () => {

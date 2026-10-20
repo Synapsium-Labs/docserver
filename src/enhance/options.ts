@@ -3,7 +3,9 @@
 // and `info.commits` entry, and the arrays inside them are read as own data properties only: an inherited property
 // is not an option (it comes from a prototype, not from the host's object), an own property is read whether it is
 // enumerable or not, and a getter is refused without being called (a getter on an entry or an array item reads as
-// absent, which its shape check then refuses). Unknown own keys (in the options, `prefs`, `info`, `chrome` and
+// absent, which its shape check then refuses). An array is read item by item, by index (firstItems), never through
+// a method or an iterator of its own, so a host array's own `map`, `every` or Symbol.iterator is never called, and
+// a hole reads as absent rather than as an inherited index. Unknown own keys (in the options, `prefs`, `info`, `chrome` and
 // `mermaid`) and wrong types throw EnhanceError('invalid-options'); enhance() calls this before it reserves
 // anything, so a refused call leaves no trace. A key whose value is undefined counts as absent. The storage object
 // is only checked to be an object here: its snapshot and set are read during startup, inside the startup operation
@@ -17,8 +19,11 @@
 //
 // Host data is bounded as it is read: numbers are finite integers within LIMITS; `info.commits` keeps its first
 // LIMITS.commits entries and reads none past them; a subject is cut to LIMITS.subject code units (never inside a
-// surrogate pair); a parents list keeps its first LIMITS.parents; a sha is 7 to 40 hex characters, or exactly 64 (a
-// SHA-256 repository). `info.commits` is the document's version history; it is not named `history`, a name the
+// surrogate pair); a parents list keeps its first LIMITS.parents; `info.frontList` keeps its first LIMITS.frontList
+// entries and each `vals` its first LIMITS.frontVals items (render()'s own bounds on meta.frontList, so its output is
+// never cut); a key (`storageKey`, `posKey`) is at most LIMITS.key code units; a sha is 7 to 40 hex characters, or
+// exactly 64 (a SHA-256 repository), in either case, and is kept in lower case, so two spellings of one commit
+// compare equal. `info.commits` is the document's version history; it is not named `history`, a name the
 // source walls refuse in src/enhance because it is the page's. Vocabulary options are a later version's (word
 // lists, never patterns).
 import type { BoundCallback, HostCallbacks } from './host.js';
@@ -114,9 +119,15 @@ export const LIMITS = {
   maxEdges: 50_000,
   /** Keys in mermaid.secure. */
   secure: 64,
+  /** info.frontList entries kept: render()'s count of front-matter keys. */
+  frontList: 40,
+  /** Items of one info.frontList entry's vals kept: render()'s count of list items. */
+  frontVals: 300,
+  /** Code units of storageKey and of posKey. */
+  key: 1024,
 } as const;
 
-/** A sha: 7 to 40 hex characters (a short or full SHA-1 name), or exactly 64 (SHA-256), in either case. */
+/** A sha: 7 to 40 hex characters (a short or full SHA-1 name), or exactly 64 (SHA-256), in either case (kept lower). */
 const SHA = /^(?:[0-9a-f]{7,40}|[0-9a-f]{64})$/i;
 
 /** A key of Mermaid's configuration, as `secure` lists them: a top-level name, 1 to 64 characters. */
@@ -181,26 +192,29 @@ export function normalizePrefs(prefs: unknown, where = 'prefs'): Partial<Prefs> 
   return out;
 }
 
+/** One info.frontList entry, copied: its vals read by index, the first LIMITS.frontVals of them. */
+function frontEntry(e: unknown, i: number): FrontListEntry {
+  const [key, list, vals] = isRecord(e) ? [ownValue(e, 'key'), ownValue(e, 'list'), ownValue(e, 'vals')] : [];
+  const items = Array.isArray(vals) ? firstItems(vals, LIMITS.frontVals) : null;
+  const strings: string[] = [];
+  for (const s of items ?? []) if (typeof s === 'string') strings.push(s);
+  if (typeof key !== 'string' || typeof list !== 'boolean' || items === null || strings.length !== items.length) {
+    throw invalid(`info.frontList[${String(i)}] must be { key: string, list: boolean, vals: string[] }`);
+  }
+  return { key, list, vals: strings };
+}
+
 function normalizeFrontList(v: unknown): readonly FrontListEntry[] | null | undefined {
   if (v === undefined || v === null) return v;
   if (!Array.isArray(v)) throw invalid('info.frontList must be an array or null');
-  return v.map((e: unknown, i) => {
-    const [key, list, vals] = isRecord(e) ? [ownValue(e, 'key'), ownValue(e, 'list'), ownValue(e, 'vals')] : [];
-    const ok =
-      typeof key === 'string' &&
-      typeof list === 'boolean' &&
-      Array.isArray(vals) &&
-      (vals as unknown[]).every((s) => typeof s === 'string');
-    if (!ok) throw invalid(`info.frontList[${String(i)}] must be { key: string, list: boolean, vals: string[] }`);
-    return { key, list, vals: [...(vals as string[])] };
-  });
+  return firstItems(v, LIMITS.frontList).map(frontEntry);
 }
 
-/** A sha, null, or undefined (left out); anything else is refused. */
+/** A sha, null, or undefined (left out); anything else is refused. A sha is kept in lower case. */
 function shaOrNull(where: string, v: unknown): string | null | undefined {
   if (v === undefined || v === null) return v;
   if (!isSha(v)) throw invalid(`${where} must be 7 to 40 hex characters, or 64, or null`);
-  return v;
+  return v.toLowerCase();
 }
 
 /** At most `n` code units of `s`, without cutting a surrogate pair in two. */
@@ -233,9 +247,9 @@ function commitEntry(e: unknown, i: number): CommitEntry {
   if (!Array.isArray(parents)) throw invalid(`${where}.parents must be an array of shas`);
   const kept = firstItems(parents, LIMITS.parents).map((p, k) => {
     if (!isSha(p)) throw invalid(`${where}.parents[${String(k)}] must be 7 to 40 hex characters, or 64`);
-    return p;
+    return p.toLowerCase();
   });
-  return Object.freeze({ sha, subject: cut(subject, LIMITS.subject), date, parents: Object.freeze(kept) });
+  return Object.freeze({ sha: sha.toLowerCase(), subject: cut(subject, LIMITS.subject), date, parents: Object.freeze(kept) });
 }
 
 function normalizeCommits(v: unknown): readonly CommitEntry[] | null | undefined {
@@ -259,6 +273,11 @@ function normalizeInfo(v: unknown): NormalizedInfo {
     commits: normalizeCommits(fields['commits']),
     only: shaOrNull('info.only', fields['only']),
   };
+}
+
+/** A storage key namespace: a non-empty string of at most LIMITS.key code units. */
+function isKey(v: unknown): v is string {
+  return typeof v === 'string' && v !== '' && v.length <= LIMITS.key;
 }
 
 function isSignal(v: unknown): v is AbortSignal {
@@ -343,10 +362,8 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
   const fields = ownFields('options', options, OPTION_KEYS);
   const { prefs, storage, storageKey, info, folds, signal, posKey } = fields;
   if (storage !== undefined && (typeof storage !== 'object' || storage === null)) throw invalid('storage must be an object');
-  if (storageKey !== undefined && (typeof storageKey !== 'string' || storageKey === '')) {
-    throw invalid('storageKey must be a non-empty string');
-  }
-  if (posKey !== undefined && (typeof posKey !== 'string' || posKey === '')) throw invalid('posKey must be a non-empty string');
+  if (storageKey !== undefined && !isKey(storageKey)) throw invalid(`storageKey must be a non-empty string of at most ${String(LIMITS.key)} code units`);
+  if (posKey !== undefined && !isKey(posKey)) throw invalid(`posKey must be a non-empty string of at most ${String(LIMITS.key)} code units`);
   if (folds !== undefined && typeof folds !== 'boolean') throw invalid('folds must be a boolean');
   if (signal !== undefined && !isSignal(signal)) throw invalid('signal must be an AbortSignal');
   const mermaid = fields['mermaid'] === undefined ? null : normalizeMermaid(fields['mermaid']);

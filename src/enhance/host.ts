@@ -16,13 +16,19 @@
 //     null means only that it was absent, not live or failed. A callback that returns a value (changes, itemLink,
 //     mermaid's load) answers that value, null included. The three synchronous void wrappers never look at what
 //     the host returned: a promise one of them returns is the host's own, and its rejection is the host's.
-//   - silences an asynchronous reply that settles once the instance is not live: it answers null.
+//   - silences a reply once the instance is not live: an asynchronous one that settles after that, and a
+//     synchronous one whose callback itself destroyed the instance (the destroy runs as the call returns), both
+//     answer null. A feature still checks live() after every call, as for any call-out.
 //   - passes the objects it hands the host (`{ newTab }`, `{ push, from }`, `{ sha, only }`) as fresh frozen
 //     copies, so the host never holds an object of the library's.
 // The host's function is called with the object it was read from as its receiver (the options object, or the
-// `mermaid` object for its `load`), as a method call on that object would be. A thenable it returns has its `then`
-// read inside the operation and called by the promise machinery afterwards; a reply that settles with an object is
-// a promise settling with it, so the machinery reads that object's `then` again, as it does for any value.
+// `mermaid` object for its `load`), as a method call on that object would be. It is called through the language's
+// own call, captured once when the host is built (`invoke`), so no property of the host's function is read (an own
+// `call` property is never run) and a Function.prototype.call patched later sees nothing. A thenable it returns has
+// its `then` read inside the operation and called by the promise machinery afterwards, outside any operation: host
+// code in that `then` (or in a getter of what it resolves with) runs as a plain promise reaction, so a destroy it
+// requests takes effect at once, and the reply is then silenced. A reply that settles with an object is a promise
+// settling with it, so the machinery reads that object's `then` again, as it does for any value.
 //
 // Import-inert: declarations only, and createHost runs when the lifecycle calls it.
 
@@ -75,19 +81,27 @@ type Called = { readonly value: unknown } | null;
 
 /** The wrappers over `callbacks`, for one instance: `live` and `operate` are that instance's. */
 export function createHost(callbacks: HostCallbacks, live: () => boolean, operate: Operate): Host {
-  /** Call one callback inside an operation, its throw caught. */
+  /**
+   * The language's call, bound to itself: invoke(fn, self, ...args) calls fn with self as its receiver. Captured
+   * here, once per instance, so a call reads nothing from `fn` and a later patch of Function.prototype.call is not
+   * seen. (Reflect and Function are names the source walls refuse.)
+   */
+  type Invoke = (fn: BoundCallback['fn'], self: object, ...args: readonly unknown[]) => unknown;
+  const intrinsicCall = ((): undefined => undefined).call as unknown as Invoke & { bind(self: unknown): Invoke };
+  const invoke = intrinsicCall.bind(intrinsicCall);
+
+  /** Call one callback inside an operation, its throw caught; null when it destroyed the instance itself. */
   const call = (name: HostCallback, args: readonly unknown[]): Called => {
     const bound = callbacks[name];
     if (bound === null || !live()) return null;
-    const fn = bound.fn as (...a: readonly unknown[]) => unknown;
     const out = operate((): Called => {
       try {
-        return { value: fn.call(bound.self, ...args) };
+        return { value: invoke(bound.fn, bound.self, ...args) };
       } catch {
         return null; // swallowed: the host's failure is the feature's null
       }
     });
-    return out ?? null;
+    return out === undefined || !live() ? null : out;
   };
 
   /**
@@ -97,10 +111,9 @@ export function createHost(callbacks: HostCallbacks, live: () => boolean, operat
   const callAsync = (name: HostCallback, args: readonly unknown[], keep: boolean): Promise<unknown> => {
     const bound = callbacks[name];
     if (bound === null || !live()) return Promise.resolve(null);
-    const fn = bound.fn as (...a: readonly unknown[]) => unknown;
     const pending = operate((): Promise<unknown> | null => {
       try {
-        const value = fn.call(bound.self, ...args);
+        const value = invoke(bound.fn, bound.self, ...args);
         return new Promise<unknown>((resolve) => {
           resolve(value);
         });
