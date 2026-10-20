@@ -704,7 +704,7 @@ describe('host: the lifecycle wires it to the instance', () => {
     await enhance(root, { copy: noop, onLink: noop, mermaid: { load } });
     const ctx = ctxOf(root);
     expect(ctx.host.present.names).toEqual(['copy', 'onLink', 'mermaid']);
-    expect(Object.keys(ctx.options).sort()).toEqual(['chrome', 'folds', 'info', 'initialHash', 'keyboard', 'mermaid', 'posKey', 'prefs', 'rules', 'signal', 'storage', 'storageKey']);
+    expect(Object.keys(ctx.options).sort()).toEqual(['chrome', 'folds', 'info', 'initialHash', 'keyboard', 'mermaid', 'namespace', 'posKey', 'prefs', 'rules', 'signal', 'storage', 'storageKey', 'vocabulary']);
     expect(Object.values(ctx.options).some((v) => typeof v === 'function')).toBe(false);
     expect(ctx.options.mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [] });
   });

@@ -1360,8 +1360,8 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
     w.statusHeaders = ['st.t'];
     w.addressees = ['a.b'];
     const v = compileVocab(w);
-    expect([statusOf(v, 'a.b now'), statusOf(v, 'axb now'), statusOf(v, 'c+ yes')?.role, statusOf(v, 'cc')]).toEqual([{ word: 'a.b', role: 'ok' }, null, undefined, null]);
-    expect(statusOf(v, '(x) here')).toBeNull(); // an entry that ends on a non-word character never meets the word boundary after it
+    expect([statusOf(v, 'a.b now'), statusOf(v, 'axb now'), statusOf(v, 'c+ yes')?.role, statusOf(v, 'cc')]).toEqual([{ word: 'a.b', role: 'ok' }, null, 'ok', null]);
+    expect(statusOf(v, '(x) here')).toEqual({ word: '(x)', role: 'ok' }); // an entry that ends on a non-word character is its own boundary (Task 8)
     expect([v.statusHeader.test('st.t'), v.statusHeader.test('stat')]).toEqual([true, false]);
     expect([v.addressee.test('ask a.b now'), v.addressee.test('a.bX'), v.addressee.test('axb')]).toEqual([true, false, false]);
   });

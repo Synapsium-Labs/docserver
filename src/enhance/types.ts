@@ -31,8 +31,9 @@ export interface Prefs {
 export interface ReaderStorage {
   /**
    * What the host already has stored under this reader's keys. Read during startup only: the object once, then
-   * each key this document needs once (`docreader:prefs`, then, as features ask, `docreader:doc:<storageKey>:<name>`,
-   * the reading position's `docreader:pos:<posKey>` and the reader-wide `docreader:ui`).
+   * each key this document needs once (`<namespace>:prefs`, then, as features ask, `<namespace>:doc:<storageKey>:<name>`,
+   * the reading position's `<namespace>:pos:<posKey>` and the reader-wide `<namespace>:ui`; the namespace is the
+   * `namespace` option, `docreader` by default).
    */
   readonly snapshot?: Readonly<Record<string, string>>;
   /**
@@ -105,6 +106,74 @@ export interface MermaidOptions {
   readonly secure?: readonly string[];
 }
 
+/**
+ * The words a host's documents use, for the parts of the layout that read them (docserver L2, Task 8; LD9). Each list
+ * is plain words, never a pattern: every character is matched as itself (in any case, where the field says so), an
+ * empty list matches no word, and a list given replaces its default whole (a list left out keeps it). A list holds at
+ * most 200 words, each 1 to 64 code units with no white space at either end; duplicates are dropped. How each list
+ * is matched (a whole word, the start of a text, anywhere) is the library's, as its field says. A whole word is
+ * whole in any script: where the word ends in a letter, a digit, a combining mark or `_`, the text has none of those
+ * right beyond it ("готово" and "validé" are words as "done" is); where it ends in anything else ("done!", "✓"),
+ * that edge needs nothing of the text.
+ */
+export interface VocabularyOptions {
+  /**
+   * Status words by colour role: a status cell or a rule's status that opens with one, as a whole word and in any
+   * case, takes its role. Default: the general words of each role (agreed, done, pending, open, rejected, deferred, …).
+   */
+  readonly status?: {
+    readonly ok?: readonly string[];
+    readonly wait?: readonly string[];
+    readonly no?: readonly string[];
+    readonly info?: readonly string[];
+  };
+  /** Header words that name a status column, each as a whole word. Default: status, state, result, verdict, outcome (each also plural), stands, fate. */
+  readonly statusHeaders?: readonly string[];
+  /**
+   * Header words that name a ruling, anywhere in the header: such a column, or one whose header ends in "?", is a
+   * status column when half its filled cells open on a status word. Default: ruling, ruled, answer. The "?" rule is
+   * no word: it stands with an empty list.
+   */
+  readonly rulingHeaders?: readonly string[];
+  /** What needs the reader. */
+  readonly attention?: {
+    /** A status column's header holds one, anywhere. Default: status, state, stands, verdict. */
+    readonly status?: readonly string[];
+    /** An owner column's header opens with one, as a whole word. Default: who, owner, by whom, who acts. */
+    readonly who?: readonly string[];
+    /** A question table's first header opens with one. Default: question. */
+    readonly question?: readonly string[];
+    /** An answer still open opens with one, as a whole word. Default: open, unanswered, tbd, to be decided, waiting. */
+    readonly openAnswers?: readonly string[];
+    /** A cell that blocks opens with one, as a whole word. Default: blocking, blocker, blocks. */
+    readonly blocking?: readonly string[];
+    /** A status that is a risk holds one, anywhere. Default: diverge. */
+    readonly risk?: readonly string[];
+    /** A rule's status still open opens with one. Default: open, proposed, awaiting. */
+    readonly openStatus?: readonly string[];
+  };
+  /**
+   * The ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts and an optional lower-case
+   * letter (R14, F3, OP-6, D2.1a). `prefixes` replaces the capitals with these words; false: no IDs at all.
+   */
+  readonly ids?: false | { readonly prefixes?: readonly string[] };
+  /** The rule-ID grammar: two or more capitals, then dash-separated parts of capitals or digits; `prefixes` replaces the capitals. */
+  readonly ruleIds?: { readonly prefixes?: readonly string[] };
+  /** Words that, right before a mention of an ID, make it another document's ("the annex R3"). Default: none. */
+  readonly qualifiers?: readonly string[];
+  /** A task heading's word, a step title's word and an owner line's label. Default: Task, Step, Who. */
+  readonly plan?: { readonly task?: readonly string[]; readonly step?: readonly string[]; readonly who?: readonly string[] };
+  /** Words that name the reader, in an owner line, an owner cell or a step's owner. Default: you. */
+  readonly addressees?: readonly string[];
+  /** Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`. Default: none. */
+  readonly itemFields?: readonly string[];
+  /**
+   * Level-2 headings, after an optional section number, whose section's first code block names an item key on an
+   * `item:` line, for `itemLink`. Default: none.
+   */
+  readonly itemHeadings?: readonly string[];
+}
+
 /** The options of enhance(). Read once, as plain data (own data properties only), when enhance() is called. */
 export interface EnhanceOptions {
   /** Explicit starting prefs; they override stored ones. */
@@ -142,10 +211,24 @@ export interface EnhanceOptions {
   changes?(sha: string): Promise<unknown>;
   /** Show another version: `{ sha, only }` a day's version; `{ sha: null, only: null }` back to the latest. */
   openVersion?(v: { readonly sha: string | null; readonly only: string | null }): void;
-  /** The link for an item key the document names, or null for none. Absent: no item links. */
+  /**
+   * The link for an item key the document names (`AB-12`: a capital, 1 to 9 capitals or digits, a dash, a number), or
+   * null for none. Absent: no item links. The keys are read where `vocabulary.itemFields` and `itemHeadings` say;
+   * without either, it is never called. At most 16 keys are asked for and at most 64 links written in a document; a
+   * key past either stays text. A link that is not a string of 1 to 2048 code units, holds white space (any of
+   * Unicode's, a byte-order mark included) or a control character (C0, DEL or C1), or names a scheme other than http
+   * or https, is ignored.
+   */
   itemLink?(key: string): string | null;
   /** Drawing Mermaid figures. Absent: no drawing; a figure shows its source. */
   mermaid?: MermaidOptions;
+  /** The words the host's documents use; each list given replaces its default. */
+  vocabulary?: VocabularyOptions;
+  /**
+   * The prefix of every storage key: a lower-case letter, then up to 31 lower-case letters, digits or dashes. Default
+   * `docreader`: `<namespace>:prefs`, `<namespace>:ui`, `<namespace>:pos:<posKey>`, `<namespace>:doc:<storageKey>:<name>`.
+   */
+  namespace?: string;
 }
 
 /** Why enhance() (or setEnhancementPrefs) refused or failed. */

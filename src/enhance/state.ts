@@ -2,11 +2,13 @@
 // state (folds today), kept locally and written behind to the host's storage. The library never touches a storage
 // API; it reads the host's snapshot during startup and calls the host's set() after each local change.
 //
-// Storage keys (the README states them; LD8 adds the two in the middle):
-//   docreader:prefs                      a JSON object { theme, width, font, lens }, reader-wide
-//   docreader:ui                         a JSON object of UI memory fields (which rail tab, say), reader-wide
-//   docreader:pos:<posKey>               the reading position of one document, as its feature stores it
-//   docreader:doc:<storageKey>:<name>    per-document JSON, such as docreader:doc:project-a:specs:x.md:folds
+// Storage keys (the README states them; LD8 adds the two in the middle). Each starts with the namespace, the host's
+// `namespace` option (Task 8; `docreader` when it gives none, options.ts), so no key is fixed and two readers under
+// two namespaces share no key, and so no write queue, on one storage object:
+//   <ns>:prefs                      a JSON object { theme, width, font, lens }, reader-wide
+//   <ns>:ui                         a JSON object of UI memory fields (which rail tab, say), reader-wide
+//   <ns>:pos:<posKey>               the reading position of one document, as its feature stores it
+//   <ns>:doc:<storageKey>:<name>    per-document JSON, such as docreader:doc:project-a:specs:x.md:folds
 // Invalid stored JSON, or a stored value of the wrong shape, is ignored, never thrown. A stored value is returned as
 // `unknown`: the feature that reads it checks its shape, type, count and length.
 //
@@ -30,24 +32,34 @@
 // fields it cannot see are never overwritten. A host that shares one store between several enhance() calls passes
 // the same storage object to each; two objects are two queues.
 import type { Journal } from './journal.js';
-import { isPrefValue, PREF_VALUES, prefNames, type FeatureOptions } from './options.js';
+import { DEFAULT_NAMESPACE, isPrefValue, PREF_VALUES, prefNames, type FeatureOptions } from './options.js';
 import type { Prefs } from './types.js';
 
-// Open before v1: the `docreader:` prefix is fixed; the public release gives it a namespace option or states why not.
-export const PREFS_KEY = 'docreader:prefs';
-
-/** The storage key of the reader-wide UI memory (LD8). */
-export const UI_KEY = 'docreader:ui';
-
-/** The storage key of a per-document value: docreader:doc:<storageKey>:<name>. */
-export function docKey(storageKey: string, name: string): string {
-  return `docreader:doc:${storageKey}:${name}`;
+/** The storage key of the reader-wide prefs: <ns>:prefs. */
+export function prefsKey(ns: string): string {
+  return `${ns}:prefs`;
 }
 
-/** The storage key of a reading position: docreader:pos:<posKey> (LD8). */
-export function posKeyOf(posKey: string): string {
-  return `docreader:pos:${posKey}`;
+/** The storage key of the reader-wide UI memory (LD8): <ns>:ui. */
+export function uiKey(ns: string): string {
+  return `${ns}:ui`;
 }
+
+/** The storage key of a per-document value: <ns>:doc:<storageKey>:<name>; the default namespace when `ns` is left out. */
+export function docKey(storageKey: string, name: string, ns: string = DEFAULT_NAMESPACE): string {
+  return `${ns}:doc:${storageKey}:${name}`;
+}
+
+/** The storage key of a reading position (LD8): <ns>:pos:<posKey>; the default namespace when `ns` is left out. */
+export function posKeyOf(posKey: string, ns: string = DEFAULT_NAMESPACE): string {
+  return `${ns}:pos:${posKey}`;
+}
+
+/** The prefs key under the default namespace. */
+export const PREFS_KEY = `${DEFAULT_NAMESPACE}:prefs`;
+
+/** The UI memory's key under the default namespace. */
+export const UI_KEY = `${DEFAULT_NAMESPACE}:ui`;
 
 /** The defaults: the first value each pref accepts. */
 export function defaultPrefs(): Prefs {
@@ -172,8 +184,8 @@ function isPlainRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** The options the state reads: the storage, the per-document key and the explicit prefs (options.prefs). */
-export type StateOptions = Pick<FeatureOptions, 'storage' | 'storageKey' | 'prefs'>;
+/** The options the state reads: the storage, the per-document key, the explicit prefs (options.prefs) and the keys' namespace. */
+export type StateOptions = Pick<FeatureOptions, 'storage' | 'storageKey' | 'prefs' | 'namespace'>;
 
 export interface StateArgs {
   /** The normalized options; options.prefs override stored values, and are not themselves written back. */
@@ -187,7 +199,7 @@ export interface StateArgs {
 /** Create the state. Reads the snapshot object and the prefs key: host code may run (and may destroy). */
 export function createReaderState(args: StateArgs): ReaderState {
   const { operate, live } = args;
-  const { storage, storageKey, prefs: explicit } = args.options;
+  const { storage, storageKey, prefs: explicit, namespace: ns } = args.options;
   let snapshot: Readonly<Record<string, unknown>> | null = null;
   let set: ((key: string, value: string | null) => unknown) | null = null;
   if (storage !== null) {
@@ -281,7 +293,7 @@ export function createReaderState(args: StateArgs): ReaderState {
   };
 
   // Prefs: the stored object (unknown fields are kept when it is written back), its valid fields, then explicit.
-  const storedPrefs = shared(PREFS_KEY);
+  const storedPrefs = shared(prefsKey(ns));
   const persisted = storedPrefs.load();
   let prefs: Prefs = defaultPrefs();
   for (const name of prefNames()) {
@@ -290,7 +302,7 @@ export function createReaderState(args: StateArgs): ReaderState {
   }
   prefs = { ...prefs, ...explicit };
 
-  const ui = shared(UI_KEY);
+  const ui = shared(uiKey(ns));
   /** UI fields written after startup with the UI key never read: kept here, never written. */
   const uiLocal = new Map<string, unknown>();
   const posLocal = new Map<string, unknown>();
@@ -314,23 +326,23 @@ export function createReaderState(args: StateArgs): ReaderState {
       if (storageKey === null) return undefined;
       if (docLocal.has(name)) return docLocal.get(name);
       // After seal() the snapshot is gone: a key read during startup keeps its text, any other reads as absent.
-      return parseJson(readRaw(docKey(storageKey, name)));
+      return parseJson(readRaw(docKey(storageKey, name, ns)));
     },
 
     writeDoc(name, value) {
       docLocal.set(name, value);
       if (storageKey === null) return;
-      writeBehind(docKey(storageKey, name), value === null ? null : JSON.stringify(value));
+      writeBehind(docKey(storageKey, name, ns), value === null ? null : JSON.stringify(value));
     },
 
     readPos(posKey) {
       if (posLocal.has(posKey)) return posLocal.get(posKey);
-      return parseJson(readRaw(posKeyOf(posKey)));
+      return parseJson(readRaw(posKeyOf(posKey, ns)));
     },
 
     writePos(posKey, value) {
       posLocal.set(posKey, value);
-      writeBehind(posKeyOf(posKey), value === null ? null : JSON.stringify(value));
+      writeBehind(posKeyOf(posKey, ns), value === null ? null : JSON.stringify(value));
     },
 
     readUi(name) {
