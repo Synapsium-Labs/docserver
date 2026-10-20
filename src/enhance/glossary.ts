@@ -29,8 +29,10 @@
 // end in "s" or "es"; at one place the longest term wins, and a term already linked in the section, or an exact one
 // spelled otherwise, leaves the text there as it is and the search goes on after it. The match is the reference's
 // pattern, found in linear time: the terms are a trie, walked from each place a word can start, so the cost grows with
-// the text and the longest term, never with the number of terms (RF3). Each glossary's heading is found once, for all
-// its rows' links.
+// the text and the longest term, never with the number of terms (RF3). A walk stops at the first code unit no term goes
+// on with, a run of white space included, so a long run costs its length once, not once per place in it. The sections
+// are found by one finder that remembers each element's answer, so all the tables and term targets together read each
+// element once, however many tables share a heading; each glossary's heading is kept for all its rows' links.
 //
 // The link's href is "#" and the id of the heading before the term's target (the glossary's section), so a link opened
 // in a new tab, or copied, lands on the glossary; a plain click goes to the term's own row, through nav.goTo, from a
@@ -149,6 +151,9 @@ export function termMatcher(keys: readonly string[]): (text: string, from: numbe
         const c = text.charCodeAt(j);
         if (isSpace(c)) {
           node = node.next.get(SPACE);
+          // Stop before the run when no term goes on through it: no key opens with white space, so each place inside a
+          // run stops here at once, and a run is skipped only from a place a term's words reach it.
+          if (node === undefined) break;
           j += 1;
           while (isSpace(text.charCodeAt(j))) j += 1;
         } else {
@@ -177,16 +182,46 @@ function headingWords(h: Element): string {
   return headingText(h, isButton).replace(SEC_NO, '');
 }
 
-/** The heading a block belongs to (see the header), or null: the reference's group of a table. */
-function sectionOf(root: Element, node: Element): Element | null {
-  for (let n: Element | null = node; n !== null && n !== root; n = n.parentElement) {
-    for (let p = n.previousElementSibling; p !== null; p = p.previousElementSibling) {
-      if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;
-      // The layout's In short and Where things stand boxes each hold the heading they start with.
-      if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');
+/** What an element before a block says of its section: the heading, or undefined when the search goes on past it. */
+function sectionAt(p: Element): Element | null | undefined {
+  if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;
+  // The layout's In short and Where things stand boxes each hold the heading they start with.
+  if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');
+  return undefined;
+}
+
+/**
+ * The finder of the heading a block belongs to (see the header), or null: the reference's group of a table. The search
+ * goes back over the element's earlier siblings, then its parent's, up to the root. Every element the search passes
+ * keeps the answer, which is the same for it (an element's answer depends only on what comes before it and above it),
+ * so a later search stops where an earlier one went: over all the tables and terms, each element is read once.
+ */
+function sectionFinder(root: Element): (node: Element) => Element | null {
+  const known = new Map<Element, Element | null>();
+  return (node) => {
+    const passed: Element[] = [];
+    let found: Element | null = null;
+    for (let n: Element | null = node; n !== null && n !== root; ) {
+      if (known.has(n)) {
+        found = known.get(n) ?? null;
+        break;
+      }
+      passed.push(n);
+      const p: Element | null = n.previousElementSibling;
+      if (p === null) {
+        n = n.parentElement;
+        continue;
+      }
+      const at = sectionAt(p);
+      if (at !== undefined) {
+        found = at;
+        break;
+      }
+      n = p;
     }
-  }
-  return null;
+    for (const n of passed) known.set(n, found);
+    return found;
+  };
 }
 
 /** The names a term cell gives, in the order the reference defines them, and its qualifier. */
@@ -209,6 +244,7 @@ function namesOf(raw: string, vocab: Vocab): { readonly names: { readonly name: 
 /** Build this feature during startup. */
 export function build(ctx: FeatureContext): void {
   const { root, journal, vocab, terms, page } = ctx;
+  const sectionOf = sectionFinder(root);
   /** A link's href, by the term's target: "#" and the id of the heading before it. */
   const hrefs = new Map<Element, string>();
   const hrefOf = (h: Element | null): string => `#${encodeURIComponent(h?.id ?? '')}`;
@@ -216,7 +252,7 @@ export function build(ctx: FeatureContext): void {
   // ── The glossaries, and their terms
   for (const b of ctx.blocks) {
     if (b.kind !== 'table' || b.heads.length !== 2) continue;
-    const g = sectionOf(root, b.el);
+    const g = sectionOf(b.el);
     const section = g === null ? '' : headingWords(g);
     const byHeads = vocab.glossary.term.test(b.heads[0] ?? '') && vocab.glossary.meaning.test(b.heads[1] ?? '');
     if (!byHeads && !vocab.glossary.section.test(section)) continue;
@@ -246,7 +282,7 @@ export function build(ctx: FeatureContext): void {
   const skip = (el: Element): boolean => skipsMarkup(el, page) || el.classList.contains('glossary');
   const link = (entry: TermEntry): HTMLElement => {
     let href = hrefs.get(entry.target);
-    if (href === undefined) hrefs.set(entry.target, (href = hrefOf(sectionOf(root, entry.target))));
+    if (href === undefined) hrefs.set(entry.target, (href = hrefOf(sectionOf(entry.target))));
     const a = chrome(doc, 'a', {
       className: 'term',
       attrs: { href, 'data-term': entry.key, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' },
