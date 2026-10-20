@@ -8,7 +8,7 @@ import { normaliseForCompare } from '../src/conformance/normalise.js';
 import { checkOutputSafety } from '../src/conformance/oracle.js';
 import { createEngine } from '../src/render/engine.js';
 import { createEnv } from '../src/render/env.js';
-import { FM_MAX_CHARS, frontRecord, parseFrontMatter } from '../src/render/frontMatter.js';
+import { FM_MAX_CHARS, frontRecord, MERGE_REFUSAL, parseFrontMatter } from '../src/render/frontMatter.js';
 import { cpLength } from '../src/render/pyText.js';
 import { render } from '../src/render/index.js';
 import type { FrontEntry } from '../src/render/types.js';
@@ -465,29 +465,56 @@ describe('PD2: a merge source that is a sequence fails the load, as in the refer
   });
 
   // A block writes fewer than FM_MAX_CHARS / 2 NULs: each takes a two-character escape, and js-yaml refuses a
-  // literal NUL. A NUL key as long as a block under the cap can make it, before the `<<`, is still refused.
-  // js-yaml loads that key on its own (the control below); the reference renders nothing for both blocks,
-  // because PyYAML refuses a simple key longer than 1024 characters.
+  // literal NUL. The shortest block that puts a NUL key before a `<<` is the key, a null value, and the merge:
+  // `"` + n escapes + `":\n<<: [[]]`. With the content below FM_MAX_CHARS (the cap is strict), that is n =
+  // 9993 for a cap of 20000, and one more escape reaches the cap. That longest key, before the `<<`, is still
+  // refused. js-yaml loads that key on its own (the control below). The reference renders nothing for both
+  // blocks, because PyYAML refuses a simple key whose source is longer than 1024 characters; that departure
+  // predates this case and is not ruled here. A block can only fail to spell the refusal's key if that key is all
+  // NULs and longer than n, so the case also reads the key itself: a block spells one NUL key per length, and no
+  // set of blocks small enough to run here covers every length below n.
   it('a NUL key as long as a block under the cap can make it, before the `<<`, is still refused', () => {
-    const tail = '": 1\n<<: [[]]';
+    const tail = '":\n<<: [[]]';
     const n = Math.floor((FM_MAX_CHARS - 1 - 1 - tail.length) / 2);
     const content = `"${'\\0'.repeat(n)}${tail}`;
     expect(cpLength(content)).toBeLessThan(FM_MAX_CHARS);
     expect(cpLength(content) + 2).toBeGreaterThanOrEqual(FM_MAX_CHARS);
-    expect(parseFrontMatter(`"${'\\0'.repeat(n)}": 1`)).toEqual({ ['\u0000'.repeat(n)]: '1' });
+    expect(MERGE_REFUSAL).toMatch(/^\0+$/);
+    expect(MERGE_REFUSAL.length).toBeGreaterThan(n);
+    expect(parseFrontMatter(`"${'\\0'.repeat(n)}":`)).toEqual({ ['\u0000'.repeat(n)]: null });
     refused(`---\n${content}\n---\n`);
   });
 
   // The refusal's property is defined on every sequence the block holds and removed after the load; its key is
-  // one constant string, so a longer key costs nothing per sequence. Measured on Node 24 before and after the
-  // change: a median of about 7 ms for this block either way.
-  it('a block of about 6000 sequences loads in bounded time', () => {
-    const src = `---\na: [${Array(6000).fill('[]').join(',')}]\nb: 1\n---\n`;
-    expect(cpLength(src)).toBeLessThan(FM_MAX_CHARS);
-    const started = performance.now();
-    const r = render(src);
-    expect(performance.now() - started).toBeLessThan(1000);
-    expect(r.html).toBe(dl('1-4', item('a', '') + item('b', '1')));
+  // one constant string, built once, so its length costs nothing per sequence. The case compares a block of
+  // 6000 sequences with the same block of 6000 mappings (each mapping gets two marks, each sequence one
+  // property), timed in turn, by the median of 11 renders each. Measured on Node 24, the sequences' median is
+  // about 0.6 to 0.8 of the mappings', with the short key this task replaced and with the long one alike; a key
+  // built afresh for each sequence makes it about 7.5. The bound of 3 leaves room for noise either way.
+  it('a block of 6000 sequences costs no more than the same block of mappings: the long key is built once', () => {
+    const seqs = `---\na: [${Array(6000).fill('[]').join(',')}]\nb: 1\n---\n`;
+    const maps = `---\na: [${Array(6000).fill('{}').join(',')}]\nb: 1\n---\n`;
+    expect(cpLength(seqs)).toBeLessThan(FM_MAX_CHARS);
+    expect(render(seqs).html).toBe(dl('1-4', item('a', '') + item('b', '1')));
+    expect(render(maps).html).toBe(dl('1-4', item('a', '') + item('b', '1')));
+    const median = (xs: number[]): number => [...xs].sort((x, y) => x - y)[xs.length >> 1] ?? Number.NaN;
+    const timeOf = (src: string): number => {
+      const started = performance.now();
+      render(src);
+      return performance.now() - started;
+    };
+    const ts: number[] = [];
+    const tm: number[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      timeOf(seqs);
+      timeOf(maps);
+    }
+    for (let i = 0; i < 11; i += 1) {
+      ts.push(timeOf(seqs));
+      tm.push(timeOf(maps));
+    }
+    expect(median(ts)).toBeLessThan(1000);
+    expect(median(ts)).toBeLessThan(3 * median(tm));
   });
 
   it('the merge refusal leaves no mark behind: a sequence from a loaded block is a plain array', () => {

@@ -170,9 +170,10 @@ function refuseMergeSource(): never {
  * 2 * FM_MAX_CHARS NULs, and a block under FM_MAX_CHARS code points spells fewer than FM_MAX_CHARS / 2 of
  * them (each NUL takes a two-character escape, and js-yaml refuses a literal one). Aliases do not help: a
  * sequence key can grow far past its source (ruling C31), but it joins two or more items with commas, and a
- * key of one item is that item's text, so an all-NUL key is never longer than one scalar.
+ * key of one item is that item's text, so an all-NUL key is never longer than one scalar. Exported so a test
+ * can read it: a block spells one NUL key per length, so no block-level test sees every length the key could take.
  */
-const MERGE_REFUSAL = '\u0000'.repeat(2 * FM_MAX_CHARS);
+export const MERGE_REFUSAL = '\u0000'.repeat(2 * FM_MAX_CHARS);
 
 /**
  * The YAML of a front-matter block as a mapping, or null (too long, a load error, or not a mapping).
