@@ -184,10 +184,11 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
     });
   };
 
+  /** A window without media queries (no matchMedia), or a query it refuses, answers false. */
   const matches = (query: string): boolean => {
-    if (view === null || typeof view.matchMedia !== 'function') return false;
+    if (view === null) return false;
     try {
-      return view.matchMedia(query).matches;
+      return view.matchMedia(query).matches === true;
     } catch {
       return false;
     }

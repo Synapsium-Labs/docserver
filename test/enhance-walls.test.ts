@@ -96,7 +96,7 @@ const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> 
     '.ResizeObserver': 2,
     '.IntersectionObserver': 2,
     '.fonts': 1,
-    '.matchMedia': 2,
+    '.matchMedia': 1,
     '.innerWidth': 1,
     '.innerHeight': 1,
     '.scrollY': 1,

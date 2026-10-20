@@ -222,6 +222,20 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     const env = ctxOf(root).env;
     for (const ms of [-5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 40, 25]) env.timeout(() => undefined, ms);
     expect(delays).toEqual([0, 0, 2 ** 31 - 1, 2 ** 31 - 1, 25]);
+    // Without requestIdleCallback, idle waits at most 200 ms, or its own bound when that is shorter; a frame, 16 ms
+    // where the window has no frames.
+    delays.length = 0;
+    env.idle(() => undefined);
+    env.idle(() => undefined, 50);
+    const record = windowRecord(root);
+    const raf = record['requestAnimationFrame'];
+    delete record['requestAnimationFrame'];
+    try {
+      env.frame(() => undefined);
+    } finally {
+      record['requestAnimationFrame'] = raf;
+    }
+    expect(delays).toEqual([200, 50, 16]);
   });
 
   it('idle waits through requestIdleCallback, with its bound, where the window has one', async () => {
@@ -344,6 +358,8 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       delete record['matchMedia'];
     }
     env.scrollTo(Number.NaN);
+    await destroyEnhancement(root);
+    env.scrollTo(480); // once the instance is gone, nothing scrolls
     expect(scrolled).toEqual([
       { top: 120, behavior: 'auto' },
       { top: 240, behavior: 'smooth' },
@@ -376,7 +392,7 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       release();
       expect(await loaded).toBe(true);
       Object.defineProperty(root.ownerDocument, 'fonts', { configurable: true, value: { load: () => new Promise(() => undefined) } });
-      expect(await env.fonts(20)).toBe(false);
+      expect(await Promise.race([env.fonts(20), wait(2000).then(() => 'never')])).toBe(false);
       Object.defineProperty(root.ownerDocument, 'fonts', { configurable: true, value: { load: () => Promise.reject(new Error('no face')) } });
       expect(await env.fonts(1000)).toBe(false);
     } finally {
@@ -392,8 +408,8 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       release = r;
     });
     Object.defineProperty(root.ownerDocument, 'fonts', { configurable: true, value: { load: () => gate.then(() => []) } });
+    const env = ctxOf(root).env;
     try {
-      const env = ctxOf(root).env;
       const loaded = env.fonts(40);
       const timedOut = env.fonts(40);
       let settled = 0;
@@ -412,6 +428,11 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     } finally {
       delete (root.ownerDocument as { fonts?: unknown }).fonts;
     }
+    // with no font set at all, where a live wait answers false at once
+    let none = 0;
+    void env.fonts(1).then(() => (none += 1));
+    await flush();
+    expect(none).toBe(0);
   });
 
   it('observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy', async () => {
@@ -645,6 +666,16 @@ describe('journal.setStyle (LD11): the only style write, through the CSSOM', () 
     expect(el.hasAttribute('style')).toBe(true);
   });
 
+  it('an element whose style attribute the host left empty keeps it, empty', () => {
+    const { journal, undoAll } = journalFor();
+    const el = document.createElement('div');
+    el.setAttribute('style', '');
+    const before = el.outerHTML;
+    journal.setStyle(el, 'width', '10px');
+    undoAll();
+    expect(el.outerHTML).toBe(before);
+  });
+
   it('an element the host gave an inline style after the library\'s first write keeps it, attribute and all', () => {
     const { journal, undoAll } = journalFor();
     const el = document.createElement('div');
@@ -810,8 +841,11 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
     const { storage, calls } = recordingStorage({ [UI_KEY]: JSON.stringify({ later: 'kept' }) });
     await enhance(root, { storage });
     const ctx = ctxOf(root);
+    expect(ctx.state.readUi('later')).toBeUndefined(); // not read now: the snapshot is closed
     ctx.state.writeUi('sidetab', 'index');
     expect(ctx.state.readUi('sidetab')).toBe('index');
+    ctx.state.writeUi('sidetab', null);
+    expect(ctx.state.readUi('sidetab')).toBeUndefined();
     expect(calls).toEqual([]);
   });
 
@@ -1044,6 +1078,7 @@ describe('text: clip, hash, document order and the colour key', () => {
     expect(clip('The quick brown fox jumps over the lazy dog', 20)).toBe('The quick brown fox…');
     expect(clip('Supercalifragilistic expialidocious', 12)).toBe('Supercalifr…');
     expect(clip('One, two, three, four', 11)).toBe('One, two…');
+    expect(clip('ab cdefghijklmnop', 10)).toBe('ab cdefgh…'); // a space before 60% of the length is no place to cut
     for (const [s, n] of [['The quick brown fox jumps over the lazy dog', 20], ['abcdefghij', 5]] as const) expect(clip(s, n).length).toBeLessThanOrEqual(n);
   });
 
@@ -1255,7 +1290,13 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
       false,
     ]);
     expect([a.openAnswers.test('TBD'), a.openAnswers.test('To be decided later'), a.openAnswers.test('Opened')]).toEqual([true, true, false]);
-    expect([a.blocking.test('  Blocker for R2'), a.blocking.test('Blocked'), a.risk.test('It diverges'), a.openStatus.test('Proposed (draft)')]).toEqual([true, false, true, true]);
+    expect([a.blocking.test('  Blocker for R2'), a.blocking.test('Blocked'), a.blocking.test('Blockers list'), a.risk.test('It diverges'), a.openStatus.test('Proposed (draft)')]).toEqual([
+      true,
+      false,
+      false,
+      true,
+      true,
+    ]);
   });
 
   it('technical, decision and title headers; file paths', () => {
@@ -1333,6 +1374,19 @@ describe('status marks read ctx.vocab', () => {
     const other = mount(TABLE);
     await enhance(other);
     expect(other.querySelectorAll('.pill').length).toBe(0); // "Status" no longer names a status column, and one cell is over three words
+  });
+
+  it('the ruling-header words are the vocabulary\'s too', async () => {
+    const md = ['# T', '', '| Item | The call |', '|---|---|', '| One | Agreed, as the note above says |', '| Two | Pending a reply from the team |', ''].join('\n');
+    const plain = mount(md);
+    await enhance(plain);
+    expect(plain.querySelectorAll('.pill').length).toBe(0); // by default "The call" names no ruling
+    const w = defaultVocabulary();
+    w.rulingHeaders = ['call'];
+    hooks.words = w;
+    const root = mount(md);
+    await enhance(root);
+    expect(Array.from(root.querySelectorAll('.pill')).map((p) => p.textContent)).toEqual(['Agreed', 'Pending']);
   });
 });
 
