@@ -85,8 +85,8 @@ interface Report {
   readonly labelFonts: readonly string[];
   /** The computed fill of every node's shape in a flowchart drawing. */
   readonly fills: readonly string[];
-  /** Every style attribute on an element of a label's own markup (inside a label's p). */
-  readonly labelStyles: readonly string[];
+  /** Every style or class attribute on an element of a label's own markup (inside a label's p), as `name=value`. */
+  readonly labelAttrs: readonly string[];
 }
 
 /** What the page shows of its diagrams now. */
@@ -142,7 +142,11 @@ function report(page: Page): Promise<Report> {
       links: drawings.flatMap((s) => Array.from(s.querySelectorAll('a')).map((a) => a.getAttribute('href') ?? a.getAttribute('xlink:href') ?? a.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ?? '')),
       labelFonts: drawings.flatMap((s) => Array.from(s.querySelectorAll('.nodeLabel')).map((l) => cs(l).fontFamily)),
       fills: drawings.flatMap((s) => Array.from(s.querySelectorAll('g.node > rect, g.node > polygon')).map((r) => cs(r).fill)),
-      labelStyles: drawings.flatMap((s) => Array.from(s.querySelectorAll('.nodeLabel p *, .edgeLabel p *')).filter((e) => e.hasAttribute('style')).map((e) => e.getAttribute('style') ?? '')),
+      labelAttrs: drawings.flatMap((s) =>
+        Array.from(s.querySelectorAll('.nodeLabel p *, .edgeLabel p *')).flatMap((e) =>
+          Array.from(e.attributes).filter((a) => a.name === 'style' || a.name === 'class').map((a) => `${a.name}=${a.value}`),
+        ),
+      ),
     };
   });
 }
@@ -288,14 +292,14 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('an HTML label keeps its text and loses its handler, its script, its style element and its style attribute', async () => {
+  it('an HTML label keeps its text and loses its handler, its script, its style element, its style and its class', async () => {
     const { doc, got } = await openCase(browser, 'diagrams/html-label');
     try {
       expect(got.state).toBe('drawn');
       expect(got.handlers).toEqual([]);
       expect(got.scripts).toBe(0);
       expect(got.fixed).toEqual([]);
-      expect(got.labelStyles).toEqual([]);
+      expect(got.labelAttrs).toEqual([]);
       const labels = await doc.page.evaluate(() =>
         Array.from(document.querySelectorAll('main[data-harness-root] .nodeLabel')).map((l) => (l.textContent ?? '').replace(/\s+/g, ' ').trim()),
       );

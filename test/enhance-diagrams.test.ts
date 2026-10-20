@@ -84,6 +84,8 @@ interface Fake {
   readonly configs: Record<string, unknown>[];
   /** The node each run was given. */
   readonly nodes: HTMLElement[];
+  /** Each run's suppressErrors. */
+  readonly suppressed: unknown[];
   /** Hold every run until release(). */
   hold: boolean;
   /** Finish the oldest held run; false when none is held. */
@@ -97,6 +99,7 @@ function fakeMermaid(draw: (text: string) => Draw = () => 'svg', decorate: (svg:
   const log: string[] = [];
   const configs: Record<string, unknown>[] = [];
   const nodes: HTMLElement[] = [];
+  const suppressed: unknown[] = [];
   const held: (() => void)[] = [];
   const fake: Fake = {
     api: {
@@ -108,6 +111,7 @@ function fakeMermaid(draw: (text: string) => Draw = () => 'svg', decorate: (svg:
       run(options) {
         const node = options.nodes[0] as HTMLElement;
         nodes.push(node);
+        suppressed.push(options.suppressErrors);
         // As Mermaid does: mark the node, read its text, then replace it with the drawing (or nothing, on an error).
         node.setAttribute('data-processed', 'true');
         const text = node.textContent ?? '';
@@ -139,6 +143,7 @@ function fakeMermaid(draw: (text: string) => Draw = () => 'svg', decorate: (svg:
     log,
     configs,
     nodes,
+    suppressed,
     hold: false,
     release() {
       const next = held.shift();
@@ -246,6 +251,11 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
       fontFamily: FONT_FALLBACK,
     });
     expect(config['themeVariables']).toEqual({ ...THEME_VARIABLES, fontFamily: FONT_FALLBACK });
+    // A label's own markup loses its style elements, and its style and class attributes.
+    expect(config['dompurifyConfig']).toEqual({ FORBID_TAGS: ['style'], FORBID_ATTR: ['style', 'class'] });
+    // Each run is given its node alone, and asked to keep its errors to itself.
+    expect(fake.suppressed).toEqual([true, true, true]);
+    expect(fake.nodes.every((n) => n.localName === 'pre' && n.hasAttribute(CHROME_ATTR))).toBe(true);
     // The library's keys, then the host's that are not among them, each once.
     expect(config['secure']).toEqual([...secureKeys(), 'extraKey']);
     // Each call gets its own configuration object: Mermaid keeps what it is given.
@@ -421,6 +431,37 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     expect(figuresOf(root).map((f) => f.classList.contains('draw-failed'))).toEqual([true, true, true]);
   });
 
+  it('a drawing that left its figure (the host moved it) counts as failed', async () => {
+    const root = mount();
+    const away = document.createElement('div');
+    document.body.append(away);
+    const fake = fakeMermaid();
+    const api = {
+      initialize: (c: Record<string, unknown>) => {
+        fake.api.initialize(c);
+      },
+      run: async (o: RunOptions): Promise<void> => {
+        await fake.api.run(o);
+        const node = o.nodes[0];
+        if (node !== undefined && (node.textContent ?? '') === '' && fake.nodes.length === 2) away.append(node);
+      },
+    };
+    await enhance(root, drawWith({ default: api }));
+    await settledState(root, 'partial');
+    expect(figuresOf(root).map((f) => f.classList.contains('drawn'))).toEqual([true, false, true]);
+  });
+
+  it('takes the figure\'s width from the drawing\'s viewBox when Mermaid gave it no max-width, and none past 100000 px', async () => {
+    const root = mount();
+    const fake = fakeMermaid(undefined, (svg, text) => {
+      if (text.includes('one')) svg.removeAttribute('style');
+      if (text.includes('three')) svg.setAttribute('style', 'max-width: 100000.5px;');
+    });
+    await enhance(root, drawWith({ default: fake.api }));
+    await settledState(root, 'drawn');
+    expect(figuresOf(root).map((f) => f.style.getPropertyValue('--fig-w'))).toEqual(['352px', '353px', '']);
+  });
+
   it('a source longer than maxTextSize is never handed to Mermaid: its note says it is too long', async () => {
     const root = mount(['# D', '', fence('flowchart LR\n  one --> A'), fence(`flowchart LR\n  two --> B\n  %% ${'x'.repeat(200)}`)].join('\n'));
     const fake = fakeMermaid();
@@ -443,7 +484,12 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
 
   it('a module that does not load, or is not Mermaid\'s, leaves every figure to its fallback with the load note', async () => {
     const REJECTS = Symbol('rejects');
-    for (const mod of [null, 'x', { default: { initialize: () => undefined } }, { run: () => Promise.resolve() }, REJECTS]) {
+    const throwing = Object.defineProperty({}, 'default', {
+      get() {
+        throw new Error('no default');
+      },
+    });
+    for (const mod of [null, 'x', { default: { initialize: () => undefined } }, { run: () => Promise.resolve() }, throwing, REJECTS]) {
       const root = mount();
       const load = (): Promise<unknown> => (mod === REJECTS ? Promise.reject(new Error('gone')) : Promise.resolve(mod));
       await enhance(root, { mermaid: { load } });

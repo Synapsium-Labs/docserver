@@ -559,7 +559,7 @@
 [data-docreader-root] figure.mermaid-figure pre.mermaid { background: var(--plate) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 34px 24px 26px !important; margin: 0 !important; overflow-x: auto; font-family: var(--sans); font-size: 13px !important; color: var(--text-muted); }
 /* a diagram's source, only where the Mermaid feature marked the root (see the header): the transparent placeholder until
    its figure is drawn or has failed, then hidden. Keyed on the figure's class, since the source is never drawn into */
-[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure:not(.drawn):not(.draw-failed) > pre.mermaid:not([data-docreader-chrome]) { color: transparent !important; min-height: 180px; user-select: none; }
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure > pre.mermaid:not([data-docreader-chrome]) { color: transparent !important; min-height: 180px; user-select: none; }
 [data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure.drawn > pre.mermaid:not([data-docreader-chrome]),
 [data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure.draw-failed > pre.mermaid:not([data-docreader-chrome]) { display: none !important; }
 /* the drawing, the chrome pre.mermaid beside the source: laid out but unseen over the placeholder while Mermaid draws

@@ -49,7 +49,7 @@
 // Standard files, slug `diagrams`: test/enhance-diagrams.test.ts, test/browser/diagrams.test.ts,
 // conformance/layout/diagrams/ and scripts/demo/samples/diagrams.md. The figure rules are assets/reader.css's.
 // Registered in features.ts, whose header says where in the build order and why.
-import { CHROME_ATTR, chrome } from './journal.js';
+import { chrome } from './journal.js';
 import type { MermaidSettings } from './options.js';
 import type { FigureEntry } from './registry.js';
 import type { FeatureContext } from './types.js';
@@ -221,13 +221,16 @@ function mermaidOf(mod: unknown): MermaidApi | null {
   }
 }
 
-/** The figures to draw: figures.ts's entries, in document order, each with render()'s source `pre.mermaid`. */
+/**
+ * The figures to draw: figures.ts's entries, in document order, each with render()'s source `pre.mermaid` (its first
+ * child of that kind: read before any drawing goes in beside it).
+ */
 function drawable(ctx: FeatureContext): Fig[] {
   const out: Fig[] = [];
   for (const entry of ctx.figures.all()) {
     let source: HTMLElement | null = null;
     for (let n = entry.figure.firstElementChild; n !== null; n = n.nextElementSibling) {
-      if (n.localName === 'pre' && n.classList.contains('mermaid') && !n.hasAttribute(CHROME_ATTR)) {
+      if (n.localName === 'pre' && n.classList.contains('mermaid')) {
         source = n as HTMLElement;
         break;
       }
