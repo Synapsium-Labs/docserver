@@ -391,6 +391,21 @@ describe('the ratchet command', () => {
     });
   });
 
+  it('a hostile layout case moved to a new name is a removal: renames are not followed', () => {
+    const dir = repo();
+    commit(dir, { 'conformance/hostile.json': '[]\n', ...layoutCase(true, 'h1\n') }, 'start');
+    for (const kind of ['md', 'options.json', 'dom.txt']) {
+      git(dir, 'mv', `conformance/layout/core/a.${kind}`, `conformance/layout/core/renamed.${kind}`);
+    }
+    git(dir, 'commit', '-q', '-m', 'rename the hostile case\n\nLayout-moved: core/a');
+    expect(git(dir, 'diff', '--name-status', 'HEAD^', 'HEAD')).toMatch(/^R100\t/m); // git itself sees renames here
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: core/a: a hostile layout case was removed (a hostile case is never removed)\n',
+    });
+  });
+
   it('usage errors exit 2', () => {
     const dir = repo();
     commit(dir, { 'conformance/hostile.json': '[]\n' }, 'start');
