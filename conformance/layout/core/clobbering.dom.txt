@@ -10,6 +10,8 @@ p
 h2 .folded aria-label="jump"
   "jump"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to jump"
+      "#"
     button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: jump"
       "Unfold"
 button .fold-note chrome aria-label="Unfold: jump"
@@ -23,6 +25,8 @@ p hidden="until-found"
 h2 aria-label="keys"
   "keys"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to keys"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: keys"
       "Fold"
 button .fold-note chrome aria-label="Unfold: keys" hidden=""
@@ -36,6 +40,8 @@ p
 h2 aria-label="xcard"
   "xcard"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to xcard"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: xcard"
       "Fold"
 button .fold-note chrome aria-label="Unfold: xcard" hidden=""
@@ -49,6 +55,8 @@ p
 h2 aria-label="toc-contents"
   "toc-contents"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to toc-contents"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: toc-contents"
       "Fold"
 button .fold-note chrome aria-label="Unfold: toc-contents" hidden=""
@@ -62,6 +70,8 @@ p
 h2 .folded aria-label="__proto__"
   "__proto__"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to __proto__"
+      "#"
     button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: __proto__"
       "Unfold"
 button .fold-note chrome aria-label="Unfold: __proto__"
@@ -75,6 +85,8 @@ p hidden="until-found"
 h2 aria-label="constructor"
   "constructor"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to constructor"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: constructor"
       "Fold"
 button .fold-note chrome aria-label="Unfold: constructor" hidden=""
@@ -89,6 +101,8 @@ p
 h2 aria-label="data-docreader-root"
   "data-docreader-root"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to data-docreader-root"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: data-docreader-root"
       "Fold"
 button .fold-note chrome aria-label="Unfold: data-docreader-root" hidden=""

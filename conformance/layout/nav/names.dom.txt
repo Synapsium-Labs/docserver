@@ -1,0 +1,52 @@
+h1
+  "Names"
+p
+  strong
+    "Guide"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "__proto__"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to __proto__"
+      "#"
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: __proto__"
+      "Fold"
+p
+  "A heading whose id is a prototype key."
+h2
+  "constructor"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to constructor"
+      "#"
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: constructor"
+      "Fold"
+p
+  "Another."
+h2
+  "jump"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to jump"
+      "#"
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: jump"
+      "Fold"
+p
+  "Named like the quick jump."
+h2
+  "toc-contents"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to toc-contents"
+      "#"
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: toc-contents"
+      "Fold"
+p
+  "Named like the contents rail."
+h2
+  "toString"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to toString"
+      "#"
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: toString"
+      "Fold"
+p
+  "Named like an inherited method."

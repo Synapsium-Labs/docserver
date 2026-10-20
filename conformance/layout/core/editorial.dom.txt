@@ -274,7 +274,7 @@ ol
     "Should a fold remember its state across "…
   li
     "Should the stylesheet ship a print layou"…
-h2
+h2 aria-label="Where things stand"
   "Where things stand"
 nav .stand-index chrome aria-label="Where things stand"
   a chrome
@@ -296,8 +296,11 @@ nav .stand-index chrome aria-label="Where things stand"
     span chrome
       "Later"
 div .agreed.callout chrome
-  h3
+  h3 aria-label="Agreed"
     "Agreed"
+    span .h-ctl chrome
+      a .h-anchor chrome aria-label="Link to Agreed"
+        "#"
   ul
     li
       "R1: the title block comes first."
@@ -306,8 +309,11 @@ div .agreed.callout chrome
         "D1"
       ": the warm palette stays."
 div .callout.waiting chrome
-  h3
+  h3 aria-label="Waiting on you"
     "Waiting on you"
+    span .h-ctl chrome
+      a .h-anchor chrome aria-label="Link to Waiting on you"
+        "#"
   ul
     li
       a .xref chrome aria-expanded="false" aria-haspopup="dialog"
@@ -316,8 +322,11 @@ div .callout.waiting chrome
     li
       "Q1: the fold memory question in section "…
 div .callout.later chrome
-  h3
+  h3 aria-label="Later"
     "Later"
+    span .h-ctl chrome
+      a .h-anchor chrome aria-label="Link to Later"
+        "#"
   ul
     li
       a .xref chrome aria-expanded="false" aria-haspopup="dialog"
