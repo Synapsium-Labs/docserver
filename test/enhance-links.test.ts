@@ -603,7 +603,7 @@ describe('xrefs: the first mention of a defined ID in each block (the reference 
     expect(reads).toBe(0);
   });
 
-  it('a click on a cross-reference goes to its target through nav, and tells the host its ID', async () => {
+  it('a click on a cross-reference goes to its target through nav, and tells the host its ID when the target has no id of its own (a row)', async () => {
     const root = mount(XREF_DOC);
     seedIdRows();
     const onHash = vi.fn();
@@ -613,6 +613,24 @@ describe('xrefs: the first mention of a defined ID in each block (the reference 
     const row = root.querySelectorAll('tbody tr')[0];
     expect(document.activeElement).toBe(row);
     expect(onHash).toHaveBeenCalledWith('R1', { push: true, from: null });
+  });
+
+  it('a click on a cross-reference to a target with its own document id tells the host that id, as nav names it', async () => {
+    const root = mount(['# S', '', '## F3. Lettered', '', 'Body.', '', '## Next', '', 'See F3 here.', ''].join('\n'));
+    seed((ctx) => {
+      const h = find(ctx.root, 'h2');
+      ctx.index.define({ id: 'F3', kind: 'section', title: 'Lettered', status: null, group: '', target: h, row: null, heads: [] });
+    });
+    const onHash = vi.fn();
+    await enhance(root, { onHash });
+    const a = find(para(root, 'See F3'), 'a.xref');
+    expect(a.getAttribute('href')).toBe('#F3');
+    const h = find(root, 'h2');
+    expect(h.id).not.toBe('');
+    expect(click(a).prevented).toBe(true);
+    expect(document.activeElement).toBe(h);
+    // nav.goTo names a target by its document id first (LD7's idOf), so the host hears the heading's id, not "F3".
+    expect(onHash.mock.calls).toEqual([[h.id, { push: true, from: null }]]);
   });
 
   it('an ID whose text needs escaping in a fragment is written escaped, and nav decodes it', async () => {
@@ -897,6 +915,43 @@ describe('glossary: what makes a glossary, and its terms (the reference layout, 
     await enhance(root);
     expect(ctxOf(root).terms.all().map((t) => t.name)).toEqual([`${'Long '.repeat(8)}longname`, 'Okay']);
     expect(root.querySelectorAll('td.termcell')).toHaveLength(8);
+  });
+
+  it('each table\'s section is found in one pass: the siblings read grow with the number of tables, never its square', async () => {
+    const proto = Element.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'previousElementSibling');
+    if (desc?.get === undefined) throw new Error('no previousElementSibling getter on Element.prototype');
+    const get = desc.get;
+    /** How many times the glossary reads an element's previous sibling, on n two-column tables under one heading. */
+    const reads = async (n: number): Promise<number> => {
+      const md = ['# Tables', '', '## Body', '', ...Array.from({ length: n }, (_, i) => `| A | B |\n|---|---|\n| ${i} | x |\n\nText ${i}.\n`)].join('\n');
+      const root = mount(md);
+      let on = false;
+      let count = 0;
+      hooks.between.push({ name: 'on', build: () => void (on = true) } satisfies Feature);
+      hooks.after.push({ name: 'off', build: () => void (on = false) } satisfies Feature);
+      Object.defineProperty(proto, 'previousElementSibling', {
+        ...desc,
+        get(this: Element) {
+          if (on) count += 1;
+          return get.call(this);
+        },
+      });
+      try {
+        await enhance(root);
+      } finally {
+        Object.defineProperty(proto, 'previousElementSibling', desc);
+        hooks.between.length = 0;
+        hooks.after.length = 0;
+      }
+      expect(root.querySelectorAll('table').length).toBe(n);
+      return count;
+    };
+    const one = await reads(200);
+    const two = await reads(400);
+    expect(one).toBeGreaterThanOrEqual(200);
+    expect(one).toBeLessThanOrEqual(8 * 200);
+    expect(two / one, `${one} then ${two}`).toBeLessThanOrEqual(2.5);
   });
 
   it('a section\'s words leave out a button the layout put in its heading', async () => {
@@ -1248,13 +1303,22 @@ describe('glossary: the term link goes to its definition', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('after destroy a click does nothing', async () => {
+  it('after destroy a click does nothing: the link\'s own listener is gone with it', async () => {
     const root = mount(GLOSSARY_DOC);
-    await enhance(root);
+    const onHash = vi.fn();
+    await enhance(root, { onHash });
     const a = find(para(root, 'A fold hides'), 'a.term');
+    const row = root.querySelector('tbody tr');
     await destroyEnhancement(root);
     expect(a.isConnected).toBe(false);
-    expect(click(a).prevented).toBe(false);
+    // Dispatched on the link itself, which a host may have kept: a detached link's click never reaches the document, so
+    // only the event's own flag can say whether a listener took it.
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    expect(a.dispatchEvent(event)).toBe(true);
+    expect(event.defaultPrevented, 'the link still answers a click after destroy').toBe(false);
+    expect(document.activeElement).toBe(document.body);
+    expect(row?.hasAttribute('tabindex')).toBe(false);
+    expect(onHash).not.toHaveBeenCalled();
   });
 });
 
@@ -1367,6 +1431,36 @@ describe('the term matcher (glossary.ts)', () => {
     expect(bad).toEqual([]);
   }, 120_000);
 
+  it('a run of white space is read a bounded number of times: the cost grows with the text, never with its square', () => {
+    /** How many code units the matcher reads to find every mention in `text`, and how many it finds. */
+    const reads = (text: string): { reads: number; found: number } => {
+      let n = 0;
+      // The matcher reads a text only through its length and charCodeAt, so a counting stand-in can take its place.
+      const counted = {
+        length: text.length,
+        charCodeAt: (i: number): number => {
+          n += 1;
+          return text.charCodeAt(i);
+        },
+      } as unknown as string;
+      const find = termMatcher(['alpha beta', 'beta']);
+      let found = 0;
+      for (let at = find(counted, 0); at !== null; at = find(counted, at.end)) found += 1;
+      return { reads: n, found };
+    };
+    for (const unit of [' ', '\u00a0', ' \u00a0\t\n']) {
+      const text = (k: number): string => {
+        const run = unit.repeat(Math.ceil(k / unit.length)).slice(0, k);
+        return `x${run}y alpha${run}beta, alpha${run}z${run}`;
+      };
+      const one = reads(text(10_000));
+      expect(one.found, JSON.stringify(unit)).toBe(1);
+      expect(one.reads, JSON.stringify(unit)).toBeLessThanOrEqual(4 * text(10_000).length);
+      const two = reads(text(20_000));
+      expect(two.reads / one.reads, JSON.stringify(unit)).toBeLessThanOrEqual(2.5);
+    }
+  });
+
   it('a longer term wins at the same place, and a shorter one is tried when the longer one\'s end is inside a word', () => {
     const find = termMatcher(['read', 'read mark']);
     expect(find('the read mark here', 0)).toEqual({ start: 4, keyEnd: 13, end: 13 });
@@ -1386,10 +1480,19 @@ describe('the term matcher (glossary.ts)', () => {
 const BUDGET_MS = 20_000;
 
 /**
- * How many rounds of the large plan, then the plan twice as large, the time is the best of: enough that on a loaded
- * box each best is rarely a slowed round, since the ratio's bound leaves little room (2.0 to 2.4 measured, bound 2.5).
+ * How many rounds of the large plan, then the plan twice as large. Each round is a pair, timed one right after the
+ * other, so both halves of a pair run under much the same load; the ratio judged is the median of the pairs' ratios. A
+ * best of each scale taken from different rounds once compared a lucky large-plan round with a plateaued 2x one, and
+ * crossed the bound under load on honest code (2.58; its pairs measured 2.05 to 2.16, then 2.59).
  */
 const ROUNDS = 5;
+
+/** The middle of `xs` (the mean of the middle two when there is an even number). */
+function median(xs: readonly number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 === 1 ? (s[m] as number) : ((s[m - 1] as number) + (s[m] as number)) / 2;
+}
 
 /**
  * No round starts once the rounds have taken this long, in ms, so a matcher whose cost grows with the number of terms
@@ -1468,10 +1571,9 @@ describe('RF3: the large plan', () => {
     expect(counts1.terms).toBeGreaterThan(LARGE_PLAN_COUNTS.terms);
     expect(counts2.xrefs).toBeGreaterThan(1.8 * counts1.xrefs);
     expect(counts2.terms).toBeGreaterThan(1.5 * counts1.terms);
-    const best1 = Math.min(...one);
-    const best2 = Math.min(...two);
-    const said = `${one.map((x) => x.toFixed(0)).join(', ')} ms, then ${two.map((x) => x.toFixed(0)).join(', ')} ms`;
-    expect(best1, `large plan: ${said}`).toBeLessThan(BUDGET_MS);
-    expect(best2 / best1, said).toBeLessThanOrEqual(2.5);
+    const ratios = one.map((x, i) => (two[i] as number) / x);
+    const said = `${one.map((x) => x.toFixed(0)).join(', ')} ms, then ${two.map((x) => x.toFixed(0)).join(', ')} ms; pairs ${ratios.map((r) => r.toFixed(2)).join(', ')}`;
+    expect(Math.min(...one), `large plan: ${said}`).toBeLessThan(BUDGET_MS);
+    expect(median(ratios), said).toBeLessThanOrEqual(2.5);
   }, 900_000);
 });

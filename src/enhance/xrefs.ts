@@ -6,7 +6,8 @@
 // aria-haspopup="dialog" and aria-expanded="false" (for the preview cards, Task 17), chrome around split text: the
 // mention's own text node moves into the link, so the document's text never changes. Its href is "#<ID>" (escaped
 // for a fragment), which nav resolves (LD6): a document id of that text first, then the ID in the index. So a click
-// goes there through nav.goTo, which tells the host the ID (onHash). No id is written on any node.
+// goes there through nav.goTo, which tells the host the target's id (onHash, LD7's idOf): its own document id when it
+// has one (a section's heading), else the ID (a row, a rule). No id is written on any node.
 //
 // What it reads (mentions.ts): every text in a block (a paragraph, list item, table cell, description or quote) of
 // the root, in document order, outside the document's code, keyboard keys, links, headings, table heads, figures and
