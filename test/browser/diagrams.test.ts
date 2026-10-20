@@ -7,7 +7,10 @@
 // - The Level 2 cases of conformance/layout/diagrams/ are opened again here, for what a structural snapshot cannot
 //   hold: no style the diagram injects (no element of the figure is fixed, the drawing's style text holds none of its
 //   directive's CSS, font or colour), no handler (no `on…` attribute, a click runs nothing, no link runs script), and
-//   the fallback where it applies, with its note.
+//   the fallback where it applies, with its note; a style element inside a label is dropped wherever it sits, so a
+//   paragraph outside the drawing keeps its colour.
+// - Mermaid's tooltip, which its flowchart puts in the body, goes with the reader: a node hovered as the reader is
+//   destroyed leaves the body as it was.
 // - The figure rules: under the gate, the source is a transparent placeholder on the plate while its figure is drawn,
 //   then hidden; the drawing is laid out but unseen while Mermaid draws into it; a drawn figure shows no source plate
 //   and a failed one no blank plate, its note in their place; without Mermaid the source is text on its plate. Two of
@@ -63,6 +66,9 @@ interface FigureReport {
     readonly visibility: string;
     readonly position: string;
     readonly background: string;
+    readonly color: string;
+    readonly minHeight: string;
+    readonly userSelect: string;
     readonly svg: { readonly role: string | null; readonly label: string | null; readonly width: number; readonly height: number } | null;
   } | null;
   readonly note: { readonly text: string; readonly summary: string; readonly code: string; readonly display: string; readonly height: number } | null;
@@ -115,6 +121,9 @@ function report(page: Page): Promise<Report> {
                 visibility: cs(drawing).visibility,
                 position: cs(drawing).position,
                 background: cs(drawing).backgroundColor,
+                color: cs(drawing).color,
+                minHeight: cs(drawing).minHeight,
+                userSelect: cs(drawing).getPropertyValue('user-select') || cs(drawing).getPropertyValue('-webkit-user-select'),
                 svg: svg === null ? null : { role: svg.getAttribute('role'), label: svg.getAttribute('aria-label'), width: box?.width ?? 0, height: box?.height ?? 0 },
               },
         note:
@@ -237,6 +246,10 @@ describeBrowsers((browser) => {
         expect(f.cls).toBe('mermaid-figure drawn');
         expect(f.source).toMatchObject({ display: 'none', processed: false });
         expect(f.drawing).toMatchObject({ display: 'block', visibility: 'visible', position: 'static', background: PLATE });
+        // The drawing's plate is never the source's placeholder: as tall as its drawing, its text seen and selectable.
+        expect(f.drawing?.minHeight).not.toBe('180px');
+        expect(f.drawing?.color).not.toBe(TRANSPARENT);
+        expect(f.drawing?.userSelect).not.toBe('none');
         expect(f.drawing?.svg?.role).toBe('img');
         expect(f.drawing?.svg?.label).toBe(['Figure 1. The flow of one request.', 'Figure 2. One exchange.'][i]);
         expect(f.drawing?.svg?.width ?? 0).toBeGreaterThan(100);
@@ -306,6 +319,53 @@ describeBrowsers((browser) => {
       expect(labels).toEqual(['bold text', 'after', 'styled', 'last']);
       await doc.page.locator('main[data-harness-root] .nodeLabel b').first().hover();
       expect(await doc.page.evaluate(() => (window as unknown as { __hit?: number }).__hit)).toBe(undefined);
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('a style element inside a label, after other markup, is dropped: a paragraph outside the drawing keeps its colour', async () => {
+    const { doc, got } = await openCase(browser, 'diagrams/label-style');
+    try {
+      expect(got.state).toBe('drawn');
+      expect(got.fixed).toEqual([]);
+      const seen = await doc.page.evaluate(() => {
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const prose = Array.from(root.querySelectorAll('p')).find((p) => (p.textContent ?? '').startsWith('A flowchart whose first label'));
+        return {
+          labelStyles: root.querySelectorAll('figure .nodeLabel style, figure foreignObject style').length,
+          labels: Array.from(root.querySelectorAll('figure .nodeLabel')).map((l) => (l.textContent ?? '').replace(/\s+/g, ' ').trim()),
+          prose: prose === undefined ? null : getComputedStyle(prose).color,
+        };
+      });
+      expect(seen.labelStyles).toBe(0);
+      expect(seen.labels).toEqual(['xyafter', 'two']);
+      expect(seen.prose).not.toBe(null);
+      expect(seen.prose).not.toBe('rgb(1, 2, 3)');
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('Mermaid\'s tooltip goes with the reader: a node hovered as the reader is destroyed leaves the body as it was', async () => {
+    const md = ['# A tip', '', '```mermaid', 'flowchart LR', '  A[Hover me] --> B[Stop]', '  click A href "https://example.com/" "A tip"', '```', '', '*Figure 1. A node with a tip.*', ''].join('\n');
+    const doc = await openDoc(md, { mermaid: {} }, { browser, csp: 'reader', enhance: false });
+    try {
+      const body = (): Promise<string[]> => doc.page.evaluate(() => Array.from(document.body.children).map((c) => `${c.localName}.${c.className}`));
+      const before = await body();
+      await doc.enhance();
+      expect((await report(doc.page)).state).toBe('drawn');
+      await doc.page.locator('main[data-harness-root] figure g.node', { hasText: 'Hover me' }).hover();
+      // Mermaid shows its tooltip, in the body, over the hovered node.
+      await doc.page.waitForFunction(() => {
+        const tip = document.querySelector('body > div.mermaidTooltip');
+        return tip !== null && Number(getComputedStyle(tip).opacity) > 0.5 && (tip.textContent ?? '').includes('A tip');
+      });
+      await doc.page.evaluate(() => (window as unknown as { __docreaderHarness: { destroy(): Promise<void> } }).__docreaderHarness.destroy());
+      await frames(doc.page);
+      expect(await body()).toEqual(before);
+      expect(await doc.page.evaluate(() => document.querySelectorAll('.mermaidTooltip').length)).toBe(0);
+      expect(await doc.violations()).toEqual([]);
     } finally {
       await doc.close();
     }
