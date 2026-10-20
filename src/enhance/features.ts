@@ -4,15 +4,20 @@
 // exports `after(ctx)`, the second phase (LD5).
 //
 // The order is the reference layout's, section by section, and each step says what it needs from the steps before:
-//   editorial   1, 2, 4, 5, 6, and 8's status marks: the title block, the facts panel, the boxes, section numbers.
-//               First: it marks the root (`data-docreader-root`) and reads the headings before anything changes them.
+//   editorial   1, 2, 4, 5 and 6: the title block, the facts panel, the boxes, section numbers. First: it marks the
+//               root (`data-docreader-root`) and reads the headings before anything changes them.
 //   rules       3 and 4's rules index: rule paragraphs, then the index in the facts panel editorial built. Before
 //               ids, so a rule defines its ID first (the index keeps the first definition).
-//   ids         6's lettered sections and 8's ID rows. Before plans (7, which the reference runs between the two):
-//               the heading an ID row is grouped under holds no plan chrome yet, as the reference read it.
+//   tables      8's bullet cells and the filter, built here; the measured widths come in relayout. Before status, as
+//               the reference split a cell's lines before it marked them.
+//   status      8's status marks, the group rows and the phone cards' labels (status.ts): after tables, so a cell's
+//               first bullet line is read without its bullet.
+//   ids         6's lettered sections and 8's ID rows: after status, as an ID row takes its status from the row's
+//               mark. Before plans (7, which the reference runs before 8): the heading an ID row is grouped under
+//               still holds no plan chrome, so its text is the heading's own, as the reference read it (a label
+//               taken before section 7 ran).
 //   plans       7 and 23: tasks, steps and owners; a stored outline is applied here, so the full plan never flashes.
-//   tables      8's rest: bullet cells, the filter, the measured widths. After editorial, whose status marks the
-//               bullet lines then hold (the reference split the lines first).
+//               After tables, which reads no plan chrome (the reference's 7 then 8 shares nothing between them).
 //   code        9: Copy buttons and widths.
 //   figures     10: book captions; the figure entries the index and the quick jump list.
 //   xrefs       12: the first mention of each defined ID links to it: after rules, ids and figures defined them.
@@ -58,6 +63,7 @@ import { build as buildRules } from './rules.js';
 import { build as buildScroll } from './scroll.js';
 import { build as buildSettings } from './settings.js';
 import { after as afterSince, build as buildSince } from './since.js';
+import { buildStatusMarks } from './status.js';
 import { build as buildStrip } from './strip.js';
 import { build as buildTables } from './tables.js';
 import type { FeatureContext } from './types.js';
@@ -82,9 +88,10 @@ export function features(): readonly Feature[] {
   return Object.freeze([
     { name: 'editorial', build: buildEditorial },
     { name: 'rules', build: buildRules },
+    { name: 'tables', build: buildTables },
+    { name: 'status', build: buildStatusMarks },
     { name: 'ids', build: buildIds },
     { name: 'plans', build: buildPlans },
-    { name: 'tables', build: buildTables },
     { name: 'code', build: buildCode },
     { name: 'figures', build: buildFigures },
     { name: 'xrefs', build: buildXrefs },

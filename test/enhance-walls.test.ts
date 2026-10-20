@@ -10,12 +10,19 @@
 //    holds `#` or an `[id=...]` match, and no selector is built at run time; no attribute that runs code, loads a URL
 //    or styles is written (an `on...` name, `src`, `srcset`, `srcdoc`, `style` and the like, by `setAttribute`, in an
 //    attribute map or as a property), and outside journal.ts no attribute name is built at run time; no `cssText`.
-// 3. One module for the window, one for styles (Task 7a): the root's window (`.defaultView`, or an event's `.view`),
-//    its timers, frames and idle callbacks, its observers, its media queries, sizes and scroll position, a point
-//    lookup, computed styles and the document's fonts are reached only in env.ts, and everywhere else only through
-//    `env` (`ctx.env.fonts(...)`); the clock (`Date.now`, `Date()`, `new Date()` with no argument) likewise; and an
-//    element's inline style (`.style`) only in journal.ts, whose setStyle is the one style write (LD11). Each of those
-//    two files uses each such name exactly as often as ALLOWED_SITES says, so the exception cannot widen unseen.
+// 3. One module for the window, one for styles (Task 7a): the root's window (`.defaultView`, an event's `.view`, a
+//    frame's `.contentWindow`), its timers, frames and idle callbacks, its observers, its media queries, sizes and
+//    scroll position (`.scrollingElement` too), a point lookup, computed styles and the document's fonts are reached
+//    only in env.ts, and everywhere else only through the Env (`ctx.env.fonts(...)`): a receiver whose type, by the
+//    TypeScript checker, is env.ts's Env, and only for a name Env itself declares, so a variable named `env` that
+//    holds the document is refused, and so is `ctx.env.defaultView`. The clock (`Date.now`, `Date()`, `new Date()`
+//    with no argument) only in env.ts: elsewhere `Date` is named only as `new Date(value)`, as `Date.<member>` other
+//    than `now`, or as a type, so it cannot be passed on (`const D = Date`) or read by a key (`Date['now']`). An
+//    element's inline style (`.style`) only in journal.ts, whose setStyle is the one style write (LD11), and the
+//    other ways to style a page (`attributeStyleMap`, `styleSheets`, `adoptedStyleSheets`, `insertRule`) nowhere.
+//    A name is seen as a member (`.x`), as a string key (`['x']`) and as a destructured property (`const { x } = o`,
+//    `{ x: y }`). Each of env.ts and journal.ts uses each such name exactly as often as ALLOWED_SITES says, so the
+//    exception cannot widen unseen.
 // 4. The only globals a source names are the language's own (Object, Promise, Map, Date, ...): a TypeScript program
 //    over src/enhance with the DOM library resolves every free identifier, and one that the DOM library declares
 //    (window, document, parent, top, navigator, Image, DOMParser, setTimeout, performance, ...) is refused unless
@@ -65,8 +72,8 @@ const FORBIDDEN_MEMBERS: readonly string[] = ['body', 'head', 'write', 'open'];
  * else only on `env` itself (`ctx.env.fonts(...)`, `env.elementFromPoint(...)`), the seam that wraps them.
  */
 const WINDOW_MEMBERS: readonly string[] = [
-  // the window
-  'defaultView', 'view',
+  // the window, and a frame's
+  'defaultView', 'view', 'contentWindow',
   // timers, frames, idle callbacks
   'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame',
   'requestIdleCallback', 'cancelIdleCallback', 'queueMicrotask',
@@ -74,11 +81,14 @@ const WINDOW_MEMBERS: readonly string[] = [
   'ResizeObserver', 'IntersectionObserver', 'MutationObserver', 'PerformanceObserver',
   // the document's fonts, media queries, sizes, scroll position, a point lookup, computed styles
   'fonts', 'matchMedia', 'innerWidth', 'innerHeight', 'scrollX', 'scrollY', 'pageXOffset', 'pageYOffset',
-  'elementFromPoint', 'getComputedStyle',
+  'scrollingElement', 'elementFromPoint', 'getComputedStyle',
 ];
 
 /** Member names used in journal.ts alone: an element's inline style, which setStyle alone writes (LD11). */
 const STYLE_MEMBERS: readonly string[] = ['style'];
+
+/** Member names never used: the other ways to style an element or the page, around setStyle's closed list. */
+const STYLESHEET_MEMBERS: readonly string[] = ['attributeStyleMap', 'styleSheets', 'adoptedStyleSheets', 'insertRule'];
 
 /**
  * Where a refused name is allowed all the same, and how often, by the violation's text: env.ts reaches the window,
@@ -127,6 +137,70 @@ function parse(fileName: string, source: string): ts.SourceFile {
   return ts.createSourceFile(fileName, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
 }
 
+/** The program options of both checker-based scans: the DOM library, no Node types. */
+const PROGRAM_OPTIONS: ts.CompilerOptions = {
+  target: ts.ScriptTarget.ES2022,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  lib: ['lib.es2022.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
+  types: [],
+  strict: true,
+  noEmit: true,
+  skipLibCheck: true,
+};
+
+/** Files read from disk (the libraries, src/enhance), parsed once for every program this file makes. */
+const diskFiles = new Map<string, ts.SourceFile>();
+
+/** A program over the given texts (a name relative to src/enhance is put there), the rest read from disk. */
+function programOf(files: readonly { name: string; text: string }[]): ts.Program {
+  const host = ts.createCompilerHost(PROGRAM_OPTIONS, true);
+  const mem = new Map(files.map((f) => [path.resolve(ENHANCE_DIR, f.name), f.text]));
+  const getSourceFile = host.getSourceFile.bind(host);
+  const fileExists = host.fileExists.bind(host);
+  const readFile = host.readFile.bind(host);
+  host.getSourceFile = (name, lang, ...rest) => {
+    const text = mem.get(path.resolve(name));
+    if (text !== undefined) return ts.createSourceFile(name, text, lang, true);
+    const key = path.resolve(name);
+    let sf = diskFiles.get(key);
+    if (sf === undefined) {
+      sf = getSourceFile(name, lang, ...rest);
+      if (sf !== undefined) diskFiles.set(key, sf);
+    }
+    return sf;
+  };
+  host.fileExists = (name) => mem.has(path.resolve(name)) || fileExists(name);
+  host.readFile = (name) => mem.get(path.resolve(name)) ?? readFile(name);
+  return ts.createProgram([...mem.keys()], PROGRAM_OPTIONS, host);
+}
+
+/** True for a node inside a type (an annotation, `typeof x` in a type): it names no value at run time. */
+function inType(node: ts.Node): boolean {
+  for (let n: ts.Node | undefined = node.parent; n !== undefined; n = n.parent) {
+    if (ts.isTypeNode(n)) return true;
+    if (ts.isStatement(n) || ts.isExpressionStatement(n)) return false;
+  }
+  return false;
+}
+
+/** Every wall violation in each source text, by name, as "line:column what": one program, one checker. */
+function scan(files: readonly { name: string; text: string }[]): Map<string, string[]> {
+  const program = programOf(files);
+  const checker = program.getTypeChecker();
+  const out = new Map<string, string[]>();
+  for (const f of files) {
+    const sf = program.getSourceFile(path.resolve(ENHANCE_DIR, f.name));
+    if (sf === undefined) throw new Error(`walls: ${f.name} is not in the program`);
+    out.set(f.name, violationsIn(sf, checker));
+  }
+  return out;
+}
+
+/** Every wall violation in one source text (see scan). */
+function violations(fileName: string, source: string): string[] {
+  return scan([{ name: fileName, text: source }]).get(fileName) ?? [];
+}
 /** True for a key made by joining strings: `'outer' + 'HTML'`, `prefix + 'HTML'`, a template. Index arithmetic is not. */
 function builtString(key: ts.Expression): boolean {
   if (ts.isTemplateExpression(key)) return true;
@@ -139,35 +213,56 @@ function builtString(key: ts.Expression): boolean {
 /** A selector that looks an element up by its id: `#x`, or an attribute match on id (`[id="x"]`, `[id^=x]`). */
 const ID_SELECTOR = /#|\[\s*id\s*[~|^$*]?=/i;
 
-/** Every wall violation in a source text, as "line:column what". */
-function violations(fileName: string, source: string): string[] {
-  const sf = parse(fileName, source);
+/** Every wall violation in a source file of a program, as "line:column what". */
+function violationsIn(sf: ts.SourceFile, checker: ts.TypeChecker): string[] {
   const banned = new Set(FORBIDDEN);
-  const members = new Set([...FORBIDDEN_MEMBERS, ...STYLE_MEMBERS]);
+  const members = new Set([...FORBIDDEN_MEMBERS, ...STYLE_MEMBERS, ...STYLESHEET_MEMBERS]);
   const windowMembers = new Set(WINDOW_MEMBERS);
-  const genericSetter = rel(fileName) === 'src/enhance/journal.ts';
+  const genericSetter = rel(sf.fileName) === 'src/enhance/journal.ts';
   const out: string[] = [];
   const at = (node: ts.Node, what: string): void => {
     const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
     out.push(`${line + 1}:${character + 1} ${what}`);
   };
+  /** True when `name` is one Env declares and `value`'s type is env.ts's Env: the seam that wraps the window. */
+  const onEnv = (value: ts.Node, name: string): boolean => {
+    const type = checker.getTypeAtLocation(value);
+    const sym = type.aliasSymbol ?? type.getSymbol();
+    if (sym?.getName() !== 'Env' || !(sym.declarations ?? []).some((d) => rel(d.getSourceFile().fileName) === 'src/enhance/env.ts')) return false;
+    return checker.getPropertiesOfType(type).some((p) => p.getName() === name);
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && banned.has(node.text)) at(node, node.text);
     if (ts.isPropertyAccessExpression(node) && members.has(node.name.text)) at(node.name, `.${node.name.text}`);
-    // The window's members, except on the seam that wraps them: `env.fonts(...)`, `ctx.env.elementFromPoint(...)`.
-    if (ts.isPropertyAccessExpression(node) && windowMembers.has(node.name.text) && !/(?:^|\.)env$/.test(node.expression.getText(sf))) {
+    // The window's members, except a name of the Env, on the Env: `env.fonts(...)`, `ctx.env.elementFromPoint(...)`.
+    if (ts.isPropertyAccessExpression(node) && windowMembers.has(node.name.text) && !onEnv(node.expression, node.name.text)) {
       at(node.name, `.${node.name.text}`);
     }
-    // The clock: Date.now, Date() and new Date() with no argument read the time; new Date(value) only converts.
-    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date' && node.name.text === 'now') at(node, 'Date.now');
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date') at(node, 'Date()');
-    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date' && (node.arguments?.length ?? 0) === 0) at(node, 'new Date()');
+    // The clock: Date.now, Date() and new Date() with no argument read the time; new Date(value) only converts, and
+    // Date.parse or Date.UTC read no clock. Any other use of the name could pass the clock on: refused.
+    if (ts.isIdentifier(node) && node.text === 'Date' && isValueReference(node) && !inType(node)) {
+      const p = node.parent;
+      if (ts.isPropertyAccessExpression(p) && p.expression === node) {
+        if (p.name.text === 'now') at(p, 'Date.now');
+      } else if (ts.isNewExpression(p) && p.expression === node) {
+        if ((p.arguments?.length ?? 0) === 0) at(p, 'new Date()');
+      } else if (ts.isCallExpression(p) && p.expression === node) at(p, 'Date()');
+      else at(node, 'Date');
+    }
     // A string key reads a member as surely as a dot does; a key built at run time could be anything.
     if (ts.isElementAccessExpression(node)) {
       const key = node.argumentExpression;
       if (ts.isStringLiteralLike(key)) {
         if (banned.has(key.text) || members.has(key.text) || windowMembers.has(key.text)) at(key, `['${key.text}']`);
       } else if (builtString(key)) at(key, '[<member built at run time>]');
+    }
+    // A destructured property reads a member too: `const { style } = el`, `const { defaultView: w } = doc`.
+    if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+      const key = node.propertyName ?? node.name;
+      const text = ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : ts.isComputedPropertyName(key) && ts.isStringLiteralLike(key.expression) ? key.expression.text : null;
+      if (text !== null) {
+        if (members.has(text) || (windowMembers.has(text) && !onEnv(node.parent, text))) at(key, `{ ${text} }`);
+      } else if (ts.isComputedPropertyName(key) && builtString(key.expression)) at(key, '{ [<member built at run time>] }');
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
       const left = node.left;
@@ -242,28 +337,8 @@ function isValueReference(id: ts.Identifier): boolean {
  * every declaration is in a default library file is a global.
  */
 function globalUses(files: readonly { name: string; text: string }[]): string[] {
-  const options: ts.CompilerOptions = {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    lib: ['lib.es2022.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
-    types: [],
-    strict: true,
-    noEmit: true,
-    skipLibCheck: true,
-  };
-  const host = ts.createCompilerHost(options, true);
-  const mem = new Map(files.map((f) => [path.resolve(f.name), f.text]));
-  const getSourceFile = host.getSourceFile.bind(host);
-  const fileExists = host.fileExists.bind(host);
-  const readFile = host.readFile.bind(host);
-  host.getSourceFile = (name, lang, ...rest) => {
-    const text = mem.get(path.resolve(name));
-    return text === undefined ? getSourceFile(name, lang, ...rest) : ts.createSourceFile(name, text, lang, true);
-  };
-  host.fileExists = (name) => mem.has(path.resolve(name)) || fileExists(name);
-  host.readFile = (name) => mem.get(path.resolve(name)) ?? readFile(name);
-  const program = ts.createProgram([...mem.keys()], options, host);
+  const program = programOf(files);
+  const mem = new Set(files.map((f) => path.resolve(ENHANCE_DIR, f.name)));
   const checker = program.getTypeChecker();
   const out: string[] = [];
   for (const sf of program.getSourceFiles()) {
@@ -346,7 +421,7 @@ describe('enhance walls: import inertness', () => {
 
 describe('enhance walls: CSP, purity and id lookups', () => {
   it('no source file names a forbidden identifier, a selector with # or built at run time, or a style string', () => {
-    const found = sources().flatMap((f) => afterAllowed(rel(f), violations(f, readFileSync(f, 'utf8'))).map((u) => `${rel(f)}:${u}`));
+    const found = [...scan(sources().map((f) => ({ name: f, text: readFileSync(f, 'utf8') })))].flatMap(([f, v]) => afterAllowed(rel(f), v).map((u) => `${rel(f)}:${u}`));
     expect(found).toEqual([]);
   });
 
@@ -366,6 +441,9 @@ describe('enhance walls: CSP, purity and id lookups', () => {
       'Date.now(); new Date(); Date(); new Date(iso); Date.parse(iso);',
       'ctx.env.fonts(1); env.elementFromPoint(1, 2); ctx.env.timeout(f, 1);',
       "doc.elementFromPoint(1, 2); v.scrollY; v.requestIdleCallback(f); v.getComputedStyle(el); v['matchMedia'];",
+      // after every line above, so their positions stay: the Env's type, which lets `env` and `ctx.env` through
+      "import type { Env } from './env.js'; import type { FeatureContext } from './types.js';",
+      'declare const ctx: FeatureContext; declare const env: Env;',
     ].join('\n');
     expect(violations('probe.ts', probe)).toEqual([
       '1:30 .defaultView',
@@ -387,6 +465,41 @@ describe('enhance walls: CSP, purity and id lookups', () => {
       '6:42 .requestIdleCallback',
       '6:68 .getComputedStyle',
       "6:92 ['matchMedia']",
+    ]);
+  });
+
+  it('the scan sees a destructured member, an alias named env, the other style routes, a frame\'s window and the clock passed on', () => {
+    const probe = [
+      'const { style } = root; const { defaultView: w } = doc; const { setTimeout: later, innerWidth } = w; later(f, 1);',
+      'const env = root.ownerDocument; env.fonts.load(x); env.elementFromPoint(1, 2); env.defaultView;',
+      "const D = Date; new D(); new (Date)(); Date['now'](); const { now } = Date; Date.parse(s); new Date(s);",
+      "root.attributeStyleMap.set('width', '1px'); doc.styleSheets[0]?.insertRule(r); doc.adoptedStyleSheets = [];",
+      "doc.scrollingElement.scrollTop = 100; frame.contentWindow; const { fonts } = doc; const { ['sty' + 'le']: s2 } = root;",
+      "const { fonts: f2, elementFromPoint: at } = ctx.env; realEnv.fonts(1); ctx.env.defaultView; const d: Date = new Date(1); void o.Date;",
+      "import type { Env } from './env.js'; import type { FeatureContext } from './types.js';",
+      'declare const ctx: FeatureContext; declare const realEnv: Env; declare const root: HTMLElement; declare const doc: Document;',
+    ].join('\n');
+    expect(violations('probe.ts', probe)).toEqual([
+      '1:9 { style }',
+      '1:33 { defaultView }',
+      '1:65 { setTimeout }',
+      '1:84 { innerWidth }',
+      '2:37 .fonts',
+      '2:56 .elementFromPoint',
+      '2:84 .defaultView',
+      '3:11 Date',
+      '3:31 Date',
+      '3:40 Date',
+      '3:71 Date',
+      '4:6 .attributeStyleMap',
+      '4:65 .insertRule',
+      '4:49 .styleSheets',
+      '4:84 .adoptedStyleSheets',
+      '5:5 .scrollingElement',
+      '5:45 .contentWindow',
+      '5:68 { fonts }',
+      '5:91 { [<member built at run time>] }',
+      '6:80 .defaultView',
     ]);
   });
 

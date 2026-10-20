@@ -35,9 +35,11 @@
 // `ctx.host`.
 //
 // The seams every feature builds with (Task 7a): `env` (the root's window, env.ts), `sections`, `vocab` (vocab.ts),
-// `chromeId` and `text` (text.ts). Chrome ids are per instance: `docreader-<n>-<name>`, where n counts the instances
-// of the document, each checked against the document's ids (taken at the instance's first call) and every id
-// another instance of the document issued; an instance's ids are released at its teardown.
+// `chromeId` and `text` (text.ts). Chrome ids are per instance: `docreader.<n>.<name>`, where n counts the instances
+// of the document, so two instances never issue the same id. The dots keep them out of render()'s id alphabet
+// (letters, digits, `_` and `-`, for anchors and heading slugs alike), so no root rendered into the document later
+// can carry one; an id the document held at the instance's first call, or one the instance issued, is skipped by a
+// `.<k>` suffix. An instance's ids are released at its teardown, and it issues none once it is not live.
 //
 // destroyEnhancement(root): marks the instance destroying and bumps its generation first, so no further write
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
@@ -88,7 +90,7 @@ let registry: WeakMap<Document, Set<Instance>> | undefined;
 let byRoot: WeakMap<Element, Set<Instance>> | undefined;
 /** The last destroy promise of each root, so repeated calls return the same promise. */
 let lastDestroy: WeakMap<Element, Promise<void>> | undefined;
-/** Per document: how many instances asked for chrome ids, and every chrome id issued and not yet released. */
+/** Per document: how many instances asked for chrome ids, and every chrome id its live instances issued. */
 let chromeIds: WeakMap<Document, { next: number; readonly issued: Set<string> }> | undefined;
 
 /** A chrome id's name: 1 to 32 lower-case letters, digits and dashes, starting with a letter. */
@@ -241,7 +243,7 @@ function measureSections(root: Element): readonly SectionUnit[] {
 }
 
 /** The chrome ids of one instance: a new id per call, unique in the document; all released when the instance is torn down. */
-function chromeIdsOf(inst: Instance, journal: Journal): (name: string) => string {
+function chromeIdsOf(inst: Instance, journal: Journal, live: () => boolean): (name: string) => string {
   chromeIds ??= new WeakMap();
   let reg = chromeIds.get(inst.doc);
   if (reg === undefined) chromeIds.set(inst.doc, (reg = { next: 1, issued: new Set() }));
@@ -258,13 +260,15 @@ function chromeIdsOf(inst: Instance, journal: Journal): (name: string) => string
     if (typeof name !== 'string' || !CHROME_ID_NAME.test(name)) {
       throw new Error('docreader: chromeId takes a name of 1 to 32 lower-case letters, digits and dashes, starting with a letter');
     }
+    // Its release has run, or will run before anything could insert the element: an id issued now would stay issued.
+    if (!live()) throw new Error('docreader: chromeId after a destroy');
     if (taken === null) {
       taken = new Set();
       for (const el of Array.from(inst.root.ownerDocument.querySelectorAll('[id]'))) taken.add(el.id);
     }
-    const base = `docreader-${String(no)}-${name}`;
+    const base = `docreader.${String(no)}.${name}`;
     let id = base;
-    for (let k = 2; taken.has(id) || issued.has(id); k += 1) id = `${base}-${String(k)}`;
+    for (let k = 2; taken.has(id) || issued.has(id); k += 1) id = `${base}.${String(k)}`;
     issued.add(id);
     mine.push(id);
     return id;
@@ -329,6 +333,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   const journal = inst.control.journal;
   // The host's functions stay out of the context: features call them through `host` alone.
   const { callbacks, ...options } = opts;
+  const vocab = createVocab(options);
   const ctx: FeatureContext = {
     root,
     journal,
@@ -340,9 +345,9 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     operate: operateHere,
     env: createEnv(root, journal, live, operateHere),
     sections,
-    vocab: createVocab(options),
-    chromeId: chromeIdsOf(inst, journal),
-    text: textTools(),
+    vocab,
+    chromeId: chromeIdsOf(inst, journal, live),
+    text: textTools(vocab),
   };
   inst.ctx = ctx;
   applyPrefs(journal, root, state.prefs);

@@ -1,7 +1,8 @@
 // IDs: lettered sections and ID rows (the reference layout, sections 6 and 8), on by default. Built by L2 Task 9;
 // until then a stub that builds nothing.
 //
-// Consumes ctx.vocab (the ID grammar), statusOf (status.ts) and ctx.blocks. Produces index entries of kinds 'row'
+// Consumes ctx.vocab (the ID grammar), statusOf (status.ts), the status marks (built before it: an ID row's status is
+// its last `.pill`) and ctx.blocks. Produces index entries of kinds 'row'
 // and 'section', blocks[].isIndex, and section 6 and 8's classes (`idcell`, a row's group from the nearest h2 or
 // h3). Writes no ids (LD6). The open-rule width test reads env.matches('(min-width: 700px)'), not the window.
 //

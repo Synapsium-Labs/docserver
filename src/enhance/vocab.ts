@@ -4,8 +4,9 @@
 //     column's header words, the ID and rule-ID grammars (by their prefixes), the qualifiers, the addressees, the plan
 //     words, the attention words, and the byline item fields and delta-section headings (both default none);
 //   - the format contract, the same for every host and documented as such: the technical, decision and title-column
-//     header words, the file-path extensions, the glossary's headers and section names, git's merge subjects and the
-//     commit-prefix rule, and the colour key's labels.
+//     header words, the decisions table's header word, the file-path extensions, the glossary's headers, section
+//     names, alias stop words and name joins, the rule-ID list's joins, git's merge subjects and the commit-prefix
+//     rule, and the colour key's labels (the reference layout's, its ID examples neutral).
 // A feature never holds a word list of its own: it reads `ctx.vocab`, compiled here once per instance.
 //
 // Words, never patterns (LD9): a list is plain strings, and compiling escapes every character a pattern would read
@@ -15,7 +16,7 @@
 // task number, a step's owner in brackets) are this module's, never a host's.
 //
 // The defaults reproduce what the prototype marked (status.ts's words and header rule) and port the reference
-// layout's own lists, sections 2, 3, 7, 8, 12, 12b, 12c and 24b, except its private words: the qualifiers and the
+// layout's own lists, sections 2, 3, 7, 8, 12, 12b, 12c, 16 and 24b, except its private words: the qualifiers and the
 // byline item fields and delta headings default to none, and the addressees to "you" alone.
 //
 // Import-inert: declarations only. defaultVocabulary() returns a fresh object, and compileVocab() a frozen one, so
@@ -51,7 +52,10 @@ export interface VocabularyWords {
   ruleIds: { prefixes: string[] | null };
   /** Words that, right before a mention of an ID, make it another document's ("the annex R3"). Default none. */
   qualifiers: string[];
-  /** Words that name the reader, each a whole word, in an owner cell or a step's owner. */
+  /**
+   * Words that name the reader: as a whole word in an owner line or an owner cell (`addressee`), and anywhere in a
+   * step's bracketed owner, as the reference's section 7 reads it (`addresseeAnywhere`: "(yours)" too).
+   */
   addressees: string[];
   /** A task heading's word ("Task 3:"), a step title's word ("Step 2 (you):") and an owner line's label ("Who:"). */
   plan: { task: string[]; step: string[]; who: string[] };
@@ -85,6 +89,10 @@ export interface VocabularyWords {
   decisionHeaders: string[];
   /** Format contract: a column whose header opens with one of these holds an ID row's title. */
   titleHeaders: string[];
+  /** Format contract: the review strip's decisions table is an ID table with one of these anywhere in a header. */
+  decisionTableHeaders: string[];
+  /** Format contract: what joins two rule IDs in a list ("AB-1 and AB-2"), besides a comma. */
+  ruleIdJoins: string[];
   /** Format contract: the file extensions that make inline code a file path. */
   pathExtensions: string[];
   /** Format contract: what makes a table a glossary. */
@@ -97,6 +105,10 @@ export interface VocabularyWords {
     sections: string[];
     /** A term cell that opens with one, as a whole word, defines no term. */
     notTerms: string[];
+    /** A term's "(x)": an alias, unless x is exactly one of these, in any case. */
+    aliasStops: string[];
+    /** What joins a term cell's names, as a whole word, besides a comma and a slash ("A, B and C / D"). */
+    nameJoins: string[];
   };
   /** Format contract: git's merge subjects, each after "Merge ". */
   mergeForms: string[];
@@ -134,23 +146,27 @@ export function defaultVocabulary(): VocabularyWords {
     techHeaders: ['file', 'path', 'test', 'command', 'module', 'function', 'endpoint', 'field', 'grammar', 'regex', 'schema', 'key', 'route', 'symbol', 'code', 'type', 'constant', 'env'],
     decisionHeaders: ['status', 'ruling', 'decision'],
     titleHeaders: ['what', 'decision', 'title', 'name', 'summary', 'meaning', 'description', 'format', 'choice', 'effect', 'task', 'question', 'proposal', 'rule'],
+    decisionTableHeaders: ['status'],
+    ruleIdJoins: ['and'],
     pathExtensions: ['ts', 'tsx', 'js', 'mjs', 'cjs', 'py', 'md', 'json', 'yaml', 'yml', 'sh', 'tf', 'html', 'css', 'toml', 'go', 'rs', 'sql'],
     glossary: {
       termHeaders: ['term', 'terms', 'word', 'words', 'name', 'names', 'acronym', 'acronyms', 'glossary'],
       meaningHeaders: ['meaning', 'definition', 'means', 'what it means', 'description'],
       sections: ['words used here', 'glossary', 'terms used'],
       notTerms: ['code', 'codes', 'id', 'ids'],
+      aliasStops: ['the', 'for', 'a', 'an'],
+      nameJoins: ['and'],
     },
     mergeForms: ['pull request', 'branch', 'remote-tracking branch', 'tag', 'commit', 'remote branch'],
     colourKey: [
-      { role: 'nav', label: 'Links, contents and section numbers' },
-      { role: 'term', label: 'Terms this document defines' },
-      { role: 'id', label: 'Defined IDs, such as R1 or F2' },
-      { role: 'wait', label: 'Waiting on you, or still open' },
-      { role: 'chg', label: 'Changed, when you compare versions' },
-      { role: 'no', label: 'Rejected, or at risk' },
-      { role: 'ok', label: 'Settled' },
-      { role: 'info', label: 'Deferred, or for information' },
+      { role: 'nav', label: 'Links, contents, section numbers' },
+      { role: 'term', label: 'Terms defined in this doc' },
+      { role: 'id', label: 'IDs: R14, F3, …' },
+      { role: 'wait', label: 'Waiting on you · open · partial' },
+      { role: 'chg', label: 'Changed (when you compare)' },
+      { role: 'no', label: 'Rejected · diverges · risk' },
+      { role: 'ok', label: 'Settled: ruled, agreed, done' },
+      { role: 'info', label: 'Deferred · later · pinned' },
       { role: 'code', label: 'Code and file paths' },
     ],
   };
@@ -183,8 +199,10 @@ export interface Vocab {
   readonly ruleId: RegExp;
   /** The text right before a mention ends on a qualifier word and white space. */
   readonly qualifier: RegExp;
-  /** A text names the reader, as a whole word, in any case. */
+  /** A text names the reader, as a whole word, in any case (an owner line, an owner cell). */
   readonly addressee: RegExp;
+  /** A step's bracketed owner names the reader: one of the words anywhere, in any case ("yours"). */
+  readonly addresseeAnywhere: RegExp;
   readonly plan: {
     /** A task heading's start: group 1 the word, group 2 its number; group 0 is the whole prefix to split off. */
     readonly task: RegExp;
@@ -211,9 +229,22 @@ export interface Vocab {
   readonly techHeader: RegExp;
   readonly decisionHeader: RegExp;
   readonly titleHeader: RegExp;
+  /** A header of the review strip's decisions table: one of the words anywhere, in any case ("Current status"). */
+  readonly decisionTable: RegExp;
+  /** The whole text between two rule IDs of a list: a comma, a join word, or a comma and a join word. */
+  readonly ruleIdJoin: RegExp;
   /** Inline code that is a file path: a path with a slash, or a file name with a listed extension (and a fragment). */
   readonly path: RegExp;
-  readonly glossary: { readonly term: RegExp; readonly meaning: RegExp; readonly section: RegExp; readonly notTerm: RegExp };
+  readonly glossary: {
+    readonly term: RegExp;
+    readonly meaning: RegExp;
+    readonly section: RegExp;
+    readonly notTerm: RegExp;
+    /** A whole text that is an alias stop word: "(the)" qualifies a term, it names no alias. */
+    readonly aliasStop: RegExp;
+    /** For split(): the joins between a term cell's names, a comma, a join word or a slash, with their spaces. */
+    readonly nameSplit: RegExp;
+  };
   /** A merge commit's subject, in git's own forms. */
   readonly merge: RegExp;
   /** The commit-prefix rule: a leading "type(scope)!: " to drop from a subject. */
@@ -260,12 +291,16 @@ function frozenCopy(w: VocabularyWords): Readonly<VocabularyWords> {
     techHeaders: list(w.techHeaders),
     decisionHeaders: list(w.decisionHeaders),
     titleHeaders: list(w.titleHeaders),
+    decisionTableHeaders: list(w.decisionTableHeaders),
+    ruleIdJoins: list(w.ruleIdJoins),
     pathExtensions: list(w.pathExtensions),
     glossary: Object.freeze({
       termHeaders: list(w.glossary.termHeaders),
       meaningHeaders: list(w.glossary.meaningHeaders),
       sections: list(w.glossary.sections),
       notTerms: list(w.glossary.notTerms),
+      aliasStops: list(w.glossary.aliasStops),
+      nameJoins: list(w.glossary.nameJoins),
     }),
     mergeForms: list(w.mergeForms),
     colourKey: Object.freeze(w.colourKey.map((e) => Object.freeze({ role: e.role, label: e.label }))) as ColourKeyEntry[],
@@ -292,6 +327,7 @@ export function compileVocab(given: VocabularyWords): Vocab {
     ruleId: new RegExp(`^${ruleHead}(?:-[A-Z0-9]+)+$`),
     qualifier: new RegExp(`\\b${anyOf(w.qualifiers)}\\s+$`, 'i'),
     addressee: new RegExp(`\\b${anyOf(w.addressees)}\\b`, 'i'),
+    addresseeAnywhere: new RegExp(anyOf(w.addressees), 'i'),
     plan: Object.freeze({
       task: new RegExp(`^(${anyOf(w.plan.task)})\\s+([\\w.-]*\\w)\\s*[:.—–]\\s*`),
       step: new RegExp(`^(${anyOf(w.plan.step)}\\s+[\\w.-]+)\\s*(?:\\(([^)]{1,24})\\))?\\s*:\\s*`),
@@ -312,12 +348,16 @@ export function compileVocab(given: VocabularyWords): Vocab {
     techHeader: new RegExp(`\\b${anyOf(w.techHeaders)}s?\\b`, 'i'),
     decisionHeader: new RegExp(anyOf(w.decisionHeaders), 'i'),
     titleHeader: new RegExp(`^${anyOf(w.titleHeaders)}`, 'i'),
+    decisionTable: new RegExp(anyOf(w.decisionTableHeaders), 'i'),
+    ruleIdJoin: new RegExp(`^\\s*(?:,|${anyOf(w.ruleIdJoins)}|,\\s*${anyOf(w.ruleIdJoins)})\\s*$`),
     path: new RegExp(`^[\\w@.~-]*\\/[\\w./@#:*{}-]+$|^[\\w-]+\\.${anyOf(w.pathExtensions)}(?:#[\\w-]+)?$`),
     glossary: Object.freeze({
       term: new RegExp(`^${anyOf(w.glossary.termHeaders)}$`, 'i'),
       meaning: new RegExp(`^${anyOf(w.glossary.meaningHeaders)}$`, 'i'),
       section: new RegExp(`^${anyOf(w.glossary.sections)}`, 'i'),
       notTerm: new RegExp(`^${anyOf(w.glossary.notTerms)}\\b`, 'i'),
+      aliasStop: new RegExp(`^${anyOf(w.glossary.aliasStops)}$`, 'i'),
+      nameSplit: new RegExp(`\\s*,\\s*|\\s+${anyOf(w.glossary.nameJoins)}\\s+|\\s*\\/\\s*`),
     }),
     merge: new RegExp(`^Merge ${anyOf(w.mergeForms)}\\b`),
     commitPrefix: /^[a-z]+(?:\([^)]*\))?!?:\s*/i,

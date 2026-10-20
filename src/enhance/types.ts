@@ -234,8 +234,10 @@ export interface FeatureContext {
   readonly vocab: Vocab;
   /**
    * A new id for an element of this instance's chrome (a listbox option, a dialog's label): `name` is 1 to 32
-   * lower-case letters, digits and dashes, starting with a letter. The id is unique in the document, against every
-   * id it held when this instance first asked and every id another instance issued; each call answers a new one.
+   * lower-case letters, digits and dashes, starting with a letter. The id is `docreader.<n>.<name>`, n this instance's
+   * number in the document: no other instance issues it, and no root render() makes can carry it (its ids have no
+   * dots). It skips every id the document held when this instance first asked, and every id this instance issued;
+   * each call answers a new one. Throws once the instance is not live.
    */
   chromeId(name: string): string;
   /** Text helpers (text.ts): clip, hash, document order, and the colour key. */

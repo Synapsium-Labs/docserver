@@ -199,12 +199,18 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
     if (!live()) return null;
     const o = make();
     if (o === null) return null;
-    const cancel = track(() => {
+    /** Cancelled by its own handle: a disconnected observer is never started again (teardown no longer tracks it). */
+    let cancelled = false;
+    const stop = track(() => {
       o.disconnect();
     });
+    const cancel = (): void => {
+      cancelled = true;
+      stop();
+    };
     return Object.freeze({
       observe: (el: Element) => {
-        if (live()) o.observe(el);
+        if (live() && !cancelled) o.observe(el);
       },
       unobserve: (el: Element) => {
         o.unobserve(el);
@@ -279,17 +285,6 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
     fonts: (maxMs) =>
       new Promise<boolean>((resolve) => {
         if (!live()) return; // never settles: nothing after the wait runs
-        let set: { load(font: string): Promise<unknown> } | null = null;
-        try {
-          const f: unknown = doc.fonts;
-          if (typeof f === 'object' && f !== null && typeof (f as { load?: unknown }).load === 'function') set = f as { load(font: string): Promise<unknown> };
-        } catch {
-          set = null;
-        }
-        if (set === null) {
-          resolve(false);
-          return;
-        }
         let settled = false;
         const finish = (loaded: boolean): void => {
           if (settled) return;
@@ -300,10 +295,12 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
         const stop = timeout(() => {
           finish(false);
         }, maxMs);
+        // One guard for every way the font set can fail: a getter that throws, no font set, no load, a load that
+        // throws at once. Each answers false, as a load that rejects does.
         let loads: Promise<unknown>;
         try {
-          const s = set;
-          loads = Promise.all(FACES.map((face) => s.load(face)));
+          const set = doc.fonts;
+          loads = Promise.all(FACES.map((face) => set.load(face)));
         } catch (e) {
           loads = Promise.reject(e);
         }

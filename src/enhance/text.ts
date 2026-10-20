@@ -5,7 +5,7 @@
 // Pure, and import-inert: no state, no DOM but the colour key's chrome, which is made with chrome() (journal.ts) and
 // returned unattached, for the feature to insert through its journal.
 import { chrome } from './journal.js';
-import { defaultVocabulary } from './vocab.js';
+import { defaultVocabulary, type ColourKeyEntry, type Vocab } from './vocab.js';
 
 /** The bit of compareDocumentPosition that says the other node follows (Node.DOCUMENT_POSITION_FOLLOWING). */
 const FOLLOWING = 4;
@@ -49,10 +49,12 @@ export function inOrder<T extends Node>(nodes: readonly T[]): T[] {
 
 /**
  * The colour key, as chrome of `doc`: a `ul.ckey` with one item per colour role, each a swatch (`span.sw.k-<role>`,
- * hidden from assistive technology, since the label says it) and its label. Unattached: the caller inserts it.
+ * hidden from assistive technology, since the label says it) and its label. The entries are the vocabulary's: a
+ * feature calls `ctx.text.colourKey(doc)`, which passes its instance's (`ctx.vocab.colourKey`); without them, the
+ * defaults. Unattached: the caller inserts it.
  */
-export function colourKey(doc: Document): HTMLUListElement {
-  const items = defaultVocabulary().colourKey.map((e) =>
+export function colourKey(doc: Document, entries: readonly Readonly<ColourKeyEntry>[] = defaultVocabulary().colourKey): HTMLUListElement {
+  const items = entries.map((e) =>
     chrome(doc, 'li', {}, [chrome(doc, 'span', { className: `sw k-${e.role}`, attrs: { 'aria-hidden': 'true' } }), doc.createTextNode(e.label)]),
   );
   return chrome(doc, 'ul', { className: 'ckey' }, items);
@@ -64,10 +66,11 @@ export interface TextTools {
   readonly hash: typeof hash;
   readonly before: typeof before;
   readonly inOrder: typeof inOrder;
-  readonly colourKey: typeof colourKey;
+  /** The colour key of the instance's vocabulary. */
+  readonly colourKey: (doc: Document) => HTMLUListElement;
 }
 
-/** The helpers for one instance's context, frozen. */
-export function textTools(): TextTools {
-  return Object.freeze({ clip, hash, before, inOrder, colourKey });
+/** The helpers for one instance's context, frozen: the shared functions, and the colour key of `vocab`. */
+export function textTools(vocab: Vocab): TextTools {
+  return Object.freeze({ clip, hash, before, inOrder, colourKey: (doc: Document) => colourKey(doc, vocab.colourKey) });
 }

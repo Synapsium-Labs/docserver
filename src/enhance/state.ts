@@ -22,12 +22,13 @@
 // into the reader queues its nested write instead of issuing it inside the outer call. A throwing or rejecting
 // set() is swallowed and leaves local state as it is. A waiting value is issued inside the operation of the
 // instance that queued it, so once that instance is not live it is dropped; destroy does not wait for a pending
-// call. A reader-wide object (the prefs, the UI memory) is written whole: this instance's snapshot of it, merged
-// with the newest value queued on that storage object when that value is one the snapshot cannot hold (queued after
-// this instance read it, or still in flight then), so a root never drops a field another root wrote, and never
-// writes back a value its host's store has since replaced. A UI field written after startup, with the UI key never
-// read during it, stays local: the stored fields it cannot see are never overwritten. A host that shares one store
-// between several enhance() calls passes the same storage object to each; two objects are two queues.
+// call. A write asked for once the instance is not live is neither sent nor queued. A reader-wide object (the prefs,
+// the UI memory) is written whole: this instance's snapshot of it, merged with the newest value queued on that
+// storage object when that value is one the snapshot cannot hold (queued after this instance read it, or still in
+// flight then), so a root never drops a field another root wrote, and never writes back a value its host's store has
+// since replaced. A UI field written after startup, with the UI key never read during it, stays local: the stored
+// fields it cannot see are never overwritten. A host that shares one store between several enhance() calls passes
+// the same storage object to each; two objects are two queues.
 import type { Journal } from './journal.js';
 import { isPrefValue, PREF_VALUES, prefNames, type FeatureOptions } from './options.js';
 import type { Prefs } from './types.js';
@@ -225,6 +226,9 @@ export function createReaderState(args: StateArgs): ReaderState {
   const writer: Writer | null = set === null ? null : { set, live, operate };
   const writeBehind = (key: string, value: string | null): void => {
     if (storage === null || writer === null) return;
+    // Asked for once the instance is not live (a teardown cleanup, say): never written, and never queued either, so
+    // no later instance on this storage takes it for the newest value and writes it for this one.
+    if (!writer.live()) return;
     const slot = slotOf(storage, key);
     slot.queued += 1;
     slot.latest = value;

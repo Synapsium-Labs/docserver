@@ -1,5 +1,5 @@
-// The editorial core, ported from the reference reader's sections 0 to 6 (and the status marks of section 8, in
-// status.ts): the reading time, the title block (an eyebrow above the title, a byline below it), the facts panel
+// The editorial core, ported from the reference reader's sections 0 to 6 (the status marks of section 8 are their own
+// step, status.ts): the reading time, the title block (an eyebrow above the title, a byline below it), the facts panel
 // from the front matter, the "In short" and "Where things stand" boxes, and the hanging section numbers.
 //
 // The lifecycle calls buildEditorial once, during startup, inside the startup operation, after the prefs are on the
@@ -18,7 +18,6 @@
 // host passes it as info.frontList).
 import { chrome, siblingRun, type Journal } from './journal.js';
 import { documentMinutes, formatLong } from './reading.js';
-import { buildStatusMarks } from './status.js';
 import type { FeatureContext, FrontListEntry } from './types.js';
 
 /** A node's text, with runs of white space as one space, trimmed. */
@@ -272,7 +271,4 @@ export function buildEditorial(ctx: FeatureContext): void {
     journal.wrap([t], chrome(doc, 'span', { className: 'sec-no' }));
     journal.wrap([sep], chrome(doc, 'span', { attrs: { hidden: '' } }));
   }
-
-  // ── 8 (part). status words in table cells
-  buildStatusMarks(ctx);
 }

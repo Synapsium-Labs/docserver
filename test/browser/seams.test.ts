@@ -1,6 +1,7 @@
 // The seams in a real browser (docserver L2, Task 7a). journal.setStyle writes through the CSSOM, so what it writes
-// applies under the strict policy, which refuses every inline style: `important` included, and on SVG as on HTML;
-// a style attribute set on the same page is refused, so the policy is in force. Undo leaves no style attribute,
+// applies under the strict policy, which refuses every inline style: `important` included, and on SVG as on HTML,
+// where it beats an id-scoped `!important` rule (Mermaid's classDef rules are such) that the same write without it
+// loses to; a style attribute set on the same page is refused, so the policy is in force. Undo leaves no style attribute,
 // though the browser serializes the CSSOM into it lazily (a removal of an attribute not yet written would not stick).
 // And what a jsdom page cannot show of env.ts: the reader's faces load, text has a width, and the viewport, the
 // media queries and a frame are the browser's own.
@@ -62,8 +63,17 @@ describeBrowsers((browser) => {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         dot.setAttribute('r', '4');
-        svg.append(dot);
+        dot.id = 'd1';
+        const plain = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        plain.setAttribute('r', '4');
+        plain.id = 'd2';
+        svg.append(dot, plain);
+        // A rule as Mermaid writes one: id-scoped and !important (a constructed sheet: CSSOM, which the policy allows).
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync('#d1, #d2 { fill: rgb(0, 0, 255) !important; }');
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
         root.append(svg);
+        const ruled = getComputedStyle(dot).fill;
         const refused = document.createElement('div');
         root.append(refused);
         const widthBefore = getComputedStyle(refused).width;
@@ -73,6 +83,7 @@ describeBrowsers((browser) => {
         journal.setStyle(box, 'transform', 'translateX(3px)');
         journal.setStyle(root, '--bar-h', '61px');
         journal.setStyle(dot, 'fill', 'rgb(255, 0, 0)', true);
+        plain.style.setProperty('fill', 'rgb(255, 0, 0)'); // the same write without important, by hand
         journal.setStyle(dot, 'stroke-width', '3px', true);
         refused.setAttribute('style', 'width: 77px');
         await new Promise((r) => setTimeout(r, 50)); // the violation event is queued
@@ -83,11 +94,15 @@ describeBrowsers((browser) => {
           transform: cs(box).transform,
           barH: cs(root).getPropertyValue('--bar-h').trim(),
           barBefore,
+          ruled,
           fill: cs(dot).fill,
           fillPriority: dot.style.getPropertyPriority('fill'),
+          plainFill: cs(plain).fill,
           strokeWidth: cs(dot).strokeWidth,
           refused: cs(refused).width === widthBefore,
         };
+        plain.style.removeProperty('fill');
+        plain.removeAttribute('style');
         const faults = undoAll();
         const after = {
           faults: faults.length,
@@ -103,8 +118,10 @@ describeBrowsers((browser) => {
         transform: 'matrix(1, 0, 0, 1, 3, 0)',
         barH: '61px',
         barBefore: '48px',
+        ruled: 'rgb(0, 0, 255)',
         fill: 'rgb(255, 0, 0)',
         fillPriority: 'important',
+        plainFill: 'rgb(0, 0, 255)',
         strokeWidth: '3px',
         refused: true,
       });

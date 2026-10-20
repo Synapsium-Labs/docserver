@@ -1,7 +1,8 @@
 // The glossary: the first mention of each term in each section is underlined (the reference layout, section 12b).
 // Built by L2 Task 13; until then a stub that builds nothing.
 //
-// Consumes ctx.blocks, ctx.vocab (the glossary contract: its headers and section names) and ctx.page. Produces
+// Consumes ctx.blocks, ctx.vocab (the glossary contract: its headers, section names, alias stop words and the joins
+// between a term cell's names) and ctx.page. Produces
 // ctx.terms entries, the `glossary` and `termcell` classes and `a.term[data-term]` with aria-haspopup="dialog" and
 // aria-expanded, as chrome around split text. A term never overlaps an xref.
 //

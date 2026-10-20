@@ -9,12 +9,16 @@
 // Result, Verdict, Outcome, each also plural, Stands or Fate: "Current status" does, "Statement" does not), or (b)
 // its header names a ruling or asks a question and at least half its filled cells open on a status word, or (c) at
 // least 60% of its filled cells (three or more, none over three words) open on one. The first column never does.
-// Only the cell's first text (directly, or alone inside a strong, em or b) is read.
+// Only the cell's first text (directly, or alone inside a strong, em or b) is read. A cell section 8 split into
+// bullet lines (Task 10's `span.cell-line`) is read by its first line, as the reference's lead text descends into it;
+// a bullet split off the line's text and kept in it as hidden chrome (a chrome element with `hidden`) is passed over.
+// So the marks are built after the bullet lines: their own step in features.ts, after `tables` and before `ids`,
+// whose ID rows read the marks.
 //
 // The text is never edited: the word's text node is split off (journal.split) and moved into the mark (journal.wrap);
 // a comma, semicolon, colon or full stop right after it joins the mark in a `span.pill-wrap`, so it never wraps to
 // the next line alone. Destroy joins the text again.
-import { chrome, type Journal } from './journal.js';
+import { CHROME_ATTR, chrome, type Journal } from './journal.js';
 import { words } from './reading.js';
 import type { FeatureContext } from './types.js';
 import type { StatusRole, Vocab } from './vocab.js';
@@ -31,10 +35,21 @@ export function statusOf(vocab: Vocab, s: string): { readonly word: string; read
 
 const txt = (n: Node): string => (n.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-/** The text node a cell's text opens with: its first non-blank child, or the one text inside a leading strong/em/b. */
+/** A node the lead text passes over: blank text, or hidden chrome (a bullet split off a line). */
+function skipped(n: Node): boolean {
+  if (n.nodeType === 3) return (n as Text).data.trim() === '';
+  return n.nodeType === 1 && (n as Element).hasAttribute(CHROME_ATTR) && (n as Element).hasAttribute('hidden');
+}
+
+/**
+ * The text node a cell's text opens with: past leading bullet lines (`span.cell-line`) into the first, its first
+ * child not passed over, or the one text inside a leading strong/em/b.
+ */
 function leadText(cell: Element): Text | null {
-  let f = cell.firstChild;
-  while (f !== null && f.nodeType === 3 && (f as Text).data.trim() === '') f = f.nextSibling;
+  let host: Element = cell;
+  for (let c = host.firstChild; c !== null && c.nodeType === 1 && (c as Element).classList.contains('cell-line'); c = host.firstChild) host = c as Element;
+  let f = host.firstChild;
+  while (f !== null && skipped(f)) f = f.nextSibling;
   if (f === null) return null;
   if (f.nodeType === 1) {
     const e = f as Element;

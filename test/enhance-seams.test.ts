@@ -15,7 +15,7 @@ import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR, createJournal, IMPORTANT_STYLE_PROPS, STYLE_PROPS } from '../src/enhance/journal.js';
 import { chromeIdsIssued, contextOf } from '../src/enhance/lifecycle.js';
 import { docKey, posKeyOf, PREFS_KEY, UI_KEY } from '../src/enhance/state.js';
-import { statusOf } from '../src/enhance/status.js';
+import { buildStatusMarks, statusOf } from '../src/enhance/status.js';
 import { sectionMinutes } from '../src/enhance/reading.js';
 import { before, clip, colourKey, hash, inOrder } from '../src/enhance/text.js';
 import type { FeatureContext } from '../src/enhance/types.js';
@@ -531,6 +531,66 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     }
   });
 
+  it('an observer cancelled by its own handle observes nothing again, so none is left attached after destroy', async () => {
+    const root = mount();
+    await enhance(root);
+    const view = windowRecord(root);
+    const observing = new Set<Element>();
+    let disconnected = false;
+    view['ResizeObserver'] = class {
+      observe(el: Element): void {
+        observing.add(el);
+        disconnected = false;
+      }
+      unobserve(el: Element): void {
+        observing.delete(el);
+      }
+      disconnect(): void {
+        observing.clear();
+        disconnected = true;
+      }
+    };
+    try {
+      const ro = ctxOf(root).env.observeResize(() => undefined);
+      ro?.observe(root);
+      ro?.cancel();
+      ro?.observe(root);
+      await destroyEnhancement(root);
+      expect([observing.size, disconnected]).toEqual([0, true]);
+    } finally {
+      delete view['ResizeObserver'];
+    }
+  });
+
+  it('fonts: false when the font set cannot be read, has no load, or a load throws at once', async () => {
+    const root = mount();
+    await enhance(root);
+    const env = ctxOf(root).env;
+    const shapes: [string, PropertyDescriptor][] = [
+      ['a getter that throws', { configurable: true, get: () => { throw new Error('no font set'); } }],
+      ['no load', { configurable: true, value: {} }],
+      ['a load that throws', { configurable: true, value: { load: () => { throw new SyntaxError('bad font'); } } }],
+    ];
+    try {
+      for (const [what, desc] of shapes) {
+        Object.defineProperty(root.ownerDocument, 'fonts', desc);
+        expect(await env.fonts(1000), what).toBe(false);
+      }
+    } finally {
+      delete (root.ownerDocument as { fonts?: unknown }).fonts;
+    }
+  });
+
+  it('textWidth is null when the canvas refuses a context by throwing', async () => {
+    const root = mount();
+    await enhance(root);
+    const proto = (viewOf(root) as View).HTMLCanvasElement.prototype;
+    vi.spyOn(proto, 'getContext').mockImplementation((() => {
+      throw new Error('no canvas');
+    }) as never);
+    expect(ctxOf(root).env.textWidth('0123456789', '12px monospace')).toBeNull();
+  });
+
   it('textWidth is null without a canvas context, and measures with one', async () => {
     const root = mount();
     await enhance(root);
@@ -938,6 +998,43 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
     ]);
   });
 
+  it('a write asked for once the instance is not live is dropped: a later instance on the same storage never writes it', async () => {
+    const a = mount();
+    const calls: [string, string | null][] = [];
+    const storage: ReaderStorage = {
+      snapshot: { [UI_KEY]: '{"a":1}' },
+      set: (k, v) => void calls.push([k, v]),
+    };
+    hooks.probes.push({
+      name: 'probe-dead',
+      build: (ctx: FeatureContext) => {
+        ctx.state.readUi('a');
+        ctx.journal.defer(() => {
+          ctx.state.writeUi('dead', 'from-teardown');
+          ctx.state.setPrefs({ theme: 'dark' });
+        });
+      },
+    });
+    await enhance(a, { storage });
+    await destroyEnhancement(a);
+    expect(calls).toEqual([]);
+    hooks.probes.length = 0;
+    hooks.probes.push({
+      name: 'probe-live',
+      build: (ctx: FeatureContext) => {
+        ctx.state.readUi('a');
+      },
+    });
+    const b = mount();
+    await enhance(b, { storage });
+    ctxOf(b).state.writeUi('b', 2);
+    ctxOf(b).state.setPrefs({ width: 'wide' });
+    expect(calls).toEqual([
+      [UI_KEY, '{"a":1,"b":2}'],
+      [PREFS_KEY, '{"width":"wide"}'],
+    ]);
+  });
+
   it('the earlier keys keep their behaviour: the prefs are read first, then this document\'s keys as features ask', async () => {
     const root = mount();
     const { storage, reads } = recordingStorage();
@@ -1047,46 +1144,63 @@ describe('chromeId: per instance, unique in the document (RF2)', () => {
     const ia = ids(a);
     const ib = ids(b);
     expect(new Set([...ia, ...ib]).size).toBe(6);
-    expect(ia[0]).toMatch(/^docreader-\d+-jump$/);
+    expect(ia[0]).toMatch(/^docreader\.\d+\.jump$/);
   });
 
-  it('skips an id the document already has, inside the root or outside it, and one another instance issued', async () => {
+  it('skips an id the document already has, inside the root or outside it, and one this instance issued', async () => {
     const doc = document.implementation.createHTMLDocument('ids');
     const outside = doc.createElement('div');
-    outside.id = 'docreader-1-jump';
+    outside.id = 'docreader.1.jump';
     doc.body.append(outside);
     const root = mount(DOC, doc);
     const inside = doc.createElement('p');
-    inside.id = 'docreader-1-jump-2';
+    inside.id = 'docreader.1.jump.2';
     root.append(inside);
     await enhance(root);
     const ctx = ctxOf(root);
-    expect([ctx.chromeId('jump'), ctx.chromeId('jump'), ctx.chromeId('keys')]).toEqual(['docreader-1-jump-3', 'docreader-1-jump-4', 'docreader-1-keys']);
-    // the first instance's own name for 'jump-4' collides with what it issued for 'jump': a suffix again
-    expect(ctx.chromeId('jump-4')).toBe('docreader-1-jump-4-2');
+    expect([ctx.chromeId('jump'), ctx.chromeId('jump'), ctx.chromeId('keys')]).toEqual(['docreader.1.jump.3', 'docreader.1.jump.4', 'docreader.1.keys']);
+    // another instance's ids carry its own number, so they can never be this one's
     const second = mount(DOC, doc);
     await enhance(second);
-    expect(ctxOf(second).chromeId('jump')).toBe('docreader-2-jump');
+    expect(ctxOf(second).chromeId('jump')).toBe('docreader.2.jump');
     await destroyEnhancement(second);
     await destroyEnhancement(root);
+  });
+
+  it('an issued id is one render() never writes, so a root rendered later cannot take it', async () => {
+    const a = mount();
+    await enhance(a);
+    const id = ctxOf(a).chromeId('jump');
+    expect(id).not.toMatch(/^[A-Za-z0-9_-]+$/); // the alphabet of render()'s anchors and heading slugs
+    const box = document.createElement('div');
+    box.id = id;
+    a.append(box);
+    // a later root that tries for the same id, as an anchor and as a heading, in both spellings
+    const b = mount([`# B`, '', `<!-- id:${id} -->`, '', `<!-- id:${id.replace(/\./g, '-')} -->`, '', `## ${id}`, '', 'Text.', ''].join('\n'));
+    a.before(b);
+    await enhance(b);
+    expect(Array.from(document.querySelectorAll('[id]')).filter((e) => e.id === id)).toEqual([box]);
   });
 
   it('refuses a name that is not 1 to 32 lower-case letters, digits and dashes, starting with a letter', async () => {
     const root = mount();
     await enhance(root);
     const ctx = ctxOf(root);
-    for (const bad of ['', 'Jump', '1a', 'a b', 'a"b', 'a'.repeat(33), '-a', 'a_b']) expect(() => ctx.chromeId(bad), bad).toThrow(/chromeId/);
-    expect(ctx.chromeId('a'.repeat(32))).toMatch(/-a{32}$/);
+    for (const bad of ['', 'Jump', '1a', 'a b', 'a"b', 'a'.repeat(33), '-a', 'a_b', 'a.b']) expect(() => ctx.chromeId(bad), bad).toThrow(/chromeId/);
+    expect(ctx.chromeId('a'.repeat(32))).toMatch(/\.a{32}$/);
   });
 
-  it('an instance\'s ids are released when it is torn down', async () => {
+  it('an instance\'s ids are released when it is torn down, and none is issued after', async () => {
     const root = mount();
     await enhance(root);
     const before = chromeIdsIssued(document);
-    ctxOf(root).chromeId('jump');
-    ctxOf(root).chromeId('keys');
+    const ctx = ctxOf(root);
+    ctx.chromeId('jump');
+    ctx.chromeId('keys');
     expect(chromeIdsIssued(document)).toBe(before + 2);
     await destroyEnhancement(root);
+    expect(chromeIdsIssued(document)).toBe(before);
+    expect(() => ctx.chromeId('late')).toThrow(/chromeId after a destroy/);
     expect(chromeIdsIssued(document)).toBe(before);
   });
 });
@@ -1127,16 +1241,36 @@ describe('text: clip, hash, document order and the colour key', () => {
     expect([ul.localName, ul.className, ul.hasAttribute(CHROME_ATTR), ul.parentNode]).toEqual(['ul', 'ckey', true, null]);
     const items = Array.from(ul.children).map((li) => [li.querySelector('.sw')?.className, li.querySelector('.sw')?.getAttribute('aria-hidden'), li.textContent]);
     expect(items.map((i) => i[0])).toEqual(['sw k-nav', 'sw k-term', 'sw k-id', 'sw k-wait', 'sw k-chg', 'sw k-no', 'sw k-ok', 'sw k-info', 'sw k-code']);
-    expect(items.every((i) => i[1] === 'true' && typeof i[2] === 'string' && i[2] !== '')).toBe(true);
+    expect(items.every((i) => i[1] === 'true')).toBe(true);
+    // the reference layout's labels (section "helpers"), its ID examples neutral
+    expect(items.map((i) => i[2])).toEqual([
+      'Links, contents, section numbers',
+      'Terms defined in this doc',
+      'IDs: R14, F3, …',
+      'Waiting on you · open · partial',
+      'Changed (when you compare)',
+      'Rejected · diverges · risk',
+      'Settled: ruled, agreed, done',
+      'Deferred · later · pinned',
+      'Code and file paths',
+    ]);
     expect(Array.from(ul.querySelectorAll('*')).every((e) => e.hasAttribute(CHROME_ATTR))).toBe(true);
   });
 
-  it('the context carries the helpers, frozen, the same functions', async () => {
+  it('the context carries the helpers, frozen; its colour key is the instance\'s vocabulary\'s', async () => {
     const root = mount();
     await enhance(root);
     const { text } = ctxOf(root);
-    expect([text.clip, text.hash, text.before, text.inOrder, text.colourKey]).toEqual([clip, hash, before, inOrder, colourKey]);
+    expect([text.clip, text.hash, text.before, text.inOrder]).toEqual([clip, hash, before, inOrder]);
     expect(Object.isFrozen(text)).toBe(true);
+    expect(text.colourKey(document).textContent).toBe(colourKey(document).textContent);
+    const w = defaultVocabulary();
+    w.colourKey = [{ role: 'ok', label: 'Done here' }];
+    hooks.words = w;
+    const other = mount();
+    await enhance(other);
+    const ul = ctxOf(other).text.colourKey(document);
+    expect([ul.children.length, ul.textContent, ul.querySelector('.sw')?.className]).toEqual([1, 'Done here', 'sw k-ok']);
   });
 });
 
@@ -1173,8 +1307,11 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
       meaningHeaders: ['meaning', 'definition', 'means', 'what it means', 'description'],
       sections: ['words used here', 'glossary', 'terms used'],
       notTerms: ['code', 'codes', 'id', 'ids'],
+      aliasStops: ['the', 'for', 'a', 'an'],
+      nameJoins: ['and'],
     });
     expect(w.mergeForms).toEqual(['pull request', 'branch', 'remote-tracking branch', 'tag', 'commit', 'remote branch']);
+    expect([w.ruleIdJoins, w.decisionTableHeaders]).toEqual([['and'], ['status']]);
     expect(w.colourKey.map((e) => e.role)).toEqual(['nav', 'term', 'id', 'wait', 'chg', 'no', 'ok', 'info', 'code']);
   });
 
@@ -1283,6 +1420,11 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
       false,
     ]);
     expect([v.addressee.test('For you.'), v.addressee.test('YOU'), v.addressee.test('yours'), v.addressee.test('the reviewer')]).toEqual([true, true, false, false]);
+    // a step's bracketed owner names the reader by the word anywhere, as the reference's section 7 reads it
+    expect([v.addresseeAnywhere.test('yours'), v.addresseeAnywhere.test('You'), v.addresseeAnywhere.test('the reviewer')]).toEqual([true, true, false]);
+    const o = defaultVocabulary();
+    o.addressees = ['a.b'];
+    expect([compileVocab(o).addresseeAnywhere.test('xa.by'), compileVocab(o).addresseeAnywhere.test('axby')]).toEqual([true, false]);
   });
 
   it('the plan grammars: a task heading, a step title with its owner, and the owner line', () => {
@@ -1343,6 +1485,21 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
       true,
       false,
     ]);
+    // "(x)" after a term is an alias unless x is a stop word; a term cell's names split on commas, joins and slashes
+    expect([g.aliasStop.test('The'), g.aliasStop.test('an'), g.aliasStop.test('then'), g.aliasStop.test('API')]).toEqual([true, true, false, false]);
+    expect('A, B and C / D'.split(g.nameSplit)).toEqual(['A', 'B', 'C', 'D']);
+    expect('Brand X'.split(g.nameSplit)).toEqual(['Brand X']);
+  });
+
+  it('the rule-ID list joins and the decisions table\'s header word', () => {
+    const v = compileVocab(defaultVocabulary());
+    expect([', ', ' and ', ', and ', 'and', ' or ', 'And', ' , and , '].map((s) => v.ruleIdJoin.test(s))).toEqual([true, true, true, true, false, false, false]);
+    expect([v.decisionTable.test('Status'), v.decisionTable.test('Current status'), v.decisionTable.test('Statuses'), v.decisionTable.test('Ruling')]).toEqual([true, true, true, false]);
+    const w = defaultVocabulary();
+    w.ruleIdJoins = ['or'];
+    w.decisionTableHeaders = [];
+    const o = compileVocab(w);
+    expect([o.ruleIdJoin.test(' or '), o.ruleIdJoin.test(' and '), o.ruleIdJoin.test(','), o.decisionTable.test('Status')]).toEqual([true, false, true, false]);
   });
 
   it('git\'s merge subjects, the commit-prefix rule and the item-key shape', () => {
@@ -1395,6 +1552,66 @@ describe('status marks read ctx.vocab', () => {
     expect(other.querySelectorAll('.pill').length).toBe(0); // "Status" no longer names a status column, and one cell is over three words
   });
 
+  it('a cell split into bullet lines (section 8, Task 10) is marked by its first line\'s text, past a hidden bullet', () => {
+    const md = ['# T', '', '| ID | Status |', '|---|---|', '| R1 | x |', '| R2 | x |', '| R3 | Agreed |', ''].join('\n');
+    const root = mount(md);
+    const cells = Array.from(root.querySelectorAll('tbody tr')).map((r) => (r as HTMLTableRowElement).cells[1] as HTMLTableCellElement);
+    const line = (kids: Node[]): HTMLElement => {
+      const l = document.createElement('span');
+      l.className = 'cell-line b';
+      l.append(...kids);
+      return l;
+    };
+    const hiddenBullet = (): HTMLElement => {
+      const b = document.createElement('span');
+      b.setAttribute(CHROME_ATTR, '');
+      b.hidden = true;
+      b.textContent = '• ';
+      return b;
+    };
+    // R1: the bullet moved out of the line; R2: the bullet kept in the line, in hidden chrome
+    (cells[0] as HTMLElement).replaceChildren(line([document.createTextNode('Agreed')]), document.createElement('br'), line([document.createTextNode('later')]));
+    (cells[1] as HTMLElement).replaceChildren(line([hiddenBullet(), document.createTextNode('Pending, see below')]), document.createElement('br'), line([document.createTextNode('x')]));
+    const { journal, undoAll } = createJournal(
+      () => true,
+      (fn) => {
+        fn();
+      },
+    );
+    const before = root.innerHTML;
+    buildStatusMarks({ root, journal, vocab: compileVocab(defaultVocabulary()) } as unknown as FeatureContext);
+    expect(cells.map((c) => c.querySelector('.pill')?.textContent ?? null)).toEqual(['Agreed', 'Pending', 'Agreed']);
+    expect(cells[1]?.querySelector('.cell-line')?.firstElementChild?.hasAttribute('hidden')).toBe(true); // the bullet stays where it was
+    expect(undoAll()).toEqual([]);
+    expect(root.innerHTML).toBe(before);
+  });
+
+  it('a leading element that is not hidden chrome is no status word, as before', () => {
+    const md = ['# T', '', '| ID | Status |', '|---|---|', '| R1 | x |', '| R2 | Pending |', '| R3 | Agreed |', ''].join('\n');
+    const root = mount(md);
+    const cell = (root.querySelector('tbody tr') as HTMLTableRowElement).cells[1] as HTMLTableCellElement;
+    const shown = document.createElement('span');
+    shown.setAttribute(CHROME_ATTR, '');
+    shown.textContent = '• ';
+    const plain = document.createElement('span');
+    plain.hidden = true;
+    plain.textContent = 'x';
+    cell.replaceChildren(shown, document.createTextNode('Agreed'));
+    const { journal } = createJournal(
+      () => true,
+      (fn) => {
+        fn();
+      },
+    );
+    buildStatusMarks({ root, journal, vocab: compileVocab(defaultVocabulary()) } as unknown as FeatureContext);
+    expect(cell.querySelector('.pill')).toBeNull();
+    const again = mount(md);
+    const c2 = (again.querySelector('tbody tr') as HTMLTableRowElement).cells[1] as HTMLTableCellElement;
+    c2.replaceChildren(plain, document.createTextNode('Agreed'));
+    buildStatusMarks({ root: again, journal, vocab: compileVocab(defaultVocabulary()) } as unknown as FeatureContext);
+    expect(c2.querySelector('.pill')).toBeNull(); // hidden, but the document's own: never skipped
+  });
+
   it('the ruling-header words are the vocabulary\'s too', async () => {
     const md = ['# T', '', '| Item | The call |', '|---|---|', '| One | Agreed, as the note above says |', '| Two | Pending a reply from the team |', ''].join('\n');
     const plain = mount(md);
@@ -1417,9 +1634,12 @@ describe('features: registration in the final build order', () => {
   }
 
   const ORDER = [
-    'editorial', 'rules', 'ids', 'plans', 'tables', 'code', 'figures', 'xrefs', 'glossary', 'attention', 'marks', 'rail', 'strip', 'scroll',
+    'editorial', 'rules', 'tables', 'status', 'ids', 'plans', 'code', 'figures', 'xrefs', 'glossary', 'attention', 'marks', 'rail', 'strip', 'scroll',
     'folds', 'cards', 'jump', 'settings', 'changes', 'since', 'keysheet', 'diagrams', 'diagram-tools', 'position',
   ];
+
+  /** The features already built (the prototype's), each with its own build export; the rest are stubs. */
+  const BUILT = ['editorial', 'status', 'folds'];
 
   it('lists every feature once, in the reference\'s build order', async () => {
     expect((await realFeatures()).map((f) => f.name)).toEqual(ORDER);
@@ -1433,10 +1653,10 @@ describe('features: registration in the final build order', () => {
       if (/^export (?:async )?function build\(/m.test(src)) exporting.push(f.replace(/\.ts$/, ''));
     }
     const names = (await realFeatures()).map((f) => f.name);
-    expect(exporting.sort()).toEqual(names.filter((n) => n !== 'editorial' && n !== 'folds').sort());
+    expect(exporting.sort()).toEqual(names.filter((n) => !BUILT.includes(n)).sort());
     const withAfter = (await realFeatures()).filter((f) => f.after !== undefined).map((f) => f.name);
     expect(withAfter).toEqual(['changes', 'since', 'diagrams']);
-    for (const name of names.filter((n) => n !== 'editorial' && n !== 'folds')) {
+    for (const name of names.filter((n) => !BUILT.includes(n))) {
       const mod = (await import(`../src/enhance/${name}.ts`)) as Record<string, unknown>;
       expect(Object.keys(mod).sort(), name).toEqual(withAfter.includes(name) ? ['after', 'build'] : ['build']);
     }
@@ -1447,7 +1667,7 @@ describe('features: registration in the final build order', () => {
     await enhance(root);
     const html = root.outerHTML;
     const ctx = ctxOf(root);
-    for (const f of (await realFeatures()).filter((x) => x.name !== 'editorial' && x.name !== 'folds')) {
+    for (const f of (await realFeatures()).filter((x) => !BUILT.includes(x.name))) {
       const src = readFileSync(path.join(ENHANCE_DIR, `${f.name}.ts`), 'utf8');
       const lines = src.split('\n');
       const header = lines.slice(0, lines.findIndex((l) => !l.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join(' ');
