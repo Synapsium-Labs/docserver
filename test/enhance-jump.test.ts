@@ -317,7 +317,8 @@ describe('the jump: what it lists', () => {
       journal.insert(chrome(doc, 'button', { className: 'task-open', text: 'Show all' }), task, null);
       // A heading with controls (headCtl names it), and one with a chrome mark and no label.
       ctx.headCtl(byText(ctx.root, 'Notes on design', 'h3'), 'fold', chrome(doc, 'button', { text: 'Fold' }));
-      journal.insert(chrome(doc, 'span', { text: ' (new)' }), headingById(ctx.root, '3-rollout'), null);
+      // A chrome mark in a heading nothing labelled.
+      journal.insert(chrome(doc, 'span', { text: ' (new)' }), headingById(ctx.root, 'in-short'), null);
       // An h2 whose first child is a chrome badge that is no section number.
       const plain = headingById(ctx.root, 'plain-part');
       journal.setAttribute(plain, 'aria-label', 'Plain part');
@@ -459,6 +460,21 @@ describe('the jump: the ranking', () => {
       'XDESIGN-1|Other|Rows',
       'Fig 1|Redesigned flow',
     ]);
+  });
+
+  it('an empty query lists the headings alone, never an ID or a figure', async () => {
+    seedRanking();
+    const root = await enhanced(RANK_DOC);
+    openByButton(root);
+    expect(rows(root)).toEqual(['Section|Redesign plan', 'Section|Notes on design', 'Section|Design', 'Section|F1 overview', 'Section|F1. Scope']);
+  });
+
+  it('every match in a text is tried, not only the first', async () => {
+    const root = await enhanced(['# T', '', '### Condor', '', 'x', '', '### Undo and do', '', 'x', '', '### C', '', 'x', '', '### D', '', 'x', '', '### E', '', 'x', ''].join('\n'));
+    openByButton(root);
+    // "undo and do": the first "do" is inside "undo" (40), the second starts a word (60).
+    type(root, 'do');
+    expect(rows(root)).toEqual(['Section|Undo and do', 'Section|Condor']);
   });
 
   it('equal scores keep document order', async () => {

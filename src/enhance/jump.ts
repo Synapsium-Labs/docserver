@@ -194,7 +194,7 @@ function headingEntries(ctx: FeatureContext): Entry[] {
     if (box !== null && box.firstElementChild !== h) continue;
     const h2 = h.localName === 'h2';
     const first = h.firstChild;
-    const numbered = h2 && first !== null && first.nodeType === 1 && isChrome(first as Element) && (first as Element).classList.contains('sec-no');
+    const numbered = first !== null && first.nodeType === 1 && isChrome(first as Element) && (first as Element).classList.contains('sec-no');
     const no = numbered ? (first.textContent ?? '').trim() : '';
     const label = labelOf(h);
     const text = ctx.text.clip(h2 ? label.replace(SECTION_NUMBER, '') : label, TEXT_MAX);

@@ -19,9 +19,9 @@
 //
 // Opening it (the "?" key, through ctx.keys, so never in a field, never while a dialog is open, and never with
 // `keyboard: false`) remembers the element that had the focus (the root document's activeElement), lists the rows,
-// and focuses Close. Tab and Shift+Tab stay inside the box: from its last control Tab goes to its first, and from its
-// first Shift+Tab to its last (the reference's trap, over the box's links, buttons, fields and `tabindex="0"`
-// elements; the box holds one control, Close, so the focus stays on it). Close, a click outside the box, and Escape
+// and focuses Close. The focus stays inside the box: its one control is Close, and Tab and Shift+Tab from it do
+// nothing (the reference's trap, which moved the focus from the box's last control to its first and back, for a box of
+// one control). Close, a click outside the box, and Escape
 // (overlays.ts, 'keys', in the order Task 7b fixed) close it and give the focus back to the element that had it, or,
 // when that cannot take it (the page itself had the focus), take it out of the hidden sheet.
 //
@@ -100,22 +100,8 @@ export function build(ctx: FeatureContext): void {
   journal.listen(closeBtn, 'click', () => {
     close();
   });
-  journal.listen(sheet, 'keydown', (event) => {
-    const e = event as KeyboardEvent;
-    if (e.key !== 'Tab') return;
-    // What the box's Tab order holds, as the reference's trap read it.
-    const all = box.querySelectorAll('a[href], button:not([disabled]), input:not([type="radio"]):not([disabled]), input[type="radio"]:checked, select, [tabindex="0"]');
-    const order = Array.from(all) as HTMLElement[];
-    const first = order[0] ?? closeBtn;
-    const last = order[order.length - 1] ?? closeBtn;
-    const active = doc.activeElement;
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
+  journal.listen(sheet, 'keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Tab' && doc.activeElement === closeBtn) e.preventDefault();
   });
 
   ctx.overlays.register('keys', { isOpen, close });
