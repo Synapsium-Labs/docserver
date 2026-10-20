@@ -107,7 +107,7 @@ export function createNav(args: NavArgs): Nav {
   }
 
   const byId = (id: string): Element | null => {
-    if (typeof id !== 'string' || id === '') return null;
+    if (id === '') return null;
     const el = ids.get(id);
     if (el !== undefined && root.contains(el)) return el;
     const entry = index.get(id);
@@ -131,7 +131,7 @@ export function createNav(args: NavArgs): Nav {
       const far = Math.abs(target.getBoundingClientRect().top) > env.viewport().h * 2;
       target.scrollIntoView({ block: 'start', behavior: env.reducedMotion() || far ? 'auto' : 'smooth' });
     }
-    if (focus && typeof target.focus === 'function') {
+    if (focus) {
       if (!focusable(el)) journal.setAttribute(el, 'tabindex', '-1');
       target.focus({ preventScroll: true });
     }
@@ -142,9 +142,7 @@ export function createNav(args: NavArgs): Nav {
   journal.listen(root, 'click', (event) => {
     const e = event as MouseEvent;
     if (e.defaultPrevented || e.button !== 0) return;
-    const t = e.target as Node | null;
-    const from = t !== null && t.nodeType === 1 ? (t as Element) : (t?.parentElement ?? null);
-    const a = from?.closest('a[href]') ?? null;
+    const a = (e.target as Element).closest('a[href]');
     if (a === null || !root.contains(a)) return;
     const href = a.getAttribute('href') ?? '';
     if (href.startsWith('#')) {

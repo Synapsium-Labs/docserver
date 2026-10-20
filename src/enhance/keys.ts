@@ -122,7 +122,7 @@ export function createKeys(args: KeysArgs): Keys {
   };
 
   const handle = (e: KeyboardEvent): void => {
-    const k = typeof e.key === 'string' ? e.key : '';
+    const k = e.key;
     if (k === 'Escape') {
       overlays.close();
       return;
@@ -139,36 +139,35 @@ export function createKeys(args: KeysArgs): Keys {
     if (b !== undefined) runIt(b, e);
   };
 
-  if (live()) {
-    const member: Member = {
-      root,
-      live,
-      handle: (e) => {
-        operate(() => {
-          handle(e);
-        });
-      },
+  // Join the document's listener (made with its first instance); teardown leaves it (removed with its last).
+  const member: Member = {
+    root,
+    live,
+    handle: (e) => {
+      operate(() => {
+        handle(e);
+      });
+    },
+  };
+  docs ??= new WeakMap();
+  let reg = docs.get(doc);
+  if (reg === undefined) {
+    const members = new Set<Member>();
+    const listener = (e: Event): void => {
+      if (e.defaultPrevented) return;
+      owner(members, e.target, doc)?.handle(e as KeyboardEvent);
     };
-    docs ??= new WeakMap();
-    let reg = docs.get(doc);
-    if (reg === undefined) {
-      const members = new Set<Member>();
-      const listener = (e: Event): void => {
-        if (e.defaultPrevented) return;
-        owner(members, e.target, doc)?.handle(e as KeyboardEvent);
-      };
-      doc.addEventListener('keydown', listener);
-      docs.set(doc, (reg = { members, listener }));
-    }
-    const { members, listener } = reg;
-    members.add(member);
-    journal.defer(() => {
-      members.delete(member);
-      if (members.size > 0) return;
-      doc.removeEventListener('keydown', listener);
-      if (docs?.get(doc)?.members === members) docs.delete(doc);
-    });
+    doc.addEventListener('keydown', listener);
+    docs.set(doc, (reg = { members, listener }));
   }
+  const { members, listener } = reg;
+  members.add(member);
+  journal.defer(() => {
+    members.delete(member);
+    if (members.size > 0) return;
+    doc.removeEventListener('keydown', listener);
+    if (docs?.get(doc)?.members === members) docs.delete(doc);
+  });
 
   return Object.freeze({
     bind(b: KeyBinding): Cancel {
