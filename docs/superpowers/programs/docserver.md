@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C44)
+### Coordinator rulings for L2 (C40-C47)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -160,6 +160,18 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   - **(b) Destroy does not wait for the host's pending `set()`.** Why: teardown must not depend on the host's latency, and the per-storage queue already keeps the order. Cost if wrong: a host that reads its store right after destroy may not see the last value yet.
   - **(c) Front-matter scalar keys other than `type`, `area`, `status` and `kind` stay hidden** when `info.frontList` is given, as in the reference. They are revisited when the review strip lands (L2 Task 20). Why: parity. Cost if wrong: a scalar such as `owner` is shown nowhere until then.
   - **(d) The status vocabulary and patterns, and a storage namespace, become options in L2's scrub task** (§3.7; L2 Task 8), before v1. Why: §3.7 makes both operator-specific. Cost if wrong: none beyond that task.
+- **C45 (2026-10-20, coordinator): the build box runs the browser tests in Chromium only, by explicit selection; CI runs Chromium and WebKit.** The box has no WebKit system libraries, and installing them needs root, which no worker uses. Task 6's harness takes the selection as an environment setting; with no selection a missing browser is red and names the install command, and an excluded browser is reported as excluded, never skipped silently. Cost if wrong: a WebKit-only break is first seen in CI.
+- **C46 (2026-10-20, coordinator, from L2 Task 1's review): PD8 covers PyYAML's simple-key limit.** PyYAML refuses a simple key whose source text is longer than 1024 characters, so the reference renders nothing for that block, while `render()` loads it and cuts the key to 500 code points (C31). Only a hostile or machine-made document writes such a key, so it joins PD8's bounds. This corrects C31's "cost if wrong", which said the reference renders an over-cap key whole: that holds only up to 1024 source characters. No code change; Task 1's boundary case pins the behaviour, and the README's PD8 row gains the line in Task 24. Cost if wrong: such a block renders where the reference renders nothing.
+- **C47 (2026-10-20, coordinator, from L2 Task 5's review): Task 5's interface, as built, replaces the plan's wording.**
+  - `info.history` ships as `info.commits` (`CommitEntry[]`), because the walls refuse the identifier `history` in `src/enhance`. Task 22 consumes `info.commits`.
+  - Mermaid's loader is a host call: `mermaid.load` is reached only through `ctx.host.loadMermaid()`, and `ctx.options.mermaid` holds `maxTextSize`, `maxEdges` and `secure`. Task 21 consumes it that way.
+  - `host.present` is a frozen `{ has(name), names }`, not a `Set`, since a frozen `Set` can still be changed through `Set.prototype.add`.
+  - Shas are lower-cased where they are read (`info.sha`, `info.only`, each commit and parent), so later comparisons never depend on the host's spelling.
+  - The bounds Task 5 chose stand: Mermaid `maxTextSize` 1 to 1,048,576 and `maxEdges` 1 to 50,000; 64 secure keys; a date of at most 64 code units, shown as given; 16 parents; `initialHash` at most 1,024 code units (ignored past that); `storageKey` and `posKey` at most 1,024 (refused past that); `frontList` read to 40 entries of 300 values, `render()`'s own bounds.
+  - The new option types (`ChromeOptions`, `MermaidOptions`, `CommitEntry`) are exported by name from `./enhance` in Task 14, `index.ts`'s writer, with a type-export test.
+  - Task 1 was reviewed by one lens, not three: its three items are minor and confined to front matter. Every other task keeps the full panel.
+
+  Why: each follows the code the walls and the review measured. Cost if wrong: a later task's brief names the old shape and its implementer follows the code instead.
 
 ## Carried constraints (reviewers get these)
 
