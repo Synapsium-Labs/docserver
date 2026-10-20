@@ -4,7 +4,10 @@ Each guard of Task 15, deleted or inverted once, with the tests that go red: the
 entries (`src/enhance/figures.ts`), the Mermaid file's build and its notices (`scripts/build-mermaid.mjs`,
 `THIRD-PARTY-NOTICES`, `.gitignore`, `package.json`), the file in a real browser, and the packed package with its
 consumer smoke. Measured 2026-10-20 on branch `l2-t15-figures` at commit `ed2adea`, every row, L2-T15-M1 to
-L2-T15-M53: all 53 red (`rc=1`), L2-T15-M36 on its second mutation (below).
+L2-T15-M53: all 53 red (`rc=1`), L2-T15-M36 on its second mutation (below). The review round added L2-T15-M54
+to L2-T15-M65 and changed the text four earlier rows mutate (L2-T15-M27, M39, M40 and M53); those sixteen rows and
+the four controls were measured at commit `cf89b55`, all sixteen red and the controls green, the same way (two
+batches side by side, the checkout's status and `HEAD` the same before and after).
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8), as Task 7b ran it. Each row is applied to its own throwaway
 copy of the working tree (tracked and untracked files, never ignored ones, `node_modules` linked from the checkout),
@@ -253,7 +256,7 @@ One ESM file, the elkjs stand-in, the build options the file depends on, the lic
 | L2-T15-M24 | every path inside elkjs resolves to the stand-in | `scripts/build-mermaid.mjs` | `{ filter: /^elkjs(?:\/\|$)/ }` → `{ filter: /^elkjs$/ }` | `test/mermaid-bundle.test.ts`: 4 failed \| 13 passed (17). "bundles no elkjs: no input from it, the stub in its place, and no ELK code in the file"; "stays within 4 MiB (about 3.75 MB measured for Mermaid 12.1.0 without elkjs)"; "names every package the file bundles, and only those, exactly as the metafile gives them"; "gives each package its licence and the text of each of its LICENSE files" |
 | L2-T15-M25 | no code splitting: one file | `scripts/build-mermaid.mjs` | `    splitting: false,` → `    splitting: true,` | `test/mermaid-bundle.test.ts`: 17 skipped (17). The file failed in its hook: esbuild refused the build (splitting needs an outdir), so no case ran |
 | L2-T15-M26 | an ESM file | `scripts/build-mermaid.mjs` | `    format: 'esm',` → `    format: 'cjs',` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "is one ESM file, its only export the default, with no import() and no import left" |
-| L2-T15-M27 | the entry exports the default alone | `scripts/build-mermaid.mjs` | `const ENTRY = "export { default } from 'mermaid';\n";` → `const ENTRY = "export { default } from 'mermaid';\nexport const extra = 1;\n";` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "is one ESM file, its only export the default, with no import() and no import left" |
+| L2-T15-M27 | the entry exports the default alone | `scripts/build-mermaid.mjs` | `export default mermaid;\n";` → `export default mermaid;\nexport const extra = 1;\n";` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "is one ESM file, its only export the default, with no import() and no import left" (re-measured at `cf89b55`, the review round) |
 | L2-T15-M28 | symlinks kept as written: every input inside the package | `scripts/build-mermaid.mjs` | `    preserveSymlinks: true, ⏎ ` → (deleted) | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "reads every input from inside the package: node_modules, the stub, or the entry" |
 | L2-T15-M29 | minified: within the size bound | `scripts/build-mermaid.mjs` | `    minify: true,` → `    minify: false,` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "stays within 4 MiB (about 3.75 MB measured for Mermaid 12.1.0 without elkjs)" |
 | L2-T15-M30 | upstream legal comments kept, at the end | `scripts/build-mermaid.mjs` | `    legalComments: 'eof',` → `    legalComments: 'none',` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "keeps the upstream legal comments, gathered at its end" |
@@ -265,8 +268,8 @@ One ESM file, the elkjs stand-in, the build options the file depends on, the lic
 | L2-T15-M36 | a nested package is its own directory (the last node_modules in the path) | `scripts/build-mermaid.mjs` | `const PACKAGE_DIR = /^((?:.*\/)?node_modules\/(?:@[^/]+\/)?[^/]+)\//;` → `const PACKAGE_DIR = /^(node_modules\/(?:@[^/]+\/)?[^/]+)\//;` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "names every package the file bundles, and only those, exactly as the metafile gives them" |
 | L2-T15-M37 | a scoped package is its own directory | `scripts/build-mermaid.mjs` | `const PACKAGE_DIR = /^((?:.*\/)?node_modules\/(?:@[^/]+\/)?[^/]+)\//;` → `const PACKAGE_DIR = /^((?:.*\/)?node_modules\/[^/]+)\//;` | `test/mermaid-bundle.test.ts`: 3 failed \| 14 passed (17). "names every package the file bundles, and only those, exactly as the metafile gives them"; "gives each package its licence and the text of each of its LICENSE files"; "a package.json with no licence string is listed as such, its licence file following" |
 | L2-T15-M38 | a package.json with no licence string is named as such | `scripts/build-mermaid.mjs` | `  return typeof pkg.license === 'string' ? pkg.license : NO_LICENCE_FIELD;` → `  return String(pkg.license);` | `test/mermaid-bundle.test.ts`: 3 failed \| 14 passed (17). "names every package the file bundles, and only those, exactly as the metafile gives them"; "gives each package its licence and the text of each of its LICENSE files"; "a package.json with no licence string is listed as such, its licence file following" |
-| L2-T15-M39 | packages are sorted by name | `scripts/build-mermaid.mjs` | `order(a.name, b.name) \|\| order(a.version, b.version)` → `order(b.name, a.name) \|\| order(a.version, b.version)` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "names every package the file bundles, and only those, exactly as the metafile gives them" |
-| L2-T15-M40 | packages of one name are sorted by version | `scripts/build-mermaid.mjs` | `order(a.name, b.name) \|\| order(a.version, b.version)` → `order(a.name, b.name) \|\| order(b.version, a.version)` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "names every package the file bundles, and only those, exactly as the metafile gives them" |
+| L2-T15-M39 | packages are sorted by name | `scripts/build-mermaid.mjs` | `order(a.name, b.name) \|\| order(a.version, b.version)` → `order(b.name, a.name) \|\| order(a.version, b.version)` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "names every package the metafile names, and only those, exactly as it gives them" (re-measured at `cf89b55`, the review round) |
+| L2-T15-M40 | packages of one name are sorted by version | `scripts/build-mermaid.mjs` | `order(a.name, b.name) \|\| order(a.version, b.version)` → `order(a.name, b.name) \|\| order(b.version, a.version)` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "names every package the metafile names, and only those, exactly as it gives them" (re-measured at `cf89b55`, the review round) |
 | L2-T15-M41 | licence texts lose trailing white space | `scripts/build-mermaid.mjs` | `    .map((l) => l.replace(/[ \t]+$/, '')) ⏎ ` → (deleted) | `test/mermaid-bundle.test.ts`: 2 failed \| 15 passed (17). "names every package the file bundles, and only those, exactly as the metafile gives them"; "gives each package its licence and the text of each of its LICENSE files" |
 | L2-T15-M42 | the section needs its end marker | `scripts/build-mermaid.mjs` | `  if (begin < 0 \|\| end < 0) return null;` → `  if (begin < 0) return null;` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "the section is replaced in place, or appended after a heading when the file has none" |
 | L2-T15-M43 | the section is written as it is, with no replacement patterns | `scripts/build-mermaid.mjs` | `  if (held !== null) return text.replace(held, () => section);` → `  if (held !== null) return text.replace(held, section);` | `test/mermaid-bundle.test.ts`: 1 failed \| 16 passed (17). "the section is replaced in place, or appended after a heading when the file has none" |
@@ -315,8 +318,8 @@ One ESM file, the elkjs stand-in, the build options the file depends on, the lic
     "id": "L2-T15-M27",
     "guard": "the entry exports the default alone",
     "file": "scripts/build-mermaid.mjs",
-    "old": "const ENTRY = \"export { default } from 'mermaid';\\n\";",
-    "new": "const ENTRY = \"export { default } from 'mermaid';\\nexport const extra = 1;\\n\";",
+    "old": "export default mermaid;\\n\";",
+    "new": "export default mermaid;\\nexport const extra = 1;\\n\";",
     "tests": "test/mermaid-bundle.test.ts"
   },
   {
@@ -531,7 +534,7 @@ The clean copy builds the file, the tarball may hold it, and the smoke imports i
 |---|---|---|---|---|
 | L2-T15-M51 | the packed package is built with the Mermaid file | `test/pack.test.ts` | `  const mermaid = spawnSync(process.execPath, [path.join('scripts', 'build-mermaid.mjs')], { cwd: st…` → (deleted) | `test/pack.test.ts`: 3 failed \| 7 passed (10). "holds the three entries with their types, the corpus files, the licence, the readme, the assets and their notices"; "passes the whole corpus through the consumer smoke"; "fails, naming the case, when the packed corpus does not pass" |
 | L2-T15-M52 | the Mermaid file is allowed in the tarball | `test/pack.test.ts` | `  /^assets\/mermaid\/mermaid\.mjs$/, ⏎ ` → (deleted) | `test/pack.test.ts`: 1 failed \| 9 passed (10). "holds nothing else: no references, scripts, sources, tests, CI files or working papers" |
-| L2-T15-M53 | the consumer smoke imports the Mermaid file and checks its one export | `scripts/consumer-smoke.mjs` | `  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'funct…` → `  if (false) {` | `test/pack.test.ts`: 2 failed \| 8 passed (10). "passes the whole corpus through the consumer smoke"; "fails, naming the case, when the packed corpus does not pass" |
+| L2-T15-M53 | the consumer smoke imports the Mermaid file and checks its one export | `scripts/consumer-smoke.mjs` | `  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'funct…` → `  if (false) {` | `test/pack.test.ts`: 2 failed \| 8 passed (10). "passes the whole corpus through the consumer smoke"; "fails, naming the case, when the packed corpus does not pass" (re-measured at `cf89b55`, the review round) |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -557,7 +560,7 @@ The clean copy builds the file, the tarball may hold it, and the smoke imports i
     "id": "L2-T15-M53",
     "guard": "the consumer smoke imports the Mermaid file and checks its one export",
     "file": "scripts/consumer-smoke.mjs",
-    "old": "  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'function')) {",
+    "old": "  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'function') && api.startOnLoad === false) {",
     "new": "  if (false) {",
     "tests": "test/pack.test.ts"
   }
@@ -565,13 +568,15 @@ The clean copy builds the file, the tarball may hold it, and the smoke imports i
 ```
 ## Control runs (L2-T15-C1 to L2-T15-C4)
 
-Each command the rows above use, run once in an unmutated copy the same way: green (`rc=0`).
+Each command the rows above use, run once in an unmutated copy the same way: green (`rc=0`). Run again at `cf89b55`,
+after the review round's tests were added, with the results below (the first round's, at `ed2adea`, were 17, 3, 36
+and 10 passed).
 
 | Row | Command | Result |
 |---|---|---|
-| L2-T15-C1 | `vitest run test/mermaid-bundle.test.ts` | 17 passed (17) |
-| L2-T15-C2 | `vitest run test/browser/mermaid-file.test.ts` | 3 passed \| 3 skipped (6): WebKit excluded |
-| L2-T15-C3 | `vitest run test/enhance-figures.test.ts test/browser/layout-corpus.test.ts` | 36 passed \| 9 skipped (45): WebKit excluded |
+| L2-T15-C1 | `vitest run test/mermaid-bundle.test.ts` | 23 passed (23) |
+| L2-T15-C2 | `vitest run test/browser/mermaid-file.test.ts` | 4 passed \| 4 skipped (8): WebKit excluded |
+| L2-T15-C3 | `vitest run test/enhance-figures.test.ts test/browser/layout-corpus.test.ts` | 37 passed \| 9 skipped (46): WebKit excluded |
 | L2-T15-C4 | `vitest run test/pack.test.ts` | 10 passed (10) |
 
 ### The controls, as `mutate.mjs` reads them
@@ -612,3 +617,174 @@ Each command the rows above use, run once in an unmutated copy the same way: gre
   }
 ]
 ```
+
+## Review round: import-inert, the embedded packages, the command line, the caption entry (L2-T15-M54 to L2-T15-M65)
+
+The file switches Mermaid's start-on-load off, so importing it draws nothing on the window's load event (the browser
+case imports it and calls nothing, then watches its `pre.mermaid`; the consumer smoke checks the exported object). The
+notices name the packages whose code ships inside pre-built files of the bundled ones (`EMBEDDED`), measured against
+the module keys every bundled input carries and against roughjs's declared dependencies. The script's command line is
+run in throwaway copies. A figure entry's caption reads each white-space run as one space.
+
+Notes on the measurement.
+- **L2-T15-M55** is red on the case's first check, the exported object's `startOnLoad`. Its behavioural check (the
+  `pre.mermaid` untouched after the load event) was also seen red on its own before the fix, with the first check
+  removed: `expected 'touched' to be 'untouched'`.
+- **L2-T15-M56** makes the same mutation as L2-T15-M55 and runs the pack test: only the consumer smoke reads
+  `startOnLoad` there, so the red is the smoke's check. Deleting that check alone (`&& api.startOnLoad === false`) is
+  equivalent on a correct file, so the row mutates the file instead.
+- **L2-T15-M27, M39, M40, M53** are the first round's rows, their `old` brought to the current text (the entry now
+  ends `export default mermaid;`, the embedded list's sort is written differently from the package sort so each `old`
+  occurs once, and the smoke's check gained its `startOnLoad` clause), and measured again.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T15-M54 | a figure entry's caption reads each white-space run as one space | `src/enhance/figures.ts` | `const txt = (n: Node): string => (n.textContent ?? '').replace(/\s+/g, ' ').trim();` → `const txt = (n: Node): string => (n.textContent ?? '').trim();` | `test/enhance-figures.test.ts`: 1 failed \| 22 passed (23). "collapses each run of white space in the figure entry's caption to one space: a caption over two lines, a double space" |
+| L2-T15-M55 | the file is import-inert: its start-on-load is off | `scripts/build-mermaid.mjs` | `mermaid.startOnLoad = false;\n` → (deleted) | `test/browser/mermaid-file.test.ts`: 1 failed \| 3 passed \| 4 skipped (8). "is import-inert: a page that only imports it keeps its pre.mermaid as written after the load event" |
+| L2-T15-M56 | the consumer smoke checks the file's start-on-load is off | `scripts/build-mermaid.mjs` | `mermaid.startOnLoad = false;\n` → (deleted) | `test/pack.test.ts`: 2 failed \| 8 passed (10). "passes the whole corpus through the consumer smoke"; "fails, naming the case, when the packed corpus does not pass" |
+| L2-T15-M57 | EMBEDDED names every package whose module keys a bundled file carries | `scripts/build-mermaid.mjs` | `  { name: 'fastdom', version: '1.0.12', carrier: 'mermaid' }, ⏎` → (deleted) | `test/mermaid-bundle.test.ts`: 2 failed \| 21 passed (23). "names every package the metafile names, and only those, exactly as it gives them"; "names every package whose module keys a bundled file carries and that is not listed itself, with the carrier" |
+| L2-T15-M58 | EMBEDDED names roughjs's declared dependencies | `scripts/build-mermaid.mjs` | `  { name: 'hachure-fill', version: '^0.5.2', carrier: 'roughjs' }, ⏎` → (deleted) | `test/mermaid-bundle.test.ts`: 2 failed \| 21 passed (23). "names every package the metafile names, and only those, exactly as it gives them"; "names what roughjs's pre-built file carries: the dependencies it declares, since that file imports nothing" |
+| L2-T15-M59 | the section lists each embedded package | `scripts/build-mermaid.mjs` | ``    ...EMBEDDED.map((e) => `  ${e.name} ${e.version}, inside ${e.carrier}`), ⏎ `` → (deleted) | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "names every package the metafile names, and only those, exactly as it gives them" |
+| L2-T15-M60 | a module key's version ends before its peer suffix | `scripts/build-mermaid.mjs` | `@(\d[^/_]*)(?:_[^/]*)?` → `@(\d[^/]*)(?:_[^/]*)?` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "names every package whose module keys a bundled file carries and that is not listed itself, with the carrier" |
+| L2-T15-M61 | embedded packages are sorted by name | `scripts/build-mermaid.mjs` | `(a.name === b.name ? order(a.version, b.version) : order(a.name, b.name))` → `(a.name === b.name ? order(a.version, b.version) : order(b.name, a.name))` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "names every package whose module keys a bundled file carries and that is not listed itself, with the carrier" |
+| L2-T15-M62 | a bad command line is refused | `scripts/build-mermaid.mjs` | `  if (argv.length > 1 \|\| (argv.length === 1 && argv[0] !== '--notices')) {` → `  if (false) {` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "a bad command line exits 2 with the usage line, and builds nothing" |
+| L2-T15-M63 | the usage refusal exits 2 | `scripts/build-mermaid.mjs` | `    return 2;` → `    return 1;` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "a bad command line exits 2 with the usage line, and builds nothing" |
+| L2-T15-M64 | a failing build exits 1 | `scripts/build-mermaid.mjs` | `    return 1;` → `    return 0;` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "a build that fails exits 1 and says why: here Mermaid is not installed" |
+| L2-T15-M65 | --notices writes the generated section | `scripts/build-mermaid.mjs` | `    if (argv[0] === '--notices') {` → `    if (false) {` | `test/mermaid-bundle.test.ts`: 1 failed \| 22 passed (23). "--notices builds the file and writes the generated section after the hand-written text" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T15-M54",
+    "guard": "a figure entry's caption reads each white-space run as one space",
+    "file": "src/enhance/figures.ts",
+    "old": "const txt = (n: Node): string => (n.textContent ?? '').replace(/\\s+/g, ' ').trim();",
+    "new": "const txt = (n: Node): string => (n.textContent ?? '').trim();",
+    "tests": "test/enhance-figures.test.ts"
+  },
+  {
+    "id": "L2-T15-M55",
+    "guard": "the file is import-inert: its start-on-load is off",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "mermaid.startOnLoad = false;\\n",
+    "new": "",
+    "tests": "test/browser/mermaid-file.test.ts"
+  },
+  {
+    "id": "L2-T15-M56",
+    "guard": "the consumer smoke checks the file's start-on-load is off",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "mermaid.startOnLoad = false;\\n",
+    "new": "",
+    "tests": "test/pack.test.ts"
+  },
+  {
+    "id": "L2-T15-M57",
+    "guard": "EMBEDDED names every package whose module keys a bundled file carries",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "  { name: 'fastdom', version: '1.0.12', carrier: 'mermaid' },\n",
+    "new": "",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M58",
+    "guard": "EMBEDDED names roughjs's declared dependencies",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "  { name: 'hachure-fill', version: '^0.5.2', carrier: 'roughjs' },\n",
+    "new": "",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M59",
+    "guard": "the section lists each embedded package",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "    ...EMBEDDED.map((e) => `  ${e.name} ${e.version}, inside ${e.carrier}`),\n",
+    "new": "",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M60",
+    "guard": "a module key's version ends before its peer suffix",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "@(\\d[^/_]*)(?:_[^/]*)?",
+    "new": "@(\\d[^/]*)(?:_[^/]*)?",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M61",
+    "guard": "embedded packages are sorted by name",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "(a.name === b.name ? order(a.version, b.version) : order(a.name, b.name))",
+    "new": "(a.name === b.name ? order(a.version, b.version) : order(b.name, a.name))",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M62",
+    "guard": "a bad command line is refused",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "  if (argv.length > 1 || (argv.length === 1 && argv[0] !== '--notices')) {",
+    "new": "  if (false) {",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M63",
+    "guard": "the usage refusal exits 2",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "    return 2;",
+    "new": "    return 1;",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M64",
+    "guard": "a failing build exits 1",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "    return 1;",
+    "new": "    return 0;",
+    "tests": "test/mermaid-bundle.test.ts"
+  },
+  {
+    "id": "L2-T15-M65",
+    "guard": "--notices writes the generated section",
+    "file": "scripts/build-mermaid.mjs",
+    "old": "    if (argv[0] === '--notices') {",
+    "new": "    if (false) {",
+    "tests": "test/mermaid-bundle.test.ts"
+  }
+]
+```
+
+## Visual check
+
+The task names one: the caption, light and dark. `scripts/visual/compare.mjs` compared the demo page for
+`scripts/demo/samples/figures.md` (built by `scripts/demo/build.mjs --sample`) with a temporary copy of the reference
+reader serving the same sample from a throwaway git repository, on the loopback interface. The reference's Mermaid
+import was answered from the installed Mermaid 12.1.0 files, so nothing left the machine. Measured on the caption code
+of commit `f20296c`, which the review round does not change (`src/enhance/figures.ts` is the same; the round's changes
+to the Mermaid file do not reach the demo, which draws nothing until Task 21).
+
+| Combination | Blocks in both pages | Differences | Unexpected |
+|---|---|---|---|
+| 1440×1000, light | 15 | 66 | 0 |
+| 1440×1000, dark | 15 | 66 | 0 |
+| 390×844, light | 15 | 21 | 0 |
+| 390×844, dark | 15 | 21 | 0 |
+
+The expected differences, each named in the compare run's expected list:
+- **Hidden, not removed (C43):** the meta line stays in our page, hidden, where the reference drops it.
+- **Diagrams not drawn (Task 21):** the reference draws each figure, so each figure's box, width, height and max-width
+  differ, and so does the gap of the block after it.
+- **Contents rail not built (Task 18):** on desktop the reference sets its column beside the rail, so the column's auto
+  margins resolve differently; every box is equal.
+
+The caption sits inside its figure, so compare.mjs does not measure it on its own. A probe measured, on both pages,
+each of the four captions: its box relative to its figure, the boxes of `span.fig-no` and `span.cap-text` relative to
+the caption with their line counts, and 15 computed values of each (font family, size, weight and style, line height,
+letter spacing, text transform, colour, the four margins, max-width, display, vertical align). It ran in the four
+combinations above, against the reference both drawn and undrawn: 0 differences at 0.1 px.
+
+Caption screenshots were then compared pixel by pixel. Unshifted, up to 21% of a caption's pixels differ, all from
+different fractional page offsets (the content above each figure differs until Task 21 draws). With the reference page
+shifted by each caption's fractional offset, so both rasterize at the same sub-pixel position: 32 comparisons (four
+captions, four combinations, the reference drawn and undrawn), 0 pixels differ.
