@@ -1,0 +1,329 @@
+dl .doc-meta hidden=""
+  div
+    dt
+      "type"
+    dd
+      "spec"
+  div
+    dt
+      "area"
+    dd
+      "reading layout"
+  div
+    dt
+      "status"
+    dd
+      "draft"
+  div
+    dt
+      "rules"
+    dd
+      "R1, R2"
+  div
+    dt
+      "tags"
+    dd
+      "example, demo"
+div .eyebrow chrome
+  span chrome
+    "Spec"
+  span chrome
+    "spec"
+  span chrome
+    "reading layout"
+  span chrome
+    "draft"
+h1
+  "Example spec"
+p hidden=""
+  strong
+    "Spec"
+  "· · Status: ·"
+  strong
+    "Owner:"
+dl .byline chrome
+  div chrome
+    dt chrome
+      "Date"
+    dd chrome
+      "2026-10-19"
+  div chrome
+    dt chrome
+      "Status"
+    dd chrome
+      "Draft"
+  div chrome
+    dt chrome
+      "Owner"
+    dd chrome
+      "project-a team"
+details .doc-facts chrome
+  summary chrome
+    "2 rules"
+    span .sep chrome aria-hidden="true"
+      "·"
+    "2 tags"
+  div .facts-body chrome
+    dl chrome
+      dt chrome
+        "rules"
+      dd chrome
+        code chrome
+          "R1"
+        ","
+        code chrome
+          "R2"
+      dt chrome
+        "tags"
+      dd chrome
+        code chrome
+          "example"
+        ","
+        code chrome
+          "demo"
+div .short chrome
+  h2
+    "In short"
+  p
+    "This example spec shows how the reading "…
+    strong
+      "R1"
+    "says a reader sees the title first, and"
+    strong
+      "R2"
+    "says a section can fold. Check the table"…
+h2 aria-label="1. Context"
+  span .sec-no chrome
+    "1"
+  ". Context"
+p
+  "Readers open a spec to decide something,"…
+  a
+    "link to the next section"
+  ", some"
+  code
+    "inline code"
+  ", and a footnote"
+  sup
+    a
+      "[1]"
+  "to check the marker."
+p
+  "A longer paragraph makes the measure and"…
+blockquote
+  p
+    "A quoted line sets the voice of the docu"…
+h2 aria-label="2. Design"
+  span .sec-no chrome
+    "2"
+  ". Design"
+p
+  "The design has three parts, and each par"…
+ul
+  li
+    "The renderer turns Markdown into safe ma"…
+  li
+    "The enhancer builds the title block, the"…
+  li
+    "The stylesheet gives the page its look a"…
+p
+  "A fenced code block shows how a host wou"…
+div
+  pre
+    code
+      span
+        "import"
+      "{ render }"
+      span
+        "from"
+      span
+        "'@example/docs/render'"
+      ";"
+      span
+        "import"
+      "{ enhance }"
+      span
+        "from"
+      span
+        "'@example/docs/enhance'"
+      ";"
+      span
+        "const"
+      "result ="
+      span
+        "render"
+      "(markdown);"
+      span
+        "const"
+      "ready ="
+      span
+        "true"
+      ";"
+      span
+        "const"
+      "root ="
+      span
+        "document"
+      "."
+      span
+        "createElement"
+      "("
+      span
+        "'main'"
+      ");"
+      span
+        "show"
+      "(root, result."
+      span
+        "html"
+      ");"
+      span
+        "// the host inserts the safe html"
+      span
+        "// Start the layout; the title comes fro"…
+      span
+        "await"
+      span
+        "enhance"
+      "(root, {"
+      span
+        "info"
+      ": {"
+      span
+        "title"
+      ": result."
+      span
+        "meta"
+      "."
+      span
+        "title"
+      "} });"
+div
+  p
+    "Note"
+  p
+    "An alert draws attention to one fact. Th"…
+div
+  p
+    "Warning"
+  p
+    "A warning is rarer than a note, and it s"…
+h2 aria-label="3. Decisions"
+  span .sec-no chrome
+    "3"
+  ". Decisions"
+p
+  "Each decision has a status, and the stat"…
+div
+  table
+    thead
+      tr
+        th
+          "#"
+        th
+          "Decision"
+        th
+          "Chosen, and why"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "D1"
+        td
+          "Keep the warm palette"
+        td
+          "The reading page stays recognisable"
+        td
+          "Agreed"
+      tr
+        td
+          "D2"
+        td
+          "Fold sections by default"
+        td
+          "Long specs stay short to scan"
+        td
+          "Proposed"
+      tr
+        td
+          "D3"
+        td
+          "Add a rules index"
+        td
+          "Out of scope for this example"
+        td
+          "Later"
+      tr
+        td
+          "D4"
+        td
+          "Drop the old layout"
+        td
+          "Nothing else reads it any more"
+        td
+          "Rejected"
+h2 aria-label="4. Open questions"
+  span .sec-no chrome
+    "4"
+  ". Open questions"
+p
+  "Two things are still open. Neither block"…
+ol
+  li
+    "Should a fold remember its state across "…
+  li
+    "Should the stylesheet ship a print layou"…
+h2
+  "Where things stand"
+nav .stand-index chrome aria-label="Where things stand"
+  a chrome
+    span .agreed.dot chrome
+    b chrome
+      "2"
+    span chrome
+      "Agreed"
+  a chrome
+    span .dot.waiting chrome
+    b chrome
+      "2"
+    span chrome
+      "Waiting on you"
+  a chrome
+    span .dot.later chrome
+    b chrome
+      "2"
+    span chrome
+      "Later"
+div .agreed.callout chrome
+  h3
+    "Agreed"
+  ul
+    li
+      "R1: the title block comes first."
+    li
+      "D1: the warm palette stays."
+div .callout.waiting chrome
+  h3
+    "Waiting on you"
+  ul
+    li
+      "D2: whether sections fold by default."
+    li
+      "Q1: the fold memory question in section "…
+div .callout.later chrome
+  h3
+    "Later"
+  ul
+    li
+      "D3: a rules index."
+    li
+      "A print layout."
+hr
+section
+  ol
+    li
+      p
+        "A footnote holds a source or a caveat th"…
+        a
+          "↩︎"
