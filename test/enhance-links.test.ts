@@ -1379,15 +1379,21 @@ describe('the term matcher (glossary.ts)', () => {
 
 // ── RF3: the large plan ─────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The budget for xrefs and the glossary on the large plan under jsdom, in ms: about three times the slowest best run measured on a loaded build box. */
+/**
+ * The budget for xrefs and the glossary on the large plan under jsdom, in ms: about six times the slowest best run
+ * measured on a loaded build box (3.4 s).
+ */
 const BUDGET_MS = 20_000;
 
-/** How many rounds of the large plan, then the plan twice as large, the time is the best of. */
-const ROUNDS = 3;
+/**
+ * How many rounds of the large plan, then the plan twice as large, the time is the best of: enough that on a loaded
+ * box each best is rarely a slowed round, since the ratio's bound leaves little room (2.0 to 2.4 measured, bound 2.5).
+ */
+const ROUNDS = 5;
 
 /**
  * No round starts once the rounds have taken this long, in ms, so a matcher whose cost grows with the number of terms
- * is judged on the rounds it finished (one at least) rather than outrunning the test's own timeout. Three honest
+ * is judged on the rounds it finished (one at least) rather than outrunning the test's own timeout. Five honest
  * rounds take a fraction of it.
  */
 const ROUNDS_MS = 240_000;
