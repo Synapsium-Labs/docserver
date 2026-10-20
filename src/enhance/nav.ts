@@ -15,9 +15,11 @@
 //                      tabindex="-1" when it takes no focus of its own), then tell the host
 //                      (`onHash(idOf(el), { push, from })`, LD7) when it has an id.
 //   nav.goToHash(id, from)  the host's history moved to an entry of this document (the export goToHash, routed by the
-//                      lifecycle): with a `from` token this instance gave, back to that place; otherwise to `id`
+//                      lifecycle): with a `from` token of the shape this library writes (checked like a stored position,
+//                      below, whoever made it), back to that place; otherwise to `id` when it names something here
 //                      (revealed, brought to the top at once and flashed, but not focused, as the reference's popstate
-//                      did), or to the top for no id. It calls no onHash: the host's history has moved already.
+//                      did; an id that names nothing does nothing), or to the top for no id. It calls no onHash: the
+//                      host's history has moved already.
 //   one click listener on the root, delegated, for the document's links and the chrome's:
 //                      - a link whose href starts with `#`, clicked with the main button and no modifier, goes to its
 //                        target through goTo with push true, when byId finds one;
@@ -50,14 +52,25 @@
 //                      every 24 px down to 240 px, a third into the reading column, at most 240 px in): an element the
 //                      document had when the instance started that carries a `data-line`, or one with a document id,
 //                      as { line: its data-line or its id, offset: its top in the viewport, y: the scroll position };
-//                      { line: null, offset: 0, y } when no block is hit; null when none is hit at the very top.
+//                      { line: null, offset: 0, y } when no block is hit but the reading band (the 240 px probed) crosses
+//                      the root's box (or the page has no layout); null when none is hit at the very top, or when the
+//                      band misses the root: with two roots in one window, the one the reader is not in keeps no place
+//                      (its position is deleted, and its keep() restores nothing) rather than the other root's scroll
+//                      position. A keep() of a root above the one being read still moves that one's text: an instance
+//                      anchors only its own blocks.
 //   restore(a)         back to an anchor: its block at the same offset when the block is shown, else the scroll
 //                      position `y`. At once.
 //   pin(apply)         apply now, and again after every relayout (keep) and whenever the root's size changes, until
-//                      the reader acts (a wheel, a touch, a key or a pointer press anywhere in the document), another
-//                      pin or jump replaces it, PIN_MS pass, or the instance is destroyed: while blocks above the
-//                      target are measured, drawn or loaded, the reader stays on it (the reference held its pin until
-//                      the page was ready, which this library has no gate for: LD5).
+//                      the reader acts (a wheel, a touch, a key or a pointer press anywhere in the document, heard by
+//                      four capture-phase listeners that are there only while a pin holds), another pin or jump
+//                      replaces it, PIN_MS pass, or the instance is destroyed: while blocks above the target are
+//                      measured, drawn or loaded, the reader stays on it. The reference held its pin for two frames once
+//                      the page was ready, which this library has no gate for (LD5). The cost: every jump made at once
+//                      (reduced motion, a far target, goToHash, a far `j` or `k`) holds for PIN_MS even on a page that
+//                      settled long ago, and a scroll in that window that comes with none of those four events (a
+//                      scrollbar dragged in a browser that sends no pointer event for it, a host's own scroll) is
+//                      undone at the next relayout or size change. Nothing is applied after a destroy (reach checks
+//                      live(); env.scrollTo does too).
 //   barBottom()        the bottom of the bar in the viewport (0 without the bar, or with it hidden: `bar-hidden`).
 //   reach(el, smooth)  bring `el` to the top of the reading area, as goTo does (no pin, no flash, no focus).
 // A `from` token is an anchor as JSON text: `{ "line", "offset", "y" }`. It is opaque to the host, and checked like a
@@ -96,6 +109,9 @@ export const PIN_RELEASE = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as 
 /** The bounds of a position token: its `line`, its text, and `offset` and `y`. */
 export const TOKEN = { line: 1024, from: 4096, coord: 10_000_000 } as const;
 
+/** How far down from the reading line a block is looked for, in px. */
+const READING_BAND = 240;
+
 /** How many of the document's first blocks the reading column is looked for in (a hidden meta line or front matter comes first). */
 const COLUMN_SCAN = 16;
 
@@ -128,7 +144,7 @@ export function tokenOf(a: Anchor | null): string | null {
   return a === null ? null : JSON.stringify({ line: a.line, offset: a.offset, y: a.y });
 }
 
-/** A token's anchor: null for no token, and for anything that is not a token this library writes. */
+/** A token's anchor: null for no token, and for anything not of the shape this library writes (whoever made it). */
 export function parseToken(text: string | null): Anchor | null {
   if (text === null || text.length > TOKEN.from) return null;
   try {
@@ -284,7 +300,9 @@ export function createNavigation(args: NavArgs): Navigation {
   };
 
   const reach = (el: Element, smooth: boolean): void => {
-    if (!root.contains(el)) return; // it left the root since (a pin held on it)
+    // Not after a destroy (scrollIntoView is the browser's, not env's, and env's live() gate is not on it), and not to
+    // an element that left the root since (a pin held on it).
+    if (!live() || !root.contains(el)) return;
     const target = el as HTMLElement;
     if (el.hasAttribute('id')) {
       // The stylesheet's [id] margin applies; a browser without scrollIntoView skips it.
@@ -331,11 +349,19 @@ export function createNavigation(args: NavArgs): Navigation {
     const { w, scrollY } = env.viewport();
     const top = barBottom() + 12;
     const x = readingX(w);
-    for (let dy = 0; dy < 240; dy += 24) {
+    for (let dy = 0; dy < READING_BAND; dy += 24) {
       const b = blockAt(env.elementFromPoint(x, top + dy));
       if (b !== null) return Object.freeze({ line: b.line, offset: b.el.getBoundingClientRect().top, y: scrollY });
     }
-    return scrollY > 0 ? Object.freeze({ line: null, offset: 0, y: scrollY }) : null;
+    if (scrollY <= 0) return null;
+    // No block hit: the scroll position is this root's place only while the reading band crosses the root. Another
+    // root of the window may be what the reader is reading, and its place is not this one's. A root with no layout box
+    // (no layout at all) is taken to.
+    if (root.getClientRects().length > 0) {
+      const r = root.getBoundingClientRect();
+      if (r.top >= top + READING_BAND || r.bottom <= top) return null;
+    }
+    return Object.freeze({ line: null, offset: 0, y: scrollY });
   };
 
   /** Whether `el` is shown: nothing up to the root hides it, and in a laid-out page it has a box. */
@@ -375,7 +401,13 @@ export function createNavigation(args: NavArgs): Navigation {
       release();
     }
   };
-  /** The reader acting ends the pin; heard in the capture phase, before any handler of the page. */
+  /**
+   * The reader acting ends the pin; heard in the capture phase, before any handler of the page. The four listeners are
+   * on the document only while a pin holds (the reference's were always there): an instance with no pin adds no
+   * keydown listener beside the keyboard layer's one per document (keys.ts), which the services' cases count. So they
+   * are added by pin() and removed by release(), which journal.defer runs at teardown, rather than by journal.listen,
+   * whose listeners last until teardown.
+   */
   const onAct = (): void => {
     operate(release);
   };
@@ -407,8 +439,10 @@ export function createNavigation(args: NavArgs): Navigation {
       return fn();
     } finally {
       keeping -= 1;
+      // After a destroy `fn` asked for (its teardown waits for the operation), neither scrolls: reach and env.scrollTo
+      // check live().
       if (pinned !== null) hold();
-      else if (at !== null) restore(at); // env.scrollTo does nothing once not live
+      else if (at !== null) restore(at);
     }
   };
 

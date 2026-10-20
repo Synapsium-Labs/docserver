@@ -52,9 +52,10 @@
 // `.<k>` suffix. An instance's ids are released at its teardown, and it issues none once it is not live.
 //
 // goToHash(root, id, from?): the host's history moved to an entry of this document (LD7). For an active instance on
-// `root`, one operation runs nav.goToHash: back to the place `from` names when it is a token this library gave (onHash's
-// `from`), else to the element `id` names, else, for a null or empty id, to the top. An id that names nothing, and a
-// call for a root not enhanced or still starting, do nothing; a `from` that is not a string is no token.
+// `root`, one operation runs nav.goToHash: back to the place `from` names when it is a token of the shape this library
+// writes (onHash's `from`; checked like a stored position, whoever made it), else to the element `id` names, else, for
+// a null or empty id, to the top. An id that names nothing, and a call for a root not enhanced or still starting, do
+// nothing; a `from` that is not a string is no token.
 //
 // destroyEnhancement(root): marks the instance destroying and bumps its generation first, so no further write
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
@@ -606,9 +607,9 @@ export function destroyEnhancement(root: HTMLElement): Promise<void> {
 }
 
 /**
- * The host's history moved to an entry of the document on `root` (LD7): back to the place `from` names (a token the
- * host was given as onHash's `from`), else to `id` (a heading id or a defined ID, without '#'), else, for null, to the
- * top. Calls no onHash. Does nothing for a root that is not enhanced, or still starting; see the header of this file.
+ * The host's history moved to an entry of the document on `root` (LD7): back to the place `from` names (a token of the
+ * shape the host was given as onHash's `from`), else to `id` (a heading id or a defined ID, without '#'), else, for
+ * null, to the top. Calls no onHash. Does nothing for a root that is not enhanced, or still starting; see the header of this file.
  */
 export function goToHash(root: HTMLElement, id: string | null, from?: string | null): void {
   const inst = findByRoot(root);

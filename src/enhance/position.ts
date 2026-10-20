@@ -5,7 +5,10 @@
 //   The section link   a chrome `a.h-anchor` ("#", href `#<id>`, titled "Link to this section", named "Link to <the
 //                      heading's title without its number>") in the `anchor` slot of each level-2 and level-3 heading
 //                      that is the document's element of its id (headCtl), except the "In short" box's heading, as in
-//                      the reference. A click is the delegated hash click of nav.ts: goTo, with push true.
+//                      the reference. A click is the delegated hash click of nav.ts: goTo, with push true. A heading
+//                      whose id an earlier element holds (a comment anchor of the same text, which render() writes
+//                      before it) gets none: the reference gave it one, whose `#id` went to that earlier element, which
+//                      may be far away; here no link is better than one to elsewhere.
 //   `j` and `k`        `j`: the next section's heading; `k`: this section's start, or the previous section's when the
 //                      reader is within 40 px below this one's start (the bar's bottom less 40 px). Each through goTo with
 //                      push false; nothing, and the key's default left alone, past either end. The sections are
@@ -20,7 +23,7 @@
 //   The position       with a position key (options.posKey, which defaults to storageKey): read during startup (state,
 //                      `<namespace>:pos:<posKey>`), and written behind as the reader's place (placeOf's anchor) when
 //                      scrolling has stopped for SAVE_MS and when the page is hidden, unless it is the place already
-//                      stored; null (at the top with nothing hit) deletes it. A stored value is checked like a token
+//                      stored; null (at the top with nothing hit, or the reader in another root: nav.ts's anchor) deletes it. A stored value is checked like a token
 //                      (nav.ts's checkAnchor): of the wrong shape, oversized, or with a selector character, it is
 //                      ignored. The reference kept it per tab; a host that wants that routes the key to its session
 //                      storage.
