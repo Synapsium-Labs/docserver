@@ -7,22 +7,24 @@
 // API. Code splitting is off, so each `import()` in Mermaid is bundled in place and nothing loads after the file: a
 // host passes the module itself (LD4, `mermaid.load()` resolves with it), and the file needs no URL of its own. Every
 // import of `elkjs` resolves to scripts/mermaid-elk-stub.mjs instead: elkjs is EPL-2.0, which §3.6 keeps out, so a
-// diagram that asks for the ELK layout fails to draw and shows the reader's failure note.
+// diagram that asks for the ELK layout fails to draw and shows the reader's failure note. Mermaid 12.1.0's own
+// default configuration asks for it (`layout: 'elk'`), so a host that draws with this file sets another layout, such
+// as `dagre` (test/browser/mermaid-file.test.ts measures both).
 //
 // The build is reproducible: the same inputs give the same bytes. Every input path is relative to the package root,
 // and symlinks are kept as written, so a checkout whose node_modules is a link to another tree still names only
-// `node_modules/...` (in the file's own module keys and in the metafile). Upstream legal comments are collected at
-// the end of the file.
+// `node_modules/...` (in the metafile and in the module keys this build writes; a pre-built dependency keeps the keys
+// its own build wrote). Upstream legal comments are collected at the end of the file.
 //
 // THIRD-PARTY-NOTICES: the build's metafile names every input file. Each package those files belong to
 // (`node_modules/<name>` or `node_modules/@<scope>/<name>`, nested ones included; one entry per directory) is listed
 // in the generated section, sorted by name, version and directory, with its licence from its package.json and the
 // text of each of its licence files (LICENSE, LICENSE.md, license.txt, LICENSE-MPL, COPYING and the like); a
 // package.json that gives no licence string is listed as NO_LICENCE_FIELD, its licence file still following. A
-// package with no licence file stops `--notices`.
-// The section runs from NOTICES_BEGIN to NOTICES_END; the rest of the
+// package with no licence file stops `--notices`. The section runs from NOTICES_BEGIN to NOTICES_END; the rest of the
 // file is written by hand. test/mermaid-bundle.test.ts holds the section to the metafile exactly, so a dependency
-// change that bundles another package fails until `--notices` is run again.
+// change that bundles another package fails until `--notices` is run again. The metafile sees packages, not what a
+// package's own pre-built file carries inside it.
 //
 // Exit codes: 0 built; 1 the build or the notices failed (the reason on stderr); 2 a usage error. Dev tooling, never
 // shipped; what the tests use is exported (types in build-mermaid.d.mts).
