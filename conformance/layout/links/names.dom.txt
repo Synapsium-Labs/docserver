@@ -1,0 +1,78 @@
+h1
+  "Hostile names"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "Glossary"
+div .glossary
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td .termcell
+          "__proto__"
+        td
+          "A name a plain object would read as its "…
+      tr
+        td .termcell
+          "constructor"
+        td
+          "A name every object answers"
+      tr
+        td .termcell
+          "toString"
+        td
+          "Another one"
+      tr
+        td .termcell
+          "C++ (cpp)"
+        td
+          "A name with pattern characters, and its "…
+      tr
+        td .termcell
+          "a.b*c"
+        td
+          "Dots and a star, matched as written"
+      tr
+        td .termcell
+          "R12"
+        td
+          "An ID, never a term"
+      tr
+        td .termcell
+          "AB-CD"
+        td
+          "A rule ID, never a term"
+h2
+  "1. Mentions"
+p
+  "The"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "__proto__"
+  "link, the"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "constructor"
+  "link and the"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "toString"
+  "link are ordinary terms."
+p
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "C++"
+  "links, and so does"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "cpp"
+  ", its alias. The"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "a.b*c"
+  "name links, and aXbbc does not."
+p
+  "R12 and AB-CD stay text."
