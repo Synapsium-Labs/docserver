@@ -239,14 +239,14 @@ The §3.7 scrub task that C44 names.
 **Goal.** Every option list in `vocab.ts` becomes an option with its neutral, documented default (LD9); storage keys get a namespace; the item-link plugin is added (section 2, by both routes).
 **Files.** Modify `types.ts`, `options.ts`, `vocab.ts`, `state.ts` and `editorial.ts` (the item link). Standard files (slug `vocab`, no Level 2 cases).
 **Produces.**
-- `vocabulary?: { status?: { ok?, wait?, no?, info? }; statusHeaders?; attention?: { status?, who?, question?, open?, blocking?, risk? }; ids?: false | { prefixes? }; ruleIds?: { prefixes? }; qualifiers?; plan?: { task?, step?, who? }; addressees?; itemFields?; itemHeadings? }`, each list `string[]`, each field replacing its default.
+- `vocabulary?: { status?: { ok?, wait?, no?, info? }; statusHeaders?; attention?: { status?, who?, question?, openAnswers?, blocking?, risk? }; ids?: false | { prefixes? }; ruleIds?: { prefixes? }; qualifiers?; plan?: { task?, step?, who? }; addressees?; itemFields?; itemHeadings? }`, each list `string[]`, each field replacing its default.
 - `namespace?: string`, matching `[a-z][a-z0-9-]{0,31}`, default `docreader`: `<ns>:prefs`, `<ns>:ui`, `<ns>:pos:<posKey>`, `<ns>:doc:<storageKey>:<name>`.
 
 **Defaults.** Task 7a's table. Status words keep the general ones; the PR lists any word moved out of the default for the coordinator to rule. The item link is off unless `itemLink` is given and a route is: a byline fact whose label is in `itemFields`, or the first code block under a section whose heading is in `itemHeadings` (the delta route). A value with an item-key shape becomes a link, routed through `onLink`.
 **Scrub.** The reference's private qualifier words and rule-ID prefix, the unprefixed storage keys, the fixed `docreader:` prefix. This closes both "Open before v1" notes.
 **Tests (jsdom).** The defaults reproduce the prototype's marks; a custom list changes them; metacharacters are literal; bounds of 200 words of 64 characters; every key carries the namespace, and a bad one is refused; the item link by each route, and only with `itemLink`.
 **Mutation rows.** One per guard above.
-**Done when.** Every option row of Task 7a's table is an option, documented in the PR's README text.
+**Done when.** Every option row of Task 7a's table is an option, documented in the PR's README text. The words still in `editorial.ts` (the box headings, the callout kinds, the front-matter kind keys) live in `vocab.ts` as format contract (C48).
 
 ### Task 9: IDs: rule paragraphs, rules index, ID rows
 

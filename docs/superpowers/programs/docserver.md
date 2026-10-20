@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C47)
+### Coordinator rulings for L2 (C40-C48)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -172,6 +172,17 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   - Task 1 was reviewed by one lens, not three: its three items are minor and confined to front matter. Every other task keeps the full panel.
 
   Why: each follows the code the walls and the review measured. Cost if wrong: a later task's brief names the old shape and its implementer follows the code instead.
+- **C48 (2026-10-20, coordinator, from L2 Task 7a's review): the seams as built.**
+  - **Build order:** `editorial, rules, tables, status, ids, plans, code`, then the rest as the plan lists them. The status marks are their own step after the table bullet cells are split, so a status cell that opens with a bullet is marked; ID rows read the marks; an ID row's group heading holds no plan chrome. The reference runs plans (section 7) before section 8; the outcome per element is the same.
+  - **Chrome ids** are `docreader.<n>.<name>` (with `.<k>` on a repeat). `render()` never writes a dot in an id, so a document cannot claim one. Features treat ids as opaque.
+  - **The colour key's ID example** is `IDs: R14, F3, …`, the spec's own neutral examples (§3.7).
+  - **`attention.openAnswers`** replaces the plan's `open`, because the walls refuse the member name `.open`, as C47 did for `history`.
+  - **Task 7a's two edits outside its writers list stand:** `folds.ts` prints through `ctx.env.onPrint` and reads its own option, and `test/pack.test.ts` admits dashed module names (`diagram-tools`).
+  - **Carried to Task 8:** the words still in `editorial.ts` (the "In short" and "Where things stand" headings, the callout kinds, and the front-matter kind keys `type`, `area`, `status` and `kind`) move into `vocab.ts` as format contract, so Task 24's check finds no list outside it. Task 8 also rules whether `rulingHeaders`, `attention.openStatus` and `decisionHeaders` are options or format contract, and says which in its PR.
+  - **Carried to Tasks 14 and 18:** the README's rows for the `pos` and `ui` storage keys say they are unused until those tasks use them.
+  - **WebKit's first CI run** (Task 6) failed one case only: WebKit had not started the serif face's load when the page settled. The case now asks for the face before reading the loaded faces. Every other WebKit case passed, including the network wall's.
+
+  Why: each follows the code the review measured. Cost if wrong: a later task re-orders a step or renames a list in its own PR.
 
 ## Carried constraints (reviewers get these)
 
