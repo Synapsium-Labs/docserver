@@ -271,7 +271,7 @@ describe('rule paragraphs (rules.ts; the reference layout, section 3)', () => {
       '',
       '`AB-11` and *AB-12* — an em is no code.',
       '',
-      '`AB-13` *and* `AB-14` — an em is no join.',
+      '`AB-13`*and*`AB-14` — an em is no join.',
       '',
     ].join('\n');
     const root = await enhanced(md, { rules: true }, (r) => {
@@ -633,7 +633,7 @@ describe('ID rows (ids.ts; the reference layout, section 8)', () => {
       '|---|---|---|',
       '| A1 - the own title | why | name one |',
       '| A2 ab | why | name two |',
-      '| A3 A4 | why | name three |',
+      '| A3 R14 and more | why | name three |',
       '',
       '| ID | Why | Other |',
       '|---|---|---|',
