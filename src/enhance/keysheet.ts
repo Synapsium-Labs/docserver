@@ -21,9 +21,9 @@
 // `keyboard: false`) remembers the element that had the focus (the root document's activeElement), lists the rows,
 // and focuses Close. The focus stays inside the box: its one control is Close, and Tab and Shift+Tab from it do
 // nothing (the reference's trap, which moved the focus from the box's last control to its first and back, for a box of
-// one control). Close, a click outside the box, and Escape
-// (overlays.ts, 'keys', in the order Task 7b fixed) close it and give the focus back to the element that had it, or,
-// when that cannot take it (the page itself had the focus), take it out of the hidden sheet.
+// one control). Close, a click outside the box, and Escape (overlays.ts, 'keys', in the order Task 7b fixed) close it
+// and give the focus back to the element that had it, or, when that cannot take it (the page itself had the focus),
+// take it out of the hidden sheet.
 //
 // With `keyboard: false` nothing could open it, so it is not built.
 //

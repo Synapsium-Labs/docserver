@@ -21,7 +21,7 @@
 // one (editorial.ts names a heading it numbers by its whole text, the plans name a task heading by its own text before
 // its badge exists, and headCtl names a heading by its text as it makes its controls), else its text with every
 // chrome element left out (headctl.ts's headingText). Each text is cut to TEXT_MAX code units (text.ts's clip), so no
-// heading, title or caption makes a row, or a query's work, unbounded.
+// heading, title, group or caption makes a row, or a query's work, unbounded (an ID is bounded by the index).
 //
 // The ranking, the reference's, for a query cut of its white space at both ends and lower-cased, against each entry's
 // lower-cased text and tag (an ID, or a heading's section number); the first that holds gives the score:
