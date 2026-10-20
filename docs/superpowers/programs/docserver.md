@@ -9,7 +9,7 @@ Coordinator: ccrc session `ccrc-pwa-calm-canyon`. It also coordinates ccrc's `na
 | # | scope | PRs | state |
 |---|---|---|---|
 | L1 | Scaffold and rules. A TypeScript package with ESM entry points and `.d.ts`. `render()` on markdown-it with the raw-HTML allowlist, alerts, figure captions, front matter, heading ids, `data-line` attributes and `meta`. The conformance corpus: golden HTML generated from today's renderer, hostile cases, and `runCorpus()`. CI. Plan: [`2026-10-12-docserver-l1-rules-and-corpus.md`](../plans/2026-10-12-docserver-l1-rules-and-corpus.md), 12 tasks. | plan: #1; work: #8 | **merged** 2026-10-15 as `89a9db6f4`, with one `Goldens-moved:` trailer naming the 52 cases. Run 414 dispatched 2026-10-13, and PR #8 opened 2026-10-14. The coordinator's reviews were runs 458, 464 and 469, with two fix rounds (C31-C39). The suite is green on Node 22 and 24, and the mutation table holds 494 rows: 461 red, 33 superseded or not applied, each with a stand-in, and 0 not red |
-| L2 | The layout. `enhance(root, options)` made embeddable: host adapters, namespaced storage keys, operator-specific defaults scrubbed into off-by-default options, CSP-safe. The styles, and the fonts with `OFL.txt`. A self-hosted single-file Mermaid with pinned limits. `THIRD-PARTY-NOTICES`. | — | next: plan to be written |
+| L2 | The layout. `enhance(root, options)` made embeddable: host adapters, namespaced storage keys, operator-specific defaults scrubbed into off-by-default options, CSP-safe. The styles, and the fonts with `OFL.txt`. A self-hosted single-file Mermaid with pinned limits. `THIRD-PARTY-NOTICES`. Level 2 of the corpus. Plan: [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md), 24 tasks, written from the prototype (C40). | plan and prototype: #13 (Tasks 2-4); one PR per later task | **in progress.** The prototype (draft #13, `91fd3bb`, CI green) was approved by the operator on 2026-10-19, who said "proceed" on 2026-10-20. The plan was rewritten from it the same day. Next: Task 1 from `main`, then the stacked tasks (below) |
 | L3 | The frame and the release. `frameDocument()`, the frame bootstrap and click guard as hashed assets, `mountDocFrame()` for other hosts, and `assets.json`. Then v1: the repo goes public, and the package is published to npm with provenance as `@synapsium-labs/docserver`. | — | after L2 |
 
 ## Decisions & deviations
@@ -135,6 +135,32 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
+### Coordinator rulings for L2 (C40-C44)
+
+Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
+
+- **C40 (2026-10-19, operator): prototype first.** The paper L2 plan loop is retired. L2's plan is written from running code, and each remaining task is built the same way: code, tests, mutation rows and a visual comparison, not code blocks specified in prose. Why: the paper plan stopped converging, while the prototype proved the hard parts (the lifecycle, the journal and the stylesheet's scoping) in running code. Cost if wrong: less of each task's code is reviewed before it is written. The held-out panel on every task and the whole-branch review carry that weight.
+- **C41 (2026-10-19, operator): the reference's warm colour palette is kept exactly, in light and dark.** This reverses an earlier architecture choice that excluded it. Why: readers keep the look they know, and visual parity can be measured. Cost if wrong: the library ships one opinionated palette. A host overrides the tokens on the root.
+- **C42 (2026-10-19, operator): `destroyEnhancement(root)` returns `Promise<void>`, which settles after cleanup.** A destroy requested inside one of the reader's own actions stops that action at once, and the teardown runs as the action unwinds. Why: a host can await cleanup before it reuses the root, and no action writes after a destroy. Cost if wrong: a host must handle a rejection (an `AggregateError` from a failed cleanup step). The promise is marked handled, so an ignored one is not an unhandled rejection.
+- **C43 (2026-10-20, coordinator): the prototype's design, as shipped on #13, is binding for the rest of L2.** Its load-bearing decisions:
+  - **A registry, and one owner per root.** WeakMaps per document and per root. The same options object (or none, twice) returns the same promise. Other options, or a root inside or around an enhanced one, reject with `ownership`, checked again after the options are read. Why: a host that calls twice gets one reader, and two readers never share a subtree. Cost if wrong: a host that wants new options destroys first.
+  - **Options are read once, as own data properties.** An unknown key or a getter is refused before anything is reserved, and the getter is never called. Inherited properties are ignored. The storage object is read only inside startup. Why: no host code runs before the reservation, and a prototype cannot inject an option. Cost if wrong: a host passes plain data, not a class instance with getters.
+  - **The journal.** Every write is recorded and undone in reverse. A restore is conditional: a value the host changed since stays. Source nodes are only moved (`wrap`, `move`) or split (`split`), never re-created or re-typed. A `move` puts its node back even when the node after it has left, then reports it. Writes are refused once the instance is not live. Undo attempts every entry and reports an `AggregateError`. Why: destroy restores the host's document exactly, and nothing writes after it. Cost if wrong: features split and wrap where the reference rewrote text.
+  - **Write-behind, serialised per storage object.** The local state changes first, and `set()` is called after. Per key and per storage object, one call is in flight and only the newest waiting value is sent. The prefs object merges under a newer value that another root queued. Why: an older value never lands after a newer one, across roots. Cost if wrong: two storage objects for one store are two queues, as the README says.
+  - **Storage keys.** `docreader:prefs` (reader-wide JSON) and `docreader:doc:<storageKey>:<name>`. Only these keys are read from the snapshot, and invalid JSON is ignored. Task 8 adds the namespace option (C44) without changing the shape. Why: a host can pass its whole store, and the keys never collide with the host's. Cost if wrong: changing a key later loses readers' stored state, so the shape is fixed now.
+  - **Root and chrome attributes.** The root carries `data-docreader-root` (the stylesheet's scope), `data-theme` (absent for `auto`), `data-width` and `data-font`. Every created element carries `data-docreader-chrome`. No ids are written on the document's nodes, and nothing is looked up by a document id. Class names are the reference's, popups are keyed on classes, and view-mode classes sit on the root. Why: the stylesheet and teardown find what the library made, with no id a heading could clobber. Cost if wrong: renaming any of them breaks hosts' CSS.
+  - **Fonts.** The faces are named Docreader Serif and Docreader Sans, from Fontsource 5.3.0 files, unmodified and hash-pinned. Why: a host's own copies of these fonts never collide with the reader's, and the OFL files travel unmodified. Cost if wrong: a font update is a pinned, hash-checked change.
+  - **`sideEffects: ["*.css"]`.** Why: a bundler keeps the stylesheet import and can still drop unused code. Cost if wrong: none known.
+  - **Sizes in `calc(N * var(--rem))`**, with `--rem: 16px` on the root. Why: a host's `html` font size cannot shrink the reader. Cost if wrong: a reader's own root font size is ignored unless the host sets `--rem`.
+  - **Mermaid's source is hidden only under `data-docreader-mermaid`.** Why: a diagram's source stays readable until something will draw it. Cost if wrong: none; L2's Task 21 sets the mark.
+  - **The root owns its own box**: its background, type and padding, `max-width: none` and `margin: 0`. Its narrow rules follow the viewport. Why: the reading column stays the reference's in any host. Cost if wrong: a host that wants to constrain the root wraps it, or gives it a frame of its own. This closes the prototype's open point on host control of the root's box.
+  - **Two documented limits stay as the README states them.** An attribute the library removed comes back last in its element's list. A root moved to another document while enhanced is tracked only in part, so destroy before moving it.
+- **C44 (2026-10-20, coordinator): defaults for the four questions the operator has not answered.** Each is cheap to change later.
+  - **(a) The root is released even when a cleanup step throws**, and the `AggregateError` is the report. Why: a reservation that outlived a failed step would lock the root for good. Cost if wrong: a host may enhance again over what that step left behind; the rejection tells it so.
+  - **(b) Destroy does not wait for the host's pending `set()`.** Why: teardown must not depend on the host's latency, and the per-storage queue already keeps the order. Cost if wrong: a host that reads its store right after destroy may not see the last value yet.
+  - **(c) Front-matter scalar keys other than `type`, `area`, `status` and `kind` stay hidden** when `info.frontList` is given, as in the reference. They are revisited when the review strip lands (L2 Task 20). Why: parity. Cost if wrong: a scalar such as `owner` is shown nowhere until then.
+  - **(d) The status vocabulary and patterns, and a storage namespace, become options in L2's scrub task** (§3.7; L2 Task 8), before v1. Why: §3.7 makes both operator-specific. Cost if wrong: none beyond that task.
+
 ## Carried constraints (reviewers get these)
 
 - Public-ready text from the first commit (`CLAUDE.md`): no hosts, users, private paths, project lists, issue-tracker workspaces, private product names or operator defaults.
@@ -143,11 +169,17 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
 - Browser code is CSP-safe: no `innerHTML`, `eval` or inline handlers.
 - The corpus is the contract: a golden change is stated, and a hostile verdict never weakens.
 
-## Next-wave brief (L2)
+## What happens next (L2)
 
-L1 merged on 2026-10-15 as `89a9db6f4`. L2's run is opened before L1's closes, and its plan is written next. The plan must:
-- start with the three items carried from L1's last review, closing C39's parity gap first;
-- keep C1-C39 and PD1-PD9 binding;
-- build on `main` at or after `89a9db6f4`.
+The plan is [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). It keeps C1-C44 and PD1-PD9 binding, and builds on `main` at or after `89a9db6f4`.
 
-The reference renderer, departures and repository-settings rules are the same as L1's: C5, C-numbers before any file moves, and C4. Routing is set when the plan is written.
+1. **Task 1 first:** the three items carried from L1's last review, closing C39's parity gap first. It branches from `main`, touches only `src/render/` and its tests, and merges as its own PR.
+2. **#13** carries the prototype (Tasks 2-4), the plan and this ledger. It is reviewed and merged by the coordinator (C4).
+3. **The stacked tasks.** Each task is its own branch and PR, stacked on `l2-prototype` or on the task before it in merge order, so #13 stays reviewable. Tasks 5 and 6 run in parallel, then Task 7 (the shared services). Then nine feature tasks run in parallel (Tasks 8-16), then Tasks 17-21, then 22 and 23, then Task 24: the scrub audit, the README, full visual parity and the whole-branch review.
+4. **How each task runs.** The workers are native subagents, driven by the coordinator's workflows. An implementer builds the task. Then a held-out review panel of three Opus lenses reads it, a Sonnet refute pass checks each finding, and one fix round follows. The coordinator merges after review (C4).
+5. **Visual comparison** uses neutral samples and screenshots. The reference reader is supplied by argument and run as a temporary copy (C5). It is never named in tracked text.
+
+The reference renderer, departures and repository-settings rules are the same as L1's: C5, C-numbers before any file moves, and C4.
+
+**Waiting on the operator.**
+- **Question 1: URL options for another viewer.** §3.2's table of what another viewer asked for says that `enhance` keeps today's URL options (`mermaidUrl`, `resolveLink`, `changesUrl`, `bar` and an issue-tracker base) for hosts that serve the layout from their own origin. A pure `./enhance` cannot fetch or build URLs. The plan's default (LD4, LD10): `./enhance` takes adapters only. The URL conveniences become a small helper in L3's `./host`, or recipes in the README, and tools in a host's own bar wait for an additive option. Does this stand, given that the other viewer's coordinator confirmed §3.2 as written? If it does not, the helper moves into L2's Task 5.
