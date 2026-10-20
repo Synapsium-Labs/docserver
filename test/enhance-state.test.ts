@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs, type ReaderStorage } from '../src/enhance/index.js';
-import { docKey, PREFS_KEY } from '../src/enhance/state.js';
+import { docKey, posKeyOf, PREFS_KEY } from '../src/enhance/state.js';
 import { render } from '../src/render/index.js';
 
 const DOC = ['# Example spec', '', '## 1. Scope', '', 'Scope text.', '', '## 2. Design', '', 'Design text.', '', '## 3. Plan', '', 'Plan text.', ''].join('\n');
@@ -145,10 +145,11 @@ describe('the snapshot is read during startup only, each key once, only this rea
       },
     });
     await enhance(root, { storage: { snapshot }, storageKey: 'k' });
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds')]);
+    // and the reading position's, whose key defaults to storageKey (Task 14)
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]);
     (root.querySelector('button.h-fold') as HTMLButtonElement).click();
     setEnhancementPrefs(root, { width: 'wide' });
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds')]);
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]);
   });
 });
 

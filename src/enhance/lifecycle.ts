@@ -35,13 +35,13 @@
 // `ctx.host`.
 //
 // The shared services (Task 7b; LD1), made before the first feature builds, in this order: the registries (index,
-// terms, blocks, figures, plan, page; registry.ts) and events; the position seam (nav.ts); reveal (reveal.ts);
-// overlays (overlays.ts); the keyboard layer (keys.ts, which joins its document's one keydown listener); navigation
-// (nav.ts: it reads the document's ids now, before any chrome exists, and listens for clicks on the root); relayout
-// (relayout.ts: the resize listener and the fonts wait start here); heading controls (headctl.ts); the bar's
-// skeleton (bar.ts, only with chrome.bar), whose tray features fill during their build, put in the root once every
-// feature is built; and the folds' API (folds.ts). Then, once every feature is built, the first relayout ('start') is
-// asked for. Prefs changes, from setEnhancementPrefs or a feature's ctx.setPrefs, go through one path: the state,
+// terms, blocks, figures, plan, page; registry.ts) and events; reveal (reveal.ts); overlays (overlays.ts); the
+// keyboard layer (keys.ts, which joins its document's one keydown listener); the bar's skeleton (bar.ts, only with
+// chrome.bar), whose tray features fill during their build, put in the root once every feature is built; navigation
+// and the position seam (nav.ts: it reads the document's ids and lines now, before any chrome exists, listens for
+// clicks on the root, and measures the bar for the reader's place); relayout (relayout.ts: the resize listener and the
+// fonts wait start here); heading controls (headctl.ts); and the folds' API (folds.ts). Then, once every feature is
+// built, the first relayout ('start') is asked for. Prefs changes, from setEnhancementPrefs or a feature's ctx.setPrefs, go through one path: the state,
 // the root's attributes, the 'prefs' event, and a relayout ('prefs' for the width or face, 'lens' for the lens).
 //
 // The seams every feature builds with (Task 7a): `env` (the root's window, env.ts), `sections`, `vocab` (vocab.ts),
@@ -50,6 +50,12 @@
 // (letters, digits, `_` and `-`, for anchors and heading slugs alike), so no root rendered into the document later
 // can carry one; an id the document held at the instance's first call, or one the instance issued, is skipped by a
 // `.<k>` suffix. An instance's ids are released at its teardown, and it issues none once it is not live.
+//
+// goToHash(root, id, from?): the host's history moved to an entry of this document (LD7). For an active instance on
+// `root`, one operation runs nav.goToHash: back to the place `from` names when it is a token this library gave (onHash's
+// `from`), else to the element `id` names, else, for a null or empty id, to the top. An id that is neither a string
+// nor null, and a call for a root not enhanced or still starting, do nothing; a `from` that is not a string is no
+// token.
 //
 // destroyEnhancement(root): marks the instance destroying and bumps its generation first, so no further write
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
@@ -63,7 +69,7 @@ import { createHeadCtl } from './headctl.js';
 import { createHost } from './host.js';
 import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { createKeys } from './keys.js';
-import { createNav, createPosition } from './nav.js';
+import { createNavigation } from './nav.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
 import { createOverlays } from './overlays.js';
 import { sectionMinutes } from './reading.js';
@@ -359,13 +365,22 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   // The shared services (see the header), before the first feature builds.
   const events = createEvents(live);
   const index = createIndex(root);
-  const position = createPosition(env);
   const revealer = createReveal({ root, journal, events, live });
   const overlays = createOverlays(live);
   const keys = createKeys({ root, journal, overlays, keyboard: options.keyboard, live, operate: operateHere });
-  const nav = createNav({ root, journal, host, env, index, reveal: revealer.reveal, position, live });
-  const relayout = createRelayout({ env, events, position, live });
   const bar = options.chrome.bar ? createBar({ root, journal, isDocument: info.isDocument }) : null;
+  const { nav, position } = createNavigation({
+    root,
+    journal,
+    host,
+    env,
+    index,
+    reveal: revealer.reveal,
+    live,
+    operate: operateHere,
+    bar: bar?.slots.bar ?? null,
+  });
+  const relayout = createRelayout({ env, events, position, live });
   const ctx: FeatureContext = {
     root,
     journal,
@@ -587,6 +602,23 @@ export function destroyEnhancement(root: HTMLElement): Promise<void> {
   const inst = findByRoot(root);
   if (inst !== undefined) return destroyInstance(inst);
   return lastDestroy?.get(root) ?? Promise.resolve();
+}
+
+/**
+ * The host's history moved to an entry of the document on `root` (LD7): back to the place `from` names (a token the
+ * host was given as onHash's `from`), else to `id` (a heading id or a defined ID, without '#'), else, for null, to the
+ * top. Calls no onHash. Does nothing for a root that is not enhanced, or still starting; see the header of this file.
+ */
+export function goToHash(root: HTMLElement, id: string | null, from?: string | null): void {
+  if (!isElement(root)) return;
+  if (id !== null && typeof id !== 'string') return;
+  const inst = findByRoot(root);
+  const ctx = inst?.ctx ?? null;
+  if (inst === undefined || inst.phase !== 'active' || ctx === null) return;
+  const token = typeof from === 'string' ? from : null;
+  operate(inst, () => {
+    ctx.nav.goToHash(id, token);
+  });
 }
 
 /**
