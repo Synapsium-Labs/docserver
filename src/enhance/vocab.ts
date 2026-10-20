@@ -1,12 +1,19 @@
-// Every word list of the reading layout, in one place (docserver L2, Task 7a): what a document's words must say for
-// the layout to mark them, with each list's default. Two kinds:
-//   - options (Task 8 makes each one a host option, a bounded list of strings): the status words and the status
-//     column's header words, the ID and rule-ID grammars (by their prefixes), the qualifiers, the addressees, the plan
-//     words, the attention words, and the byline item fields and delta-section headings (both default none);
+// Every word list of the reading layout, in one place (docserver L2, Tasks 7a and 8): what a document's words must say
+// for the layout to mark them, with each list's default. Two kinds:
+//   - options, the host's `vocabulary` (Task 8; types.ts's VocabularyOptions, checked and bounded by options.ts): the
+//     status words and the status column's header and ruling-header words, the ID and rule-ID grammars (by their
+//     prefixes), the qualifiers, the addressees, the plan words, the attention words (a rule's open statuses
+//     included), and the byline item fields and delta-section headings (both default none). Each list given replaces
+//     its default whole (mergeVocabulary); a list left out keeps it.
 //   - the format contract, the same for every host and documented as such: the technical, decision and title-column
 //     header words, the decisions table's header word, the file-path extensions, the glossary's headers, section
 //     names, alias stop words and name joins, the rule-ID list's joins, git's merge subjects and the commit-prefix
-//     rule, and the colour key's labels (the reference layout's, its ID examples neutral).
+//     rule, the colour key's labels (the reference layout's, its ID examples neutral), the editorial boxes' headings
+//     ("In short", "Where things stand"), the callout kinds' words, the front-matter keys that name the document's
+//     kind, and the delta block's `item:` line.
+// Of the three lists C48 left to rule, `rulingHeaders` and `attention.openStatus` are options (they belong to the
+// status column's rule and to the status words, both options), and `decisionHeaders` is the format contract (the
+// product lens's own rule that decisions stay, beside the technical header words).
 // A feature never holds a word list of its own: it reads `ctx.vocab`, compiled here once per instance.
 //
 // Words, never patterns (LD9): a list is plain strings, and compiling escapes every character a pattern would read
@@ -16,12 +23,14 @@
 // task number, a step's owner in brackets) are this module's, never a host's.
 //
 // The defaults reproduce what the prototype marked (status.ts's words and header rule) and port the reference
-// layout's own lists, sections 2, 3, 7, 8, 12, 12b, 12c, 16 and 24b, except its private words: the qualifiers and the
-// byline item fields and delta headings default to none, and the addressees to "you" alone.
+// layout's own lists, sections 2, 3, 5, 7, 8, 12, 12b, 12c, 16 and 24b, except its private words: the qualifiers and
+// the byline item fields and delta headings default to none, the ID and rule-ID grammars take no prefix, and the
+// addressees are "you" alone.
 //
 // Import-inert: declarations only. defaultVocabulary() returns a fresh object, and compileVocab() a frozen one, so
 // no instance can change another's words.
 import type { FeatureOptions } from './options.js';
+import type { VocabularyOptions } from './types.js';
 
 /** The four colour roles a status word takes. */
 export type StatusRole = 'ok' | 'wait' | 'no' | 'info';
@@ -114,6 +123,12 @@ export interface VocabularyWords {
   mergeForms: string[];
   /** Format contract: the colour key, in its order. */
   colourKey: ColourKeyEntry[];
+  /** Format contract: the level-2 headings of the editorial boxes, each the whole heading, in any case. */
+  boxes: { short: string[]; stand: string[] };
+  /** Format contract: a "Where things stand" level-3 heading that opens with one of a kind's words is that kind's callout. */
+  callouts: { agreed: string[]; waiting: string[]; later: string[] };
+  /** Format contract: the front matter's scalar keys whose value names the document's kind (the eyebrow), each whole, in any case. */
+  kindKeys: string[];
 }
 
 /** The defaults, as a fresh object each call. */
@@ -158,6 +173,9 @@ export function defaultVocabulary(): VocabularyWords {
       nameJoins: ['and'],
     },
     mergeForms: ['pull request', 'branch', 'remote-tracking branch', 'tag', 'commit', 'remote branch'],
+    boxes: { short: ['in short'], stand: ['where things stand'] },
+    callouts: { agreed: ['agreed'], waiting: ['waiting'], later: ['later'] },
+    kindKeys: ['type', 'area', 'status', 'kind'],
     colourKey: [
       { role: 'nav', label: 'Links, contents, section numbers' },
       { role: 'term', label: 'Terms defined in this doc' },
@@ -226,6 +244,10 @@ export interface Vocab {
   readonly itemHeading: RegExp;
   /** An item key: a capital, 1 to 9 capitals or digits, a dash, a number ("AB-12"). */
   readonly itemKey: RegExp;
+  /** A fresh global pattern for every item key in a text, with no word character or dash on either side. Group 1 is the key. */
+  itemKeyScan(): RegExp;
+  /** A delta block's item line, the whole line: "item:", then the value (group 1), with no white space in it. */
+  readonly itemLine: RegExp;
   readonly techHeader: RegExp;
   readonly decisionHeader: RegExp;
   readonly titleHeader: RegExp;
@@ -250,6 +272,12 @@ export interface Vocab {
   /** The commit-prefix rule: a leading "type(scope)!: " to drop from a subject. */
   readonly commitPrefix: RegExp;
   readonly colourKey: readonly Readonly<ColourKeyEntry>[];
+  /** The editorial boxes' headings: the whole heading text, in any case. */
+  readonly box: { readonly short: RegExp; readonly stand: RegExp };
+  /** A callout's kind: its heading opens with one of the kind's words, in any case. */
+  readonly callout: { readonly agreed: RegExp; readonly waiting: RegExp; readonly later: RegExp };
+  /** A front-matter key that names the document's kind, whole, in any case. */
+  readonly kindKey: RegExp;
 }
 
 /** A word with every pattern metacharacter escaped, so it matches itself and nothing else. */
@@ -259,6 +287,9 @@ function literal(word: string): string {
 
 /** A pattern that never matches. */
 const NEVER = '(?!)';
+
+/** An item key's grammar (format contract): a capital, 1 to 9 capitals or digits, a dash, a number. */
+const ITEM_KEY = '[A-Z][A-Z0-9]{1,9}-\\d+';
 
 /** One alternation group of the words, each literal; NEVER when there are none. */
 function anyOf(words: readonly string[]): string {
@@ -304,6 +335,9 @@ function frozenCopy(w: VocabularyWords): Readonly<VocabularyWords> {
     }),
     mergeForms: list(w.mergeForms),
     colourKey: Object.freeze(w.colourKey.map((e) => Object.freeze({ role: e.role, label: e.label }))) as ColourKeyEntry[],
+    boxes: Object.freeze({ short: list(w.boxes.short), stand: list(w.boxes.stand) }),
+    callouts: Object.freeze({ agreed: list(w.callouts.agreed), waiting: list(w.callouts.waiting), later: list(w.callouts.later) }),
+    kindKeys: list(w.kindKeys),
   });
 }
 
@@ -344,7 +378,9 @@ export function compileVocab(given: VocabularyWords): Vocab {
     }),
     itemField: new RegExp(`^${anyOf(w.itemFields)}$`, 'i'),
     itemHeading: new RegExp(`^(?:\\d+\\.\\s*)?${heading(w.itemHeadings)}$`, 'i'),
-    itemKey: /^[A-Z][A-Z0-9]{1,9}-\d+$/,
+    itemKey: new RegExp(`^${ITEM_KEY}$`),
+    itemKeyScan: () => new RegExp(`(?<![\\w-])(${ITEM_KEY})(?![\\w-])`, 'g'),
+    itemLine: /^item:\s*(\S+)$/,
     techHeader: new RegExp(`\\b${anyOf(w.techHeaders)}s?\\b`, 'i'),
     decisionHeader: new RegExp(anyOf(w.decisionHeaders), 'i'),
     titleHeader: new RegExp(`^${anyOf(w.titleHeaders)}`, 'i'),
@@ -362,14 +398,49 @@ export function compileVocab(given: VocabularyWords): Vocab {
     merge: new RegExp(`^Merge ${anyOf(w.mergeForms)}\\b`),
     commitPrefix: /^[a-z]+(?:\([^)]*\))?!?:\s*/i,
     colourKey: w.colourKey,
+    box: Object.freeze({ short: new RegExp(`^${anyOf(w.boxes.short)}$`, 'i'), stand: new RegExp(`^${anyOf(w.boxes.stand)}$`, 'i') }),
+    callout: Object.freeze({
+      agreed: new RegExp(`^${anyOf(w.callouts.agreed)}`, 'i'),
+      waiting: new RegExp(`^${anyOf(w.callouts.waiting)}`, 'i'),
+      later: new RegExp(`^${anyOf(w.callouts.later)}`, 'i'),
+    }),
+    kindKey: new RegExp(`^${anyOf(w.kindKeys)}$`, 'i'),
   });
 }
 
 /**
- * The vocabulary of one instance. Today the defaults; L2 Task 8 reads the host's `vocabulary` option here (each list
- * given replaces its default), so the lifecycle passes the options and needs no change for it.
+ * The word lists with the host's over them: each list the host gave (options.ts checked and bounded it) replaces its
+ * default whole, a list left out keeps it, and a group given in part keeps the default of each list it leaves out.
+ * `ids: false` is no IDs; an ID grammar given without prefixes is the default grammar. A fresh object; `w` is unchanged.
  */
+export function mergeVocabulary(w: VocabularyWords, o: VocabularyOptions): VocabularyWords {
+  const list = (given: readonly string[] | undefined, fallback: readonly string[]): string[] => [...(given ?? fallback)];
+  const grammar = (g: { readonly prefixes?: readonly string[] }): { prefixes: string[] | null } => ({ prefixes: g.prefixes === undefined ? null : [...g.prefixes] });
+  return {
+    ...w,
+    status: { ok: list(o.status?.ok, w.status.ok), wait: list(o.status?.wait, w.status.wait), no: list(o.status?.no, w.status.no), info: list(o.status?.info, w.status.info) },
+    statusHeaders: list(o.statusHeaders, w.statusHeaders),
+    rulingHeaders: list(o.rulingHeaders, w.rulingHeaders),
+    ids: o.ids === undefined ? w.ids : o.ids === false ? false : grammar(o.ids),
+    ruleIds: o.ruleIds === undefined ? w.ruleIds : grammar(o.ruleIds),
+    qualifiers: list(o.qualifiers, w.qualifiers),
+    addressees: list(o.addressees, w.addressees),
+    plan: { task: list(o.plan?.task, w.plan.task), step: list(o.plan?.step, w.plan.step), who: list(o.plan?.who, w.plan.who) },
+    attention: {
+      status: list(o.attention?.status, w.attention.status),
+      who: list(o.attention?.who, w.attention.who),
+      question: list(o.attention?.question, w.attention.question),
+      openAnswers: list(o.attention?.openAnswers, w.attention.openAnswers),
+      blocking: list(o.attention?.blocking, w.attention.blocking),
+      risk: list(o.attention?.risk, w.attention.risk),
+      openStatus: list(o.attention?.openStatus, w.attention.openStatus),
+    },
+    itemFields: list(o.itemFields, w.itemFields),
+    itemHeadings: list(o.itemHeadings, w.itemHeadings),
+  };
+}
+
+/** The vocabulary of one instance: the defaults, with the host's `vocabulary` option over them. */
 export function createVocab(options: FeatureOptions): Vocab {
-  void options;
-  return compileVocab(defaultVocabulary());
+  return compileVocab(mergeVocabulary(defaultVocabulary(), options.vocabulary));
 }

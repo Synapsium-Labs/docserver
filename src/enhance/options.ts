@@ -24,10 +24,16 @@
 // never cut); a key (`storageKey`, `posKey`) is at most LIMITS.key code units; a sha is 7 to 40 hex characters, or
 // exactly 64 (a SHA-256 repository), in either case, and is kept in lower case, so two spellings of one commit
 // compare equal. `info.commits` is the document's version history; it is not named `history`, a name the
-// source walls refuse in src/enhance because it is the page's. Vocabulary options are a later version's (word
-// lists, never patterns).
+// source walls refuse in src/enhance because it is the page's.
+//
+// The vocabulary (docserver L2, Task 8; LD9) is words, never patterns: each list an array of at most LIMITS.words
+// strings, each 1 to LIMITS.word code units and not all white space, read by index (a list over its bound is refused
+// before any item is read), its duplicates dropped, and frozen with every group around it. Only the lists vocab.ts
+// calls options are accepted; a format-contract list is an unknown key. What a list means, and its default, is
+// vocab.ts's: a list given replaces its default there. The namespace is the prefix of every storage key (state.ts),
+// `docreader` by default.
 import type { BoundCallback, HostCallbacks } from './host.js';
-import { EnhanceError, type CommitEntry, type FrontListEntry, type Prefs, type ReaderStorage } from './types.js';
+import { EnhanceError, type CommitEntry, type FrontListEntry, type Prefs, type ReaderStorage, type VocabularyOptions } from './types.js';
 
 /** Which parts of the chrome the reader builds (LD10). */
 export interface ChromeFlags {
@@ -61,6 +67,10 @@ export interface NormalizedOptions {
   readonly initialHash: string | null;
   /** Null: no drawing. */
   readonly mermaid: MermaidSettings | null;
+  /** The host's word lists, as given (frozen): vocab.ts merges them over its defaults. A feature reads `ctx.vocab`. */
+  readonly vocabulary: VocabularyOptions;
+  /** The prefix of every storage key (state.ts). */
+  readonly namespace: string;
   /** The host's functions, for host.ts alone: the lifecycle never puts them on a feature's context. */
   readonly callbacks: HostCallbacks;
 }
@@ -96,10 +106,26 @@ export const OPTION_KEYS: readonly string[] = [
   'prefs', 'storage', 'storageKey', 'info', 'folds', 'signal',
   'posKey', 'keyboard', 'chrome', 'rules', 'initialHash',
   'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid',
+  'vocabulary', 'namespace',
 ];
 const INFO_KEYS: readonly string[] = ['title', 'frontList', 'sha', 'draft', 'commits', 'only'];
 const CHROME_KEYS: readonly string[] = ['bar', 'rail', 'settings'];
 const MERMAID_KEYS: readonly string[] = ['load', 'maxTextSize', 'maxEdges', 'secure'];
+
+/** The option lists of the vocabulary, by group (vocab.ts says what each means). */
+const VOCABULARY_KEYS: readonly string[] = [
+  'status', 'statusHeaders', 'rulingHeaders', 'attention', 'ids', 'ruleIds', 'qualifiers', 'plan', 'addressees', 'itemFields', 'itemHeadings',
+];
+const STATUS_KEYS = ['ok', 'wait', 'no', 'info'] as const;
+const ATTENTION_KEYS = ['status', 'who', 'question', 'openAnswers', 'blocking', 'risk', 'openStatus'] as const;
+const PLAN_KEYS = ['task', 'step', 'who'] as const;
+const LIST_KEYS = ['statusHeaders', 'rulingHeaders', 'qualifiers', 'addressees', 'itemFields', 'itemHeadings'] as const;
+
+/** The storage keys' prefix when the host gives none. */
+export const DEFAULT_NAMESPACE = 'docreader';
+
+/** A namespace: a lower-case letter, then up to 31 lower-case letters, digits or dashes. */
+const NAMESPACE = /^[a-z][a-z0-9-]{0,31}$/;
 
 /** The bounds on host data read from the options. */
 export const LIMITS = {
@@ -125,6 +151,10 @@ export const LIMITS = {
   frontVals: 300,
   /** Code units of storageKey and of posKey. */
   key: 1024,
+  /** Words in one vocabulary list. */
+  words: 200,
+  /** Code units of one vocabulary word. */
+  word: 64,
 } as const;
 
 /** A sha: 7 to 40 hex characters (a short or full SHA-1 name), or exactly 64 (SHA-256), in either case (kept lower). */
@@ -348,6 +378,70 @@ function normalizeMermaid(v: unknown): { settings: MermaidSettings; load: BoundC
   return { settings, load };
 }
 
+/**
+ * One word list: an array of at most LIMITS.words words, each a string of 1 to LIMITS.word code units that is not all
+ * white space. Read by index (a longer array is refused before any item is read); duplicates are dropped; frozen.
+ */
+function wordList(where: string, v: unknown): readonly string[] {
+  if (!Array.isArray(v)) throw invalid(`${where} must be an array of words`);
+  if (v.length > LIMITS.words) throw invalid(`${where} holds at most ${String(LIMITS.words)} words`);
+  const out: string[] = [];
+  firstItems(v, LIMITS.words).forEach((w, i) => {
+    if (typeof w !== 'string' || w.length > LIMITS.word || w.trim() === '') {
+      throw invalid(`${where}[${String(i)}] must be a word of 1 to ${String(LIMITS.word)} code units, not all white space`);
+    }
+    if (!out.includes(w)) out.push(w);
+  });
+  return Object.freeze(out);
+}
+
+/** A group of word lists (`status`, `attention`, `plan`): an object of own data fields, each a list; frozen. */
+function wordGroup<K extends string>(where: string, v: unknown, keys: readonly K[]): Readonly<Partial<Record<K, readonly string[]>>> {
+  if (!isRecord(v)) throw invalid(`${where} must be an object`);
+  const fields = ownFields(where, v, keys);
+  const out: Partial<Record<K, readonly string[]>> = {};
+  for (const k of keys) {
+    const f = fields[k];
+    if (f !== undefined) out[k] = wordList(`${where}.${k}`, f);
+  }
+  return Object.freeze(out);
+}
+
+/** An ID grammar's choice (`ids`, `ruleIds`): `{ prefixes? }`, frozen; `shape` names what else the field takes. */
+function grammar(where: string, v: unknown, shape: string): { readonly prefixes?: readonly string[] } {
+  if (!isRecord(v)) throw invalid(`${where} must be ${shape}`);
+  const { prefixes } = ownFields(where, v, ['prefixes']);
+  return Object.freeze(prefixes === undefined ? {} : { prefixes: wordList(`${where}.prefixes`, prefixes) });
+}
+
+/** options.vocabulary: the lists given, each checked and frozen, in a frozen object; left out, an empty one. */
+function normalizeVocabulary(v: unknown): VocabularyOptions {
+  if (v === undefined) return Object.freeze({});
+  if (!isRecord(v)) throw invalid('vocabulary must be an object');
+  const fields = ownFields('vocabulary', v, VOCABULARY_KEYS);
+  const out: { -readonly [K in keyof VocabularyOptions]: VocabularyOptions[K] } = {};
+  if (fields['status'] !== undefined) out.status = wordGroup('vocabulary.status', fields['status'], STATUS_KEYS);
+  if (fields['attention'] !== undefined) out.attention = wordGroup('vocabulary.attention', fields['attention'], ATTENTION_KEYS);
+  if (fields['plan'] !== undefined) out.plan = wordGroup('vocabulary.plan', fields['plan'], PLAN_KEYS);
+  const { ids, ruleIds } = fields;
+  if (ids !== undefined) out.ids = ids === false ? false : grammar('vocabulary.ids', ids, 'false or an object');
+  if (ruleIds !== undefined) out.ruleIds = grammar('vocabulary.ruleIds', ruleIds, 'an object');
+  for (const k of LIST_KEYS) {
+    const f = fields[k];
+    if (f !== undefined) out[k] = wordList(`vocabulary.${k}`, f);
+  }
+  return Object.freeze(out);
+}
+
+/** options.namespace: NAMESPACE, or DEFAULT_NAMESPACE when left out. */
+function normalizeNamespace(v: unknown): string {
+  if (v === undefined) return DEFAULT_NAMESPACE;
+  if (typeof v !== 'string' || !NAMESPACE.test(v)) {
+    throw invalid('namespace must be a lower-case letter, then up to 31 lower-case letters, digits or dashes');
+  }
+  return v;
+}
+
 /** initialHash: the id, without '#'; empty or left out is none, and one over LIMITS.hash code units is ignored. */
 function normalizeHash(v: unknown): string | null {
   if (v === undefined || v === null || v === '') return null;
@@ -389,6 +483,8 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
     rules: flag('rules', fields['rules'], false),
     initialHash: normalizeHash(fields['initialHash']),
     mermaid: mermaid?.settings ?? null,
+    vocabulary: normalizeVocabulary(fields['vocabulary']),
+    namespace: normalizeNamespace(fields['namespace']),
     callbacks,
   };
 }
