@@ -1,7 +1,9 @@
 # L2 Task 6: mutation rows (real-browser harness, Level 2 runner, visual compare)
 
 Each guard Task 6 adds, deleted or inverted once, with the tests that go red. Measured 2026-10-20 on branch
-`l2-t6-browser`, against the tree its last code commit records.
+`l2-t6-browser`, on its final code: the harness rows (L2-T6-M16 to M27) and the Level 2 rows (L2-T6-M37 to M44)
+were measured again after the last code commit (the browser-neutral policy and favicon checks), with the same
+results as recorded here.
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8) with the two changes its results section records (a
 512 MiB output buffer, and a run that ends with no exit status reported as KILLED and counted as no verdict):
