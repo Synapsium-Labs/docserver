@@ -8,22 +8,28 @@
 //   1. the root takes the gate, `data-docreader-mermaid`, and the state `data-docreader-diagrams="drawing"`, at once,
 //      before any drawing succeeds (C43): the stylesheet then shows each source as a transparent placeholder;
 //   2. the host's load() is called, once, and its module awaited while the reader's faces load (env.fonts, at most
-//      FONT_WAIT_MS: Mermaid measures its labels with them);
+//      FONT_WAIT_MS: Mermaid measures its labels with them). As soon as the module is here, before that wait ends, it
+//      is given the configuration once, through its queue: stock Mermaid listens for the window's load event and,
+//      while its start-on-load is on (its default), draws every `.mermaid` of the document then, with its own defaults
+//      and into the document's own `pre`; the package's file has it off already;
 //   3. a module whose default export (or which itself) has Mermaid's `initialize` and `run` is Mermaid's; anything
 //      else, a rejection included, leaves every figure to its fallback, with the load note;
 //   4. after a frame, the figures near the viewport (less than NEAR screens away) are drawn first, in document order;
 //      then, after a timeout of 0, the rest, nearest first (each distance measured then);
 //   5. each figure is one call, serialised in one queue per Mermaid module across every root of the page (a module's
 //      configuration is global to it): a chrome `pre.mermaid` holding the source's text goes in right after the
-//      document's own `pre` (which is never written into, so it never gets Mermaid's `data-processed`), then
-//      `initialize(config)` and `run({ nodes: [that pre], suppressErrors: true })`. No id is looked up: the drawing is
-//      the svg Mermaid put in that node;
+//      document's own `pre` (which is never written into, so it never gets Mermaid's `data-processed`), or first in
+//      the figure when the host has moved that `pre` out of it, then `initialize(config)` and `run({ nodes: [that
+//      pre], suppressErrors: true })`, unless initialize destroyed the instance. No id is looked up: the drawing is the
+//      svg Mermaid put in that node;
 //   6. a figure is drawn when its chrome `pre` holds an svg that is not Mermaid's error drawing: the figure takes the
 //      journaled class `drawn`, the svg `role="img"` and an `aria-label` ("Figure N. " and the caption, else the
 //      drawing's own title, else the first line of its source), and the figure `--fig-w`, the drawing's own width
-//      with its plate's padding and border. Otherwise the figure takes `draw-failed` and a chrome `.fig-error` before
-//      its source: a note saying why, and a `details` holding the source. A source longer than maxTextSize is never
-//      handed to Mermaid (which would draw a box saying so): its note says it is too long;
+//      with its plate's padding and border. The first line of the source skips a leading front-matter block whole,
+//      where the reference skipped only its `---` fences. Otherwise the figure takes `draw-failed` and a chrome
+//      `.fig-error` before its source (first in the figure when the source has left it): a note saying why, and a
+//      `details` holding the source. A source longer than maxTextSize is never handed to Mermaid (which would draw a
+//      box saying so): its note says it is too long;
 //   7. once every figure is done, the state reads `drawn`, `partial` (some failed) or `failed` (all did).
 // Each change of a figure runs through position.keep and asks for a relayout ('content').
 //
@@ -36,15 +42,23 @@
 // additions: Mermaid's own six, and every style-bearing key of 12.1.0's configuration schema (a name that names a
 // theme, CSS, a style, a font, a colour, a fill, a stroke, the look or dark mode), enumerated from the schema by
 // test/enhance-diagrams.test.ts. Mermaid deletes a secure key from a diagram's own directives (an init directive or
-// front matter) at any depth, so no diagram changes its theme, fonts or colours, injects CSS, lifts the security level
-// or the limits. And `dompurifyConfig`, with which Mermaid sanitises each label: a label's own markup loses its
-// `style` elements (Mermaid's default), and its `style` and `class` attributes, so no label styles itself or borrows
-// one of the reader's rules (Mermaid adds its own classes after).
+// front matter) at any depth, so no directive changes the theme, fonts or colours, injects CSS, lifts the security
+// level or the limits. A diagram's own `classDef`, `style` and `linkStyle` statements are not directives: they still
+// style its nodes and edges inside the drawing (Mermaid scopes their rules to the drawing's id), as in the reference.
+// And `dompurifyConfig`, with which Mermaid sanitises each label: a label's own markup loses its `style` elements
+// (Mermaid's default) and its `style` and `class` attributes, so no label styles itself or borrows one of the reader's
+// rules. Mermaid passes the markup it makes inside a label through the same sanitiser, so that loses them too: a math
+// label's KaTeX wrapper, an `fa:` icon's `<i class>`, a registered icon's `label-icon` class.
 //
 // The second phase writes only inside operations, checks live() after every await (the font wait and env's frame
 // and timeout never settle once the instance is not live; the host's load answers null), and a queued call of a
 // destroyed instance is never made. The drawing is Mermaid's own writing inside a chrome node the journal inserted,
-// so destroy removes it with that node.
+// so destroy removes it with that node. One thing Mermaid writes outside it: its flowchart, state and class drawings
+// put a tooltip, `div.mermaidTooltip`, in the document's body the first time (it reuses the document's first
+// `.mermaidTooltip` after), and show it over a hovered node that has a tooltip. One a library call made is tracked
+// per document with the live instances that drew while it stood (Tip): the last one's teardown removes it, and each
+// earlier one's closes and empties it (a tooltip shown over that root's node would stay shown); one a call made after
+// its instance was destroyed goes at once. A tooltip the page already had is the page's: never changed.
 //
 // Standard files, slug `diagrams`: test/enhance-diagrams.test.ts, test/browser/diagrams.test.ts,
 // conformance/layout/diagrams/ and scripts/demo/samples/diagrams.md. The figure rules are assets/reader.css's.
@@ -115,7 +129,9 @@ export const THEME_VARIABLES = {
 /**
  * What a label's own markup loses, beyond what Mermaid's strict level removes (handlers, scripts): the elements and
  * attributes that style. Mermaid sanitises each label with `dompurifyConfig` when one is given (its default refuses
- * `style` elements only), and adds its own classes after, so its drawing is unchanged. A `class` would let a label
+ * `style` elements only). It sets its own classes on the label's wrappers after, so its shapes and their classes are
+ * unchanged; but the markup it makes inside a label is sanitised with the author's, so a math label's KaTeX wrapper
+ * loses its class and style, and an `fa:` icon's `<i>` or a registered icon its class. A `class` would let a label
  * borrow one of the reader's own rules.
  */
 const LABEL_TAGS_REFUSED = ['style'] as const;
@@ -199,6 +215,57 @@ function enqueue<T>(api: object, task: () => Promise<T>): Promise<T> {
     ),
   );
   return next;
+}
+
+/** Mermaid's tooltip, which a library call put in a document's body, and the live instances that drew while it stood. */
+interface Tip {
+  readonly el: Element;
+  readonly users: Set<FeatureContext>;
+}
+
+/** The tooltip a library call made, per document. */
+let tips: WeakMap<Document, Tip> | undefined;
+
+/** The document's tooltip as Mermaid finds it: its first `.mermaidTooltip`. */
+function tooltipIn(doc: Document): Element | null {
+  return doc.querySelector('.mermaidTooltip');
+}
+
+/** One instance's teardown: it no longer draws with `tip`; remove it once no live instance does, else close it. */
+function releaseTip(tip: Tip, ctx: FeatureContext): void {
+  tip.users.delete(ctx);
+  if (tip.users.size === 0) {
+    tip.el.remove();
+    return;
+  }
+  // Shown over a node of this root, it would stay shown once that node is gone (no mouseout comes): close it.
+  (tip.el as Element & ElementCSSInlineStyle).style.opacity = '0';
+  tip.el.replaceChildren();
+}
+
+/** After a call: note a tooltip the call made, and that this instance draws with the library's. */
+function noteTip(ctx: FeatureContext, doc: Document, had: Element | null): void {
+  const now = tooltipIn(doc);
+  if (now === null) return;
+  tips ??= new WeakMap();
+  let tip = tips.get(doc);
+  if (tip?.el !== now) {
+    if (had !== null) return; // the page's own, or one that stood before: not the library's
+    tip = { el: now, users: new Set() };
+    tips.set(doc, tip);
+  }
+  if (!ctx.live()) {
+    // The call ran on after a destroy: a tooltip it made has no instance left to go with.
+    if (tip.users.size === 0) releaseTip(tip, ctx);
+    return;
+  }
+  const held = tip;
+  ctx.operate(() => {
+    held.users.add(ctx);
+    ctx.journal.defer(() => {
+      releaseTip(held, ctx);
+    });
+  });
 }
 
 /** Whether `v` has Mermaid's initialize and run. */
@@ -293,6 +360,20 @@ function naturalWidth(svg: SVGSVGElement): number | null {
   return Number.isFinite(w) && w > 0 && w <= WIDTH_MAX ? w : null;
 }
 
+/** A source's first line: past a leading front-matter block (from a first `---` line to the next), and past comments. */
+function firstLine(text: string): string {
+  const lines = text.split('\n').map((l) => l.trim());
+  // An unclosed block skips nothing: indexOf answers -1, and the slice starts at 0.
+  const body = lines[0] === '---' ? lines.slice(lines.indexOf('---', 1) + 1) : lines;
+  return body.find((l) => l !== '' && !l.startsWith('%%')) ?? '';
+}
+
+/** Where a figure's chrome goes beside its source: right after it (or before it), or first once the host moved it out. */
+function besideSource(f: Fig, after: boolean): Node | null {
+  if (f.source.parentNode !== f.entry.figure) return f.entry.figure.firstChild;
+  return after ? f.source.nextSibling : f.source;
+}
+
 /** The drawing's name: "Figure N. " and the caption, else its own title, else the first line of its source. */
 function labelOf(ctx: FeatureContext, f: Fig, svg: SVGSVGElement): string {
   let title = '';
@@ -302,8 +383,7 @@ function labelOf(ctx: FeatureContext, f: Fig, svg: SVGSVGElement): string {
       break;
     }
   }
-  const line = f.text.split('\n').map((l) => l.trim()).find((l) => l !== '' && !l.startsWith('%%') && !l.startsWith('---')) ?? '';
-  const name = f.entry.caption !== '' ? f.entry.caption : title !== '' ? title : ctx.text.clip(line, LABEL_LINE_MAX);
+  const name = f.entry.caption !== '' ? f.entry.caption : title !== '' ? title : ctx.text.clip(firstLine(f.text), LABEL_LINE_MAX);
   return `Figure ${f.entry.no}. ${name}`;
 }
 
@@ -328,7 +408,7 @@ function markFailed(ctx: FeatureContext, f: Fig, why: Why): void {
       chrome(doc, 'pre', { className: 'fig-src', attrs: { tabindex: '0' } }, [chrome(doc, 'code', { text: f.text })]),
     ]),
   ]);
-  ctx.journal.insert(note, f.entry.figure, f.source);
+  ctx.journal.insert(note, f.entry.figure, besideSource(f, false));
 }
 
 /** Write one figure's outcome, keeping the reader's place, and ask for a relayout. */
@@ -348,12 +428,16 @@ function finish(ctx: FeatureContext, f: Fig, svg: SVGSVGElement | null, why: Why
  */
 async function call(ctx: FeatureContext, api: MermaidApi, config: () => Record<string, unknown>, f: Fig): Promise<HTMLElement | null> {
   if (!ctx.live()) return null;
-  const drawing = chrome(ctx.root.ownerDocument, 'pre', { className: 'mermaid', text: f.text });
+  const doc = ctx.root.ownerDocument;
+  const drawing = chrome(doc, 'pre', { className: 'mermaid', text: f.text });
+  let had: Element | null = null;
   let running: unknown;
   try {
     running = ctx.operate(() => {
-      ctx.journal.insert(drawing, f.entry.figure, f.source.nextSibling);
+      ctx.journal.insert(drawing, f.entry.figure, besideSource(f, true));
+      had = tooltipIn(doc);
       api.initialize(config());
+      if (!ctx.live()) return undefined; // initialize destroyed the instance: its run is never called
       return { run: api.run({ nodes: [drawing], suppressErrors: true }) };
     });
   } catch {
@@ -365,6 +449,7 @@ async function call(ctx: FeatureContext, api: MermaidApi, config: () => Record<s
   } catch {
     // a rejection: the drawing is checked by the caller
   }
+  noteTip(ctx, doc, had);
   return drawing;
 }
 
@@ -394,7 +479,22 @@ export async function after(ctx: FeatureContext): Promise<void> {
   if (figs.length === 0) return;
   ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
   ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing'); // the state (LD5)
+  const config = configOf(settings, fontOf(ctx));
   const loading = ctx.host.loadMermaid();
+  // As soon as the module is here, before the font wait ends: its start-on-load off, with the rest of the
+  // configuration, before a window load event can find it on (header, step 2).
+  void loading.then((mod) => {
+    const early = mermaidOf(mod);
+    if (early === null) return;
+    void enqueue(early, () => {
+      try {
+        ctx.operate(() => early.initialize(config()));
+      } catch {
+        // a throw of the module's: each call initialises again
+      }
+      return Promise.resolve();
+    });
+  });
   await ctx.env.fonts(FONT_WAIT_MS);
   if (!ctx.live()) return;
   const api = mermaidOf(await loading);
@@ -411,7 +511,6 @@ export async function after(ctx: FeatureContext): Promise<void> {
     settle();
     return;
   }
-  const config = configOf(settings, fontOf(ctx));
   await new Promise<void>((resolve) => {
     ctx.env.frame(resolve);
   });

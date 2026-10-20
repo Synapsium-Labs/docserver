@@ -4,7 +4,9 @@
 // each run, the configuration it passes, one call at a time per module across roots), the order it draws in (the
 // figures near the viewport first, in document order, then the rest, nearest first), what it writes (the root's gate
 // and state, a chrome `pre.mermaid` beside the source, the figure's class, the fallback note, the drawing's name and
-// width), and what a destroy stops (RF5). The real file in a real browser is test/browser/diagrams.test.ts.
+// width), what a destroy stops (RF5), Mermaid's tooltip in the body (removed with the last instance that drew while it
+// stood), and the module told not to start on load as soon as it is here. The real file in a real browser is
+// test/browser/diagrams.test.ts.
 //
 // The secure keys are measured against Mermaid 12.1.0's own configuration schema, its generated types in the pinned
 // package (`mermaid/dist/config.type.d.ts`), read with TypeScript's parser: every key whose name says it styles the
@@ -27,6 +29,7 @@ import {
 import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
+import { clip } from '../src/enhance/text.js';
 import { render } from '../src/render/index.js';
 
 const hooks = vi.hoisted(() => ({
@@ -124,7 +127,20 @@ interface Fake {
 /** The first word of a diagram's second line: the name each fixture gives its first node. */
 const wordOf = (text: string): string => /\n\s*(\S+)/.exec(text)?.[1] ?? text;
 
-function fakeMermaid(draw: (text: string) => Draw = () => 'svg', decorate: (svg: SVGSVGElement, text: string) => void = () => undefined): Fake {
+/** Put Mermaid's tooltip in the body, as its flowchart drawing does: the first `.mermaidTooltip` of the document, else a new one. */
+function mermaidTooltip(): void {
+  if (document.querySelector('.mermaidTooltip') !== null) return;
+  const tip = document.createElement('div');
+  tip.className = 'mermaidTooltip';
+  tip.style.opacity = '0';
+  document.body.append(tip);
+}
+
+function fakeMermaid(
+  draw: (text: string) => Draw = () => 'svg',
+  decorate: (svg: SVGSVGElement, text: string) => void = () => undefined,
+  tooltip = false,
+): Fake {
   const log: string[] = [];
   const configs: Record<string, unknown>[] = [];
   const nodes: HTMLElement[] = [];
@@ -156,6 +172,7 @@ function fakeMermaid(draw: (text: string) => Draw = () => 'svg', decorate: (svg:
           if (how === 'error') svg.setAttribute('aria-roledescription', 'error');
           decorate(svg, text);
           node.append(svg);
+          if (tooltip) mermaidTooltip();
         };
         if (!fake.hold) {
           finish();
@@ -188,6 +205,12 @@ function fakeMermaid(draw: (text: string) => Draw = () => 'svg', decorate: (svg:
 function drawWith(mod: unknown, tag = 'tagA', extra: Partial<NonNullable<EnhanceOptions['mermaid']>> = {}): EnhanceOptions {
   return { mermaid: { load: () => Promise.resolve(mod), secure: [tag], ...extra } };
 }
+
+/**
+ * The calls of a log, each `init` with the `run` it was made for: without the initialize that tells a module not to
+ * start on load as soon as it is here (an `init` no `run` follows).
+ */
+const calls = (log: readonly string[]): string[] => log.filter((l, i) => !l.startsWith('init') || (log[i + 1]?.startsWith('run') ?? false));
 
 const figuresOf = (root: Element): HTMLElement[] => Array.from(root.querySelectorAll('figure.mermaid-figure'));
 
@@ -248,7 +271,7 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     });
     // enhance() resolved with the layout built: the drawing comes after, in the second phase (LD5).
     expect(atLoad).toEqual(['', 'drawing']);
-    expect(fake.log).toEqual([]);
+    expect(fake.log.filter((l) => l.startsWith('run'))).toEqual([]);
     await settledState(root, 'drawn');
     expect(calls).toBe(1);
     expect(fake.log.filter((l) => l.startsWith('run'))).toHaveLength(3);
@@ -267,7 +290,7 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     const fake = fakeMermaid();
     await enhance(root, drawWith({ default: fake.api }, 'extraKey', { secure: ['themeCSS', 'extraKey'] }));
     await settledState(root, 'drawn');
-    expect(fake.log).toEqual(['init extraKey', 'run one', 'init extraKey', 'run two', 'init extraKey', 'run three']);
+    expect(calls(fake.log)).toEqual(['init extraKey', 'run one', 'init extraKey', 'run two', 'init extraKey', 'run three']);
     const config = fake.configs[0] ?? {};
     expect(config).toMatchObject({
       startOnLoad: false,
@@ -288,7 +311,7 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     // The library's keys, then the host's that are not among them, each once.
     expect(config['secure']).toEqual([...secureKeys(), 'extraKey']);
     // Each call gets its own configuration object: Mermaid keeps what it is given.
-    expect(new Set(fake.configs).size).toBe(3);
+    expect(new Set(fake.configs).size).toBe(fake.configs.length);
   });
 
   it('the host\'s limits replace the pinned defaults', async () => {
@@ -387,7 +410,7 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     await enhance(root, drawWith({ default: fake.api }));
     // The fonts wait and the load settle at once here; a task later, the frame (16 ms in jsdom) has not come.
     await new Promise((r) => setTimeout(r, 0));
-    expect(fake.log).toEqual([]);
+    expect(fake.log.filter((l) => l.startsWith('run'))).toEqual([]);
     await settledState(root, 'drawn');
   });
 
@@ -434,6 +457,28 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     expect(labels).toEqual(['Figure 1. Named.', 'Figure 2. flowchart LR', 'Figure 3. Its own title']);
   });
 
+  it('a drawing named by its source skips a leading front-matter block whole, not only its fences', async () => {
+    const md = ['# D', '', fence('---\ntitle: A titled flow\nconfig:\n  theme: dark\n---\nflowchart LR\n  one --> A')].join('\n');
+    const root = mount(md);
+    const fake = fakeMermaid();
+    await enhance(root, drawWith({ default: fake.api }));
+    await settledState(root, 'drawn');
+    const labels = figuresOf(root).map((f) => drawingOf(f)?.querySelector('svg')?.getAttribute('aria-label'));
+    expect(labels).toEqual(['Figure 1. flowchart LR']);
+  });
+
+  it('a drawing named by its source takes at most 80 characters of its first line', async () => {
+    const line = `flowchart LR; ${Array.from({ length: 12 }, (_, i) => `n${String(i)} --> n${String(i + 1)};`).join(' ')}`;
+    expect(line.length).toBeGreaterThan(120);
+    const root = mount(['# D', '', fence(line)].join('\n'));
+    const fake = fakeMermaid();
+    await enhance(root, drawWith({ default: fake.api }));
+    await settledState(root, 'drawn');
+    const label = drawingOf(figuresOf(root)[0] as Element)?.querySelector('svg')?.getAttribute('aria-label') ?? '';
+    expect(label).toBe(`Figure 1. ${clip(line, 80)}`);
+    expect(label.length).toBeLessThanOrEqual('Figure 1. '.length + 80);
+  });
+
   it('draws the figures near the viewport first, in document order, then the rest, nearest first', async () => {
     const md = ['# D', '', ...['one', 'two', 'three', 'four', 'five'].map((w) => fence(`flowchart LR\n  ${w} --> X`))].join('\n');
     const root = mount(md);
@@ -455,23 +500,21 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     await enhance(a, drawWith({ default: fake.api }, 'tagA'));
     await enhance(b, drawWith({ default: fake.api }, 'tagB'));
     await vi.waitFor(() => {
-      expect(fake.log).toEqual(['init tagA', 'run one']);
+      expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
     });
-    // b and c have queued their first figures behind a's by now.
+    // b has queued its first figure behind a's by now: nothing of b runs while a's call is open.
     await new Promise((r) => setTimeout(r, 60));
-    // b's first figure waits behind a's first: nothing of b runs while a's call is open.
-    await new Promise((r) => setTimeout(r, 60));
-    expect(fake.log).toEqual(['init tagA', 'run one']);
+    expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
     expect(fake.release()).toBe(true);
     await vi.waitFor(() => {
-      expect(fake.log).toEqual(['init tagA', 'run one', 'init tagB', 'run bee']);
+      expect(calls(fake.log)).toEqual(['init tagA', 'run one', 'init tagB', 'run bee']);
     });
     // a's second figure was queued behind b's: one call at a time, in the order they were asked for.
     fake.hold = false;
     expect(fake.release()).toBe(true);
     await settledState(a, 'drawn');
     await settledState(b, 'drawn');
-    expect(fake.log).toEqual(['init tagA', 'run one', 'init tagB', 'run bee', 'init tagA', 'run two', 'init tagA', 'run three']);
+    expect(calls(fake.log)).toEqual(['init tagA', 'run one', 'init tagB', 'run bee', 'init tagA', 'run two', 'init tagA', 'run three']);
   });
 
   it('two Mermaid modules have a queue each: a call on one never waits for the other', async () => {
@@ -483,8 +526,8 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     await enhance(a, drawWith({ default: held.api }, 'tagA'));
     await enhance(b, drawWith({ default: free.api }, 'tagB'));
     await settledState(b, 'drawn');
-    expect(free.log).toEqual(['init tagB', 'run bee']);
-    expect(held.log).toEqual(['init tagA', 'run one']);
+    expect(calls(free.log)).toEqual(['init tagB', 'run bee']);
+    expect(calls(held.log)).toEqual(['init tagA', 'run one']);
   });
 
   it('a figure Mermaid could not draw falls back: draw-failed, and a note holding its source in a details', async () => {
@@ -556,7 +599,7 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     const fake = fakeMermaid();
     await enhance(root, drawWith({ default: fake.api }, 'tagA', { maxTextSize: 100 }));
     await settledState(root, 'partial');
-    expect(fake.log).toEqual(['init tagA', 'run one']);
+    expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
     const [, long] = figuresOf(root) as [HTMLElement, HTMLElement];
     expect(long.classList.contains('draw-failed')).toBe(true);
     expect(drawingOf(long)).toBe(null);
@@ -596,7 +639,8 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     const api = {
       initialize: (c: Record<string, unknown>) => {
         n += 1;
-        if (n === 2) throw new Error('refused');
+        // The first is the one made as the module arrives; the third is the second figure's.
+        if (n === 3) throw new Error('refused');
         fake.api.initialize(c);
       },
       run: (o: RunOptions) => fake.api.run(o),
@@ -606,6 +650,113 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     expect(figuresOf(root).map((f) => f.classList.contains('drawn'))).toEqual([true, false, true]);
   });
 
+  it('a source the host moved out of its figure: the note or the drawing goes first in the figure, and the pass goes on', async () => {
+    const root = mount();
+    const fake = fakeMermaid((text) => (text.includes('one') ? 'empty' : 'svg'));
+    let resolve: (m: unknown) => void = () => undefined;
+    await enhance(root, { mermaid: { load: () => new Promise((r) => (resolve = r)), secure: ['tagA'] } });
+    const [one, two] = figuresOf(root) as [HTMLElement, HTMLElement, HTMLElement];
+    // Each source now sits before a node that is not in its figure.
+    const away = document.createElement('div');
+    root.append(away);
+    away.append(sourceOf(one), sourceOf(two), document.createElement('span'));
+    resolve({ default: fake.api });
+    await settledState(root, 'partial');
+    expect(figuresOf(root).map((f) => f.className)).toEqual(['mermaid-figure draw-failed', 'mermaid-figure drawn', 'mermaid-figure drawn']);
+    expect(one.firstElementChild?.classList.contains('fig-error')).toBe(true);
+    expect(one.querySelector('.fig-error > p')?.textContent).toBe(NOTES.error);
+    expect(two.firstElementChild).toBe(drawingOf(two));
+    expect(drawingOf(two)?.querySelector('svg')?.getAttribute('role')).toBe('img');
+  });
+
+  it('an initialize that destroys the instance: the run it was made for is never called', async () => {
+    const root = mount();
+    const before = root.innerHTML;
+    const fake = fakeMermaid();
+    let n = 0;
+    const api = {
+      initialize: (c: Record<string, unknown>) => {
+        n += 1;
+        fake.api.initialize(c);
+        // The first is the one made as the module arrives; the second is the first figure's.
+        if (n === 2) void destroyEnhancement(root);
+      },
+      run: (o: RunOptions) => fake.api.run(o),
+    };
+    await enhance(root, drawWith({ default: api }));
+    await vi.waitFor(() => {
+      expect(n).toBe(2);
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(fake.log.filter((l) => l.startsWith('run'))).toEqual([]);
+    expect(root.innerHTML).toBe(before);
+    expect(root.hasAttribute(STATE)).toBe(false);
+  });
+
+  it('tells the module not to start on load as soon as it is here, before the fonts wait ends', async () => {
+    // A font set whose faces never load: the wait runs to its bound, 1.5 s.
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { load: () => new Promise(() => undefined), addEventListener: () => undefined, removeEventListener: () => undefined },
+    });
+    try {
+      const root = mount();
+      const fake = fakeMermaid();
+      await enhance(root, drawWith({ default: fake.api }));
+      await vi.waitFor(() => {
+        expect(fake.log).toEqual(['init tagA']);
+      });
+      expect(fake.configs[0]).toMatchObject({ startOnLoad: false, securityLevel: 'strict', layout: 'dagre' });
+      // The drawing still waits for the faces.
+      await new Promise((r) => setTimeout(r, 300));
+      expect(fake.log).toEqual(['init tagA']);
+      await vi.waitFor(
+        () => {
+          expect(root.getAttribute(STATE)).toBe('drawn');
+        },
+        { timeout: 4000 },
+      );
+    } finally {
+      Reflect.deleteProperty(document, 'fonts');
+    }
+  });
+
+  it('an initialize that throws as the module arrives: every figure still draws', async () => {
+    const root = mount();
+    const fake = fakeMermaid();
+    let n = 0;
+    const api = {
+      initialize: (c: Record<string, unknown>) => {
+        n += 1;
+        if (n === 1) throw new Error('refused');
+        fake.api.initialize(c);
+      },
+      run: (o: RunOptions) => fake.api.run(o),
+    };
+    await enhance(root, drawWith({ default: api }));
+    await settledState(root, 'drawn');
+    expect(calls(fake.log)).toEqual(['init tagA', 'run one', 'init tagA', 'run two', 'init tagA', 'run three']);
+  });
+
+  it('the initialize made as a module arrives, queued behind another root\'s call, is never made once its instance is destroyed', async () => {
+    const a = mount();
+    const fake = fakeMermaid();
+    fake.hold = true;
+    await enhance(a, drawWith({ default: fake.api }, 'tagA'));
+    await vi.waitFor(() => {
+      expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
+    });
+    // b's module arrives while a's call is open: its initialize waits behind it.
+    const b = mount(['# B', '', fence('flowchart LR\n  bee --> X')].join('\n'));
+    await enhance(b, drawWith({ default: fake.api }, 'tagB'));
+    await new Promise((r) => setTimeout(r, 60));
+    await destroyEnhancement(b);
+    fake.hold = false;
+    fake.release();
+    await settledState(a, 'drawn');
+    expect(fake.log.filter((l) => l.endsWith('tagB'))).toEqual([]);
+  });
+
   it('a destroy during a pass stops it: the call in flight ends, no other is made, nothing is written', async () => {
     const root = mount();
     const before = root.innerHTML;
@@ -613,16 +764,16 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     fake.hold = true;
     await enhance(root, drawWith({ default: fake.api }));
     await vi.waitFor(() => {
-      expect(fake.log).toEqual(['init tagA', 'run one']);
+      expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
     });
-    // b and c have queued their first figures behind a's by now.
+    // The pass waits on the first figure's call by now.
     await new Promise((r) => setTimeout(r, 60));
     const destroyed = destroyEnhancement(root);
     await destroyed;
     expect(root.innerHTML).toBe(before);
     fake.release();
     await new Promise((r) => setTimeout(r, 80));
-    expect(fake.log).toEqual(['init tagA', 'run one']);
+    expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
     expect(root.innerHTML).toBe(before);
     expect(root.hasAttribute(STATE)).toBe(false);
   });
@@ -637,7 +788,7 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     await enhance(b, drawWith({ default: fake.api }, 'tagB'));
     await enhance(c, drawWith({ default: fake.api }, 'tagC'));
     await vi.waitFor(() => {
-      expect(fake.log).toEqual(['init tagA', 'run one']);
+      expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
     });
     // b and c have queued their first figures behind a's by now.
     await new Promise((r) => setTimeout(r, 60));
@@ -646,8 +797,8 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     fake.release();
     await settledState(c, 'drawn');
     await settledState(a, 'drawn');
-    expect(fake.log.filter((l) => l.endsWith('tagB') || l === 'run bee')).toEqual([]);
-    expect(fake.log.slice(0, 4)).toEqual(['init tagA', 'run one', 'init tagC', 'run sea']);
+    expect(calls(fake.log).filter((l) => l.endsWith('tagB') || l === 'run bee')).toEqual([]);
+    expect(calls(fake.log).slice(0, 4)).toEqual(['init tagA', 'run one', 'init tagC', 'run sea']);
   });
 
   it('RF5: a load() that resolves after a destroy draws nothing', async () => {
@@ -703,6 +854,80 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     expect(calls).toBe(0);
     expect(root.hasAttribute(GATE)).toBe(false);
     expect(root.hasAttribute(STATE)).toBe(false);
+  });
+});
+
+const tooltips = (): HTMLElement[] => Array.from(document.querySelectorAll('.mermaidTooltip'));
+
+describe('diagrams: Mermaid\'s tooltip, which its drawings put in the body, outside every root', () => {
+  it('goes with the last instance that drew while it stood: the body is as it was', async () => {
+    const a = mount();
+    const b = mount(['# B', '', fence('flowchart LR\n  bee --> X')].join('\n'));
+    const body = Array.from(document.body.childNodes);
+    const fake = fakeMermaid(undefined, undefined, true);
+    await enhance(a, drawWith({ default: fake.api }, 'tagA'));
+    await enhance(b, drawWith({ default: fake.api }, 'tagB'));
+    await settledState(a, 'drawn');
+    await settledState(b, 'drawn');
+    const [tip] = tooltips();
+    expect(tooltips()).toHaveLength(1);
+    expect(tip?.parentNode).toBe(document.body);
+    await destroyEnhancement(a);
+    // b still draws with it.
+    expect(tip?.isConnected).toBe(true);
+    await destroyEnhancement(b);
+    expect(tip?.isConnected).toBe(false);
+    expect(Array.from(document.body.childNodes)).toEqual(body);
+  });
+
+  it('one shown when its root goes, while another root still draws with it, is closed and emptied', async () => {
+    const a = mount();
+    const b = mount(['# B', '', fence('flowchart LR\n  bee --> X')].join('\n'));
+    const fake = fakeMermaid(undefined, undefined, true);
+    await enhance(a, drawWith({ default: fake.api }, 'tagA'));
+    await enhance(b, drawWith({ default: fake.api }, 'tagB'));
+    await settledState(a, 'drawn');
+    await settledState(b, 'drawn');
+    const tip = tooltips()[0] as HTMLElement;
+    // As Mermaid shows it over a hovered node of a's.
+    tip.style.opacity = '0.9';
+    tip.textContent = 'A tip';
+    await destroyEnhancement(a);
+    expect(tip.isConnected).toBe(true);
+    expect([tip.style.opacity, tip.textContent]).toEqual(['0', '']);
+  });
+
+  it('one the page already had is never removed nor changed', async () => {
+    const own = document.createElement('div');
+    own.className = 'mermaidTooltip';
+    own.style.opacity = '0.9';
+    own.textContent = 'the page\'s own';
+    document.body.append(own);
+    const html = own.outerHTML;
+    const root = mount();
+    const fake = fakeMermaid(undefined, undefined, true);
+    await enhance(root, drawWith({ default: fake.api }));
+    await settledState(root, 'drawn');
+    expect(tooltips()).toEqual([own]);
+    await destroyEnhancement(root);
+    expect(tooltips()).toEqual([own]);
+    expect(own.outerHTML).toBe(html);
+  });
+
+  it('one a call made after its instance was destroyed goes at once', async () => {
+    const root = mount();
+    const body = Array.from(document.body.childNodes);
+    const fake = fakeMermaid(undefined, undefined, true);
+    fake.hold = true;
+    await enhance(root, drawWith({ default: fake.api }));
+    await vi.waitFor(() => {
+      expect(calls(fake.log)).toEqual(['init tagA', 'run one']);
+    });
+    await destroyEnhancement(root);
+    expect(fake.release()).toBe(true);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(tooltips()).toEqual([]);
+    expect(Array.from(document.body.childNodes)).toEqual(body);
   });
 });
 
