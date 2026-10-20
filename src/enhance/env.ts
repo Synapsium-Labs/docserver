@@ -111,7 +111,7 @@ const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;
 
 /** Whether one face's load answered a loaded face: a list with at least one face whose status is 'loaded'. */
 function loadedFace(found: unknown): boolean {
-  return Array.isArray(found) && found.some((f: unknown) => typeof f === 'object' && f !== null && (f as { status?: unknown }).status === 'loaded');
+  return Array.isArray(found) && found.some((f: unknown) => (f as { status?: unknown } | null | undefined)?.status === 'loaded');
 }
 
 /** A finite delay from 0 to MAX_DELAY. */

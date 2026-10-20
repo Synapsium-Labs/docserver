@@ -1957,7 +1957,7 @@ describe('env.fonts: a face is loaded only when its load answers a loaded face (
   it('an answer that is not a list of faces is no loaded face', async () => {
     const root = mount();
     await enhance(root);
-    for (const answer of [undefined, [null], ['loaded'], [{}], [{ status: 'error' }]]) {
+    for (const answer of [undefined, [undefined], [null], ['loaded'], [{}], [{ status: 'error' }]]) {
       Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => Promise.resolve(answer) } });
       expect(await ctxOf(root).env.fonts(20), JSON.stringify(answer)).toBe(false);
     }
