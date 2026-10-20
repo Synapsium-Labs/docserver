@@ -15,7 +15,7 @@ import { DEFAULT_NAMESPACE, LIMITS, normalizeOptions, OPTION_KEYS } from '../src
 import { createReaderState, docKey, posKeyOf, prefsKey, PREFS_KEY, uiKey, UI_KEY } from '../src/enhance/state.js';
 import { statusOf } from '../src/enhance/status.js';
 import type { FeatureContext, VocabularyOptions } from '../src/enhance/types.js';
-import { compileVocab, defaultVocabulary, type VocabularyWords } from '../src/enhance/vocab.js';
+import { compileVocab, createVocab, defaultVocabulary, type VocabularyWords } from '../src/enhance/vocab.js';
 import { render } from '../src/render/index.js';
 
 // createVocab passes through to the real one unless a test sets `hooks.words`: the format contract is no option, so a
@@ -204,7 +204,7 @@ describe('vocabulary: every option list of vocab.ts is an option, each list give
     expect(normalizeOptions({ vocabulary: { qualifiers: full } }).vocabulary.qualifiers).toEqual(full);
     expect(verdict({ vocabulary: { qualifiers: [...full, 'one more'] } })).toBe('invalid-options: docreader: vocabulary.qualifiers holds at most 200 words');
     expect(verdict({ vocabulary: { status: { ok: ['w'.repeat(LIMITS.word + 1)] } } })).toBe(
-      'invalid-options: docreader: vocabulary.status.ok[0] must be a word of 1 to 64 code units, not all white space',
+      'invalid-options: docreader: vocabulary.status.ok[0] must be a word of 1 to 64 code units, with no white space at either end',
     );
   });
 
@@ -240,9 +240,14 @@ describe('vocabulary: every option list of vocab.ts is an option, each list give
     ['a list an array-like object', { vocabulary: { addressees: { length: 1, 0: 'you' } } }, /vocabulary\.addressees must be an array of words$/],
     ['ids.prefixes a string', { vocabulary: { ids: { prefixes: 'R' } } }, /vocabulary\.ids\.prefixes must be an array of words$/],
     ['ruleIds.prefixes a number', { vocabulary: { ruleIds: { prefixes: 3 } } }, /vocabulary\.ruleIds\.prefixes must be an array of words$/],
-    ['a word a number', { vocabulary: { itemFields: [3] } }, /vocabulary\.itemFields\[0\] must be a word of 1 to 64 code units, not all white space$/],
+    ['a word a number', { vocabulary: { itemFields: [3] } }, /vocabulary\.itemFields\[0\] must be a word of 1 to 64 code units, with no white space at either end$/],
     ['an empty word', { vocabulary: { statusHeaders: ['status', ''] } }, /vocabulary\.statusHeaders\[1\] must be a word/],
     ['a word of white space', { vocabulary: { status: { wait: [' \t '] } } }, /vocabulary\.status\.wait\[0\] must be a word/],
+    ['a word opening on a space', { vocabulary: { status: { ok: [' done'] } } }, /vocabulary\.status\.ok\[0\] must be a word of 1 to 64 code units, with no white space at either end$/],
+    ['a word ending on a tab', { vocabulary: { statusHeaders: ['status\t'] } }, /vocabulary\.statusHeaders\[0\] must be a word/],
+    ['a word opening on a no-break space', { vocabulary: { addressees: ['\u00a0you'] } }, /vocabulary\.addressees\[0\] must be a word/],
+    ['a heading ending on an ideographic space', { vocabulary: { itemHeadings: ['change delta\u3000'] } }, /vocabulary\.itemHeadings\[0\] must be a word/],
+    ['a prefix ending on a line break', { vocabulary: { ids: { prefixes: ['REQ\n'] } } }, /vocabulary\.ids\.prefixes\[0\] must be a word/],
     ['a hole', { vocabulary: { itemHeadings: [, 'delta'] } }, /vocabulary\.itemHeadings\[0\] must be a word/],
     ['a word null', { vocabulary: { attention: { risk: [null] } } }, /vocabulary\.attention\.risk\[0\] must be a word/],
     ['a plan word over 64', { vocabulary: { plan: { task: ['T'.repeat(65)] } } }, /vocabulary\.plan\.task\[0\] must be a word/],
@@ -370,6 +375,96 @@ describe('vocabulary: the status marks read it', () => {
     const root = mount(STATUS_DOC);
     await enhance(root, { vocabulary: { status: { ok: [], wait: [], no: [], info: [] } } });
     expect(pills(root)).toEqual([]);
+  });
+
+  it('an empty rulingHeaders names no ruling word, and a header that ends in "?" still asks a question', () => {
+    const v = compileVocab({ ...defaultVocabulary(), rulingHeaders: [] });
+    expect(['Ruling', 'Agreed?', 'Answer'].map((h) => v.rulingHeader.test(h))).toEqual([false, true, false]);
+  });
+});
+
+describe('vocabulary: a whole word, in any script (a letter, digit, mark or _ ends a word; any other edge is its own)', () => {
+  const vocabOf = (v: VocabularyOptions): ReturnType<typeof createVocab> => createVocab(normalizeOptions({ vocabulary: v }));
+
+  it('a status word opens a status in any script, or ending in punctuation or a symbol; a letter, digit or mark after a letter edge stops it', () => {
+    const v = vocabOf({ status: { ok: ['готово', 'validé', '完了', '✓', 'c++', 'done!', 'erledigt'] } });
+    const cases: [string, string | null][] = [
+      ['готово сегодня', 'ok'],
+      ['Готово', 'ok'],
+      ['validé hier', 'ok'],
+      ['VALIDÉ', 'ok'],
+      ['完了 です', 'ok'],
+      ['✓ shipped', 'ok'],
+      ['✓shipped', 'ok'],
+      ['c++ now', 'ok'],
+      ['done! now', 'ok'],
+      ['erledigt.', 'ok'],
+      ['готовый', null],
+      ['готово7', null],
+      ['готово\u0301', null],
+      ['validée', null],
+      ['erledigte', null],
+      ['done now', null],
+    ];
+    expect(cases.map(([s]) => [s, statusOf(v, s)?.role ?? null])).toEqual(cases);
+  });
+
+  it('the default words keep their whole-word rule, now by every script: a letter after an ASCII word stops it too', () => {
+    const v = createVocab(normalizeOptions({}));
+    const cases: [string, string | null][] = [
+      ['Done.', 'ok'],
+      ['Done (late)', 'ok'],
+      ['Doneé', null],
+      ['Done_', null],
+      ['Donez', null],
+      ['To do next', 'wait'],
+    ];
+    expect(cases.map(([s]) => [s, statusOf(v, s)?.role ?? null])).toEqual(cases);
+  });
+
+  it('status-column headers: whole, in any script and any case; one ending in "?" needs no boundary after', () => {
+    const v = vocabOf({ statusHeaders: ['статус', 'status?'] });
+    const cases: [string, boolean][] = [
+      ['Статус', true],
+      ['Текущий статус', true],
+      ['статусы', false],
+      ['подстатус', false],
+      ['Status? (now)', true],
+      ['Status?x', true],
+      ['xstatus?', false],
+      ['Status', false],
+    ];
+    expect(cases.map(([h]) => [h, v.statusHeader.test(h)])).toEqual(cases);
+  });
+
+  it('addressees, qualifiers and the attention words: whole, in any script', () => {
+    const v = vocabOf({
+      addressees: ['вы', '@me'],
+      qualifiers: ['приложения'],
+      attention: { who: ['кто'], openAnswers: ['открыто'], blocking: ['блок!'] },
+    });
+    const cases: [string, RegExp, string, boolean][] = [
+      ['addressee', v.addressee, 'Кто: вы', true],
+      ['addressee', v.addressee, 'вывод', false],
+      ['addressee', v.addressee, 'Owner: @me', true],
+      ['addressee', v.addressee, 'Owner: @mex', false],
+      ['addressee', v.addressee, 'ask x@me', true],
+      ['qualifier', v.qualifier, 'см. приложения ', true],
+      ['qualifier', v.qualifier, 'см. xприложения ', false],
+      ['who', v.attention.who, 'Кто делает', true],
+      ['who', v.attention.who, 'Ктото', false],
+      ['openAnswers', v.attention.openAnswers, 'Открыто пока', true],
+      ['openAnswers', v.attention.openAnswers, 'открытость', false],
+      ['blocking', v.attention.blocking, '  блок! да', true],
+      ['blocking', v.attention.blocking, 'блоки', false],
+    ];
+    expect(cases.map(([name, re, s]) => [name, re, s, re.test(s)])).toEqual(cases);
+  });
+
+  it('an ID is whole in any script: a prefix of another script, and the default grammar with a letter on either side', () => {
+    const scan = (v: ReturnType<typeof createVocab>, s: string): string[] => Array.from(s.matchAll(v.idScan()), (m) => m[1] ?? '');
+    expect(scan(vocabOf({ ids: { prefixes: ['Р'] } }), 'see Р12, xР13, Р14б and Р15.')).toEqual(['Р12', 'Р15']);
+    expect(scan(createVocab(normalizeOptions({})), 'R1, éR2, R3é and R4')).toEqual(['R1', 'R4']);
   });
 });
 
@@ -532,6 +627,19 @@ describe('the item link: off unless itemLink is given and a route is', () => {
     ]);
   });
 
+  it('without itemLink the byline carries no click listener of the item link', async () => {
+    const spy = vi.spyOn(EventTarget.prototype, 'addEventListener');
+    try {
+      const root = mount(ITEM_DOC);
+      await enhance(root, { onLink: () => undefined, vocabulary: { itemFields: ['Tracker'], itemHeadings: ['change delta'] } });
+      const byline = root.querySelector('dl.byline');
+      expect(byline).not.toBeNull();
+      expect(spy.mock.contexts.filter((t) => t === byline).length).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('with itemLink but no route (the defaults name none), itemLink is never called', async () => {
     const itemLink = vi.fn(LINK);
     const root = mount(ITEM_DOC);
@@ -604,6 +712,30 @@ describe('the item link, by the byline route: a fact whose label is in itemField
     expect(Array.from(root.querySelectorAll('a.item-link')).map((a) => a.firstChild?.textContent)).toEqual(keys.slice(0, ITEM_LINKS.keys));
   });
 
+  it('at most 64 links are written: one key repeated past them stays text, and the host is asked once', async () => {
+    const root = mount(`# Example spec\n\n**Spec** · **Tracker:** ${'AB-1 '.repeat(ITEM_LINKS.links + 6)}· Status: Draft\n`);
+    const itemLink = vi.fn(LINK);
+    await enhance(root, { itemLink, vocabulary: { itemFields: ['Tracker'] } });
+    expect(ITEM_LINKS.links).toBe(64);
+    expect(itemLink.mock.calls).toEqual([['AB-1']]);
+    expect(root.querySelectorAll('a.item-link').length).toBe(ITEM_LINKS.links);
+    expect(facts(root)[0]?.[1].split('AB-1').length).toBe(ITEM_LINKS.links + 7);
+  });
+
+  it('one click listener for every item link of the byline, never one per link', async () => {
+    const spy = vi.spyOn(EventTarget.prototype, 'addEventListener');
+    try {
+      const root = mount(`# Example spec\n\n**Spec** · **Tracker:** AB-1 AB-2 AB-1 \`AB-3\` · Status: Draft\n`);
+      await enhance(root, { itemLink: LINK, onLink: () => undefined, vocabulary: { itemFields: ['Tracker'] } });
+      const byline = root.querySelector('dl.byline');
+      const on = (pick: (t: unknown) => boolean): number => spy.mock.calls.filter((c, i) => c[0] === 'click' && pick(spy.mock.contexts[i])).length;
+      expect(root.querySelectorAll('a.item-link').length).toBe(4);
+      expect([on((t) => t instanceof Element && t.matches('a.item-link, a.item-link *')), on((t) => t === byline)]).toEqual([0, 1]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('only the first fact with an item label is read, and a label is matched whole and literally', async () => {
     const md = '# Example spec\n\n**Spec** · **Trackers:** AB-1 · **Tracker:** AB-2 · **Tracker:** AB-3 · **Tr.cker:** AB-4\n';
     const itemLink = vi.fn(LINK);
@@ -672,6 +804,15 @@ describe('the item link, by the delta route: the first code block of a section h
     await enhance(root, { itemLink, vocabulary: { itemFields: ['Tracker'], itemHeadings: ['change delta'] } });
     // no delta key (the first block's first line is not an item line): the byline route links the fact instead
     expect(itemLink.mock.calls).toEqual([['AB-12']]);
+  });
+
+  it('a section whose first code block names no key passes to the next section with an item heading', async () => {
+    const md = ITEM_DOC.replace('## 3. Change delta\n', '## 3. Change delta\n\n```text\nnotes\n```\n\n## 4. Change delta\n');
+    const itemLink = vi.fn(LINK);
+    const root = mount(md);
+    await enhance(root, { itemLink, vocabulary: { itemFields: ['Tracker'], itemHeadings: ['change delta'] } });
+    expect(itemLink.mock.calls).toEqual([['CD-7']]);
+    expect(facts(root)[1]).toEqual(['Tracker', 'CD-7 ↗', [LINK('CD-7')]]);
   });
 
   it('an item line whose value is no key is no delta, and the byline route applies', async () => {
@@ -744,6 +885,15 @@ describe('the item link: the host\'s answer is checked', () => {
     ['a new line', 'https://items.example/\nAB-12', false],
     ['a control character', 'https://items.example/\u0000', false],
     ['a delete character', 'https://items.example/\u007f', false],
+    ['a next-line control (C1)', 'https://items.example/\u0085', false],
+    ['a C1 control', 'https://items.example/\u009b', false],
+    ['a no-break space', 'https://items.example/a\u00a0b', false],
+    ['a line separator', 'https://items.example/a\u2028b', false],
+    ['an ideographic space', 'https://items.example/a\u3000b', false],
+    ['an ogham space mark', 'https://items.example/a\u1680b', false],
+    ['a leading byte-order mark', '\ufeffjavascript:alert(1)', false],
+    ['a leading no-break space', '\u00a0javascript:alert(1)', false],
+    ['a letter past the C1 block', 'https://items.example/\u00e9', true],
   ];
   for (const [name, answer, linked] of answers) {
     it(`${linked ? 'linked' : 'no link'}: ${name}`, async () => {
@@ -799,7 +949,7 @@ describe('the item link: the host\'s answer is checked', () => {
 });
 
 describe('the item link goes through onLink, in a new tab', () => {
-  const click = (a: Element, init: MouseEventInit = {}): MouseEvent => {
+  const click = (a: EventTarget, init: MouseEventInit = {}): MouseEvent => {
     const e = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...init });
     a.dispatchEvent(e);
     return e;
@@ -828,6 +978,27 @@ describe('the item link goes through onLink, in a new tab', () => {
     });
     click(arrow);
     expect(onLink).not.toHaveBeenCalled();
+  });
+
+  it('a click on an author\'s link in the byline is not the item link\'s: it reaches onLink as written, without newTab', async () => {
+    const onLink = vi.fn();
+    const root = mount('# Example spec\n\n**Spec** · **Tracker:** AB-1 and [the notes](https://example.org/n) · Status: Draft\n');
+    await enhance(root, { itemLink: LINK, onLink, vocabulary: { itemFields: ['Tracker'] } });
+    const author = Array.from(root.querySelectorAll('dl.byline a')).find((a) => !a.classList.contains('item-link')) as Element;
+    click(author);
+    expect(onLink.mock.calls).toEqual([['https://example.org/n', { newTab: false }]]);
+    click(root.querySelector('a.item-link') as Element);
+    expect(onLink.mock.calls[1]).toEqual([LINK('AB-1'), { newTab: true }]);
+  });
+
+  it('a click whose target is the link\'s own text node goes to onLink too', async () => {
+    const onLink = vi.fn();
+    const root = mount(ITEM_DOC);
+    await enhance(root, { itemLink: LINK, onLink, vocabulary: { itemFields: ['Tracker'] } });
+    const key = (root.querySelector('a.item-link') as Element).firstChild as Text;
+    expect(key.nodeType).toBe(3);
+    const e = click(key);
+    expect([e.defaultPrevented, onLink.mock.calls]).toEqual([true, [[LINK('AB-12'), { newTab: true }]]]);
   });
 
   it('a click with another button is left to the browser', async () => {
@@ -979,6 +1150,6 @@ describe('README: the two options of Task 8', () => {
   it('each row states the default and the bounds the code holds', () => {
     expect(row('namespace')).toContain(`| \`${DEFAULT_NAMESPACE}\` |`);
     expect(row('namespace')).toContain('a lower-case letter, then up to 31 lower-case letters, digits or dashes');
-    expect(row('vocabulary')).toContain(`at most ${String(LIMITS.words)} words, each 1 to ${String(LIMITS.word)} code units`);
+    expect(row('vocabulary')).toContain(`at most ${String(LIMITS.words)} words, each 1 to ${String(LIMITS.word)} code units with no white space at either end`);
   });
 });

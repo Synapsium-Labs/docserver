@@ -27,10 +27,10 @@
 // source walls refuse in src/enhance because it is the page's.
 //
 // The vocabulary (docserver L2, Task 8; LD9) is words, never patterns: each list an array of at most LIMITS.words
-// strings, each 1 to LIMITS.word code units and not all white space, read by index (a list over its bound is refused
-// before any item is read), its duplicates dropped, and frozen with every group around it. Only the lists vocab.ts
-// calls options are accepted; a format-contract list is an unknown key. What a list means, and its default, is
-// vocab.ts's: a list given replaces its default there. The namespace is the prefix of every storage key (state.ts),
+// strings, each 1 to LIMITS.word code units with no white space at either end, read by index (a list over its bound
+// is refused before any item is read), its duplicates dropped, and frozen with every group around it. Only the lists
+// vocab.ts calls options are accepted; a format-contract list is an unknown key. What a list means, and its default,
+// is vocab.ts's: a list given replaces its default there. The namespace is the prefix of every storage key (state.ts),
 // `docreader` by default.
 import type { BoundCallback, HostCallbacks } from './host.js';
 import { EnhanceError, type CommitEntry, type FrontListEntry, type Prefs, type ReaderStorage, type VocabularyOptions } from './types.js';
@@ -379,16 +379,17 @@ function normalizeMermaid(v: unknown): { settings: MermaidSettings; load: BoundC
 }
 
 /**
- * One word list: an array of at most LIMITS.words words, each a string of 1 to LIMITS.word code units that is not all
- * white space. Read by index (a longer array is refused before any item is read); duplicates are dropped; frozen.
+ * One word list: an array of at most LIMITS.words words, each a string of 1 to LIMITS.word code units with no white
+ * space (String.prototype.trim's) at either end, which no rule of vocab.ts could match. Read by index (a longer array
+ * is refused before any item is read); duplicates are dropped; frozen.
  */
 function wordList(where: string, v: unknown): readonly string[] {
   if (!Array.isArray(v)) throw invalid(`${where} must be an array of words`);
   if (v.length > LIMITS.words) throw invalid(`${where} holds at most ${String(LIMITS.words)} words`);
   const out: string[] = [];
   firstItems(v, LIMITS.words).forEach((w, i) => {
-    if (typeof w !== 'string' || w.length > LIMITS.word || w.trim() === '') {
-      throw invalid(`${where}[${String(i)}] must be a word of 1 to ${String(LIMITS.word)} code units, not all white space`);
+    if (typeof w !== 'string' || w.length > LIMITS.word || w === '' || w.trim() !== w) {
+      throw invalid(`${where}[${String(i)}] must be a word of 1 to ${String(LIMITS.word)} code units, with no white space at either end`);
     }
     if (!out.includes(w)) out.push(w);
   });

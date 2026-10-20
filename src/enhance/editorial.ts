@@ -12,19 +12,24 @@
 //
 // The item link (the reference layout's section 2; docserver L2, Task 8): an item key the document names (`AB-12`)
 // becomes a link to what the host's `itemLink(key)` answers, by two routes, and only when the host gave `itemLink`:
-//   - the delta route: the first code block of the first level-2 section (a child of the root) whose heading is one
-//     of `vocabulary.itemHeadings`, when the block's first line that is not blank is `item: <key>`. Its key is the
+//   - the delta route: the first level-2 section (a child of the root) whose heading is one of
+//     `vocabulary.itemHeadings` and whose first code block names a key, by its first line that is not blank being
+//     `item: <key>`; a section whose first code block names none passes to the next such section, as the reference's
+//     section 2 reads it. That key is the
 //     document's: the first byline fact labelled with one of `vocabulary.itemFields` shows only that key's link (the
 //     fact's own nodes stay in the hidden meta line), or, with no such fact, a fact of its own does (labelled with
 //     the first item field, if any), before the wide facts;
 //   - the byline route, without a delta key (or when the host gives no link for it): in the first fact labelled with
 //     an item field, every key in its text (split off its text node and wrapped, never re-typed) and every code
 //     element whose text is a key (wrapped whole). An author's own link is left as the author wrote it.
-// The host is asked once per key, for at most ITEM_LINKS.keys keys in a document; a key past them stays text. Its
-// answer is used only when it is a string of 1 to ITEM_LINKS.href code units with no white space or control
-// character, whose scheme, when it names one, is http or https. A link opens in a new tab: a main-button click goes
-// to the host's onLink with newTab true when the host gave it (and the browser's own handling is prevented); without
-// it the browser follows the link, by its target. An arrow after the key is chrome, hidden from speech.
+// The host is asked once per key, for at most ITEM_LINKS.keys keys in a document; a key past them stays text. At most
+// ITEM_LINKS.links links are written in a document (one key named many times is many links), the first in document
+// order; a key past them stays text. The host's answer is used only when it is a string of 1 to ITEM_LINKS.href code
+// units with no white space (any of Unicode's, a byte-order mark included) and no control character (C0, DEL or C1),
+// whose scheme, when it names one, is http or https. A link opens in a new tab: a main-button click goes to the
+// host's onLink with newTab true when the host gave it (and the browser's own handling is prevented), through one
+// click listener on the byline for all its item links; without onLink the browser follows the link, by its target.
+// An arrow after the key is chrome, hidden from speech.
 //
 // Every DOM write goes through the journal, so destroyEnhancement undoes it. The document's own nodes are only
 // moved (journal.wrap, journal.move) or, where a word must be lifted out of a text, partitioned without changing a
@@ -37,8 +42,9 @@
 // ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
 // (render() parses it, and the host passes it as info.frontList). The item link leaves an author's own link alone
 // (the reference re-pointed one that was not https), keeps a key's code element in the link (the reference replaced
-// it with the bare key), has no third route for a header line older than the meta line, and takes the neutral class
-// `item-link` (the reference's named one tracker; no rule of the stylesheet reads either).
+// it with the bare key), has no third route for a header line older than the meta line, writes at most
+// ITEM_LINKS.links links (the reference linked every occurrence), and takes the neutral class `item-link` (the
+// reference's named one tracker; no rule of the stylesheet reads either).
 //
 // It publishes what later features read of the title block (docserver L2, Task 7b): `ctx.page` (registry.ts), once,
 // at the end of its build: the byline (or null), the items of the first "Waiting" box of "Where things stand" and that
@@ -59,11 +65,18 @@ import { noFacts, type FactsSeam } from './registry.js';
 import type { FeatureContext, FrontListEntry } from './types.js';
 import type { Vocab } from './vocab.js';
 
-/** The item link's bounds: the distinct keys asked of the host in one document, and a link's length in code units. */
-export const ITEM_LINKS = { keys: 16, href: 2048 } as const;
+/**
+ * The item link's bounds: the distinct keys asked of the host in one document, the links written in one document,
+ * and a link's length in code units.
+ */
+export const ITEM_LINKS = { keys: 16, links: 64, href: 2048 } as const;
 
-/** What a link from the host may not hold: white space (an ASCII space, tab or line break) or a control character. */
-const HREF_REFUSED = /[\u0000-\u0020\u007f]/;
+/**
+ * What a link from the host may not hold: a control character (C0, DEL or C1: Unicode's Cc) or white space (JavaScript's
+ * `\s`: ASCII's, the no-break spaces, the Unicode space separators, the line and paragraph separators, and the
+ * byte-order mark).
+ */
+const HREF_REFUSED = /[\u0000-\u001f\u007f-\u009f\s]/;
 
 /** A link's scheme, when it names one (group 1). */
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
@@ -125,7 +138,10 @@ function itemHref(v: unknown): string | null {
   return scheme === undefined || scheme === 'http' || scheme === 'https' ? v : null;
 }
 
-/** The item link of one build: the host's link per key, asked once each, for at most ITEM_LINKS.keys keys. */
+/**
+ * The item link of one build: the host's link per key, asked once each, for at most ITEM_LINKS.keys keys; the links
+ * made; and the one click listener that routes them all.
+ */
 interface ItemLinks {
   /** The link for `key`; null for none, or past the bound. The host may have destroyed the instance: check live(). */
   hrefOf(key: string): string | null;
@@ -133,11 +149,14 @@ interface ItemLinks {
   anchor(key: string, href: string): HTMLAnchorElement;
   /** The arrow after a key, chrome hidden from speech. */
   arrow(): HTMLElement;
+  /** One click listener on `on` (the byline), delegated, for every link made: a click on one goes to onLink. */
+  route(on: HTMLElement): void;
 }
 
 function itemLinks(ctx: FeatureContext): ItemLinks {
   const doc = ctx.root.ownerDocument;
   const asked = new Map<string, string | null>();
+  const made = new Map<Element, string>();
   return {
     hrefOf(key) {
       if (asked.has(key)) return asked.get(key) ?? null;
@@ -151,22 +170,30 @@ function itemLinks(ctx: FeatureContext): ItemLinks {
         className: 'item-link',
         attrs: { href, target: '_blank', rel: 'noopener noreferrer', 'aria-label': `${key} (opens in a new tab)` },
       });
-      ctx.journal.listen(a, 'click', (event) => {
+      made.set(a, href);
+      return a;
+    },
+    route(on) {
+      ctx.journal.listen(on, 'click', (event) => {
         const e = event as MouseEvent;
-        if (e.defaultPrevented || e.button !== 0 || !ctx.host.present.has('onLink')) return;
+        const n = e.target as Node | null;
+        const el = n?.nodeType === 1 ? (n as Element) : (n?.parentElement ?? null); // a click on a text node is its parent's
+        const a = el?.closest('a') ?? null;
+        const href = a === null ? undefined : made.get(a);
+        if (href === undefined || e.defaultPrevented || e.button !== 0 || !ctx.host.present.has('onLink')) return;
         e.preventDefault();
         ctx.host.onLink(href, { newTab: true });
       });
-      return a;
     },
     arrow: () => chrome(doc, 'span', { className: 'item-arrow', text: ' ↗', attrs: { 'aria-hidden': 'true' } }),
   };
 }
 
 /**
- * The delta route's key: the first code block of the first level-2 section, a child of the root, whose heading is an
- * item heading, when that block's first line that is not blank is an item line naming a key. Read before any node
- * moves; null when there is none.
+ * The delta route's key: in the first level-2 section, a child of the root, whose heading is an item heading and whose
+ * first code block names a key, that key. A block names one when its first line that is not blank is an item line
+ * naming a key; a section whose first code block names none passes to the next such section (the reference's
+ * section 2). Read before any node moves; null when there is none.
  */
 function deltaKey(root: HTMLElement, vocab: Vocab): string | null {
   for (const h of Array.from(root.children)) {
@@ -209,8 +236,10 @@ function linkKeys(ctx: FeatureContext, nodes: readonly Node[], links: ItemLinks)
     for (const c of Array.from(el.childNodes)) walk(c);
   };
   for (const n of nodes) walk(n);
+  // The first ITEM_LINKS.links links in document order; the host is asked for no key past them.
   const hrefs = new Map<KeySpot, string>();
   for (const spot of spots) {
+    if (hrefs.size >= ITEM_LINKS.links) break;
     const href = links.hrefOf(spot.key);
     if (!ctx.live()) return false;
     if (href !== null) hrefs.set(spot, href);
@@ -463,6 +492,7 @@ export function buildEditorial(ctx: FeatureContext): void {
     // The byline route: the keys of the item fact's own nodes (call-outs, then writes). With a delta there are none:
     // the item fact shows the delta's link, and its own nodes stay in the hidden meta line.
     if (links !== null && item !== null && !linkKeys(ctx, item, links)) return;
+    links?.route(byline);
     for (const f of front ?? []) if (!f.list && ctx.vocab.kindKey.test(f.key)) kinds.push(f.vals.join(', '));
     if (kinds.length > 0) {
       journal.insert(chrome(doc, 'div', { className: 'eyebrow' }, kinds.map((k) => chrome(doc, 'span', { text: k }))), parent, h1);

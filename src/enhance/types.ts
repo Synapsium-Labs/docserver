@@ -108,10 +108,13 @@ export interface MermaidOptions {
 
 /**
  * The words a host's documents use, for the parts of the layout that read them (docserver L2, Task 8; LD9). Each list
- * is plain words, never a pattern: every character is matched as itself, an empty list matches nothing, and a list
- * given replaces its default whole (a list left out keeps it). A list holds at most 200 words, each 1 to 64 code
- * units and not all white space; duplicates are dropped. How each list is matched (a whole word, the start of a
- * text, anywhere) is the library's, as its field says.
+ * is plain words, never a pattern: every character is matched as itself (in any case, where the field says so), an
+ * empty list matches no word, and a list given replaces its default whole (a list left out keeps it). A list holds at
+ * most 200 words, each 1 to 64 code units with no white space at either end; duplicates are dropped. How each list
+ * is matched (a whole word, the start of a text, anywhere) is the library's, as its field says. A whole word is
+ * whole in any script: where the word ends in a letter, a digit, a combining mark or `_`, the text has none of those
+ * right beyond it ("готово" and "validé" are words as "done" is); where it ends in anything else ("done!", "✓"),
+ * that edge needs nothing of the text.
  */
 export interface VocabularyOptions {
   /**
@@ -128,7 +131,8 @@ export interface VocabularyOptions {
   readonly statusHeaders?: readonly string[];
   /**
    * Header words that name a ruling, anywhere in the header: such a column, or one whose header ends in "?", is a
-   * status column when half its filled cells open on a status word. Default: ruling, ruled, answer.
+   * status column when half its filled cells open on a status word. Default: ruling, ruled, answer. The "?" rule is
+   * no word: it stands with an empty list.
    */
   readonly rulingHeaders?: readonly string[];
   /** What needs the reader. */
@@ -210,8 +214,10 @@ export interface EnhanceOptions {
   /**
    * The link for an item key the document names (`AB-12`: a capital, 1 to 9 capitals or digits, a dash, a number), or
    * null for none. Absent: no item links. The keys are read where `vocabulary.itemFields` and `itemHeadings` say;
-   * without either, it is never called. A link that is not a string of 1 to 2048 code units, holds white space or a
-   * control character, or names a scheme other than http or https, is ignored.
+   * without either, it is never called. At most 16 keys are asked for and at most 64 links written in a document; a
+   * key past either stays text. A link that is not a string of 1 to 2048 code units, holds white space (any of
+   * Unicode's, a byte-order mark included) or a control character (C0, DEL or C1), or names a scheme other than http
+   * or https, is ignored.
    */
   itemLink?(key: string): string | null;
   /** Drawing Mermaid figures. Absent: no drawing; a figure shows its source. */

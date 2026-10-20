@@ -18,9 +18,19 @@
 //
 // Words, never patterns (LD9): a list is plain strings, and compiling escapes every character a pattern would read
 // as syntax, so a host's word is matched literally and no pattern of a host's can backtrack without bound. An empty
-// list matches nothing. Each list's match is fixed here: a status word opens the text, as a whole word, in any case;
-// a header word is a whole word; and so on, as each field says. The grammars around the words (an ID's digits, a
-// task number, a step's owner in brackets) are this module's, never a host's.
+// list matches no word (the ruling header's "?" rule is no word, and stands). Each list's match is fixed here: a
+// status word opens the text, as a whole word, in any case; a header word is a whole word; and so on, as each field
+// says. The grammars around the words (an ID's digits, a task number, a step's owner in brackets) are this module's,
+// never a host's.
+//
+// A whole word (`whole()`), in any script: on a side where the word ends in a letter, a digit, a combining mark or
+// `_` (Unicode's, not ASCII's alone), the text holds none of those right beyond it; on a side where it ends in
+// anything else (punctuation, a symbol), that edge is its own boundary and nothing is asked of the text there. So
+// "готово", "validé" and "完了" match as words, as "done" does, and "done!" or "✓" open a status too. The patterns
+// that read a whole word of an option list (the status roles, the status header, the qualifier, the addressee, the
+// attention's owner, open-answer and blocking words, and the ID scan) carry the `u` flag their lookarounds need: a
+// copy of one must keep its flags (`new RegExp(re)`), never its source alone. The format contract's words are ASCII
+// and keep ASCII's `\b`. options.ts refuses a word with white space at either end, which no rule could match.
 //
 // The defaults reproduce what the prototype marked (status.ts's words and header rule) and port the reference
 // layout's own lists, sections 2, 3, 5, 7, 8, 12, 12b, 12c, 16 and 24b, except its private words: the qualifiers and
@@ -296,6 +306,34 @@ function anyOf(words: readonly string[]): string {
   return words.length === 0 ? NEVER : `(?:${words.map(literal).join('|')})`;
 }
 
+/** A word character of any script: a letter, a digit, a combining mark or `_`. Needs the `u` flag. */
+const WORD_CHAR = '[\\p{L}\\p{N}\\p{M}_]';
+
+/** Whether one code point is a WORD_CHAR. */
+const isWordChar = (c: string | undefined): boolean => c !== undefined && /^[\p{L}\p{N}\p{M}_]$/u.test(c);
+
+/** No word character right before this point. Needs the `u` flag. */
+const NOT_AFTER_WORD = `(?<!${WORD_CHAR})`;
+
+/** No word character right after this point. Needs the `u` flag. */
+const NOT_BEFORE_WORD = `(?!${WORD_CHAR})`;
+
+/**
+ * One alternation group of the words, each literal and whole (see the header): on the sides asked for, a word that
+ * ends there in a word character is bounded by no word character in the text; NEVER when there are none. A pattern
+ * built with it takes the `u` flag.
+ */
+function whole(words: readonly string[], before: boolean, after: boolean): string {
+  if (words.length === 0) return NEVER;
+  const one = (w: string): string => {
+    const cps = [...w];
+    const lead = before && isWordChar(cps[0]) ? NOT_AFTER_WORD : '';
+    const tail = after && isWordChar(cps[cps.length - 1]) ? NOT_BEFORE_WORD : '';
+    return `${lead}${literal(w)}${tail}`;
+  };
+  return `(?:${words.map(one).join('|')})`;
+}
+
 /** A copy of the lists, every array and object in it frozen. */
 function frozenCopy(w: VocabularyWords): Readonly<VocabularyWords> {
   const list = (a: readonly string[]): string[] => Object.freeze([...a]) as string[];
@@ -344,9 +382,13 @@ function frozenCopy(w: VocabularyWords): Readonly<VocabularyWords> {
 /** Compile word lists into a vocabulary: a frozen copy of the lists, and their patterns. */
 export function compileVocab(given: VocabularyWords): Vocab {
   const w = frozenCopy(given);
-  const role = (r: StatusRole): StatusPattern => Object.freeze({ role: r, re: new RegExp(`^(${anyOf(w.status[r])})\\b`, 'i') });
+  const role = (r: StatusRole): StatusPattern => Object.freeze({ role: r, re: new RegExp(`^(${whole(w.status[r], false, true)})`, 'iu') });
   const idHead = w.ids === false ? null : w.ids.prefixes === null ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes);
-  const idBody = idHead === null ? NEVER : `${idHead}-?\\d+(?:[.-]\\d+)*[a-z]?`;
+  const idTail = '-?\\d+(?:[.-]\\d+)*[a-z]?';
+  const idBody = idHead === null ? NEVER : `${idHead}${idTail}`;
+  // The scan's ID is whole: no word character before its prefix (when that ends in one) or after its last character.
+  const idScanHead = w.ids === false ? null : w.ids.prefixes === null ? `${NOT_AFTER_WORD}[A-Z]{1,4}` : whole(w.ids.prefixes, true, false);
+  const idScanBody = idScanHead === null ? NEVER : `${idScanHead}${idTail}`;
   const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{2,}' : anyOf(w.ruleIds.prefixes);
   // A heading's words: each part literal, a space or a dash between parts.
   const heading = (words: readonly string[]): string =>
@@ -354,13 +396,13 @@ export function compileVocab(given: VocabularyWords): Vocab {
   return Object.freeze({
     words: w,
     status: Object.freeze([role('ok'), role('wait'), role('no'), role('info')]),
-    statusHeader: new RegExp(`\\b${anyOf(w.statusHeaders)}\\b`, 'i'),
+    statusHeader: new RegExp(whole(w.statusHeaders, true, true), 'iu'),
     rulingHeader: new RegExp(w.rulingHeaders.length === 0 ? '\\?$' : `${anyOf(w.rulingHeaders)}|\\?$`, 'i'),
     id: new RegExp(`^(${idBody})(?=$|[\\s,.:;)])`),
-    idScan: () => new RegExp(`\\b(${idBody})\\b`, 'g'),
+    idScan: () => new RegExp(`(${idScanBody})${NOT_BEFORE_WORD}`, 'gu'),
     ruleId: new RegExp(`^${ruleHead}(?:-[A-Z0-9]+)+$`),
-    qualifier: new RegExp(`\\b${anyOf(w.qualifiers)}\\s+$`, 'i'),
-    addressee: new RegExp(`\\b${anyOf(w.addressees)}\\b`, 'i'),
+    qualifier: new RegExp(`${whole(w.qualifiers, true, false)}\\s+$`, 'iu'),
+    addressee: new RegExp(whole(w.addressees, true, true), 'iu'),
     addresseeAnywhere: new RegExp(anyOf(w.addressees), 'i'),
     plan: Object.freeze({
       task: new RegExp(`^(${anyOf(w.plan.task)})\\s+([\\w.-]*\\w)\\s*[:.—–]\\s*`),
@@ -369,10 +411,10 @@ export function compileVocab(given: VocabularyWords): Vocab {
     }),
     attention: Object.freeze({
       status: new RegExp(anyOf(w.attention.status), 'i'),
-      who: new RegExp(`^${anyOf(w.attention.who)}\\b`, 'i'),
+      who: new RegExp(`^${whole(w.attention.who, false, true)}`, 'iu'),
       question: new RegExp(`^${anyOf(w.attention.question)}`, 'i'),
-      openAnswers: new RegExp(`^${anyOf(w.attention.openAnswers)}\\b`, 'i'),
-      blocking: new RegExp(`^\\s*${anyOf(w.attention.blocking)}\\b`, 'i'),
+      openAnswers: new RegExp(`^${whole(w.attention.openAnswers, false, true)}`, 'iu'),
+      blocking: new RegExp(`^\\s*${whole(w.attention.blocking, false, true)}`, 'iu'),
       risk: new RegExp(anyOf(w.attention.risk), 'i'),
       openStatus: new RegExp(`^${anyOf(w.attention.openStatus)}`, 'i'),
     }),
