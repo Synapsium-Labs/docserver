@@ -6,10 +6,10 @@
 //   <id>.options.json  { "options": {...}, "scope": [...], "hostile"?: true, "viewport"?: { width, height }, "csp"?: "strict" | "reader" }
 //   <id>.dom.txt       the expected snapshot (test/browser/page/snapshot.ts)
 // `options` are enhance()'s, as plain data (the harness adds `info` from render() unless they give their own);
-// `scope` is the snapshot's (a non-empty list of class names and `[attribute]` entries). The ratchet
-// (scripts/ratchet.mjs) holds every case: a changed .dom.txt is named in a `Layout-moved:` trailer, and a hostile
-// case is never removed and its .md and options never change. `UPDATE_LAYOUT=1` writes the expected files; CI
-// never sets it.
+// `scope` is the snapshot's (a non-empty list of class names, `[attribute]` and `tag[attribute]` entries). The
+// ratchet (scripts/ratchet.mjs) holds every case: a changed .dom.txt is named in a `Layout-moved:` trailer, and a
+// hostile case is never removed and its .md and options never change. `UPDATE_LAYOUT=1` writes the expected files
+// (updateRequested); CI never sets it, and fails when a run leaves conformance/layout/ changed.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,7 +51,7 @@ export function parseCaseFile(id: string, text: string): Omit<LayoutCase, 'id' |
   const { options, scope, hostile, viewport, csp } = raw;
   if (!isRecord(options)) throw bad('"options" must be an object');
   if (!Array.isArray(scope) || scope.length === 0 || !scope.every((s) => typeof s === 'string' && SCOPE_ENTRY.test(s))) {
-    throw bad('"scope" must be a non-empty list of class names and [attribute] entries');
+    throw bad('"scope" must be a non-empty list of class names, [attribute] and tag[attribute] entries');
   }
   if (hostile !== undefined && hostile !== true) throw bad('"hostile" is true or absent');
   if (
@@ -100,6 +100,11 @@ export function loadLayoutCases(dir: string = LAYOUT_DIR): LayoutCase[] {
   return out;
 }
 
+/** True only when the environment asks for the expected files to be written: UPDATE_LAYOUT is exactly "1". */
+export function updateRequested(env: Readonly<Record<string, string | undefined>>): boolean {
+  return env['UPDATE_LAYOUT'] === '1';
+}
+
 /**
  * Compare a snapshot with the case's expected file. With `update` (UPDATE_LAYOUT=1) a missing or different file is
  * written; without it, it is reported, never written.
@@ -122,4 +127,33 @@ export function holdSnapshot(id: string, actual: string, expected: string, updat
   const verdict = compareOrWrite(actual, expected, update);
   if (verdict === 'missing') throw new Error(`${id}: no expected file; write it with UPDATE_LAYOUT=1`);
   if (verdict === 'differs') expect(actual, `${id}: the snapshot moved`).toBe(readFileSync(expected, 'utf8'));
+}
+
+/**
+ * One run's hold, for every selected browser in turn. With `update`, a case is written at most once, by the first
+ * browser that holds it; every later browser in the run is held to that file, so an update run cannot hide a
+ * difference between the browsers by letting the last one overwrite the others.
+ */
+export function snapshotHold(update: boolean): (id: string, actual: string, expected: string) => void {
+  const held = new Set<string>();
+  return (id, actual, expected) => {
+    const first = !held.has(id);
+    held.add(id);
+    holdSnapshot(id, actual, expected, update && first);
+  };
+}
+
+/** What a case page asked for that it must not: policy violations, requests to another origin, unserved paths. */
+export interface PageTrouble {
+  readonly violations: readonly string[];
+  readonly aborted: readonly string[];
+  readonly missing: readonly string[];
+}
+
+/** A case page reports no violation, reaches no other origin and asks for nothing it is not served. */
+export function holdClean(id: string, got: PageTrouble): void {
+  expect(
+    { violations: got.violations, aborted: got.aborted, missing: got.missing },
+    `${id}: the page was refused something, reached another origin, or asked for a file it is not served`,
+  ).toEqual({ violations: [], aborted: [], missing: [] });
 }
