@@ -8,7 +8,8 @@ name: ci
 # The token is read-only; a later job that needs more asks for it in its own diff. The checkout keeps no
 # credentials in the workspace (the ratchet needs history, not a token), so no later step can push with one.
 # The layout tests (test/browser/) run in real browsers: the pinned playwright-core installs its Chromium and
-# WebKit builds and their system libraries first, and both run (DOCREADER_BROWSERS is never set here).
+# WebKit builds and their system libraries first, and both run (DOCREADER_BROWSERS is never set here); a run that
+# leaves conformance/layout/ changed (an expected snapshot written by the tests) fails.
 on:
   push:
     branches: [main]
@@ -44,6 +45,8 @@ jobs:
       - run: npx playwright-core install --with-deps chromium webkit
       - run: npm run typecheck
       - run: ./node_modules/.bin/vitest run
+      - name: the tests wrote no layout snapshot
+        run: test -z "$(git status --porcelain -- conformance/layout)"
       - run: npm run build
       - name: ratchet
         env:
