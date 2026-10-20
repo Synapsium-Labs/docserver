@@ -265,6 +265,14 @@ describe('figure entries', () => {
     expect(title).toBe(ctx.text.clip(`${words}.`, 90));
   });
 
+  it('collapses each run of white space in the figure entry\'s caption to one space: a caption over two lines, a double space', async () => {
+    const root = mount(fig('*Figure 1. First  line\nsecond line.*'));
+    await enhance(root);
+    // The caption as written keeps its line break and its double space; the entry reads them as single spaces.
+    expect(captionOf(figures(root)[0] as HTMLElement).textContent).toContain('First  line\nsecond');
+    expect(ctxOf(root).figures.all()[0]?.caption).toBe('First line second line.');
+  });
+
   it('the first figure of a number keeps its id; a later one of the same number still has its figure entry', async () => {
     const root = mount([fig('*Figure 1. First.*'), fig('*Figure 1. Again.*')].join('\n'));
     await enhance(root);
