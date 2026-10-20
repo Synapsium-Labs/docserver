@@ -1,0 +1,4 @@
+{
+  "options": { "folds": false, "vocabulary": { "qualifiers": ["annex"] } },
+  "scope": ["xref", "idcell"]
+}
