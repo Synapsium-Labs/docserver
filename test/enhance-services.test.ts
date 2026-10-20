@@ -1838,7 +1838,7 @@ describe('cancels, labels, refusals and sizes: the review round', () => {
     expect(ctxOf(root).blocks.map((b) => b.kind)).toEqual(['table', 'code']);
   });
 
-  it('terms: defining is linear; twice the terms, or twice one term\'s definitions, takes at most 3 times as long', async () => {
+  it('terms: defining is linear; eight times the terms, or eight times one term\'s definitions, takes at most 24 times as long', async () => {
     const root = mount();
     await enhance(root);
     const cell = find(root, 'td');
@@ -1853,14 +1853,15 @@ describe('cancels, labels, refusals and sizes: the review round', () => {
       expect(same ? terms.get('term')?.defs.length : terms.all().length).toBe(n);
       return ms;
     };
-    // The best of five runs, so a pause of the collector or a busy machine does not decide it. Copying the list on each
-    // definition, as before, makes twice the terms take four to five times as long here.
-    const best = (n: number, same: boolean): number => Math.min(...Array.from({ length: 5 }, () => time(n, same)));
+    // Three doublings, each allowed three times the time (24 < 27), where copying the list on each definition, as
+    // before, costs about four times per doubling (64, measured above 100). The best of three runs, so a pause of the
+    // collector or a busy machine does not decide it.
+    const best = (n: number, same: boolean): number => Math.min(time(n, same), time(n, same), time(n, same));
     for (const same of [false, true]) {
       best(2_000, same); // warm up
-      const once = best(10_000, same);
-      const twice = best(20_000, same);
-      expect(twice / once, same ? 'one term, its definitions' : 'distinct terms').toBeLessThanOrEqual(3);
+      const once = best(5_000, same);
+      const eight = best(40_000, same);
+      expect(eight / once, same ? 'one term, its definitions' : 'distinct terms').toBeLessThanOrEqual(24);
     }
     const terms = createTerms(root);
     terms.define({ name: 'a', exact: false, section: 'S', target: cell, def: { qual: '', cell, row } });
