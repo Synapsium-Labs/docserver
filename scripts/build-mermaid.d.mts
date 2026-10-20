@@ -35,6 +35,15 @@ export interface BundledPackage {
   readonly files: readonly LicenceFile[];
 }
 
+/** A package whose code ships inside a pre-built file of a bundled package, which the metafile does not name. */
+export interface EmbeddedPackage {
+  readonly name: string;
+  /** The version its module keys name, or the range its carrier declares when they name none. */
+  readonly version: string;
+  /** The bundled package whose file carries it. */
+  readonly carrier: string;
+}
+
 export declare const OUT_FILE: string;
 export declare const STUB: string;
 export declare const ENTRY_NAME: string;
@@ -43,9 +52,11 @@ export declare const ELK_SIGNATURE: string;
 export declare const NOTICES_BEGIN: string;
 export declare const NOTICES_END: string;
 export declare const NO_LICENCE_FIELD: string;
+export declare const EMBEDDED: readonly EmbeddedPackage[];
 export declare function buildMermaid(options?: { root?: string }): Promise<Built>;
 export declare function licenceFiles(dir: string, label: string): LicenceFile[];
 export declare function packagesOf(metafile: Metafile, root?: string): BundledPackage[];
+export declare function embeddedMarkers(metafile: Metafile, root?: string): EmbeddedPackage[];
 export declare function noticesSection(packages: readonly BundledPackage[]): string;
 export declare function readNoticesSection(text: string): string | null;
 export declare function withNoticesSection(text: string, section: string): string;

@@ -26,7 +26,8 @@
 // package with no licence file stops `--notices`. The section runs from NOTICES_BEGIN to NOTICES_END; the rest of the
 // file is written by hand. test/mermaid-bundle.test.ts holds the section to the metafile exactly, so a dependency
 // change that bundles another package fails until `--notices` is run again. The metafile sees packages, not what a
-// package's own pre-built file carries inside it.
+// package's own pre-built file carries inside it: EMBEDDED names those packages and the section lists them, without
+// their licence texts yet (the test measures the list against the module keys the bundled files carry).
 //
 // Exit codes: 0 built; 1 the build or the notices failed (the reason on stderr); 2 a usage error. Dev tooling, never
 // shipped; what the tests use is exported (types in build-mermaid.d.mts).
@@ -179,15 +180,71 @@ export function packagesOf(metafile, root = ROOT) {
   return out.sort((a, b) => order(a.name, b.name) || order(a.version, b.version) || order(a.dir, b.dir));
 }
 
+/**
+ * Packages whose code ships inside a pre-built file of a bundled package, so the metafile never names them (measured
+ * for Mermaid 12.1.0). `carrier` is the bundled package whose file holds the code; `version` is the one its module keys
+ * name (`node_modules/.pnpm/<name>@<version>/`, test/mermaid-bundle.test.ts measures them with embeddedMarkers), or,
+ * for roughjs, whose pre-built file names none and imports nothing, the range its package.json declares. Their licence
+ * texts are not in the notices yet; the section says so.
+ */
+export const EMBEDDED = [
+  { name: 'chevrotain-allstar', version: '0.5.0', carrier: '@mermaid-js/parser' },
+  { name: 'fastdom', version: '1.0.12', carrier: 'mermaid' },
+  { name: 'js-yaml', version: '4.3.0', carrier: 'mermaid' },
+  { name: 'langium', version: '4.4.0', carrier: '@mermaid-js/parser' },
+  { name: 'vscode-jsonrpc', version: '9.0.3', carrier: '@mermaid-js/parser' },
+  { name: 'vscode-languageserver-protocol', version: '3.18.4', carrier: '@mermaid-js/parser' },
+  { name: 'vscode-languageserver-textdocument', version: '1.0.15', carrier: '@mermaid-js/parser' },
+  { name: 'vscode-languageserver-types', version: '3.18.4', carrier: '@mermaid-js/parser' },
+  { name: 'vscode-uri', version: '3.1.0', carrier: '@mermaid-js/parser' },
+  { name: 'hachure-fill', version: '^0.5.2', carrier: 'roughjs' },
+  { name: 'path-data-parser', version: '^0.1.0', carrier: 'roughjs' },
+  { name: 'points-on-curve', version: '^0.2.0', carrier: 'roughjs' },
+  { name: 'points-on-path', version: '^0.2.1', carrier: 'roughjs' },
+];
+
+/** A module key a pre-built file carries: `node_modules/.pnpm/<name>@<version>/` (a scope's `/` written as `+`). */
+const PNPM_KEY = /node_modules\/\.pnpm\/((?:@[^/@+]+\+)?[^/@]+)@(\d[^/_]*)(?:_[^/]*)?\//g;
+
+/**
+ * Every package a bundled file's module keys name, with the bundled package that carries it, one per name and
+ * version, sorted by name then version (the first carrier, by input order). Reads each input under node_modules from
+ * `root`.
+ */
+export function embeddedMarkers(metafile, root = ROOT) {
+  const found = new Map();
+  for (const input of Object.keys(metafile.inputs).sort()) {
+    const m = PACKAGE_DIR.exec(input);
+    if (m === null || m[1] === undefined) continue;
+    const carrier = String(JSON.parse(readFileSync(path.join(root, m[1], 'package.json'), 'utf8')).name);
+    for (const k of readFileSync(path.join(root, input), 'utf8').matchAll(PNPM_KEY)) {
+      const name = String(k[1]).replace('+', '/');
+      const key = `${name}@${String(k[2])}`;
+      if (!found.has(key)) found.set(key, { name, version: String(k[2]), carrier });
+    }
+  }
+  const order = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...found.values()].sort((a, b) => (a.name === b.name ? order(a.version, b.version) : order(a.name, b.name)));
+}
+
 /** The generated section for `packages`, from NOTICES_BEGIN to NOTICES_END (no line end after the last). */
 export function noticesSection(packages) {
   const mermaid = packages.find((p) => p.name === 'mermaid');
+  const version = mermaid === undefined ? '' : ` ${mermaid.version}`;
   const lines = [
     NOTICES_BEGIN,
-    `assets/mermaid/mermaid.mjs is Mermaid${mermaid === undefined ? '' : ` ${mermaid.version}`} with the code it uses, bundled into one file`,
-    `(${String(packages.length)} packages, listed below). elkjs is left out: a stand-in refuses the ELK layout, so a diagram`,
-    'that asks for it is not drawn. Each package follows with its version, its licence as its package.json gives',
-    'it, and the text of its licence files as its published copy carries them.',
+    `assets/mermaid/mermaid.mjs is Mermaid${version} bundled into one file. It holds code from the`,
+    `${String(packages.length)} packages the build resolved, listed below, each with its version, its licence as its`,
+    'package.json gives it, and the text of its licence files as its published copy carries them.',
+    '',
+    `It also holds code from ${String(EMBEDDED.length)} more packages, carried inside pre-built files of the packages`,
+    'below, which the build does not see as packages of their own. Their licence texts are not in',
+    'this file yet:',
+    ...EMBEDDED.map((e) => `  ${e.name} ${e.version}, inside ${e.carrier}`),
+    '',
+    'elkjs is left out: a stand-in refuses the ELK layout, so a diagram laid out with ELK is not drawn.',
+    `Mermaid${version}'s default configuration asks for ELK, globally and for state diagrams, so with`,
+    'that default no flowchart or state diagram is drawn; a host sets another layout, such as dagre.',
   ];
   for (const p of packages) {
     lines.push('', RULE, `${p.name} ${p.version} (${p.licence})`);

@@ -5,18 +5,25 @@
 // keeps out) and no trace of elkjs's code in it; every input inside the package root, so a build in a checkout whose
 // node_modules is a link names no path outside it; the same bytes from two builds; and its size within MAX_BYTES.
 // Then THIRD-PARTY-NOTICES: its generated section is exactly what the build's metafile gives, so every package the
-// file bundles is there with its licence and its LICENSE text, and nothing else is.
-import { readFileSync } from 'node:fs';
+// metafile names is there with its licence and its LICENSE text, and nothing else is; and the packages whose code ships
+// inside a pre-built file of one of those, which the metafile cannot see, are named as such (EMBEDDED), measured from
+// the module keys the bundled files carry. Last, the script's command line: the usage refusal, a failing build, and the
+// `--notices` write, each in a throwaway copy of the scripts.
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   ELK_SIGNATURE,
+  EMBEDDED,
   MAX_BYTES,
   NOTICES_BEGIN,
   NOTICES_END,
   NO_LICENCE_FIELD,
   buildMermaid,
+  embeddedMarkers,
   licenceFiles,
   noticesSection,
   packagesOf,
@@ -104,7 +111,7 @@ describe('package.json', () => {
 });
 
 describe('THIRD-PARTY-NOTICES', () => {
-  it('names every package the file bundles, and only those, exactly as the metafile gives them', () => {
+  it('names every package the metafile names, and only those, exactly as it gives them', () => {
     const packages = packagesOf(first.metafile, ROOT);
     expect(packages.length).toBeGreaterThan(50);
     expect(packages.map((p) => p.name)).toContain('mermaid');
@@ -155,4 +162,95 @@ describe('THIRD-PARTY-NOTICES', () => {
     const dompurify = licenceFiles(path.join(ROOT, 'node_modules', 'dompurify'), 'node_modules/dompurify').map((f) => f.name);
     expect(dompurify).toEqual(['LICENSE', 'LICENSE-MPL']);
   });
+});
+
+describe('THIRD-PARTY-NOTICES: code the metafile cannot see', () => {
+  it('names every package whose module keys a bundled file carries and that is not listed itself, with the carrier', () => {
+    const listed = packagesOf(first.metafile, ROOT).map((p) => `${p.name}@${p.version}`);
+    const found = embeddedMarkers(first.metafile, ROOT).filter((e) => !listed.includes(`${e.name}@${e.version}`));
+    expect(found.length).toBeGreaterThan(5);
+    expect(found).toEqual(EMBEDDED.filter((e) => /^\d/.test(e.version)));
+  });
+
+  it('names what roughjs\'s pre-built file carries: the dependencies it declares, since that file imports nothing', () => {
+    const input = first.inputs.filter((i) => i.startsWith('node_modules/roughjs/'));
+    expect(input).toEqual(['node_modules/roughjs/bundled/rough.esm.js']);
+    expect(readFileSync(path.join(ROOT, input[0] ?? ''), 'utf8')).not.toMatch(/\bimport\b|\brequire\(/);
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, 'node_modules', 'roughjs', 'package.json'), 'utf8')) as { dependencies: Record<string, string> };
+    const declared = Object.entries(pkg.dependencies).map(([name, version]) => ({ name, version, carrier: 'roughjs' }));
+    expect(EMBEDDED.filter((e) => e.carrier === 'roughjs')).toEqual(declared);
+  });
+
+  it('the section says the list is what the build resolved, names each embedded package, and says ELK is the default', () => {
+    const section = readNoticesSection(readFileSync(NOTICES, 'utf8')) ?? '';
+    expect(section).not.toContain('with the code it uses');
+    expect(section).toContain('packages the build resolved');
+    for (const e of EMBEDDED) expect(section).toContain(`  ${e.name} ${e.version}, inside ${e.carrier}\n`);
+    expect(section).toContain("Mermaid 12.1.0's default configuration asks for ELK");
+  });
+});
+
+describe('scripts/build-mermaid.mjs: the command line', () => {
+  /** A throwaway package holding the two scripts, a notices file, and the given node_modules entries, linked. */
+  function stage(modules: readonly string[], notices: string | null): string {
+    const dir = mkdtempSync(path.join(tmpdir(), 'build-mermaid-'));
+    mkdirSync(path.join(dir, 'scripts'));
+    for (const f of ['build-mermaid.mjs', 'mermaid-elk-stub.mjs']) copyFileSync(path.join(ROOT, 'scripts', f), path.join(dir, 'scripts', f));
+    if (modules.includes('*')) symlinkSync(path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules'));
+    else {
+      mkdirSync(path.join(dir, 'node_modules'));
+      for (const m of modules) symlinkSync(path.join(ROOT, 'node_modules', m), path.join(dir, 'node_modules', m));
+    }
+    if (notices !== null) writeFileSync(path.join(dir, 'THIRD-PARTY-NOTICES'), notices);
+    return dir;
+  }
+
+  it('a bad command line exits 2 with the usage line, and builds nothing', () => {
+    // In a copy without Mermaid, so a refusal that let the build run would exit 1, not write into this checkout.
+    const dir = stage(['esbuild', '@esbuild'], null);
+    try {
+      for (const args of [['--other'], ['--notices', 'x'], ['x']]) {
+        const r = spawnSync(process.execPath, [path.join(dir, 'scripts', 'build-mermaid.mjs'), ...args], { encoding: 'utf8' });
+        expect({ args, status: r.status, stdout: r.stdout, stderr: r.stderr }).toEqual({
+          args,
+          status: 2,
+          stdout: '',
+          stderr: 'usage: node scripts/build-mermaid.mjs [--notices]\n',
+        });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a build that fails exits 1 and says why: here Mermaid is not installed', () => {
+    const dir = stage(['esbuild', '@esbuild'], null);
+    try {
+      const r = spawnSync(process.execPath, [path.join(dir, 'scripts', 'build-mermaid.mjs')], { encoding: 'utf8' });
+      expect(r.status).toBe(1);
+      expect(r.stdout).toBe('');
+      expect(r.stderr).toMatch(/mermaid/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--notices builds the file and writes the generated section after the hand-written text', () => {
+    const dir = stage(['*'], 'Hand-written notices.\n');
+    try {
+      const r = spawnSync(process.execPath, [path.join(dir, 'scripts', 'build-mermaid.mjs'), '--notices'], { encoding: 'utf8' });
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+      const built = readFileSync(path.join(dir, 'assets', 'mermaid', 'mermaid.mjs'));
+      expect(built.length).toBe(first.bytes);
+      const packages = packagesOf(first.metafile, ROOT);
+      expect(r.stdout).toBe(
+        `build-mermaid: assets/mermaid/mermaid.mjs, ${String(first.bytes)} bytes, sha256 ${first.sha256}\n` +
+          `build-mermaid: THIRD-PARTY-NOTICES lists the ${String(packages.length)} bundled packages\n`,
+      );
+      expect(readFileSync(path.join(dir, 'THIRD-PARTY-NOTICES'), 'utf8')).toBe(withNoticesSection('Hand-written notices.\n', noticesSection(packages)));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 300_000);
 });
