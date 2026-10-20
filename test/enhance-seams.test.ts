@@ -214,6 +214,7 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     const cancelA = env.timeout(() => ran.push('a'), 10);
     env.timeout(() => ran.push('b'), 10);
     cancelA();
+    cancelA(); // a second call does nothing
     expect(timers.cleared).toEqual([1]);
     for (const fn of timers.queued) fn();
     expect(ran).toEqual(['b']);
@@ -521,6 +522,7 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     };
     try {
       const ro = ctxOf(root).env.observeResize(() => undefined);
+      ro?.cancel();
       ro?.cancel();
       await destroyEnhancement(root);
       expect(disconnected).toBe(1);
@@ -1202,7 +1204,7 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
   it('status headers: named as a whole word; a ruling header by a word anywhere, or a question', () => {
     const v = compileVocab(defaultVocabulary());
     for (const h of ['Status', 'Current status', 'States', 'Verdicts', 'How it stands', 'Fate']) expect(v.statusHeader.test(h), h).toBe(true);
-    for (const h of ['Statement', 'Restated', 'Resultant', 'Note']) expect(v.statusHeader.test(h), h).toBe(false);
+    for (const h of ['Statement', 'Restated', 'Resultant', 'Upstate', 'Interstates', 'Note']) expect(v.statusHeader.test(h), h).toBe(false);
     for (const h of ['Ruling', 'Rulings so far', 'Answer', 'Is it done?']) expect(v.rulingHeader.test(h), h).toBe(true);
     for (const h of ['Notes', 'Question mark here']) expect(v.rulingHeader.test(h), h).toBe(false);
   });
@@ -1233,7 +1235,7 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
       true,
       false,
     ]);
-    expect(v.qualifier.test('programme ')).toBe(false); // the default qualifiers: none
+    expect(v.qualifier.test('the annex ')).toBe(false); // the default qualifiers: none
   });
 
   it('the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter', () => {
@@ -1280,7 +1282,7 @@ describe('vocab: every word list, with its default (Task 7a\'s table)', () => {
       false,
       false,
     ]);
-    expect([v.addressee.test('For you.'), v.addressee.test('YOU'), v.addressee.test('yours'), v.addressee.test('the operator')]).toEqual([true, true, false, false]);
+    expect([v.addressee.test('For you.'), v.addressee.test('YOU'), v.addressee.test('yours'), v.addressee.test('the reviewer')]).toEqual([true, true, false, false]);
   });
 
   it('the plan grammars: a task heading, a step title with its owner, and the owner line', () => {
