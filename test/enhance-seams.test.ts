@@ -1646,8 +1646,20 @@ describe('features: registration in the final build order', () => {
     'folds', 'cards', 'jump', 'settings', 'changes', 'since', 'keysheet', 'diagrams', 'diagram-tools', 'position',
   ];
 
-  /** The features already built (the prototype's), each with its own build export; the rest are stubs. */
+  /** The features already built (the prototype's), each with its own build export; the rest are stubs or filled. */
   const BUILT = ['editorial', 'status', 'folds'];
+
+  /** The sentence a stub's header carries until its task fills it; a filled module's header says what it builds. */
+  const STUB = /Built by L2 Task \d+; until then a stub that builds nothing\./;
+
+  /** A module's header comment, its lines joined. */
+  function headerOf(name: string): string {
+    const lines = readFileSync(path.join(ENHANCE_DIR, `${name}.ts`), 'utf8').split('\n');
+    return lines.slice(0, lines.findIndex((l) => !l.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join(' ');
+  }
+
+  /** Whether a registered feature is still a stub, by its header: a task that fills one rewrites the header. */
+  const isStub = (name: string): boolean => !BUILT.includes(name) && STUB.test(headerOf(name));
 
   it('lists every feature once, in the reference\'s build order', async () => {
     expect((await realFeatures()).map((f) => f.name)).toEqual(ORDER);
@@ -1666,8 +1678,21 @@ describe('features: registration in the final build order', () => {
     expect(withAfter).toEqual(['changes', 'since', 'diagrams']);
     for (const name of names.filter((n) => !BUILT.includes(n))) {
       const mod = (await import(`../src/enhance/${name}.ts`)) as Record<string, unknown>;
-      expect(Object.keys(mod).sort(), name).toEqual(withAfter.includes(name) ? ['after', 'build'] : ['build']);
+      const keys = Object.keys(mod).sort();
+      // A stub exports build (and after) only; a filled module may export more, its tests' constants say, but still
+      // exports build, and after exactly when it is registered with one.
+      if (isStub(name)) expect(keys, name).toEqual(withAfter.includes(name) ? ['after', 'build'] : ['build']);
+      else expect([keys.includes('build'), keys.includes('after')], name).toEqual([true, withAfter.includes(name)]);
     }
+  });
+
+  it('a stub is told by its header: every registered module the prototype did not build is a stub until its task', async () => {
+    const names = (await realFeatures()).map((f) => f.name);
+    for (const name of names.filter((n) => !BUILT.includes(n))) {
+      // Each module is a stub or names the task that built it; none is neither.
+      expect(isStub(name) || /\bL2 Task \d+\b/.test(headerOf(name)), name).toBe(true);
+    }
+    expect(names.filter((n) => isStub(n)).length).toBeGreaterThan(0);
   });
 
   it('every stub names its section of the reference layout and the task that fills it, and builds nothing yet', async () => {
@@ -1675,12 +1700,9 @@ describe('features: registration in the final build order', () => {
     await enhance(root);
     const html = root.outerHTML;
     const ctx = ctxOf(root);
-    for (const f of (await realFeatures()).filter((x) => !BUILT.includes(x.name))) {
-      const src = readFileSync(path.join(ENHANCE_DIR, `${f.name}.ts`), 'utf8');
-      const lines = src.split('\n');
-      const header = lines.slice(0, lines.findIndex((l) => !l.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join(' ');
+    for (const f of (await realFeatures()).filter((x) => isStub(x.name))) {
+      const header = headerOf(f.name);
       expect(header, f.name).toMatch(/\(the reference layout, sections? \d+[a-z]?\b/);
-      expect(header, f.name).toMatch(/Built by L2 Task \d+; until then a stub that builds nothing\./);
       expect(header, f.name).toMatch(/Consumes|Produces/);
       f.build(ctx);
       await f.after?.(ctx);
