@@ -1,8 +1,6 @@
 {
   "options": {
-    "initialHash": "__proto__",
-    "storageKey": "case",
-    "storage": { "snapshot": { "docreader:pos:case": "{\"line\":\"h2[id=jump]\",\"offset\":0,\"y\":0}" } }
+    "initialHash": "__proto__"
   },
   "scope": ["h-anchor", "h-ctl", "flash", "[tabindex]"],
   "hostile": true
