@@ -2,8 +2,8 @@
 // a skip link, the bar with its running head and its tool tray, and the progress line, all chrome inside the root
 // (LD10), made only with `chrome.bar` (the default). The stylesheet's bar block (reader.css, at its marker) makes the
 // bar the root's sticky top, as wide as the root, taking the root's own top padding below it so the reading column
-// starts where it would without the bar; scroll.ts fills the running head, moves the progress line, toggles the root
-// classes `scrolled` and `bar-hidden`, and measures `--bar-h`.
+// starts that padding below the bar's row and line, where it would under a page-level bar; scroll.ts fills the
+// running head, moves the progress line, toggles the root classes `scrolled` and `bar-hidden`, and measures `--bar-h`.
 //
 // The root's children, ahead of the document:
 //   a.skip-link        "Skip to the text", the first stop for the keyboard: it scrolls to the document's first node
