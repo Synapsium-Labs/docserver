@@ -1,0 +1,100 @@
+h1
+  "First mentions"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "In short"
+p
+  "The"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "fold"
+  "and the"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "read mark"
+  "are each linked once in this box."
+h2
+  "1. Reading"
+p
+  "A"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "fold"
+  "hides a section, and the next fold here "…
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "read mark"
+  "is linked; a second read mark is not."
+p
+  "A new paragraph in the same section: the"…
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "marker"
+  ". Only the marker is new here."
+h2
+  "2. Words used here"
+div .glossary
+  table
+    thead
+      tr
+        th
+          "Word"
+        th
+          "What it says"
+    tbody
+      tr
+        td .termcell
+          "Fold"
+        td
+          "A section shown as its heading only; a f"…
+      tr
+        td .termcell
+          "Read mark (marker)"
+        td
+          "A mark on a section the reader has read"
+      tr
+        td .termcell
+          "Box, Pill and Tag"
+        td
+          "Small labels, each a name matched as spe"…
+h2
+  "3. Another section"
+p
+  "A"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "fold"
+  ", a"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "read mark"
+  "and a"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "marker"
+  "are linked again: a new section starts o"…
+p
+  "A"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "Box"
+  "and a"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "Tag"
+  "are linked; a box and a tag in lower cas"…
+h2
+  "4. A glossary by its headers"
+div .glossary
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td .termcell
+          "Lantern"
+        td
+          "A light, defined in a table headed Term "…
+p
+  "A"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "lantern"
+  "is linked once in this section, and a la"…

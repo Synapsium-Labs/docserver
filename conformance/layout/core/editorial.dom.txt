@@ -302,13 +302,17 @@ div .agreed.callout chrome
     li
       "R1: the title block comes first."
     li
-      "D1: the warm palette stays."
+      a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+        "D1"
+      ": the warm palette stays."
 div .callout.waiting chrome
   h3
     "Waiting on you"
   ul
     li
-      "D2: whether sections fold by default."
+      a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+        "D2"
+      ": whether sections fold by default."
     li
       "Q1: the fold memory question in section "…
 div .callout.later chrome
@@ -316,7 +320,9 @@ div .callout.later chrome
     "Later"
   ul
     li
-      "D3: a rules index."
+      a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+        "D3"
+      ": a rules index."
     li
       "A print layout."
 hr
