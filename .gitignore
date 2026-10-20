@@ -6,3 +6,4 @@ coverage/
 .DS_Store
 demo-out/
 visual-out/
+assets/mermaid/

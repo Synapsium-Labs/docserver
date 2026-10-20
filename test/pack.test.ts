@@ -2,7 +2,8 @@
 // and packed in a temporary directory, as CI's `npm run build` and `npm pack` would, so this test never writes
 // the checkout's own dist/. The tarball must hold the three code entries, their declarations, the whole corpus
 // a consumer's runCorpus reads and the layout's assets (its stylesheet, its fonts, and the licence and notices the
-// fonts travel with), and nothing else: no Python references, no scripts, no sources, tests or working papers. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
+// fonts travel with, and the Mermaid file that scripts/build-mermaid.mjs builds, which the notices also cover), and
+// nothing else: no Python references, no scripts, no sources, tests or working papers. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
 // dependencies, which a consumer's install brings (review 458, F7).
 // Then scripts/consumer-smoke.mjs installs the tarball offline (its dependencies linked from this checkout's
 // node_modules) and imports it by package name, exactly as CI's registry-installed smoke does; a second tarball
@@ -48,6 +49,7 @@ const ALLOWED = [
   /^conformance\/(?:corpus|expected)\/[A-Za-z0-9/_-]+\.(?:md|html|meta\.json)$/,
   /^assets\/reader\.css$/,
   /^assets\/fonts\/[A-Za-z0-9._-]+\.(?:woff2|txt|md)$/,
+  /^assets\/mermaid\/mermaid\.mjs$/,
   /^(?:package\.json|README\.md|LICENSE|THIRD-PARTY-NOTICES)$/,
 ];
 
@@ -100,6 +102,8 @@ beforeAll(() => {
   symlinkSync(realpathSync(path.join(ROOT, 'node_modules')), path.join(stage, 'node_modules'), 'dir');
   const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.build.json'], { cwd: stage, encoding: 'utf8' });
   if (build.status !== 0) throw new Error(`build failed: ${build.stdout}${build.stderr}`);
+  const mermaid = spawnSync(process.execPath, [path.join('scripts', 'build-mermaid.mjs')], { cwd: stage, encoding: 'utf8' });
+  if (mermaid.status !== 0) throw new Error(`the Mermaid build failed: ${mermaid.stdout}${mermaid.stderr}`);
   const pack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', work], stage);
   if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
   const [first] = JSON.parse(pack.stdout) as { filename: string; files: { path: string }[] }[];
@@ -167,6 +171,8 @@ describe('npm pack', () => {
       'assets/fonts/source-sans-3-latin-wght-italic.woff2',
       'assets/fonts/OFL.txt',
       'assets/fonts/README.md',
+      // the Mermaid file, built from the pinned dev dependency, whose bundled packages the notices list
+      'assets/mermaid/mermaid.mjs',
       'THIRD-PARTY-NOTICES',
     ]) {
       expect(packed.files).toContain(must);
@@ -197,7 +203,8 @@ describe('the packed package, imported by name', () => {
         'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
         'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
         'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs',
-        'consumer-smoke: the stylesheet and the font licence resolve through ./assets/* into node_modules',
+        'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
+        "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
         'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
         'consumer-smoke: 82 of 82 cases passed',
         '',
@@ -221,17 +228,18 @@ describe('the packed package, imported by name', () => {
 
   it('fails, naming the case, when the packed corpus does not pass', () => {
     const lines = brokenSmoke?.stdout.split('\n') ?? [];
-    expect(lines.slice(0, 8)).toEqual([
+    expect(lines.slice(0, 9)).toEqual([
       'consumer-smoke: installed the tarball offline',
       STRICT_LINE,
       'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
       'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
       'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs',
-      'consumer-smoke: the stylesheet and the font licence resolve through ./assets/* into node_modules',
+      'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
+      "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
       'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
       'consumer-smoke: 81 of 82 cases passed',
     ]);
-    expect(lines[8]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
+    expect(lines[9]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
     expect(brokenSmoke?.status).toBe(1);
   });
 });

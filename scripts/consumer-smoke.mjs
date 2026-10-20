@@ -8,8 +8,10 @@
 // project, so every import resolves by package name through the tarball's own exports map, never through this
 // checkout. The check imports `@synapsium-labs/docserver/render` and `/conformance`, confirms the entry
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, imports
-// `/enhance` in Node (it is import-inert) and checks its four exports, resolves the stylesheet and the font licence
-// through `./assets/*`, refuses a deep import of the enhance build, and runs runCorpus(render, { scanRefs }).
+// `/enhance` in Node (it is import-inert) and checks its four exports, resolves the stylesheet, the font licence and
+// the Mermaid file through `./assets/*` and imports the Mermaid file there (its one export, the default, is Mermaid's
+// API, with `startOnLoad` false, so the file is import-inert), refuses a deep import of the enhance build, and runs
+// runCorpus(render, { scanRefs }).
 // Before that it typechecks, with this checkout's own typescript, a consumer file that imports the three code
 // entries together with every packed declaration file (dist/**/*.d.ts, including those no entry reaches), under
 // the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a packed declaration whose imports
@@ -109,12 +111,27 @@ if (enhanceApi === 'EnhanceError, destroyEnhancement, enhance, setEnhancementPre
   say(\`${PACKAGE}/enhance exports \${enhanceApi}\`);
 }
 
-const assets = ['assets/reader.css', 'assets/fonts/OFL.txt'].map((a) => [a, import.meta.resolve(\`${PACKAGE}/\${a}\`)]);
+const assets = ['assets/reader.css', 'assets/fonts/OFL.txt', 'assets/mermaid/mermaid.mjs'].map((a) => [a, import.meta.resolve(\`${PACKAGE}/\${a}\`)]);
 const stray = assets.filter(([a, url]) => !url.endsWith(\`/node_modules/${PACKAGE}/\${a}\`) || !existsSync(fileURLToPath(url)));
-if (stray.length === 0) say('the stylesheet and the font licence resolve through ./assets/* into node_modules');
+if (stray.length === 0) say('the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules');
 else {
   ok = false;
   for (const [a, url] of stray) say(\`\${a} resolves to \${url}, which is not the installed file\`);
+}
+
+try {
+  const mermaidFile = await import('${PACKAGE}/assets/mermaid/mermaid.mjs');
+  const api = mermaidFile.default;
+  const names = Object.keys(mermaidFile).join(', ');
+  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'function') && api.startOnLoad === false) {
+    say("the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off");
+  } else {
+    ok = false;
+    say(\`the Mermaid file exports \${names} (startOnLoad \${String(api?.startOnLoad)}), which is not Mermaid's API alone with its start-on-load off\`);
+  }
+} catch (e) {
+  ok = false;
+  say(\`the Mermaid file did not import: \${String(e)}\`);
 }
 
 try {
