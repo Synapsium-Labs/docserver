@@ -37,7 +37,8 @@
 // ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
 // (render() parses it, and the host passes it as info.frontList). The item link leaves an author's own link alone
 // (the reference re-pointed one that was not https), keeps a key's code element in the link (the reference replaced
-// it with the bare key), and has no third route for a header line older than the meta line.
+// it with the bare key), has no third route for a header line older than the meta line, and takes the neutral class
+// `item-link` (the reference's named one tracker; no rule of the stylesheet reads either).
 //
 // It publishes what later features read of the title block (docserver L2, Task 7b): `ctx.page` (registry.ts), once,
 // at the end of its build: the byline (or null), the items of the first "Waiting" box of "Where things stand" and that
@@ -459,8 +460,9 @@ export function buildEditorial(ctx: FeatureContext): void {
       if (href !== null) delta = { key, href };
     }
     const { el: byline, kinds, meta, item } = buildByline(ctx, h1, minutes, delta, links);
-    // The byline route, without a delta: the keys of the item fact's own nodes (call-outs, then writes).
-    if (links !== null && delta === null && item !== null && !linkKeys(ctx, item, links)) return;
+    // The byline route: the keys of the item fact's own nodes (call-outs, then writes). With a delta there are none:
+    // the item fact shows the delta's link, and its own nodes stay in the hidden meta line.
+    if (links !== null && item !== null && !linkKeys(ctx, item, links)) return;
     for (const f of front ?? []) if (!f.list && ctx.vocab.kindKey.test(f.key)) kinds.push(f.vals.join(', '));
     if (kinds.length > 0) {
       journal.insert(chrome(doc, 'div', { className: 'eyebrow' }, kinds.map((k) => chrome(doc, 'span', { text: k }))), parent, h1);

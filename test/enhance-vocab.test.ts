@@ -497,7 +497,7 @@ const ITEM_DOC = [
   '## 3. Change delta',
   '',
   '```text',
-  '',
+  '   ',
   'item: CD-7',
   'more lines',
   '```',
@@ -665,7 +665,8 @@ describe('the item link, by the delta route: the first code block of a section h
   });
 
   it('only the section\'s first code block counts, its first line that is not blank, as `item: <key>`', async () => {
-    const first = ITEM_DOC.replace('```text\n\nitem: CD-7\nmore lines\n```', '```text\nnotes first\nitem: CD-7\n```');
+    expect(ITEM_DOC).toContain('```text\n   \nitem: CD-7'); // a line of spaces first: render() keeps it (an empty one it drops)
+    const first = ITEM_DOC.replace('```text\n   \nitem: CD-7\nmore lines\n```', '```text\nnotes first\nitem: CD-7\n```');
     const itemLink = vi.fn(LINK);
     const root = mount(first);
     await enhance(root, { itemLink, vocabulary: { itemFields: ['Tracker'], itemHeadings: ['change delta'] } });
