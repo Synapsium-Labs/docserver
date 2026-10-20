@@ -1,6 +1,6 @@
 // The reading position, kept across reloads, the section link and the `j` and `k` keys (docserver L2, Task 14), from
 // the reference layout's sections 27, 19 (its `#` link) and 25 (`j` and `k`). Navigation itself, the place, the pin
-// and the flash are nav.ts's; this feature uses them through ctx.nav and placeOf(ctx.position).
+// and the flash are nav.ts's; this feature uses them through ctx.nav and placeOf(ctx.nav).
 //
 //   The section link   a chrome `a.h-anchor` ("#", href `#<id>`, titled "Link to this section", named "Link to <the
 //                      heading's title without its number>") in the `anchor` slot of each level-2 and level-3 heading
@@ -56,7 +56,7 @@ function inShort(root: Element, el: Element): boolean {
 export function build(ctx: FeatureContext): void {
   const { root, nav, env, options, state } = ctx;
   const doc = root.ownerDocument;
-  const place = placeOf(ctx.position);
+  const place = placeOf(nav);
 
   // ── the section link
   for (const h of Array.from(root.querySelectorAll('h2[id], h3[id]')) as HTMLElement[]) {

@@ -317,6 +317,7 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
     expect(Array.from(bare?.childNodes ?? []).map((n) => [(n as Element).className, n.textContent])).toEqual([
       ['task-id', 'Task 7'],
       ['', ':'],
+      ['h-ctl', '#'], // its controls: the section link (Task 14)
     ]);
     expect(bare?.getAttribute('aria-label')).toBe('Task 7:');
     expect(ctxOf(root).plan.tasks).toEqual([bare, k]);

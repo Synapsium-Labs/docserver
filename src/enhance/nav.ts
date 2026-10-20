@@ -45,7 +45,7 @@
 //                      runs inside it.
 //   position.holdBar() keep the phone bar shown for BAR_HOLD_MS (a jump just moved the page); position.barHeld()
 //                      says whether that hold is still on (scroll.ts reads it).
-// And, for the reading position (position.ts) and goToHash, through placeOf(ctx.position):
+// And, for the reading position (position.ts) and goToHash, through placeOf(ctx.nav):
 //   anchor()           the reader's place: the first block hit at the reading line (the bar's bottom plus 12 px, then
 //                      every 24 px down to 240 px, a third into the reading column, at most 240 px in): an element the
 //                      document had when the instance started that carries a `data-line`, or one with a document id,
@@ -173,14 +173,28 @@ export interface Place {
   reach(el: Element, smooth: boolean): void;
 }
 
-/** Each instance's place, by its position seam. */
-let places: WeakMap<Position, Place> | undefined;
+/** Each instance's place, by its navigation. */
+let places: WeakMap<Nav, Place> | undefined;
 
-/** The place of an instance, by its `ctx.position`. Throws for a position createNavigation did not make. */
-export function placeOf(position: Position): Place {
-  const place = places?.get(position);
-  if (place === undefined) throw new Error('docreader: placeOf takes the position of an instance');
+/** The place of an instance, by its `ctx.nav`. Throws for a navigation createNavigation did not make. */
+export function placeOf(nav: Nav): Place {
+  const place = places?.get(nav);
+  if (place === undefined) throw new Error('docreader: placeOf takes the navigation of an instance');
   return place;
+}
+
+/** What createNavigation answers: the navigation of one instance, and its position seam. */
+export interface Navigation {
+  readonly nav: Nav;
+  readonly position: Position;
+}
+
+/**
+ * The position seam of an instance's navigation (Task 7b's name for it): what the lifecycle puts on `ctx.position`
+ * and gives relayout, taken here so that a wrapper of the seam (a test that watches keep()) has one call to wrap.
+ */
+export function createPosition(navigation: Navigation): Position {
+  return navigation.position;
 }
 
 export interface NavArgs {
@@ -218,7 +232,7 @@ function px(value: string): number | null {
 }
 
 /** Navigation and the position seam of one instance: reads the document's ids and lines now, and listens for clicks on the root. */
-export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly position: Position } {
+export function createNavigation(args: NavArgs): Navigation {
   const { root, journal, host, env, index, reveal, live, operate, bar } = args;
   const doc = root.ownerDocument;
   /** The document's ids and its blocks' lines, read once, before any chrome exists: the first element with each. */
@@ -494,6 +508,7 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
     holdBar,
     barHeld: (): boolean => env.now() < heldUntil,
   });
-  (places ??= new WeakMap()).set(position, Object.freeze({ anchor, restore, pin, barBottom, reach }));
-  return Object.freeze({ nav: Object.freeze({ byId, idOf, goTo, goToHash }), position });
+  const nav: Nav = Object.freeze({ byId, idOf, goTo, goToHash });
+  (places ??= new WeakMap()).set(nav, Object.freeze({ anchor, restore, pin, barBottom, reach }));
+  return Object.freeze({ nav, position });
 }
