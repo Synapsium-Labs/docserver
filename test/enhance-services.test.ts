@@ -1029,16 +1029,20 @@ describe('headCtl: one .h-ctl per heading, slots in fixed order', () => {
     expect(find(root, 'h3').getAttribute('aria-label')).toBe('Task 1: Agreed own');
   });
 
-  it('a heading that already has a label keeps it; destroy removes every control and the label', async () => {
+  it('a heading that already has a label (aria-labelledby or aria-label) keeps it; destroy removes every control and the label', async () => {
     const root = mount();
     const named = find(root, 'h3');
     named.setAttribute('aria-labelledby', 'x');
+    const labelled = child(root, 'h2', '3-plan');
+    labelled.setAttribute('aria-label', 'The plan, by its author');
     const html = root.innerHTML;
     probe((ctx) => {
       ctx.headCtl(named, 'anchor', chrome(ctx.root.ownerDocument, 'a', { className: 'h-anchor' }));
+      ctx.headCtl(labelled, 'anchor', chrome(ctx.root.ownerDocument, 'a', { className: 'h-anchor' }));
     });
     await enhance(root);
     expect(named.hasAttribute('aria-label')).toBe(false);
+    expect(labelled.getAttribute('aria-label')).toBe('The plan, by its author');
     expect(named.querySelector('.h-anchor')).not.toBeNull();
     await destroyEnhancement(root);
     expect(root.innerHTML).toBe(html);
