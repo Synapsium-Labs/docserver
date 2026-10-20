@@ -25,10 +25,13 @@
 // first (it changes the wrapper's overflow); then, per table, whether the table fits its wrapper (its scroll width at
 // most the wrapper's client width plus 1) and its head's height; then `fits` again where it does, `--thead-h` (the
 // head's height in px, through journal.setStyle) and, on a table that does not fit, a labelled region the keyboard
-// reaches (tabindex 0, role region, "Table N, scrolls sideways: <the first three headers>"). A table that stacks into
-// cards on a phone (`stack`, status.ts) is not a region there: its cards fit. The phone is a viewport of PHONE_MAX_W
-// px or less (env.viewport().w), as the stylesheet's `@media (max-width: 700px)` reads it. A table that fits again
-// loses the region.
+// reaches (tabindex 0, role region, "Table N, scrolls sideways: <the first three headers>", each header clipped to
+// HEAD_LABEL_MAX). A table that stacks into cards on a phone (`stack`, status.ts) is not a region there: its cards
+// fit. The phone is a viewport of PHONE_MAX_W px or less (env.viewport().w), as the stylesheet's
+// `@media (max-width: 700px)` reads it. A table that fits again loses the region. While the root has no layout box
+// (`display: none` on it or around it: no client rects), every size reads 0, so nothing is measured or written and
+// what was measured before stays; the next relayout once it is shown measures it (a window resize, a change of the
+// prefs, a fold: relayout.ts has no trigger for the root's own size).
 //
 // Writes go through the journal, so destroy undoes them: the lines and hidden spans are unwrapped and the bullets
 // joined to their text again, the filter's hidden rows shown, the classes, the style and the region attributes put
@@ -45,6 +48,9 @@ const FILTER_MIN_ROWS = 12;
 
 /** The widest viewport that is a phone, in px: the stylesheet's `@media (max-width: 700px)`. */
 const PHONE_MAX_W = 700;
+
+/** The most a header gives a table region's label, in code units (ctx.text.clip). */
+const HEAD_LABEL_MAX = 80;
 
 /** A bullet a cell's line may open with, and the white space around it, as the reference stripped it. */
 const BULLET = /^\s*[•·▪-]\s+/;
@@ -138,9 +144,10 @@ function tableScrolls(fits: boolean, stack: boolean, phone: boolean): boolean {
   return !fits && (!stack || !phone);
 }
 
-/** Measure every table again (see the header): reads first, then writes. */
+/** Measure every table again (see the header): reads first, then writes; nothing while the root has no layout box. */
 function measure(ctx: FeatureContext, tables: readonly TableBlock[]): void {
   const { journal } = ctx;
+  if (ctx.root.getClientRects().length === 0) return;
   for (const t of tables) if (t.el.classList.contains('fits')) journal.toggleClass(t.el, 'fits', false);
   const read = tables.map((t) => ({ fits: t.table.scrollWidth <= t.el.clientWidth + 1, headH: t.table.tHead?.offsetHeight ?? 0 }));
   const phone = ctx.env.viewport().w <= PHONE_MAX_W;
@@ -149,7 +156,7 @@ function measure(ctx: FeatureContext, tables: readonly TableBlock[]): void {
     journal.toggleClass(t.el, 'fits', fits);
     journal.setStyle(t.el, '--thead-h', `${String(headH)}px`);
     if (tableScrolls(fits, t.el.classList.contains('stack'), phone)) {
-      const heads = t.heads.length > 0 ? `: ${t.heads.slice(0, 3).join(', ')}` : '';
+      const heads = t.heads.length > 0 ? `: ${t.heads.slice(0, 3).map((h) => ctx.text.clip(h, HEAD_LABEL_MAX)).join(', ')}` : '';
       journal.setAttribute(t.el, 'tabindex', '0');
       journal.setAttribute(t.el, 'role', 'region');
       journal.setAttribute(t.el, 'aria-label', `Table ${String(i + 1)}, scrolls sideways${heads}`);

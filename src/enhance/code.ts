@@ -6,24 +6,35 @@
 // foot (`.end`, "Copy this code (from its foot)") and the class `tall`, which leaves room for it. A click hands the
 // code's text (the `pre`'s textContent, read then) to host.copy; the label reads "Copied" once the host's copy
 // returned or fulfilled, "Failed" when it threw, rejected or was not called, and "Copy" again COPY_LABEL_MS later (one
-// timer per button, through env.timeout, so destroy clears it). The label is written inside an operation of the
-// instance (ctx.operate), so a copy that settles once the instance is not live writes nothing (RF5).
+// timer per button, through env.timeout, so destroy clears it). Only the reply to a button's latest click writes its
+// label: an older copy that settles later, failed say, changes nothing. The label is written inside an operation of
+// the instance (ctx.operate), so a copy that settles once the instance is not live writes nothing (RF5).
 //
 // Widths, measured on every relayout (ctx.onRelayout), as the reference's sizing did: a block whose longest line is
 // wider than the reading column takes the class `long` (the stylesheet then lets it take the wide width), and a block
 // that still does not fit scrolls sideways, so its `pre` is a labelled region the keyboard reaches (tabindex 0, role
-// region, "Code block N, scrolls sideways"), which it loses once it fits. The line is measured as text, never laid
-// out: its characters (a tab counts TAB_WIDTH) times the width of one character of the code's face, measured on a
-// canvas through env.textWidth (CHAR_W_FALLBACK px without one), plus CODE_PAD. The room:
+// region, "Code block N, scrolls sideways"), which it loses once it fits. `long` is an estimate: the line is measured
+// as text, never laid out: its characters (a tab counts TAB_WIDTH) times the width of one character of the code's
+// face, measured on a canvas through env.textWidth (CHAR_W_FALLBACK px without a finite width above 0), plus
+// CODE_PAD. The region is the layout's once `long` is written: a `pre` with a layout box is a region when it really
+// scrolls (its scroll width more than its client width plus 1), as the reference's check once the layout was real
+// did, so a line of wide characters (about one em each, twice the estimate's character) is reached too; a `pre` with
+// no box (in a folded section, say) keeps the estimate's answer. So a relayout reads the room, writes `long`, reads
+// the pres' widths (one layout), then writes the regions. The room:
 //   - the root's content-box width (its client width less its padding), less the contents rail's `--rail-w` when the
 //     root has the class `has-toc` and the viewport is RAIL_MIN_W px wide or more (the rail is Task 18's; without the
 //     class, or without a length in px for the property, there is no rail);
-//   - the column: the stylesheet's measure for the prefs (COLUMN_REM rem, less SANS_REM for the sans face; `--rem`
-//     from the root, REM_PX without one), at most that room; LIST_INDENT px less in a list item;
+//   - the column: the stylesheet's measure for the prefs (COLUMN_REM rem, less SANS_REM for the sans face), at most
+//     that room; LIST_INDENT px less in a list item. The rem is the root's `--rem` when it is a length in px; else the
+//     code's computed size (always in px) over CODE_REM, since the stylesheet sets it at CODE_REM rem, so a host's
+//     `1.25rem` counts as what it resolves to; else REM_PX. The canvas measures in the code's computed size too;
 //   - the wide width: WIDE_PX for the prefs' width, at most that room.
 // A phone is a viewport of PHONE_MAX_W px or less (env.viewport().w), as the stylesheet's `@media (max-width: 700px)`
-// reads it: there the block scrolls when it needs more than the column, and elsewhere when it needs more than the wide
-// width. Each of these numbers is the stylesheet's or the reference's, and a test holds each to it.
+// reads it: there a block's estimate scrolls when it is long, and elsewhere when it is long and needs more than the
+// wide width. Each of these numbers is the stylesheet's or the reference's, and a test holds each to it.
+// While the root has no layout box (`display: none` on it or around it: no client rects), nothing is measured or
+// written and what was measured before stays; the next relayout once it is shown measures it (relayout.ts has no
+// trigger for the root's own size).
 //
 // Writes go through the journal, so destroy undoes them; the buttons are chrome and go with the journal.
 //
@@ -114,9 +125,10 @@ function codeFit(room: CodeRoom, chars: number, inList: boolean): { readonly lon
   const wide = Math.min(WIDE_PX[room.prefs.width], avail);
   const fits = inList ? col - LIST_INDENT : col;
   const need = chars * room.charW + CODE_PAD;
-  // Off a phone the reference asked a long block about the wide width and any other about the column; one question
-  // is the same: a block that is not long needs no more than `fits`, which is no more than `wide`.
-  return { long: need > fits, scrolls: need > (phone ? fits : wide) };
+  const long = need > fits;
+  // The reference's question, `need > (long ? wide : fits)` off a phone and `need > fits` on one: a block that is not
+  // long never scrolls, even where the column is wider than the wide width (a large --rem).
+  return { long, scrolls: long && (phone || need > wide) };
 }
 
 /** A computed length in px, or null when the value is not one. */
@@ -125,15 +137,25 @@ function px(value: string): number | null {
   return m === null ? null : Number(m[1]);
 }
 
-/** Read the room now: the viewport, the root's box, the rail, the prefs, the rem and the code's character. */
-function readRoom(ctx: FeatureContext): CodeRoom {
+/** `n` to a thousandth. */
+const thousandths = (n: number): number => Math.round(n * 1000) / 1000;
+
+/** A length in px above 0, or null. */
+function positive(value: string): number | null {
+  const n = px(value);
+  return n !== null && n > 0 ? n : null;
+}
+
+/** Read the room now: the viewport, the root's box, the rail, the prefs, the rem and the code's character (see the header). */
+function readRoom(ctx: FeatureContext, pre: HTMLPreElement): CodeRoom {
   const { root, env } = ctx;
   const w = env.viewport().w;
   const box = root.clientWidth - (px(env.computed(root, 'padding-left')) ?? 0) - (px(env.computed(root, 'padding-right')) ?? 0);
   const rail = root.classList.contains('has-toc') ? Math.max(0, px(env.computed(root, '--rail-w')) ?? 0) : 0;
-  const remRead = px(env.computed(root, '--rem'));
-  const rem = remRead !== null && remRead > 0 ? remRead : REM_PX;
-  const width = env.textWidth(SAMPLE, `${String(Math.round(CODE_REM * rem * 1000) / 1000)}px ${MONO}`);
+  const remRead = positive(env.computed(root, '--rem'));
+  const size = positive(env.computed(pre, 'font-size'));
+  const rem = remRead ?? (size === null ? REM_PX : thousandths(size / CODE_REM));
+  const width = env.textWidth(SAMPLE, `${String(size ?? thousandths(CODE_REM * rem))}px ${MONO}`);
   const charW = width !== null && Number.isFinite(width) && width > 0 ? width / SAMPLE.length : CHAR_W_FALLBACK;
   const { width: pw, font } = ctx.state.prefs;
   return { w, box, rail, prefs: { width: pw, font }, rem, charW };
@@ -156,9 +178,14 @@ function addCopy(ctx: FeatureContext, c: CodeBlock, pre: HTMLPreElement): void {
       attrs: { type: 'button', 'aria-label': end ? 'Copy this code (from its foot)' : 'Copy this code' },
     });
     let reset: Cancel | null = null;
+    /** The number of this button's latest click: only its reply writes the label. */
+    let clicks = 0;
     journal.listen(b, 'click', () => {
+      clicks += 1;
+      const click = clicks;
       void ctx.host.copy(pre.textContent ?? '').then((answer) => {
         ctx.operate(() => {
+          if (click !== clicks) return;
           b.textContent = answer === undefined ? 'Copied' : 'Failed';
           reset?.();
           reset = ctx.env.timeout(() => {
@@ -187,14 +214,19 @@ interface Sized {
   readonly inList: boolean;
 }
 
-/** Size every block again (see the header): the room is read once, then each block is written. */
+/** Size every block again (see the header): the room, then `long`, then the layout, then the regions. */
 function size(ctx: FeatureContext, blocks: readonly Sized[]): void {
   const { journal } = ctx;
-  const room = readRoom(ctx);
-  for (const b of blocks) {
-    const { long, scrolls } = codeFit(room, b.chars, b.inList);
-    journal.toggleClass(b.c.el, 'long', long);
-    if (scrolls) {
+  const first = blocks[0];
+  if (first === undefined || ctx.root.getClientRects().length === 0) return;
+  const room = readRoom(ctx, first.pre);
+  const fit = blocks.map((b) => codeFit(room, b.chars, b.inList));
+  blocks.forEach((b, i) => {
+    journal.toggleClass(b.c.el, 'long', fit[i]?.long === true);
+  });
+  const scrolls = blocks.map((b, i) => (b.pre.getClientRects().length === 0 ? fit[i]?.scrolls === true : b.pre.scrollWidth > b.pre.clientWidth + 1));
+  blocks.forEach((b, i) => {
+    if (scrolls[i] === true) {
       journal.setAttribute(b.pre, 'tabindex', '0');
       journal.setAttribute(b.pre, 'role', 'region');
       journal.setAttribute(b.pre, 'aria-label', `Code block ${String(b.no)}, scrolls sideways`);
@@ -203,7 +235,7 @@ function size(ctx: FeatureContext, blocks: readonly Sized[]): void {
       journal.setAttribute(b.pre, 'role', null);
       journal.setAttribute(b.pre, 'aria-label', null);
     }
-  }
+  });
 }
 
 /** Build this feature during startup: the Copy buttons now, the widths on every relayout. */

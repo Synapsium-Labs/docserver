@@ -2,8 +2,9 @@
 // its wrapper or is a labelled region, and `--thead-h` is its head's height; a code block is `long` when it needs more
 // than the reading column, and its `pre` is a region when it still does not fit, decided by the canvas measure of the
 // code face, at the viewport thresholds of the stylesheet (a phone at 700 px or less, the rail from 1,240 px); the
-// decisions follow a width change and the fonts' arrival; the bullet cells' hidden parts take no box; and the filter
-// hides rows.
+// decisions follow a width change and the fonts' arrival; a code block's region is its real overflow once laid out (a
+// line of wide characters); a root enhanced while hidden is measured only once shown; a --rem in rem counts as what it
+// resolves to; the bullet cells' hidden parts take no box; and the filter hides rows (on a phone, an open point).
 //
 // The rail is Task 18's: these cases stand in for it with the class `has-toc` and a `--rail-w` on the root, which is
 // what the code widths read.
@@ -195,13 +196,16 @@ describeBrowsers((browser) => {
     }
   });
 
+  // The stand-in rail is a --rail-w and nothing else: it takes no room in the layout. So it moves only the estimate,
+  // which a laid-out pre no longer uses for its region (the region is its real overflow); at 1240 px the third block
+  // fits the wide width as laid out, as at 1239. The rail's arithmetic is held in jsdom (test/enhance-blocks.test.ts).
   it('long and the region at 699, 700, 701, 1239 and 1240 px (the rail standing in from 1240)', async () => {
     const want: Record<number, { long: boolean[]; region: boolean[] }> = {
       699: { long: [false, false, true, true], region: [false, false, true, true] },
       700: { long: [false, false, true, true], region: [false, false, true, true] },
       701: { long: [false, true, true, true], region: [false, true, true, true] },
       1239: { long: [false, false, true, true], region: [false, false, false, true] },
-      1240: { long: [false, false, true, true], region: [false, false, true, true] },
+      1240: { long: [false, false, true, true], region: [false, false, false, true] },
     };
     for (const width of [699, 700, 701, 1239, 1240]) {
       const doc = await openAt(browser, codeDoc, width, true);
@@ -209,6 +213,7 @@ describeBrowsers((browser) => {
         const got = (await codeState(doc.page)).slice(0, 4);
         expect({ width, long: got.map((c) => c.long), region: got.map((c) => c.role === 'region') }).toEqual({ width, ...want[width] });
         expect(got.map((c) => c.label)).toEqual(got.map((c, i) => (c.role === 'region' ? label(i + 1) : null)));
+        expect(got.map((c) => c.scrolls)).toEqual(got.map((c) => c.role === 'region'));
       } finally {
         await doc.close();
       }
@@ -223,7 +228,7 @@ describeBrowsers((browser) => {
       expect(got.map((t) => t.label)).toEqual([
         null,
         'Table 2, scrolls sideways: Column header 1, Column header 2, Column header 3',
-        `Table 3, scrolls sideways: Key, ${LONG_HEAD}`,
+        'Table 3, scrolls sideways: Key, A header long enough that it never fits the reading column, as the table head…', // clipped to 80
       ]);
       for (const t of got) {
         expect(t.headHeight).toBeGreaterThan(20);
@@ -392,18 +397,108 @@ describeBrowsers((browser) => {
   // OPEN (reported in the PR): a filtered row carries a journaled `hidden`, as the plan asks, and the browser's own
   // `[hidden] { display: none }` loses to the stylesheet's phone rule `.stack tr { display: block }`, so on a phone the
   // rows a stacked table's filter hides still show. The fix is a rule in assets/reader.css (or `display` in LD11's
-  // list), which this task does not own. This case fails today, as `fails` records; once the fix lands it passes,
-  // turns red here, and loses `fails`.
-  it.fails('on a phone the filter hides the rows of a table that stacks into cards (open: the stylesheet shows them)', async () => {
+  // list), which this task does not own. This case pins today's behaviour: the count and the `hidden` attributes are
+  // right, and the hidden rows still lay out. Once the fix lands the last expectation turns red, and flips to the
+  // desktop case's [1, 0, 0, …].
+  it('on a phone the filter of a table that stacks into cards counts and marks the rows, which still show (open: the stylesheet)', async () => {
     const rows = Array.from({ length: 14 }, (_, i) => `| Row ${String(i + 1)} | Item ${String(i + 1)} | note |`);
     const md = ['# Filter', '', '| Row | Item | Note |', '|---|---|---|', ...rows, ''].join('\n');
     const doc = await openAt(browser, md, 390);
     try {
       await doc.page.fill('main[data-harness-root] .tbl-tools input', 'item 1');
-      const shown = await doc.page.evaluate(() =>
-        Array.from(document.querySelectorAll('main[data-harness-root] tbody tr')).map((r) => r.getClientRects().length),
-      );
-      expect(shown).toEqual([1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]);
+      const got = await doc.page.evaluate(() => {
+        const trs = Array.from(document.querySelectorAll('main[data-harness-root] tbody tr'));
+        return {
+          stack: (document.querySelector('main[data-harness-root] .table-wrapper') as Element).classList.contains('stack'),
+          count: (document.querySelector('main[data-harness-root] .tbl-tools span') as Element).textContent,
+          hidden: trs.map((r) => r.hasAttribute('hidden')),
+          boxes: trs.map((r) => r.getClientRects().length),
+        };
+      });
+      expect(got.stack).toBe(true);
+      expect(got.count).toBe('6 of 14');
+      expect(got.hidden).toEqual([false, true, true, true, true, true, true, true, true, false, false, false, false, false]);
+      expect(got.boxes).toEqual(Array.from({ length: 14 }, () => 1)); // the open defect: hidden rows still lay out
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('a root enhanced while hidden is not measured until it is shown and a relayout runs', async () => {
+    const md = `${TABLES}\n\`\`\`\n${x(40)}\n\`\`\`\n`;
+    const doc = await openDoc(md, {}, { browser, viewport: { width: 1440, height: 900 }, enhance: false });
+    try {
+      const rootStyle = (display: string | null): Promise<void> =>
+        doc.page.evaluate((d) => {
+          const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+          if (d === null) root.style.removeProperty('display');
+          else root.style.setProperty('display', d);
+        }, display);
+      await rootStyle('none');
+      await doc.enhance();
+      await settle(doc.page);
+      await rootStyle(null);
+      await settle(doc.page);
+      await doc.page.waitForTimeout(300);
+      const before = await tableState(doc.page);
+      // Nothing was measured at 0 width: the wide table is not `fits` (which would spill it across the page), and the
+      // short code block is neither long nor a region.
+      expect(before.map((t) => [t.fits, t.theadH])).toEqual([
+        [false, ''],
+        [false, ''],
+        [false, ''],
+      ]);
+      expect((await codeState(doc.page)).map((c) => [c.long, c.role])).toEqual([[false, null]]);
+      const spill = await doc.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+      expect(spill).toBe(true);
+      await doc.page.setViewportSize({ width: 1439, height: 900 });
+      await doc.page.waitForTimeout(300);
+      await settle(doc.page);
+      const after = await tableState(doc.page);
+      expect(after.map((t) => t.fits)).toEqual([true, false, false]);
+      for (const t of after) expect(t.theadH).toBe(`${String(t.headHeight)}px`);
+      expect((await codeState(doc.page)).map((c) => [c.long, c.role])).toEqual([[false, null]]);
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('a line of wide characters, which the estimate takes for narrower, is a region when it really scrolls', async () => {
+    // Each wide character is about one em, twice the estimate's character: 84 of them fit the column by the estimate
+    // and overflow it laid out; 130 are long by the estimate, fit the wide width by it, and overflow that laid out.
+    const md = ['# Wide', '', fence('\u6f22'.repeat(84)), fence('\u6f22'.repeat(130)), fence(x(10))].join('\n');
+    const doc = await openAt(browser, md, 1440);
+    try {
+      const got = await codeState(doc.page);
+      expect(got.map((c) => c.long)).toEqual([false, true, false]);
+      expect(got.map((c) => c.scrolls)).toEqual([true, true, false]);
+      expect(got.map((c) => [c.role, c.tabindex, c.label])).toEqual([
+        ['region', '0', label(1)],
+        ['region', '0', label(2)],
+        [null, null, null],
+      ]);
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it("a --rem in rem is read through the code's computed size: the column and the canvas follow it", async () => {
+    // --rem 1.5rem: the code is 18.72 px and the column 44 × 24 = 1056 px. Lines that need 1046 and 1100 px at that
+    // size; read as 16 px, the first would need about 711 px of a 704 px column, and be long.
+    const charW = (await measureChar(browser)) * 1.5;
+    const line = (need: number): string => x(Math.round((need - PAD) / charW));
+    const md = ['# Rem', '', fence(line(1046)), fence(line(1100))].join('\n');
+    const doc = await openDoc(md, {}, { browser, viewport: { width: 1440, height: 900 }, enhance: false });
+    try {
+      await doc.page.evaluate(() => {
+        (document.querySelector('main[data-harness-root]') as HTMLElement).style.setProperty('--rem', '1.5rem');
+      });
+      await doc.enhance();
+      await settle(doc.page);
+      const got = await codeState(doc.page);
+      expect(got.map((c) => c.long)).toEqual([false, true]);
+      expect(Math.abs((got[0]?.width ?? 0) - 1056)).toBeLessThan(0.5);
+      expect(got.map((c) => c.scrolls)).toEqual(got.map((c) => c.role === 'region'));
     } finally {
       await doc.close();
     }

@@ -2,17 +2,17 @@
 
 **Spec** · 2026-10-20 · Status: Draft · **Owner:** project-a team
 
-This made-up sample shows the code blocks and tables of the reading layout: the Copy buttons, a long and a wide code block, bullet cells, a wide table and a table with a filter. Every name in it is a stand-in.
+This made-up sample shows the code blocks and tables of the reading layout: the Copy buttons (when the host gives a copy), a long and a wide code block, bullet cells, a wide table and a table with a filter. Every name in it is a stand-in.
 
 ## Code
 
-A short block has one Copy button above its corner.
+With the host's copy, a short block has one Copy button above its corner.
 
 ```ts
 const ready = await enhance(root, { copy: (text) => clipboard.write(text) });
 ```
 
-A block taller than a screen has a second Copy button at its foot, and its long lines take the wide width.
+With it, a block taller than a screen has a second Copy button at its foot; its long lines take the wide width.
 
 ```python
 def pipeline(sources, defaults):

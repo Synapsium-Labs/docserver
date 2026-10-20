@@ -63,7 +63,16 @@ function mount(md: string): HTMLElement {
   root.innerHTML = render(md).html; // test fixture: render()'s own safe markup
   document.body.append(root);
   roots.push(root);
+  shown(root, true);
   return root;
+}
+
+/**
+ * Give the root a layout box, as a shown root has, or take it away, as `display: none` on it or around it does: jsdom
+ * lays nothing out, so its elements have no client rects, and the measures skip a root with none.
+ */
+function shown(el: Element, laidOut: boolean): void {
+  Object.defineProperty(el, 'getClientRects', { configurable: true, value: () => ({ length: laidOut ? 1 : 0 }) });
 }
 
 const realInnerWidth = window.innerWidth;
@@ -455,6 +464,55 @@ describe('table measures', () => {
     expect([w.getAttribute('aria-label'), w.style.getPropertyValue('--thead-h')]).toEqual(['Table 1, scrolls sideways', '0px']);
   });
 
+  it('the label clips each of its headers to 80 characters, so a header of any length makes a short label', async () => {
+    viewport(1440);
+    const head = 'word '.repeat(20_000).trim();
+    const root = mount(`# Example\n\n| ${head} | ${head} | ${head} | ${head} |\n|---|---|---|---|\n| 1 | 2 | 3 | 4 |\n`);
+    const w = one(root, '.table-wrapper');
+    sizes(w, { scroll: 1000, client: 100, head: 40 });
+    await enhance(root);
+    await frames();
+    const clipped = `${'word '.repeat(16).trim()}…`; // cut at its last space within 80 code units, then the ellipsis
+    expect(w.getAttribute('aria-label')).toBe(`Table 1, scrolls sideways: ${clipped}, ${clipped}, ${clipped}`);
+  });
+
+  it('a root with no layout box (hidden, or under a hidden ancestor) is not measured: nothing is written until it has one', async () => {
+    viewport(1440);
+    const root = mount(TWO_TABLES);
+    const [three, two] = all(root, '.table-wrapper') as [HTMLElement, HTMLElement];
+    sizes(three, { scroll: 0, client: 0, head: 0 }); // what a table under display: none reads
+    sizes(two, { scroll: 0, client: 0, head: 0 });
+    shown(root, false);
+    await enhance(root);
+    await frames();
+    for (const w of [three, two]) {
+      expect([w.classList.contains('fits'), w.style.getPropertyValue('--thead-h'), w.getAttribute('role')]).toEqual([false, '', null]);
+    }
+    shown(root, true);
+    sizes(three, { scroll: 900, client: 700, head: 41 });
+    sizes(two, { scroll: 100, client: 700, head: 37 });
+    ctxOf(root).relayout('content');
+    await frames();
+    expect([three.getAttribute('role'), two.classList.contains('fits'), two.style.getPropertyValue('--thead-h')]).toEqual(['region', true, '37px']);
+  });
+
+  it('a root that loses its layout box keeps what was measured while it had one', async () => {
+    viewport(1440);
+    const root = mount(TWO_TABLES);
+    const [three, two] = all(root, '.table-wrapper') as [HTMLElement, HTMLElement];
+    sizes(three, { scroll: 900, client: 700, head: 41 });
+    sizes(two, { scroll: 100, client: 700, head: 37 });
+    await enhance(root);
+    await frames();
+    shown(root, false);
+    sizes(three, { scroll: 0, client: 0, head: 0 });
+    sizes(two, { scroll: 0, client: 0, head: 0 });
+    ctxOf(root).relayout('content');
+    await frames();
+    expect([three.classList.contains('fits'), three.getAttribute('role'), three.style.getPropertyValue('--thead-h')]).toEqual([false, 'region', '41px']);
+    expect([two.classList.contains('fits'), two.getAttribute('role'), two.style.getPropertyValue('--thead-h')]).toEqual([true, null, '37px']);
+  });
+
   it("a role the host gave a wrapper that fits is the host's: it stays", async () => {
     viewport(1440);
     const root = mount(TWO_TABLES);
@@ -555,6 +613,33 @@ describe('Copy', () => {
     c?.click();
     await flush();
     expect([a, b, c].map((x) => x?.textContent)).toEqual(['Failed', 'Failed', 'Copied']);
+  });
+
+  it('only the reply to the latest click writes the label: an older one that settles later changes nothing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const replies: { ok: () => void; no: () => void }[] = [];
+    const root = mount(CODE_DOC);
+    await enhance(
+      root,
+      copyOptions(
+        () =>
+          new Promise<void>((ok, no) => {
+            replies.push({ ok, no: () => no(new Error('refused')) });
+          }),
+      ),
+    );
+    const b = one(root, '.code-copy');
+    b.click();
+    b.click();
+    replies[1]?.ok();
+    await flush();
+    expect(b.textContent).toBe('Copied');
+    await vi.advanceTimersByTimeAsync(1000);
+    replies[0]?.no();
+    await flush();
+    expect(b.textContent).toBe('Copied');
+    await vi.advanceTimersByTimeAsync(400); // the latest reply's 1400 ms, not restarted by the older one
+    expect(b.textContent).toBe('Copy');
   });
 
   it('the label reads Copy again 1400 ms later; a second click starts its time again', async () => {
@@ -658,7 +743,7 @@ let charNow = 1;
 
 /**
  * Stub the room: the viewport's width, the root's client width and padding, and a canvas whose character is `charW`
- * px (default 1; null: no canvas at all; NaN or 0: a canvas that measures nothing). Answers the fonts the canvas was
+ * px (default 1; null: no canvas at all; NaN, 0 or Infinity: a canvas that measures nothing usable). Answers the fonts the canvas was
  * asked to measure in. The env keeps the context it got first, so a later call changes the width, not the canvas.
  */
 function room(root: HTMLElement, s: { w: number; client: number; pad: number; charW?: number | null }): string[] {
@@ -685,6 +770,9 @@ function room(root: HTMLElement, s: { w: number; client: number; pad: number; ch
 function widths(root: HTMLElement): [boolean, boolean][] {
   return all(root, '.codehilite').map((b) => [b.classList.contains('long'), one(b, 'pre').getAttribute('role') === 'region']);
 }
+
+/** A code block's region label. */
+const label = (n: number): string => `Code block ${String(n)}, scrolls sideways`;
 
 async function relayout(root: HTMLElement): Promise<void> {
   ctxOf(root).relayout('content');
@@ -853,8 +941,8 @@ describe('code widths', () => {
     expect(widths(root).map(([l]) => l)).toEqual([false, false, false]);
   });
 
-  it('without a canvas, or with one that measures nothing, a character is 7.5 px', async () => {
-    for (const charW of [null, Number.NaN, 0]) {
+  it('without a canvas, or with one that measures nothing or no finite width, a character is 7.5 px', async () => {
+    for (const charW of [null, Number.NaN, 0, Number.POSITIVE_INFINITY]) {
       const root = mount(codeDoc(['x'.repeat(88), 'x'.repeat(89)])); // 702 px and 709.5 px at 7.5
       room(root, { ...DESKTOP, charW });
       await enhance(root);
@@ -900,6 +988,103 @@ describe('code widths', () => {
       [true, false],
     ]);
     expect(all(root, 'pre').some((p) => p.hasAttribute('tabindex') || p.hasAttribute('aria-label'))).toBe(false);
+  });
+
+  it('off a phone a block that is not long is no region, even where the column is wider than the wide width', async () => {
+    // --rem 26px: the column is 44 × 26 = 1144 px, wider than the wide width (1120 px).
+    const col = SHEET.measure.serif.standard * 26;
+    const root = mount(codeDoc([need(SHEET.wide.standard + 10), need(col + 1)]));
+    room(root, DESKTOP);
+    root.style.setProperty('--rem', '26px');
+    await enhance(root);
+    await frames();
+    expect(widths(root)).toEqual([
+      [false, false],
+      [true, true],
+    ]);
+  });
+
+  it("a --rem that is not in px is read through the code's computed size, which the stylesheet sets at .78 rem; the canvas measures in that size", async () => {
+    const root = mount(codeDoc([need(44 * 20), need(44 * 20 + 1)]));
+    const fonts = room(root, DESKTOP);
+    root.style.setProperty('--rem', '1.25rem');
+    for (const pre of all(root, 'pre')) pre.style.setProperty('font-size', '15.6px'); // .78 × 20 px, what the stylesheet resolves it to
+    await enhance(root);
+    await frames();
+    expect(widths(root).map(([l]) => l)).toEqual([false, true]);
+    expect(fonts.at(-1)).toBe(`15.6px ${SHEET.mono}`);
+    // A code size the host set itself is what the canvas measures in; the column stays the root's --rem.
+    root.style.setProperty('--rem', '20px');
+    for (const pre of all(root, 'pre')) pre.style.setProperty('font-size', '14px');
+    await relayout(root);
+    expect(fonts.at(-1)).toBe(`14px ${SHEET.mono}`);
+  });
+
+  it('a pre that is laid out is a region when it really scrolls, whatever the estimate; one with no box keeps the estimate', async () => {
+    const root = mount(codeDoc([need(100), need(100), need(1500), need(1500), need(1500)]));
+    room(root, DESKTOP);
+    const pres = all(root, 'pre');
+    const real = (pre: HTMLElement, scroll: number, client: number): void => {
+      shown(pre, true);
+      Object.defineProperty(pre, 'scrollWidth', { configurable: true, get: () => scroll });
+      Object.defineProperty(pre, 'clientWidth', { configurable: true, get: () => client });
+    };
+    real(pres[0] as HTMLElement, 702, 700); // wide characters: the estimate fits, the layout does not
+    real(pres[1] as HTMLElement, 701, 700); // within the 1 px the browsers round by
+    real(pres[2] as HTMLElement, 1120, 1120); // the estimate scrolls, the layout does not
+    real(pres[3] as HTMLElement, 1500, 1120);
+    // pres[4] has no box (a folded section, say): the estimate decides
+    await enhance(root);
+    await frames();
+    expect(widths(root)).toEqual([
+      [false, true],
+      [false, false],
+      [true, false],
+      [true, true],
+      [true, true],
+    ]);
+    expect(pres.map((p) => p.getAttribute('aria-label'))).toEqual([label(1), null, null, label(4), label(5)]);
+  });
+
+  it('the layout is read after long is written, so the real overflow is that of the width long gives', async () => {
+    const root = mount(codeDoc([need(1000)]));
+    room(root, DESKTOP);
+    const pre = one(root, 'pre');
+    shown(pre, true);
+    const block = one(root, '.codehilite');
+    // At the column it scrolls; at the wide width, once long, it does not.
+    Object.defineProperty(pre, 'scrollWidth', { configurable: true, get: () => 1000 });
+    Object.defineProperty(pre, 'clientWidth', { configurable: true, get: () => (block.classList.contains('long') ? 1120 : 704) });
+    await enhance(root);
+    await frames();
+    expect(widths(root)).toEqual([[true, false]]);
+  });
+
+  it('a root with no layout box is not measured: no long, no region, and the canvas is not asked; once it has one, it is', async () => {
+    const root = mount(codeDoc([need(100), need(1500)]));
+    const fonts = room(root, { w: 1440, client: 0, pad: 0 });
+    shown(root, false);
+    await enhance(root);
+    await frames();
+    expect(widths(root)).toEqual([
+      [false, false],
+      [false, false],
+    ]);
+    expect(fonts).toEqual([]);
+    room(root, DESKTOP);
+    shown(root, true);
+    await relayout(root);
+    expect(widths(root)).toEqual([
+      [false, false],
+      [true, true],
+    ]);
+    shown(root, false);
+    Object.defineProperty(root, 'clientWidth', { configurable: true, get: () => 0 });
+    await relayout(root);
+    expect(widths(root)).toEqual([
+      [false, false],
+      [true, true],
+    ]); // what was measured stays
   });
 
   it("a role the host gave a pre that fits is the host's: it stays", async () => {
