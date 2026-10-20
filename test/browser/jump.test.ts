@@ -1,7 +1,8 @@
 // The quick jump and the keys sheet in a real browser (docserver L2, Task 16): what jsdom cannot show, the browser's
-// own focus order, layout and scrolling. The keys sheet keeps the focus inside its box; the selected row of the jump
-// stays in view of its list as the arrow keys move it; both dialogs cover the viewport, whatever the reading column's
-// width (each sits in a wrapper of its own, jump.ts's header says why); and Escape gives the focus back to the button.
+// own focus order, layout and scrolling. The keys sheet keeps the focus inside its box; a press inside either box, off
+// its control, leaves the focus where it was; the selected row of the jump stays in view of its list as the arrow keys
+// move it; both dialogs cover the viewport, whatever the reading column's width (each sits in a wrapper of its own,
+// jump.ts's header says why); and Escape gives the focus back to the button.
 import { afterAll, expect, it } from 'vitest';
 import type { Page } from 'playwright-core';
 import { closeBrowsers, describeBrowsers, openDoc } from './harness.js';
@@ -33,6 +34,33 @@ describeBrowsers((browser) => {
       }
       await page.keyboard.press('Escape');
       expect(await page.locator('.keys.open').count()).toBe(0);
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('a press inside either box keeps the focus there: the sheet\'s Tab stays on Close, the jump\'s field keeps typing', async () => {
+    const doc = await openDoc(headings(8), {}, { browser });
+    try {
+      const { page } = doc;
+      await page.keyboard.press('?');
+      await page.waitForSelector('.keys.open');
+      for (const sel of ['.keys dl', '.keys .ckey', '.keys .kh h2']) {
+        await page.click(sel);
+        expect(await focused(page), sel).toBe('button.linkish|Close');
+        await page.keyboard.press('Tab');
+        expect(await focused(page), sel).toBe('button.linkish|Close');
+      }
+      await page.keyboard.press('Escape');
+      expect(await page.locator('.keys.open').count()).toBe(0);
+      await page.keyboard.press('/');
+      await page.waitForSelector('.jump.open');
+      await page.click('.jump-hint');
+      expect(await focused(page)).toBe('input.|');
+      await page.keyboard.type('part 3');
+      expect(await page.locator('.jump li .jt').allTextContents()).toEqual(['Part 3']);
+      await page.keyboard.press('Escape');
+      expect(await page.locator('.jump.open').count()).toBe(0);
     } finally {
       await doc.close();
     }

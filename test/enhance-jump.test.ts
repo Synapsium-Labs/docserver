@@ -300,6 +300,12 @@ describe('the jump: what it lists', () => {
     ]);
   });
 
+  it('an h2 loses a section number with a letter after it ("2a. "), and keeps the number editorial.ts gave it', async () => {
+    const root = await enhanced(['# T', '', '## 2a. Detail', '', 'a', '', '## B', '', 'b', '', '### C', '', 'c', '', '### D', '', 'd', '', '### E', '', 'e', ''].join('\n'));
+    openByButton(root);
+    expect(rows(root)).toEqual(['Section|2a. Detail', 'Section|B', 'Section|C', 'Section|D', 'Section|E']);
+  });
+
   it('a heading reads as written, never its chrome: a badge with counts, a button, the controls', async () => {
     seed((ctx) => {
       const doc = ctx.root.ownerDocument;
@@ -370,6 +376,16 @@ describe('the jump: what it lists', () => {
       expect(t.length).toBeLessThanOrEqual(200);
       expect(t.endsWith('…')).toBe(true);
     }
+  });
+
+  it('a text of 200 code units shows whole; one of 201 is cut to exactly 200, the last the ellipsis', async () => {
+    const a = 'a'.repeat(200);
+    const b = 'b'.repeat(201);
+    const root = await enhanced(['# T', '', `### ${a}`, '', 'x', '', `### ${b}`, '', 'x', '', '### C', '', 'x', '', '### D', '', 'x', '', '### E', '', 'x', ''].join('\n'));
+    openByButton(root);
+    const texts = Array.from(listOf(root).querySelectorAll('.jt')).map((s) => s.textContent ?? '');
+    expect(texts.slice(0, 2)).toEqual([a, `${'b'.repeat(199)}…`]);
+    expect(texts[1]?.length).toBe(200);
   });
 
   it('at most 80 rows: the first 80 headings for an empty query, the best 80 matches for a query', async () => {
@@ -507,6 +523,29 @@ describe('the jump: the ranking', () => {
     expect(rows(root)).toEqual(['Section|😀ab two', 'Section|The ab test', 'Section|𝐀ab one', 'Section|Xab']);
   });
 
+  it('a word character is a letter, a mark, a digit or "_": before a match, and as a query\'s first character', async () => {
+    const mark = '́';
+    const root = await enhanced(
+      [
+        '# T',
+        '',
+        ...['Part xb', 'Part 2b', 'Part_b', `Cafe${mark}b`, 'Phase 2 notes', 'Step2 plan', 'Note _b', `Note ${mark}b`].flatMap((h) => [`### ${h}`, '', 'x', '']),
+      ].join('\n'),
+    );
+    openByButton(root);
+    // "b" after a letter, a digit, "_" or a mark is inside a word (40 each, so document order); after a space it would
+    // start one (60).
+    type(root, 'b');
+    expect(rows(root)).toEqual(['Section|Part xb', 'Section|Part 2b', 'Section|Part_b', `Section|Cafe${mark}b`, 'Section|Note _b', `Section|Note ${mark}b`]);
+    // A query that opens on a digit, on "_" or on a mark starts a word after a space (60), not after a letter (40).
+    type(root, '2');
+    expect(rows(root)).toEqual(['Section|Part 2b', 'Section|Phase 2 notes', 'Section|Step2 plan']);
+    type(root, '_b');
+    expect(rows(root)).toEqual(['Section|Note _b', 'Section|Part_b']);
+    type(root, `${mark}b`);
+    expect(rows(root)).toEqual([`Section|Note ${mark}b`, `Section|Cafe${mark}b`]);
+  });
+
   it('the query is matched as written: metacharacters are themselves', async () => {
     const root = await enhanced(['# T', '', '### abc', '', 'x', '', '### a.c notes', '', 'x', '', '### (x) and [y]', '', 'x', '', '### D', '', 'x', '', '### E', '', 'x', ''].join('\n'));
     openByButton(root);
@@ -599,6 +638,19 @@ describe('the jump: choosing and going', () => {
     expect(onHash).toHaveBeenCalledWith(h.id, { push: true, from: null });
   });
 
+  it('going to a target that takes no focus (gone from the root) takes the focus out of the hidden dialog, and "/" opens it again', async () => {
+    const root = await enhanced();
+    headingById(root, '3-rollout').remove();
+    key(document.body, '/');
+    type(root, 'rollout');
+    expect(rows(root)).toEqual(['Section|3. Rollout']);
+    key(inputOf(root), 'Enter');
+    expect(isOpen(jumpOf(root))).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+    key(document.body, '/');
+    expect(isOpen(jumpOf(root))).toBe(true);
+  });
+
   it('a click on a row goes there; on "Nothing matches" nothing happens', async () => {
     const onHash = vi.fn();
     seed((ctx) => {
@@ -672,6 +724,23 @@ describe('the jump: choosing and going', () => {
     key(document.body, '/');
     jumpOf(root)?.click();
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a press inside the box keeps the focus in the field: only the field takes a press\'s focus', async () => {
+    const root = await enhanced();
+    openByButton(root);
+    const press = (el: Element): boolean => {
+      const e = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      el.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(press(root.querySelector('.jump-hint') as HTMLElement)).toBe(true);
+    expect(press(root.querySelector('.jump li .jt') as HTMLElement)).toBe(true);
+    expect(press(listOf(root))).toBe(true);
+    expect(press(root.querySelector('.jump .box') as HTMLElement)).toBe(true);
+    expect(press(inputOf(root))).toBe(false);
+    // The backdrop is outside the box: a press there closes it, on its click.
+    expect(press(jumpOf(root) as HTMLElement)).toBe(false);
   });
 
   it('opening closes the preview card; going closes the contents drawer, and closing does not', async () => {
@@ -766,6 +835,30 @@ describe('the jump: keys and options', () => {
     key(document.body, '?');
     expect(root.querySelector('[data-docreader-chrome]')).toBeNull();
   });
+
+  it('a destroy while a dialog is open gives the focus back to the element that had it; one after it closed moves no focus', async () => {
+    const outside = document.createElement('button');
+    for (const k of ['/', '?']) {
+      const root = mount(`${DOC}\n[A link](https://example.com/)\n`);
+      await enhance(root);
+      const link = root.querySelector('a[href="https://example.com/"]') as HTMLElement;
+      link.focus();
+      key(link, k);
+      expect(document.activeElement, k).not.toBe(link);
+      await destroyEnhancement(root);
+      expect(document.activeElement, k).toBe(link);
+      // Opened and closed, then the focus put elsewhere: a destroy leaves it there.
+      await enhance(root);
+      link.focus();
+      key(link, k);
+      key(document.activeElement as Element, 'Escape');
+      expect(document.activeElement, k).toBe(link);
+      document.body.append(outside);
+      outside.focus();
+      await destroyEnhancement(root);
+      expect(document.activeElement, k).toBe(outside);
+    }
+  });
 });
 
 describe('the keys sheet', () => {
@@ -845,15 +938,34 @@ describe('the keys sheet', () => {
     expect(dt?.textContent).toBe('j k');
   });
 
-  it('only keys next to each other share a row', async () => {
+  it('keys next to each other with one label share a row; only keys next to each other do', async () => {
     late((ctx) => {
       ctx.keys.bind({ key: 'a', label: 'Same', run: () => undefined });
-      ctx.keys.bind({ key: 'b', label: 'Between', run: () => undefined });
-      ctx.keys.bind({ key: 'c', label: 'Same', run: () => undefined });
+      ctx.keys.bind({ key: 'b', label: 'Same', run: () => undefined });
+      ctx.keys.bind({ key: 'c', label: 'Between', run: () => undefined });
+      ctx.keys.bind({ key: 'd', label: 'Same', run: () => undefined });
     });
     const root = await enhanced();
     key(document.body, '?');
-    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', '?|This sheet', 'a|Same', 'b|Between', 'c|Same', 'Esc|Close']);
+    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', '?|This sheet', 'a b|Same', 'c|Between', 'd|Same', 'Esc|Close']);
+  });
+
+  it('the reference\'s pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own', async () => {
+    let changes = false;
+    late((ctx) => {
+      ctx.keys.bind({ key: 'j', label: 'Next section', run: () => undefined });
+      ctx.keys.bind({ key: 'k', label: 'Previous section', when: () => !changes, run: () => undefined });
+      ctx.keys.bind({ key: 'n', label: 'Next change', when: () => changes, run: () => undefined });
+      ctx.keys.bind({ key: 'p', label: 'Previous change', run: () => undefined });
+    });
+    const root = await enhanced();
+    key(document.body, '?');
+    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', 'j k|Next / previous section', 'p|Previous change', '?|This sheet', 'Esc|Close']);
+    key(document.body, 'Escape');
+    changes = true;
+    key(document.body, '?');
+    // "j" alone, and "n" after it is no pair of its.
+    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', 'j|Next section', 'n p|Next / previous change', '?|This sheet', 'Esc|Close']);
   });
 
   it('Close, a click outside the box and Escape close it and give the focus back; a click inside does not', async () => {
@@ -891,6 +1003,22 @@ describe('the keys sheet', () => {
     const dl = root.querySelector('.keys dl') as HTMLElement;
     expect(key(dl, 'Tab').defaultPrevented).toBe(false);
     expect(key(dl, 'Tab', { shiftKey: true }).defaultPrevented).toBe(false);
+  });
+
+  it('a press inside the box keeps the focus on Close: only a button takes a press\'s focus', async () => {
+    const root = await enhanced();
+    key(document.body, '?');
+    const press = (el: Element): boolean => {
+      const e = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      el.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(press(root.querySelector('.keys dl dd') as HTMLElement)).toBe(true);
+    expect(press(root.querySelector('.keys .ckey li') as HTMLElement)).toBe(true);
+    expect(press(root.querySelector('.keys .kh h2') as HTMLElement)).toBe(true);
+    expect(press(root.querySelector('.keys .box') as HTMLElement)).toBe(true);
+    expect(press(root.querySelector('.keys .kh button') as HTMLElement)).toBe(false);
+    expect(press(sheetOf(root) as HTMLElement)).toBe(false);
   });
 
   it('opened with nothing focused, closing takes the focus out of the hidden sheet', async () => {

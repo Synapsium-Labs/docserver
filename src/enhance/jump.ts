@@ -63,10 +63,13 @@
 // document's activeElement), clears the field and lists the headings, and focuses the field. In the field: the arrow
 // keys move the selection, clamped at both ends, and keep the selected row in view (scrollIntoView, where the browser
 // has it); Enter goes to the selected entry; Tab stays (the field is the dialog's one control); typing ranks again from
-// the first row. Going closes the dialog and the contents drawer (overlays.close('drawer')), then nav.goTo(target,
-// { push: true }), which reveals, scrolls, focuses and tells the host; closing in any other way gives the focus back to
-// the element that had it, and when that cannot take it (the page itself had the focus), takes it out of the hidden
-// dialog, so the next key is the page's, not the field's.
+// the first row. A press inside the box but off the field (the hint, a row, the list) takes no focus (its mousedown's
+// default prevented; a row's click still goes), so the focus stays in the field and its keys stay the dialog's. Going
+// closes the dialog and the contents drawer (overlays.close('drawer')), then nav.goTo(target, { push: true }), which
+// reveals, scrolls, focuses and tells the host; closing in any other way gives the focus back to the element that had
+// it. Either way, when nothing took the focus (the page itself had it, or the target takes none: gone from the root,
+// or not rendered), it is taken out of the hidden dialog, so the next key is the page's, not the field's. A destroy
+// while it is open closes it first, so the focus goes back before the dialog goes.
 //
 // Ambient APIs replaced: `document.activeElement` is the root document's; body classes are overlays.isOpen and close;
 // `scrollIntoView` is guarded; listeners go through the journal (one per element, the rows' clicks delegated to the
@@ -334,18 +337,23 @@ export function build(ctx: FeatureContext): void {
     select(0);
   };
 
+  /** When nothing took the focus (see the header), it leaves the hidden dialog, so no key goes there. */
+  const release = (): void => {
+    const now = doc.activeElement;
+    if (now !== null && box.contains(now)) (now as HTMLElement).blur();
+  };
+
   const close = (): void => {
     jump.classList.remove('open');
     if (opener !== null) (opener as HTMLElement).focus({ preventScroll: true });
-    // Nothing took it back (the page itself had it): the focus leaves the hidden dialog, so no key goes there.
-    const now = doc.activeElement;
-    if (now !== null && box.contains(now)) (now as HTMLElement).blur();
+    release();
   };
 
   const go = (x: Entry): void => {
     jump.classList.remove('open');
     ctx.overlays.close('drawer');
     ctx.nav.goTo(x.target, { push: true });
+    release();
   };
 
   const openJump = (): void => {
@@ -358,8 +366,17 @@ export function build(ctx: FeatureContext): void {
     input.focus();
   };
 
+  // A destroy while it is open closes it first (teardown runs in reverse), so the focus goes back before the box goes.
+  journal.defer(() => {
+    if (isOpen()) close();
+  });
+
   journal.listen(jump, 'click', (e) => {
     if (e.target === jump) close();
+  });
+  // A press inside the box but off the field takes no focus, so the focus never leaves the dialog for the page.
+  journal.listen(box, 'mousedown', (e) => {
+    if (e.target !== input) e.preventDefault();
   });
   journal.listen(list, 'click', (e) => {
     const li = (e.target as Element).closest('li');
