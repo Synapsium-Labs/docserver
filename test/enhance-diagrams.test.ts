@@ -381,6 +381,43 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     });
   });
 
+  it('draws nothing before the next frame, so the page is painted first', async () => {
+    const root = mount();
+    const fake = fakeMermaid();
+    await enhance(root, drawWith({ default: fake.api }));
+    // The fonts wait and the load settle at once here; a task later, the frame (16 ms in jsdom) has not come.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fake.log).toEqual([]);
+    await settledState(root, 'drawn');
+  });
+
+  it('lets the page run a task between the near figures and the rest', async () => {
+    const md = ['# D', '', fence('flowchart LR\n  one --> A'), fence('flowchart LR\n  two --> B')].join('\n');
+    const root = mount(md);
+    placeAt(root, [100, 5000]);
+    const fake = fakeMermaid();
+    let ran = false;
+    const seen: [string, boolean][] = [];
+    const api = {
+      initialize: (c: Record<string, unknown>) => {
+        fake.api.initialize(c);
+      },
+      run: (o: RunOptions): Promise<void> => {
+        const word = wordOf(o.nodes[0]?.textContent ?? '');
+        seen.push([word, ran]);
+        // The near figure's run asks for a task; the far figure's run sees whether that task came first.
+        if (word === 'one') setTimeout(() => (ran = true), 0);
+        return fake.api.run(o);
+      },
+    };
+    await enhance(root, drawWith({ default: api }));
+    await settledState(root, 'drawn');
+    expect(seen).toEqual([
+      ['one', false],
+      ['two', true],
+    ]);
+  });
+
   it('names a drawing by its caption, else by its own title, else by the first line of its source', async () => {
     const md = ['# D', '', fence('flowchart LR\n  one --> A', '*Figure 1. Named.*'), fence('%% a note\nflowchart LR\n  two --> B'), fence('flowchart LR\n  three --> C')].join('\n');
     const root = mount(md);
