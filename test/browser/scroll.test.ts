@@ -181,6 +181,15 @@ describeBrowsers((browser) => {
         expect(bare).toBe(pad); // the root's own top padding
         expect(await firstBlock(doc.page)).toBe(bare + 49); // the row and the line under it, then that padding
         expect(b.progress.width).toBe(0);
+        // Below a host's own header of 100 px, at the top of the page: the bar sits at the root's top edge, not above it.
+        await doc.page.evaluate(() => {
+          const header = document.createElement('div');
+          header.style.height = '100px'; // the CSSOM, which the strict policy allows
+          document.body.prepend(header);
+        });
+        await frames(doc.page);
+        const h = await boxes(doc.page);
+        expect([h.root.top, h.bar.top, h.row.top]).toEqual([100, 100, 100]);
         await scrollTo(doc.page, 1500);
         await scrollTo(doc.page, 1400); // up: on a phone, scrolling down hid the bar
         await doc.page.waitForTimeout(350); // its slide

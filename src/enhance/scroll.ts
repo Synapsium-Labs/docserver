@@ -143,7 +143,8 @@ export function build(ctx: FeatureContext): void {
 
   // The read-mark units (Task 18 marks them): the reference layout's section 14.
   const tasks = ctx.plan.outlineable ? ctx.plan.tasks : [];
-  const holders = new Set(ctx.sections.filter((s) => tasks.some((t) => s.members.includes(t))).map((s) => s.heading));
+  const isTask = new Set<Element>(tasks);
+  const holders = new Set(ctx.sections.filter((s) => s.members.some((m) => isTask.has(m))).map((s) => s.heading));
   const units: readonly HTMLElement[] = ctx.info.isDocument
     ? ctx.text.inOrder([...sections.filter((h) => !(heads.get(h)?.inShort ?? false) && !holders.has(h)), ...tasks])
     : [];
@@ -214,9 +215,11 @@ export function build(ctx: FeatureContext): void {
     }
 
     if (slots === null) return;
+    // The section's own number and title; the document's title before the first section and in "In short".
     const cur = sec === null ? undefined : heads.get(sec);
-    const no = cur !== undefined && !cur.inShort ? cur.no : null;
-    const text = cur !== undefined && !cur.inShort ? cur.title : title;
+    const own = cur !== undefined && !cur.inShort ? cur : null;
+    const no = own === null ? null : own.no;
+    const text = own === null ? title : own.title;
     const key = `${no ?? ''}\u0000${text}`;
     if (key === running) return;
     running = key;
