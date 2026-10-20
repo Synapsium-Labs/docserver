@@ -427,6 +427,43 @@ describe('xrefs: the first mention of a defined ID in each block (the reference 
     }
   });
 
+  it('the Where things stand index holds no mention, even in a quote: all its words are links', async () => {
+    const root = mount(
+      [
+        '# Standing',
+        '',
+        '| ID | What |',
+        '|---|---|',
+        '| R2 | The one defined ID |',
+        '',
+        '## Glossary',
+        '',
+        '| Term | Meaning |',
+        '|---|---|',
+        '| Lantern | A light |',
+        '',
+        '> ## Where things stand',
+        '>',
+        '> ### Agreed on R2 and the lantern',
+        '>',
+        '> - A lantern, agreed.',
+        '>',
+        '> ### Waiting on R2',
+        '>',
+        '> - R2, waiting.',
+        '',
+      ].join('\n'),
+    );
+    seedIdRows();
+    await enhance(root);
+    const index = find(root, '.stand-index');
+    expect(index.parentElement?.localName).toBe('blockquote');
+    expect(squash(index.textContent)).toBe('1Agreed on R2 and the lantern1Waiting on R2');
+    expect(index.querySelectorAll('a.xref, a.term')).toHaveLength(0);
+    expect(linked(root, 'xref')).toEqual(['li:R2']);
+    expect(linked(root, 'term')).toEqual(['li:lantern']);
+  });
+
   it('skips the layout\'s own parts: the byline, the hidden meta line and front-matter strip, the facts panel, a rule head, a step number, a button', async () => {
     const root = mount(
       [
