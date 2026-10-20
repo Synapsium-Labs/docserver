@@ -438,12 +438,12 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     const md = ['# D', '', ...['one', 'two', 'three', 'four', 'five'].map((w) => fence(`flowchart LR\n  ${w} --> X`))].join('\n');
     const root = mount(md);
     // The window is 768 px high: near means less than 1.5 screens (1152 px) away from it.
-    placeAt(root, [1800, 100, 3000, -2000, 5000]);
+    placeAt(root, [1800, 100, -1500, 1950, 5000]);
     const fake = fakeMermaid();
     await enhance(root, drawWith({ default: fake.api }));
     await settledState(root, 'drawn');
     // one (1032 px below the window) and two (in it) are near, in document order; then the rest, nearest first:
-    // four (1900 above), three (2232 below), five (4232 below).
+    // four (1182 below), three (1400 above, its bottom being 1400 px over the window's top), five (4232 below).
     expect(fake.log.filter((l) => l.startsWith('run'))).toEqual(['run one', 'run two', 'run four', 'run three', 'run five']);
   });
 
