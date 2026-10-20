@@ -4,12 +4,14 @@
 //   node scripts/build-mermaid.mjs --notices  build it, and write the generated section of THIRD-PARTY-NOTICES
 //
 // esbuild bundles the pinned `mermaid` dev dependency into ONE ESM file whose only export is the default, Mermaid's
-// API. Code splitting is off, so each `import()` in Mermaid is bundled in place and nothing loads after the file: a
-// host passes the module itself (LD4, `mermaid.load()` resolves with it), and the file needs no URL of its own. Every
-// import of `elkjs` resolves to scripts/mermaid-elk-stub.mjs instead: elkjs is EPL-2.0, which §3.6 keeps out, so a
-// diagram that asks for the ELK layout fails to draw and shows the reader's failure note. Mermaid 12.1.0's own
-// default configuration asks for it (`layout: 'elk'`), so a host that draws with this file sets another layout, such
-// as `dagre` (test/browser/mermaid-file.test.ts measures both).
+// API, with its start-on-load switched off: importing the file draws nothing, and Mermaid draws only when it is asked
+// (`run()` or `render()`), never on the window's load event by itself (import-inert). Code splitting is off, so each
+// `import()` in Mermaid is bundled in place and nothing loads after the file: a host passes the module itself (LD4,
+// `mermaid.load()` resolves with it), and the file needs no URL of its own. Every import of `elkjs` resolves to
+// scripts/mermaid-elk-stub.mjs instead: elkjs is EPL-2.0, which §3.6 keeps out, so a diagram that asks for the ELK
+// layout fails to draw and shows the reader's failure note. Mermaid 12.1.0's own default configuration asks for it
+// (`layout: 'elk'`), so a host that draws with this file sets another layout, such as `dagre`
+// (test/browser/mermaid-file.test.ts measures both).
 //
 // The build is reproducible: the same inputs give the same bytes. Every input path is relative to the package root,
 // and symlinks are kept as written, so a checkout whose node_modules is a link to another tree still names only
@@ -43,8 +45,13 @@ export const OUT_FILE = 'assets/mermaid/mermaid.mjs';
 /** The stand-in every `elkjs` import resolves to, from the package root. */
 export const STUB = 'scripts/mermaid-elk-stub.mjs';
 
-/** The entry: Mermaid's default export, and nothing else. */
-const ENTRY = "export { default } from 'mermaid';\n";
+/**
+ * The entry: Mermaid's default export, and nothing else, with its start-on-load switched off. Mermaid's own code
+ * listens for the window's load event and, while the object's `startOnLoad` is true (its default), draws every
+ * `.mermaid` element of the document then; that check reads the object's own property before any configuration, so
+ * setting it false here makes the file import-inert, whatever a later initialize() says.
+ */
+const ENTRY = "import mermaid from 'mermaid';\nmermaid.startOnLoad = false;\nexport default mermaid;\n";
 
 /** The entry's name in the metafile. */
 export const ENTRY_NAME = 'mermaid-entry.mjs';

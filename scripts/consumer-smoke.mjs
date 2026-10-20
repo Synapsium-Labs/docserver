@@ -10,7 +10,8 @@
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, imports
 // `/enhance` in Node (it is import-inert) and checks its four exports, resolves the stylesheet, the font licence and
 // the Mermaid file through `./assets/*` and imports the Mermaid file there (its one export, the default, is Mermaid's
-// API), refuses a deep import of the enhance build, and runs runCorpus(render, { scanRefs }).
+// API, with `startOnLoad` false, so the file is import-inert), refuses a deep import of the enhance build, and runs
+// runCorpus(render, { scanRefs }).
 // Before that it typechecks, with this checkout's own typescript, a consumer file that imports the three code
 // entries together with every packed declaration file (dist/**/*.d.ts, including those no entry reaches), under
 // the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a packed declaration whose imports
@@ -122,11 +123,11 @@ try {
   const mermaidFile = await import('${PACKAGE}/assets/mermaid/mermaid.mjs');
   const api = mermaidFile.default;
   const names = Object.keys(mermaidFile).join(', ');
-  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'function')) {
-    say("the Mermaid file imports through ./assets/*, and its one export is Mermaid's API");
+  if (names === 'default' && ['initialize', 'run', 'render'].every((f) => typeof api?.[f] === 'function') && api.startOnLoad === false) {
+    say("the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off");
   } else {
     ok = false;
-    say(\`the Mermaid file exports \${names}, which is not Mermaid's API alone\`);
+    say(\`the Mermaid file exports \${names} (startOnLoad \${String(api?.startOnLoad)}), which is not Mermaid's API alone with its start-on-load off\`);
   }
 } catch (e) {
   ok = false;

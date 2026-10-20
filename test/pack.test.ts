@@ -204,7 +204,7 @@ describe('the packed package, imported by name', () => {
         'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
         'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs',
         'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
-        "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API",
+        "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
         'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
         'consumer-smoke: 82 of 82 cases passed',
         '',
@@ -235,7 +235,7 @@ describe('the packed package, imported by name', () => {
       'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
       'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs',
       'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
-      "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API",
+      "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
       'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
       'consumer-smoke: 81 of 82 cases passed',
     ]);

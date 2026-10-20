@@ -12,6 +12,11 @@
 // page asks for `layout: 'dagre'`; with the default, the drawing fails with the stand-in's message, which the third
 // case pins (what the reader configures is Task 21's).
 //
+// Import-inert. Mermaid's own code listens for the window's load event and, with its `startOnLoad` default, draws every
+// `.mermaid` element of the document then. The file switches that off on the object it exports, so a page that only
+// imports it, before its load event and without calling initialize(), keeps its `pre.mermaid` exactly as written: no
+// SVG, no data-processed, the source text whole (the fourth case). Drawing happens only when the reader asks.
+//
 // The page is this file's own, served through its own route: the harness's page carries the reader, which is not
 // what is under test here.
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -49,6 +54,32 @@ const DRAW = [
   '',
 ].join('\n');
 
+/** How long the import-only page watches its `pre.mermaid` after the load event, in ms (a draw takes well under 1 s). */
+const IMPORT_WATCH_MS = 4000;
+
+/**
+ * The import-only page's module script: import the file and call nothing. After the load event it watches the
+ * `pre.mermaid` for IMPORT_WATCH_MS, and says whether Mermaid touched it (data-processed, an SVG, or other text).
+ */
+const IMPORT_ONLY = [
+  `import mermaid from '/${OUT_FILE}';`,
+  'const html = document.documentElement;',
+  "html.setAttribute('data-start-on-load', String(mermaid.startOnLoad));",
+  "const pre = document.querySelector('pre.mermaid');",
+  'const source = pre.textContent;',
+  "const touched = () => pre.hasAttribute('data-processed') || pre.querySelector('svg') !== null || pre.textContent !== source;",
+  "window.addEventListener('load', () => {",
+  '  const started = performance.now();',
+  '  const tick = () => {',
+  "    if (touched()) html.setAttribute('data-drawn', 'touched');",
+  `    else if (performance.now() - started > ${String(IMPORT_WATCH_MS)}) html.setAttribute('data-drawn', 'untouched');`,
+  '    else setTimeout(tick, 50);',
+  '  };',
+  '  setTimeout(tick, 0);',
+  '});',
+  '',
+].join('\n');
+
 const PAGE = `<!doctype html>
 <html lang="en">
 <head>
@@ -77,16 +108,21 @@ interface Drawn {
   readonly inlineRan: boolean;
   readonly violations: readonly string[];
   readonly svg: { readonly role: string | null; readonly nodes: number; readonly edges: number; readonly styles: number; readonly text: string } | null;
+  readonly startOnLoad: string | null;
+  readonly pre: { readonly processed: string | null; readonly text: string };
   readonly aborted: readonly string[];
   readonly missing: readonly string[];
 }
 
-/** Open the page under `policy` in a fresh context, wait for the drawing to end, and read what it left. */
-async function draw(browser: BrowserName, policy: PolicyName, layout: 'dagre' | 'default' = 'dagre'): Promise<Drawn> {
+/**
+ * Open the page under `policy` in a fresh context, its module script DRAW (or IMPORT_ONLY), wait for the drawing (or
+ * the watch) to end, and read what it left.
+ */
+async function draw(browser: BrowserName, policy: PolicyName, layout: 'dagre' | 'default' = 'dagre', script = DRAW): Promise<Drawn> {
   const files = new Map<string, { body: string | Uint8Array; type: string }>([
     ['/', { body: PAGE, type: 'text/html; charset=utf-8' }],
     ['/watch.js', { body: WATCH, type: 'text/javascript; charset=utf-8' }],
-    ['/draw.mjs', { body: DRAW, type: 'text/javascript; charset=utf-8' }],
+    ['/draw.mjs', { body: script, type: 'text/javascript; charset=utf-8' }],
     [`/${OUT_FILE}`, { body: file, type: 'text/javascript; charset=utf-8' }],
   ]);
   const context = await (await browserFor(browser)).newContext({ viewport: { width: 1000, height: 800 }, serviceWorkers: 'block' });
@@ -113,8 +149,11 @@ async function draw(browser: BrowserName, policy: PolicyName, layout: 'dagre' | 
     await page.waitForFunction(() => document.documentElement.hasAttribute('data-drawn'), null, { timeout: 45_000 });
     const got = await page.evaluate(() => {
       const svg = document.querySelector('pre.mermaid svg');
+      const pre = document.querySelector('pre.mermaid');
       return {
         drawn: document.documentElement.getAttribute('data-drawn'),
+        startOnLoad: document.documentElement.getAttribute('data-start-on-load'),
+        pre: { processed: pre?.getAttribute('data-processed') ?? null, text: pre?.textContent ?? '' },
         inlineRan: document.documentElement.hasAttribute('data-inline-ran'),
         violations: [...(window as unknown as { __violations: string[] }).__violations],
         svg:
@@ -166,6 +205,16 @@ describeBrowsers((browser) => {
   it('with Mermaid\'s default layout, ELK, the drawing fails with the stand-in\'s message: elkjs is not in the file', async () => {
     const got = await draw(browser, 'reader', 'default');
     expect(got.drawn).toBe(`failed: ${ELK_LEFT_OUT}`);
+    expect(got.violations.filter((v) => !PROBE.test(v))).toEqual([]);
+    expect({ aborted: got.aborted, missing: got.missing }).toEqual({ aborted: [], missing: [] });
+  });
+
+  it('is import-inert: a page that only imports it keeps its pre.mermaid as written after the load event', async () => {
+    const got = await draw(browser, 'reader', 'default', IMPORT_ONLY);
+    expect(got.startOnLoad).toBe('false');
+    expect(got.drawn).toBe('untouched');
+    expect(got.pre).toEqual({ processed: null, text: SOURCE });
+    expect(got.svg).toBe(null);
     expect(got.violations.filter((v) => !PROBE.test(v))).toEqual([]);
     expect({ aborted: got.aborted, missing: got.missing }).toEqual({ aborted: [], missing: [] });
   });
