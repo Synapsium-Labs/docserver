@@ -1889,7 +1889,10 @@ describe('cancels, labels, refusals and sizes: the review round', () => {
     const all = terms.all();
     expect(Object.isFrozen(all)).toBe(true);
     expect(terms.all()).toBe(all); // the same copy until the next definition
+    const firstDefs = terms.get('a')?.defs;
+    expect(terms.get('a')?.defs).toBe(firstDefs);
     terms.define({ name: 'a', exact: false, section: 'S', target: cell, def: { qual: 'q', cell, row } });
+    expect(firstDefs?.map((d) => d.qual)).toEqual(['']); // an earlier answer does not change
     terms.define({ name: 'b', exact: false, section: 'S', target: cell, def: { qual: '', cell, row } });
     expect(all.map((t) => t.name)).toEqual(['a']); // an earlier answer does not change
     expect(terms.all().map((t) => t.name)).toEqual(['a', 'b']);
