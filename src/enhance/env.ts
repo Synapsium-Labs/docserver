@@ -109,6 +109,9 @@ const MAX_DELAY = 2 ** 31 - 1;
 /** The faces fonts() waits for: the stylesheet's own (C43). */
 const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;
 
+/** The font set's events after which fonts() asks again. */
+const HEARD = ['loading', 'loadingdone'] as const;
+
 /** Whether one face's load answered a loaded face: a list with at least one face whose status is 'loaded'. */
 function loadedFace(found: unknown): boolean {
   return Array.isArray(found) && found.some((f: unknown) => (f as { status?: unknown } | null | undefined)?.status === 'loaded');
@@ -307,7 +310,11 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
         const stop = timeout(() => {
           finish(false);
         }, maxMs);
-        /** Listen once for the set's next 'loadingdone', then ask again; a set that cannot be listened to waits out the bound. */
+        /**
+         * Listen once for the set's next 'loading' or 'loadingdone', then ask again; a set that cannot be listened to waits
+         * out the bound. 'loading' is heard because WebKit fires no 'loadingdone' for the faces a stylesheet added after
+         * the wait began; a load asked for while a face loads answers once it has loaded.
+         */
         const hear = (set: FontFaceSet): void => {
           if (settled || !live()) return;
           // Teardown removes it (track), so it never runs once the instance is gone; ask() writes nothing.
@@ -315,13 +322,17 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
             unhear();
             ask();
           };
+          const heard: string[] = [];
           try {
-            set.addEventListener('loadingdone', handler);
+            for (const type of HEARD) {
+              set.addEventListener(type, handler);
+              heard.push(type);
+            }
           } catch {
-            return;
+            // What was added before the refusal is removed with the rest.
           }
           unhear = track(() => {
-            set.removeEventListener('loadingdone', handler);
+            for (const type of heard) set.removeEventListener(type, handler);
           });
         };
         const ask = (): void => {

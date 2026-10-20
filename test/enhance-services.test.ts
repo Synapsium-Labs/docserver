@@ -1907,9 +1907,10 @@ describe('cancels, labels, refusals and sizes: the review round', () => {
 });
 
 describe('env.fonts: a face is loaded only when its load answers a loaded face (LD5)', () => {
-  /** A font set whose load answers `answer`, and whose 'loadingdone' listeners the case fires by hand. */
+  /** A font set whose load answers `answer`, and whose 'loadingdone' and 'loading' listeners the case fires by hand. */
   function fontSet(answer: () => unknown[]) {
     const heard = new Set<() => void>();
+    const loading = new Set<() => void>();
     const loads: string[] = [];
     Object.defineProperty(document, 'fonts', {
       configurable: true,
@@ -1920,17 +1921,59 @@ describe('env.fonts: a face is loaded only when its load answers a loaded face (
         },
         addEventListener: (type: string, fn: () => void) => {
           if (type === 'loadingdone') heard.add(fn);
+          if (type === 'loading') loading.add(fn);
         },
         removeEventListener: (type: string, fn: () => void) => {
           if (type === 'loadingdone') heard.delete(fn);
+          if (type === 'loading') loading.delete(fn);
         },
       },
     });
     const fire = (): void => {
       for (const fn of [...heard]) fn();
     };
-    return { heard, loads, fire };
+    const fireLoading = (): void => {
+      for (const fn of [...loading]) fn();
+    };
+    return { heard, loading, loads, fire, fireLoading };
   }
+
+  it("a late stylesheet's faces start loading with no 'loadingdone' after (WebKit): the wait asks again at 'loading'", async () => {
+    const root = mount();
+    await enhance(root);
+    let answer: unknown[] = [];
+    const set = fontSet(() => answer);
+    let result: boolean | undefined;
+    void ctxOf(root).env.fonts(5_000).then((v) => (result = v));
+    await flush();
+    expect(result).toBeUndefined();
+    expect([set.heard.size, set.loading.size]).toEqual([1, 1]);
+    answer = [{ status: 'loaded' }]; // a load asked for while the face loads answers once it has loaded
+    set.fireLoading();
+    await flush();
+    expect(result).toBe(true);
+    expect([set.heard.size, set.loading.size]).toEqual([0, 0]);
+    expect(set.loads).toHaveLength(4);
+  });
+
+  it("a set that takes one event's listener and refuses the other's leaves no listener once the wait ends", async () => {
+    const root = mount();
+    await enhance(root);
+    const taken = new Set<unknown>();
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: () => Promise.resolve([]),
+        addEventListener: (type: string, fn: unknown) => {
+          if (type !== 'loading') throw new TypeError('refused');
+          taken.add(fn);
+        },
+        removeEventListener: (_t: string, fn: unknown) => taken.delete(fn),
+      },
+    });
+    expect(await ctxOf(root).env.fonts(30)).toBe(false);
+    expect(taken.size).toBe(0);
+  });
 
   it('a face no stylesheet declares yet answers no face: the wait listens for the next load and asks again', async () => {
     const root = mount();

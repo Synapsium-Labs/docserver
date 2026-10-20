@@ -7,7 +7,8 @@ seam, the lifecycle's wiring and the prefs path, the stylesheet's markers, RF3's
 a real browser; then four earlier rows whose code this task rewrote, and the review round's rows. Measured 2026-10-20
 on branch `l2-t7b-services`, on its code after the review round (commit `bb421f8`), every row, L2-T7b-M1 to
 L2-T7b-M279; L2-T7b-M177 and M178 again on `2380c98`, which only adds a case to one of their tests (below). 277 were
-measured, all red (`rc=1`); two are reported (below).
+measured, all red (`rc=1`); two are reported (below). WebKit's first CI run added L2-T7b-M280 to M282 and re-measured
+M276 and M277 (its section, below).
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8) with three changes: the two its results section records (a
 512 MiB output buffer, and a run that ends with no exit status reported as KILLED and counted as no verdict), and one
@@ -2473,8 +2474,8 @@ re-measure L2-T7a-M31 and M32, whose code the fix rewrote).
 | L2-T7b-M273 | a wait listens only while the instance is live | `src/enhance/env.ts` | `          if (settled \|\| !live()) return;` → `          if (settled) return;` | `test/enhance-services.test.ts`: 1 failed \| 91 passed (92). "destroy removes the listener of a wait; a load that answers after destroy adds none" |
 | L2-T7b-M274 | the listener removes itself before it asks again | `src/enhance/env.ts` | `            unhear(); ⏎             ask();` → `            ask();` | `test/enhance-services.test.ts`: 1 failed \| 91 passed (92). "a face no stylesheet declares yet answers no face: the wait listens for the next load and asks again" |
 | L2-T7b-M275 | an ended wait removes its listener | `src/enhance/env.ts` | `          stop(); ⏎           unhear();` → `          stop();` | `test/enhance-services.test.ts`: 1 failed \| 91 passed (92). "a wait that runs out while no face is declared answers false and leaves no listener, nor does a load that answers after it" |
-| L2-T7b-M276 | destroy removes the listener (it is tracked) | `src/enhance/env.ts` | `          unhear = track(() => { ⏎             set.removeEventListener('loadingdone', handler); ⏎   …` → `          unhear = () => { ⏎             set.removeEventListener('loadingdone', handler); ⏎         …` | `test/enhance-services.test.ts`: 1 failed \| 91 passed (92). "destroy removes the listener of a wait; a load that answers after destroy adds none" |
-| L2-T7b-M277 | a font set that cannot be listened to waits out the bound | `src/enhance/env.ts` | `          try { ⏎             set.addEventListener('loadingdone', handler); ⏎           } catch { ⏎ …` → `          set.addEventListener('loadingdone', handler);` | `test/enhance-services.test.ts`: 92 passed (92); vitest reports 7 errors, an unhandled rejection (TypeError: set.addEventListener is not a function) |
+| L2-T7b-M276 | destroy removes the listeners (they are tracked) | `src/enhance/env.ts` | `unhear = track(() => { ⏎ for (const type of heard) set.removeEventListener(type, handler); ⏎ });` → `unhear = () => { ⏎ for (const type of heard) set.removeEventListener(type, handler); ⏎ };` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "destroy removes the listener of a wait; a load that answers after destroy adds none" (re-measured after WebKit's first CI run, below) |
+| L2-T7b-M277 | a font set that cannot be listened to waits out the bound | `src/enhance/env.ts` | `try { ⏎ for (const type of HEARD) { ⏎ set.addEventListener(type, handler); ⏎ heard.push(type); ⏎ } ⏎ } catch { …` → `for (const type of HEARD) { ⏎ set.addEventListener(type, handler); ⏎ heard.push(type); ⏎ }` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "a set that takes one event's listener and refuses the other's leaves no listener once the wait ends" (re-measured after WebKit's first CI run, below) |
 | L2-T7b-M278 | a load that fails answers false (was L2-T7a-M31) | `src/enhance/env.ts` | `            () => { ⏎               finish(false); ⏎             }, ⏎           );` → `            () => { ⏎               finish(true); ⏎             }, ⏎           );` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "fonts: false at once without a font set; true once the faces load; false when the wait runs out" |
 | L2-T7b-M279 | a font set that cannot be read, or a load that throws at once, answers false (was L2-T7a-M32) | `src/enhance/env.ts` | `          try { ⏎             set = doc.fonts; ⏎             loads = Promise.all(FACES.map((face) =>…` → `          set = doc.fonts; ⏎           loads = Promise.all(FACES.map((face) => set.load(face)));` | `test/enhance-seams.test.ts`: 6 failed \| 90 passed (96). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel"; "each schedule returns its own cancel, which cancels that one alone"; "fonts: false at once without a font set; true once the faces load; false when the wait runs out"; "fonts: false when the font set cannot be read, has no load, or a load throws at once"; "a root in a document with no window: nothing is scheduled or heard, and nothing throws" |
 
@@ -2756,18 +2757,18 @@ re-measure L2-T7a-M31 and M32, whose code the fix rewrote).
   },
   {
     "id": "L2-T7b-M276",
-    "guard": "destroy removes the listener (it is tracked)",
+    "guard": "destroy removes the listeners (they are tracked)",
     "file": "src/enhance/env.ts",
-    "old": "          unhear = track(() => {\n            set.removeEventListener('loadingdone', handler);\n          });",
-    "new": "          unhear = () => {\n            set.removeEventListener('loadingdone', handler);\n          };",
+    "old": "          unhear = track(() => {\n            for (const type of heard) set.removeEventListener(type, handler);\n          });\n",
+    "new": "          unhear = () => {\n            for (const type of heard) set.removeEventListener(type, handler);\n          };\n",
     "tests": "test/enhance-services.test.ts"
   },
   {
     "id": "L2-T7b-M277",
     "guard": "a font set that cannot be listened to waits out the bound",
     "file": "src/enhance/env.ts",
-    "old": "          try {\n            set.addEventListener('loadingdone', handler);\n          } catch {\n            return;\n          }",
-    "new": "          set.addEventListener('loadingdone', handler);",
+    "old": "          try {\n            for (const type of HEARD) {\n              set.addEventListener(type, handler);\n              heard.push(type);\n            }\n          } catch {\n            // What was added before the refusal is removed with the rest.\n          }\n",
+    "new": "          for (const type of HEARD) {\n            set.addEventListener(type, handler);\n            heard.push(type);\n          }\n",
     "tests": "test/enhance-services.test.ts"
   },
   {
@@ -2785,6 +2786,52 @@ re-measure L2-T7a-M31 and M32, whose code the fix rewrote).
     "old": "          try {\n            set = doc.fonts;\n            loads = Promise.all(FACES.map((face) => set.load(face)));\n          } catch {\n            finish(false);\n            return;\n          }",
     "new": "          set = doc.fonts;\n          loads = Promise.all(FACES.map((face) => set.load(face)));",
     "tests": "test/enhance-seams.test.ts"
+  }
+]
+```
+
+## WebKit's first CI run (L2-T7b-M280 to L2-T7b-M282)
+
+CI's first WebKit run of this task's browser cases failed one of them: with the reader's stylesheet added after
+`enhance()`, no `fonts` relayout followed. WebKit fires the font set's `loading` event for the faces such a stylesheet
+declares, and no `loadingdone` after it, while the faces do load; a load asked for at `loading` answers once they have
+loaded (measured in WebKit and Chromium in the Playwright 1.63.0 image). The wait now listens for both events. A font
+set that takes one event's listener and refuses the other's keeps no listener once the wait ends, and the one check no
+case could redden (no listener added, so nothing to remove) was dropped. Rows M276 and M277 above name the new code.
+Measured 2026-10-20 on `l2-t7b-services` with the fix uncommitted: the unit rows with `mutate.mjs` on throwaway copies,
+the checkout's status the same before and after; M280's browser leg on a copy in the Playwright 1.63.0 image.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T7b-M280 | the wait asks again at 'loading' (WebKit fires no 'loadingdone' for a late stylesheet's faces) | `src/enhance/env.ts` | `const HEARD = ['loading', 'loadingdone'] as const;` → `const HEARD = ['loadingdone'] as const;` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "a late stylesheet's faces start loading with no 'loadingdone' after (WebKit): the wait asks again at 'loading'". In WebKit (`DOCREADER_BROWSERS=webkit`, in the Playwright 1.63.0 image), `test/browser/services.test.ts`: 1 failed \| 2 passed \| 3 skipped (6). "a stylesheet that arrives after enhance(): no fonts run on the fallback faces, then one once the faces load" |
+| L2-T7b-M281 | each listener added is recorded for removal | `src/enhance/env.ts` | `heard.push(type);` → (deleted) | `test/enhance-services.test.ts`: 5 failed \| 89 passed (94). "a late stylesheet's faces start loading with no 'loadingdone' after (WebKit): the wait asks again at 'loading'"; "a set that takes one event's listener and refuses the other's leaves no listener once the wait ends"; "a face no stylesheet declares yet answers no face: the wait listens for the next load and asks again"; "a wait that runs out while no face is declared answers false and leaves no listener, nor does a load that answers after it"; "destroy removes the listener of a wait; a load that answers after destroy adds none" |
+| L2-T7b-M282 | a listener added before a refusal is removed with the rest | `src/enhance/env.ts` | `} catch { ⏎ // What was added before the refusal is removed with the rest. ⏎ }` → `} catch { ⏎ return; ⏎ }` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "a set that takes one event's listener and refuses the other's leaves no listener once the wait ends" |
+
+```json
+[
+  {
+    "id": "L2-T7b-M280",
+    "guard": "the wait asks again at 'loading' (WebKit fires no 'loadingdone' for a late stylesheet's faces)",
+    "file": "src/enhance/env.ts",
+    "old": "const HEARD = ['loading', 'loadingdone'] as const;",
+    "new": "const HEARD = ['loadingdone'] as const;",
+    "tests": "test/enhance-services.test.ts"
+  },
+  {
+    "id": "L2-T7b-M281",
+    "guard": "each listener added is recorded for removal",
+    "file": "src/enhance/env.ts",
+    "old": "              heard.push(type);\n",
+    "new": "",
+    "tests": "test/enhance-services.test.ts"
+  },
+  {
+    "id": "L2-T7b-M282",
+    "guard": "a listener added before a refusal is removed with the rest",
+    "file": "src/enhance/env.ts",
+    "old": "          } catch {\n            // What was added before the refusal is removed with the rest.\n          }\n",
+    "new": "          } catch {\n            return;\n          }\n",
+    "tests": "test/enhance-services.test.ts"
   }
 ]
 ```
