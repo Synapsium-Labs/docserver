@@ -3,17 +3,22 @@
 Each guard of Task 7a, deleted or inverted once, with the tests that go red: the window behind `src/enhance/env.ts`,
 `journal.setStyle` (LD11), the reading position and the UI memory in the reader state (LD8), section 0's units, the
 per-instance chrome ids (RF2), the feature list and the second phase (LD5), the word lists of `src/enhance/vocab.ts`
-and the status marks that read them, the text helpers, and the walls with their new sites. Measured 2026-10-20 on
-branch `l2-t7a-seams`, on its final code: every row, L2-T7a-M1 to L2-T7a-M161, in one run of three batches.
+and the status marks that read them, the text helpers, and the walls with their new sites; then the guards of the
+review's fix round. Measured 2026-10-20 on branch `l2-t7a-seams`, on its final code: every row, L2-T7a-M1 to
+L2-T7a-M200, in three parallel batches and a fourth of three rows (below).
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8) with the two changes its results section records (a 512 MiB
 output buffer, and a run that ends with no exit status reported as KILLED and counted as no verdict): each row is
 applied to its own throwaway copy of the working tree (tracked and untracked files, never ignored ones, `node_modules`
-linked from the checkout), its test file runs there with the local `vitest`, and the copy is deleted. Each `old`
-occurs exactly once in its file. The rows ran with `DOCREADER_BROWSERS=chromium` (C45): the one browser row ran in
-Chromium, and WebKit was reported as excluded. The checkout was never edited: `git status --porcelain` read the same
-(empty) before and after, and so did the hash of `git diff`. All 161 rows went red (`rc=1`). The Red column gives the
-count line and the failing tests the run printed (at most five here; the run prints at most 20 failing lines).
+linked from the checkout), its test file runs there with the local `vitest`, and the copy is deleted. Each `old` occurs
+exactly once in its file. The rows ran with `DOCREADER_BROWSERS=chromium` (C45): the two browser rows ran in Chromium,
+and WebKit was reported as excluded. The checkout was never edited: `git status --porcelain` read the same (empty)
+before and after, and so did the hash of `git diff`. All 200 rows went red (`rc=1`). Two rows came out green in the
+batches and were made red by a test, never dropped: L2-T7a-M27, which the one `try` of the fonts wait had made redundant
+until the case counted the loads a wait asked for after destroy starts (none), and L2-T7a-M165, whose case lives in
+`test/enhance-state.test.ts`, not the seams file the row first named. Those two and L2-T7a-M200 ran again in a fourth
+batch, after the commit that added that count, with the same before-and-after check of the checkout. The Red column
+gives the count line and the failing tests the run printed (at most five here; the run prints at most 20 failing lines).
 
 Notes on the measurement.
 - A first pass over the rows, before the final tree, left a few rows green; each was made red by a case, never by
@@ -24,70 +29,94 @@ Notes on the measurement.
   the one guard that keeps an `after` from starting on a startup that fails (a destroyed one is also refused by its
   operations), and a case pins the failing startup.
 - `env.matches` keeps one check, its `try`: a window with no `matchMedia` throws there and answers false, so a second
-  check for the function could not be reddened.
+  check for the function could not be reddened. `env.fonts` likewise keeps one `try` around reading the font set and
+  calling its loads: a getter that throws, no font set, a set with no `load` and a `load` that throws at once all go
+  through it and answer false, so the separate checks it had for a missing set and a missing `load` (which the `try`
+  already covered, and no case could redden alone) were removed; L2-T7a-M32 now deletes that `try`.
 - L2-T7a-M63 is red only in a real browser: Chromium serializes the CSSOM into the `style` attribute lazily, so
   removing an attribute it has not yet written does not stick, and the next read brings it back empty. jsdom
-  serializes at once, so no jsdom case can see it; `test/browser/seams.test.ts` does.
+  serializes at once, so no jsdom case can see it; `test/browser/seams.test.ts` does. L2-T7a-M199 is a browser row
+  too: only a real cascade shows `important` beating an id-scoped `!important` rule.
 - The site rows put a use of a refused name into another module (`folds.ts`, `status.ts`, `text.ts`, `editorial.ts`, a
   stub) and show the walls catch each one; the pack row shows `test/pack.test.ts` would refuse the dashed module name
   `diagram-tools` without its widened pattern.
+- The fix round rewrote the code nine earlier rows named; each keeps its id and guard and now names the new code:
+  L2-T7a-M32 (the fonts `try`, above), M36 (an observer is started only while live, now beside its cancelled flag),
+  M79 (the context's `vocab` is made once), M140 (the frozen helpers), M142 and M146 (the window and lookup names,
+  now with `contentWindow` and `scrollingElement` beside them), M147 (the Env exemption, now by type) and M148 and
+  M149 (the clock, now one check on the name `Date`).
+
+**Rows of the prototype this task superseded.** Task 7a rewrote code that eight rows of
+`docs/superpowers/plans/l2-prototype-mutations.md` name, so their `old` text no longer occurs. None is dropped: each
+guard is measured here, by the row named.
+
+| Prototype row | Guard | Measured here by |
+|---|---|---|
+| L2P-M44 | a change is merged with a newer value another instance queued | L2-T7a-M76 (the merge, now shared by the prefs and the UI memory) |
+| L2P-M56 | print: a block the host hid itself while folded stays hidden | L2-T7a-M168 |
+| L2P-M57 | print: a block the host hid while printing is not folded over | L2-T7a-M169 |
+| L2P-M58 | a string key is read like a dot | L2-T7a-M150 (members and window members by a string key) |
+| L2P-M61 | the root's window used at a second site | L2-T7a-M156 (the window put into `folds.ts`) |
+| L2P-M63 | a DOM global planted in src/enhance | L2-T7a-M198 (a global timer put into `folds.ts`) |
+| L2P-M66 | a header names a status as a whole word | L2-T7a-M112 (the vocabulary's status-header pattern) |
+| L2P-M87 | the snapshot wins over a value that had landed before it was read | L2-T7a-M165 |
 
 ## The window: `src/enhance/env.ts` (L2-T7a-M1 to L2-T7a-M47)
 
-Every callback inside an operation and only while live, every schedule and subscription cancelled by its own handle
-and by teardown with the window's own cancel, nothing new once the instance is gone, the bounded delays and fallbacks,
-the media queries, the viewport and scrolling, the bounded fonts wait that never settles after destroy, the observers,
-the canvas, the clock and the two root-scoped lookups, and a document with no window.
+Every callback inside an operation and only while live, every schedule and subscription cancelled by its own handle and
+by teardown with the window's own cancel, nothing new once the instance is gone, the bounded delays and fallbacks, the
+media queries, the viewport and scrolling, the bounded fonts wait that never settles after destroy, the observers, the
+canvas, the clock and the two root-scoped lookups, and a document with no window.
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M1 | a callback runs inside an operation, and only while live | `src/enhance/env.ts` | `    if (live()) operate(fn);` → `    fn();` | `test/enhance-seams.test.ts`: 4 failed \| 84 passed (88). "timeout, frame and idle run their callback inside an operation of the instance"; "a callback already queued when the instance is destroyed does nothing"; "a scroll handler that destroys the instance runs to its end first, inside the operation"; "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M2 | teardown cancels every schedule and subscription still pending | `src/enhance/env.ts` | `    for (const cancel of [...pending]) cancel(); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 4 failed \| 84 passed (88). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel"; "idle waits through requestIdleCallback, with its bound, where the window has one"; "onScroll, onResize, onPrint and onPageHide listen on the window inside operations, and destroy removes them"; "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M3 | nothing is scheduled once the instance is not live | `src/enhance/env.ts` | `    if (!live()) return () => undefined; ⏎     let cancelled = false;` → `    let cancelled = false;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a callback already queued when the instance is destroyed does nothing" |
-| L2-T7a-M4 | a cancelled callback never runs, even if the window calls it | `src/enhance/env.ts` | `      if (cancelled) return; ⏎       cancelled = true;` → `      cancelled = true;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "each schedule returns its own cancel, which cancels that one alone" |
-| L2-T7a-M5 | a callback that ran is forgotten, so teardown does not cancel it again | `src/enhance/env.ts` | `      if (tracked !== null) pending.delete(tracked); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "each schedule returns its own cancel, which cancels that one alone"; "idle waits through requestIdleCallback, with its bound, where the window has one" |
-| L2-T7a-M6 | a cancel stops only once | `src/enhance/env.ts` | `      if (done) return; ⏎       done = true;` → `      done = true;` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "each schedule returns its own cancel, which cancels that one alone"; "an observer cancelled by its own handle disconnects once, and destroy leaves it alone" |
-| L2-T7a-M7 | timeout cancels with the window's clearTimeout | `src/enhance/env.ts` | `      const id = view.setTimeout(call, delay(ms)); ⏎       return () => { ⏎         view.clearTim…` → `      const id = view.setTimeout(call, delay(ms)); ⏎       return () => { ⏎         void id; ⏎   …` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel"; "each schedule returns its own cancel, which cancels that one alone" |
-| L2-T7a-M8 | a delay that is not a number is 0 | `src/enhance/env.ts` | `  if (Number.isNaN(ms) \|\| ms <= 0) return 0;` → `  if (ms <= 0) return 0;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a timeout delay is clamped to a finite, non-negative number" |
-| L2-T7a-M9 | a delay is at most 2^31 - 1 | `src/enhance/env.ts` | `  return Math.min(ms, MAX_DELAY);` → `  return ms;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a timeout delay is clamped to a finite, non-negative number" |
-| L2-T7a-M10 | frame: a 16 ms timeout where the window has no frames | `src/enhance/env.ts` | `        if (typeof view.requestAnimationFrame !== 'function') {` → `        if (false) {` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a timeout delay is clamped to a finite, non-negative number" |
-| L2-T7a-M11 | frame cancels with the window's cancelAnimationFrame | `src/enhance/env.ts` | `          view.cancelAnimationFrame(id); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel" |
-| L2-T7a-M12 | idle: requestIdleCallback with its bound | `src/enhance/env.ts` | `        const id = view.requestIdleCallback(call, { timeout: delay(maxMs) });` → `        const id = view.requestIdleCallback(call);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "idle waits through requestIdleCallback, with its bound, where the window has one" |
-| L2-T7a-M13 | idle cancels with the window's cancelIdleCallback | `src/enhance/env.ts` | `          view.cancelIdleCallback(id); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "idle waits through requestIdleCallback, with its bound, where the window has one" |
-| L2-T7a-M14 | idle without requestIdleCallback waits at most 200 ms | `src/enhance/env.ts` | `          const id = view.setTimeout(call, Math.min(200, delay(maxMs)));` → `          const id = view.setTimeout(call, delay(maxMs));` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a timeout delay is clamped to a finite, non-negative number" |
-| L2-T7a-M15 | idle's default bound is 2000 ms | `src/enhance/env.ts` | `    idle: (fn, maxMs = 2000) =>` → `    idle: (fn, maxMs = 1000) =>` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "idle waits through requestIdleCallback, with its bound, where the window has one" |
-| L2-T7a-M16 | listening starts nothing once the instance is not live | `src/enhance/env.ts` | `    if (view === null \|\| !live()) return () => undefined; ⏎     const handler` → `    if (view === null) return () => undefined; ⏎     const handler` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a callback already queued when the instance is destroyed does nothing" |
-| L2-T7a-M17 | a window event's handler runs inside an operation | `src/enhance/env.ts` | `    const handler = (): void => { ⏎       run(fn); ⏎     };` → `    const handler = (): void => { ⏎       fn(); ⏎     };` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a scroll handler that destroys the instance runs to its end first, inside the operation" |
-| L2-T7a-M18 | a window listener is removed by its cancel and by teardown | `src/enhance/env.ts` | `      view.removeEventListener(type, handler); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "onScroll, onResize, onPrint and onPageHide listen on the window inside operations, and destroy removes them"; "a window listener cancelled by its own handle stops at once" |
-| L2-T7a-M19 | onPrint: true when printing starts, false when it ends | `src/enhance/env.ts` | `      const start = listen('beforeprint', () => { ⏎         fn(true);` → `      const start = listen('beforeprint', () => { ⏎         fn(false);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "onScroll, onResize, onPrint and onPageHide listen on the window inside operations, and destroy removes them" |
-| L2-T7a-M20 | a window without media queries answers false | `src/enhance/env.ts` | `    try { ⏎       return view.matchMedia(query).matches === true; ⏎     } catch { ⏎       return …` → `    return view.matchMedia(query).matches === true;` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "matches and reducedMotion read the window's media queries; without matchMedia they are false"; "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
-| L2-T7a-M21 | reducedMotion asks for reduced motion | `src/enhance/env.ts` | `    reducedMotion: () => matches('(prefers-reduced-motion: reduce)'),` → `    reducedMotion: () => matches('(prefers-reduced-motion: no-preference)'),` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "matches and reducedMotion read the window's media queries; without matchMedia they are false" |
-| L2-T7a-M22 | viewport: width, height and scroll position, in that order | `src/enhance/env.ts` | `{ w: view.innerWidth, h: view.innerHeight, scrollY: view.scrollY }` → `{ w: view.innerHeight, h: view.innerWidth, scrollY: view.scrollY }` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
-| L2-T7a-M23 | viewport is frozen | `src/enhance/env.ts` | `    viewport: () => Object.freeze(view === null ?` → `    viewport: () => (view === null ?` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
-| L2-T7a-M24 | scrollTo ignores a top that is not finite | `src/enhance/env.ts` | `      if (view === null \|\| !Number.isFinite(top) \|\| !live()) return;` → `      if (view === null \|\| !live()) return;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
-| L2-T7a-M25 | scrollTo does nothing once the instance is not live | `src/enhance/env.ts` | `      if (view === null \|\| !Number.isFinite(top) \|\| !live()) return;` → `      if (view === null \|\| !Number.isFinite(top)) return;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
-| L2-T7a-M26 | scrollTo is smooth only when the reader allows motion | `src/enhance/env.ts` | `behavior: smooth && !matches('(prefers-reduced-motion: reduce)') ? 'smooth' : 'auto'` → `behavior: smooth ? 'smooth' : 'auto'` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
-| L2-T7a-M27 | fonts: a wait asked for once not live never settles | `src/enhance/env.ts` | `        if (!live()) return; // never settles: nothing after the wait runs ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "fonts: a wait that ends after destroy never settles, so nothing after it runs (RF5)" |
-| L2-T7a-M28 | fonts: a wait that ends once not live never settles | `src/enhance/env.ts` | `          if (live()) resolve(loaded);` → `          resolve(loaded);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "fonts: a wait that ends after destroy never settles, so nothing after it runs (RF5)" |
-| L2-T7a-M29 | fonts: the wait is bounded by maxMs | `src/enhance/env.ts` | `        const stop = timeout(() => { ⏎           finish(false); ⏎         }, maxMs);` → `        const stop = (): void => undefined;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "fonts: false at once without a font set; true once the faces load; false when the wait runs out" |
-| L2-T7a-M30 | fonts: both of the reader's faces | `src/enhance/env.ts` | `const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;` → `const FACES = ['1em "Docreader Serif"'] as const;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "fonts: false at once without a font set; true once the faces load; false when the wait runs out" |
-| L2-T7a-M31 | fonts: a failed load answers false | `src/enhance/env.ts` | `          () => { ⏎             finish(false); ⏎           }, ⏎         );` → `          () => { ⏎             finish(true); ⏎           }, ⏎         );` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "fonts: false at once without a font set; true once the faces load; false when the wait runs out" |
-| L2-T7a-M32 | fonts: false at once without a font set | `src/enhance/env.ts` | `        if (set === null) { ⏎           resolve(false); ⏎           return; ⏎         }` → `        if (set === null) { ⏎           resolve(true); ⏎           return; ⏎         }` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "fonts: false at once without a font set; true once the faces load; false when the wait runs out"; "a root in a document with no window: nothing is scheduled or heard, and nothing throws" |
-| L2-T7a-M33 | observeResize: null without ResizeObserver | `src/enhance/env.ts` | `        if (view === null \|\| typeof view.ResizeObserver !== 'function') return null;` → `        if (view === null) return null;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M34 | observeIntersection: null without IntersectionObserver | `src/enhance/env.ts` | `        if (view === null \|\| typeof view.IntersectionObserver !== 'function') return null;` → `        if (view === null) return null;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M35 | no observer is made once the instance is not live | `src/enhance/env.ts` | `    if (!live()) return null; ⏎     const o = make();` → `    const o = make();` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M36 | a disconnected observer is not started again once not live | `src/enhance/env.ts` | `        if (live()) o.observe(el);` → `        o.observe(el);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M37 | an observer is disconnected by its cancel and by teardown | `src/enhance/env.ts` | `      o.disconnect(); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy"; "an observer cancelled by its own handle disconnects once, and destroy leaves it alone" |
-| L2-T7a-M38 | a resize report runs inside an operation | `src/enhance/env.ts` | `        return new view.ResizeObserver((entries) => { ⏎           run(() => {` → `        return new view.ResizeObserver((entries) => { ⏎           ((f: () => void) => f())(() => {` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M39 | an intersection report runs inside an operation | `src/enhance/env.ts` | `        return new view.IntersectionObserver((entries) => { ⏎           run(() => {` → `        return new view.IntersectionObserver((entries) => { ⏎           ((f: () => void) => f())(…` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M40 | an intersection report carries the ratio | `src/enhance/env.ts` | `ratio: e.intersectionRatio` → `ratio: 0` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M41 | IntersectionObserver gets the feature's options | `src/enhance/env.ts` | `        if (init?.rootMargin !== undefined) options.rootMargin = init.rootMargin; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
-| L2-T7a-M42 | textWidth is null without a canvas context | `src/enhance/env.ts` | `      if (canvas === null) return null; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "textWidth is null without a canvas context, and measures with one" |
-| L2-T7a-M43 | now is the clock | `src/enhance/env.ts` | `    now: () => Date.now(),` → `    now: () => 0,` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "now is the clock, and elementFromPoint answers only inside the root" |
-| L2-T7a-M44 | elementFromPoint answers only inside the root | `src/enhance/env.ts` | `      return hit !== null && root.contains(hit) ? hit : null;` → `      return hit;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "now is the clock, and elementFromPoint answers only inside the root" |
-| L2-T7a-M45 | elementFromPoint is null where the document has none | `src/enhance/env.ts` | `      if (typeof at !== 'function') return null; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "now is the clock, and elementFromPoint answers only inside the root" |
-| L2-T7a-M46 | computed answers only inside the root | `src/enhance/env.ts` | ` \|\| !root.contains(el)) return '';` → `) return '';` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "computed reads a computed value of an element inside the root" |
-| L2-T7a-M47 | a document with no window schedules nothing | `src/enhance/env.ts` | `    once(fn, (call) => { ⏎       if (view === null) return null; ⏎       const id = view.setTimeo…` → `    once(fn, (call) => { ⏎       const id = (view as Window).setTimeout(call, delay(ms));` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a root in a document with no window: nothing is scheduled or heard, and nothing throws" |
+| L2-T7a-M1 | a callback runs inside an operation, and only while live | `src/enhance/env.ts` | `    if (live()) operate(fn);` → `    fn();` | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "timeout, frame and idle run their callback inside an operation of the instance"; "a callback already queued when the instance is destroyed does nothing"; "a scroll handler that destroys the instance runs to its end first, inside the operation"; "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M2 | teardown cancels every schedule and subscription still pending | `src/enhance/env.ts` | `    for (const cancel of [...pending]) cancel(); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel"; "idle waits through requestIdleCallback, with its bound, where the window has one"; "onScroll, onResize, onPrint and onPageHide listen on the window inside operations, and destroy removes them"; "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M3 | nothing is scheduled once the instance is not live | `src/enhance/env.ts` | `    if (!live()) return () => undefined; ⏎     let cancelled = false;` → `    let cancelled = false;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a callback already queued when the instance is destroyed does nothing" |
+| L2-T7a-M4 | a cancelled callback never runs, even if the window calls it | `src/enhance/env.ts` | `      if (cancelled) return; ⏎       cancelled = true;` → `      cancelled = true;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "each schedule returns its own cancel, which cancels that one alone" |
+| L2-T7a-M5 | a callback that ran is forgotten, so teardown does not cancel it again | `src/enhance/env.ts` | `      if (tracked !== null) pending.delete(tracked); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "each schedule returns its own cancel, which cancels that one alone"; "idle waits through requestIdleCallback, with its bound, where the window has one" |
+| L2-T7a-M6 | a cancel stops only once | `src/enhance/env.ts` | `      if (done) return; ⏎       done = true;` → `      done = true;` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "each schedule returns its own cancel, which cancels that one alone"; "an observer cancelled by its own handle disconnects once, and destroy leaves it alone" |
+| L2-T7a-M7 | timeout cancels with the window's clearTimeout | `src/enhance/env.ts` | `      const id = view.setTimeout(call, delay(ms)); ⏎       return () => { ⏎         view.clearTim…` → `      const id = view.setTimeout(call, delay(ms)); ⏎       return () => { ⏎         void id; ⏎   …` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel"; "each schedule returns its own cancel, which cancels that one alone" |
+| L2-T7a-M8 | a delay that is not a number is 0 | `src/enhance/env.ts` | `  if (Number.isNaN(ms) \|\| ms <= 0) return 0;` → `  if (ms <= 0) return 0;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a timeout delay is clamped to a finite, non-negative number" |
+| L2-T7a-M9 | a delay is at most 2^31 - 1 | `src/enhance/env.ts` | `  return Math.min(ms, MAX_DELAY);` → `  return ms;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a timeout delay is clamped to a finite, non-negative number" |
+| L2-T7a-M10 | frame: a 16 ms timeout where the window has no frames | `src/enhance/env.ts` | `        if (typeof view.requestAnimationFrame !== 'function') {` → `        if (false) {` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a timeout delay is clamped to a finite, non-negative number" |
+| L2-T7a-M11 | frame cancels with the window's cancelAnimationFrame | `src/enhance/env.ts` | `          view.cancelAnimationFrame(id); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "destroy cancels every pending timeout, frame and idle callback with the window's own cancel" |
+| L2-T7a-M12 | idle: requestIdleCallback with its bound | `src/enhance/env.ts` | `        const id = view.requestIdleCallback(call, { timeout: delay(maxMs) });` → `        const id = view.requestIdleCallback(call);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "idle waits through requestIdleCallback, with its bound, where the window has one" |
+| L2-T7a-M13 | idle cancels with the window's cancelIdleCallback | `src/enhance/env.ts` | `          view.cancelIdleCallback(id); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "idle waits through requestIdleCallback, with its bound, where the window has one" |
+| L2-T7a-M14 | idle without requestIdleCallback waits at most 200 ms | `src/enhance/env.ts` | `          const id = view.setTimeout(call, Math.min(200, delay(maxMs)));` → `          const id = view.setTimeout(call, delay(maxMs));` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a timeout delay is clamped to a finite, non-negative number" |
+| L2-T7a-M15 | idle's default bound is 2000 ms | `src/enhance/env.ts` | `    idle: (fn, maxMs = 2000) =>` → `    idle: (fn, maxMs = 1000) =>` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "idle waits through requestIdleCallback, with its bound, where the window has one" |
+| L2-T7a-M16 | listening starts nothing once the instance is not live | `src/enhance/env.ts` | `    if (view === null \|\| !live()) return () => undefined; ⏎     const handler` → `    if (view === null) return () => undefined; ⏎     const handler` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a callback already queued when the instance is destroyed does nothing" |
+| L2-T7a-M17 | a window event's handler runs inside an operation | `src/enhance/env.ts` | `    const handler = (): void => { ⏎       run(fn); ⏎     };` → `    const handler = (): void => { ⏎       fn(); ⏎     };` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a scroll handler that destroys the instance runs to its end first, inside the operation" |
+| L2-T7a-M18 | a window listener is removed by its cancel and by teardown | `src/enhance/env.ts` | `      view.removeEventListener(type, handler); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "onScroll, onResize, onPrint and onPageHide listen on the window inside operations, and destroy removes them"; "a window listener cancelled by its own handle stops at once" |
+| L2-T7a-M19 | onPrint: true when printing starts, false when it ends | `src/enhance/env.ts` | `      const start = listen('beforeprint', () => { ⏎         fn(true);` → `      const start = listen('beforeprint', () => { ⏎         fn(false);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "onScroll, onResize, onPrint and onPageHide listen on the window inside operations, and destroy removes them" |
+| L2-T7a-M20 | a window without media queries answers false | `src/enhance/env.ts` | `    try { ⏎       return view.matchMedia(query).matches === true; ⏎     } catch { ⏎       return …` → `    return view.matchMedia(query).matches === true;` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "matches and reducedMotion read the window's media queries; without matchMedia they are false"; "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
+| L2-T7a-M21 | reducedMotion asks for reduced motion | `src/enhance/env.ts` | `    reducedMotion: () => matches('(prefers-reduced-motion: reduce)'),` → `    reducedMotion: () => matches('(prefers-reduced-motion: no-preference)'),` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "matches and reducedMotion read the window's media queries; without matchMedia they are false" |
+| L2-T7a-M22 | viewport: width, height and scroll position, in that order | `src/enhance/env.ts` | `{ w: view.innerWidth, h: view.innerHeight, scrollY: view.scrollY }` → `{ w: view.innerHeight, h: view.innerWidth, scrollY: view.scrollY }` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
+| L2-T7a-M23 | viewport is frozen | `src/enhance/env.ts` | `    viewport: () => Object.freeze(view === null ?` → `    viewport: () => (view === null ?` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
+| L2-T7a-M24 | scrollTo ignores a top that is not finite | `src/enhance/env.ts` | `      if (view === null \|\| !Number.isFinite(top) \|\| !live()) return;` → `      if (view === null \|\| !live()) return;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
+| L2-T7a-M25 | scrollTo does nothing once the instance is not live | `src/enhance/env.ts` | `      if (view === null \|\| !Number.isFinite(top) \|\| !live()) return;` → `      if (view === null \|\| !Number.isFinite(top)) return;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
+| L2-T7a-M26 | scrollTo is smooth only when the reader allows motion | `src/enhance/env.ts` | `behavior: smooth && !matches('(prefers-reduced-motion: reduce)') ? 'smooth' : 'auto'` → `behavior: smooth ? 'smooth' : 'auto'` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "viewport reads the window's width, height and scroll position; scrollTo scrolls it, smoothly only when motion is allowed" |
+| L2-T7a-M27 | fonts: a wait asked for once not live never settles | `src/enhance/env.ts` | `        if (!live()) return; // never settles: nothing after the wait runs ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "fonts: a wait that ends after destroy never settles, so nothing after it runs (RF5)" |
+| L2-T7a-M28 | fonts: a wait that ends once not live never settles | `src/enhance/env.ts` | `          if (live()) resolve(loaded);` → `          resolve(loaded);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "fonts: a wait that ends after destroy never settles, so nothing after it runs (RF5)" |
+| L2-T7a-M29 | fonts: the wait is bounded by maxMs | `src/enhance/env.ts` | `        const stop = timeout(() => { ⏎           finish(false); ⏎         }, maxMs);` → `        const stop = (): void => undefined;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "fonts: false at once without a font set; true once the faces load; false when the wait runs out" |
+| L2-T7a-M30 | fonts: both of the reader's faces | `src/enhance/env.ts` | `const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;` → `const FACES = ['1em "Docreader Serif"'] as const;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "fonts: false at once without a font set; true once the faces load; false when the wait runs out" |
+| L2-T7a-M31 | fonts: a failed load answers false | `src/enhance/env.ts` | `          () => { ⏎             finish(false); ⏎           }, ⏎         );` → `          () => { ⏎             finish(true); ⏎           }, ⏎         );` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "fonts: false at once without a font set; true once the faces load; false when the wait runs out"; "fonts: false when the font set cannot be read, has no load, or a load throws at once"; "a root in a document with no window: nothing is scheduled or heard, and nothing throws" |
+| L2-T7a-M32 | fonts: false when the font set cannot be read, is missing, has no load, or a load throws at once (one try) | `src/enhance/env.ts` | `        try { ⏎           const set = doc.fonts; ⏎           loads = Promise.all(FACES.map((face)…` → `        const set = doc.fonts; ⏎         loads = Promise.all(FACES.map((face) => set.load(face)));` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "fonts: false at once without a font set; true once the faces load; false when the wait runs out"; "fonts: false when the font set cannot be read, has no load, or a load throws at once"; "a root in a document with no window: nothing is scheduled or heard, and nothing throws" |
+| L2-T7a-M33 | observeResize: null without ResizeObserver | `src/enhance/env.ts` | `        if (view === null \|\| typeof view.ResizeObserver !== 'function') return null;` → `        if (view === null) return null;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M34 | observeIntersection: null without IntersectionObserver | `src/enhance/env.ts` | `        if (view === null \|\| typeof view.IntersectionObserver !== 'function') return null;` → `        if (view === null) return null;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M35 | no observer is made once the instance is not live | `src/enhance/env.ts` | `    if (!live()) return null; ⏎     const o = make();` → `    const o = make();` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M36 | a disconnected observer is not started again once not live | `src/enhance/env.ts` | `        if (live() && !cancelled) o.observe(el);` → `        if (!cancelled) o.observe(el);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M37 | an observer is disconnected by its cancel and by teardown | `src/enhance/env.ts` | `      o.disconnect(); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy"; "an observer cancelled by its own handle disconnects once, and destroy leaves it alone"; "an observer cancelled by its own handle observes nothing again, so none is left attached after destroy" |
+| L2-T7a-M38 | a resize report runs inside an operation | `src/enhance/env.ts` | `        return new view.ResizeObserver((entries) => { ⏎           run(() => {` → `        return new view.ResizeObserver((entries) => { ⏎           ((f: () => void) => f())(() => {` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M39 | an intersection report runs inside an operation | `src/enhance/env.ts` | `        return new view.IntersectionObserver((entries) => { ⏎           run(() => {` → `        return new view.IntersectionObserver((entries) => { ⏎           ((f: () => void) => f())(…` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M40 | an intersection report carries the ratio | `src/enhance/env.ts` | `ratio: e.intersectionRatio` → `ratio: 0` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M41 | IntersectionObserver gets the feature's options | `src/enhance/env.ts` | `        if (init?.rootMargin !== undefined) options.rootMargin = init.rootMargin; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "observeResize and observeIntersection: null without the API; otherwise callbacks inside operations, cancelled by destroy" |
+| L2-T7a-M42 | textWidth is null without a canvas context | `src/enhance/env.ts` | `      if (canvas === null) return null; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "textWidth is null when the canvas refuses a context by throwing"; "textWidth is null without a canvas context, and measures with one" |
+| L2-T7a-M43 | now is the clock | `src/enhance/env.ts` | `    now: () => Date.now(),` → `    now: () => 0,` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "now is the clock, and elementFromPoint answers only inside the root" |
+| L2-T7a-M44 | elementFromPoint answers only inside the root | `src/enhance/env.ts` | `      return hit !== null && root.contains(hit) ? hit : null;` → `      return hit;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "now is the clock, and elementFromPoint answers only inside the root" |
+| L2-T7a-M45 | elementFromPoint is null where the document has none | `src/enhance/env.ts` | `      if (typeof at !== 'function') return null; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "now is the clock, and elementFromPoint answers only inside the root" |
+| L2-T7a-M46 | computed answers only inside the root | `src/enhance/env.ts` | ` \|\| !root.contains(el)) return '';` → `) return '';` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "computed reads a computed value of an element inside the root" |
+| L2-T7a-M47 | a document with no window schedules nothing | `src/enhance/env.ts` | `    once(fn, (call) => { ⏎       if (view === null) return null; ⏎       const id = view.setTimeo…` → `    once(fn, (call) => { ⏎       const id = (view as Window).setTimeout(call, delay(ms));` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a root in a document with no window: nothing is scheduled or heard, and nothing throws" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -343,10 +372,10 @@ the canvas, the clock and the two root-scoped lookups, and a document with no wi
   },
   {
     "id": "L2-T7a-M32",
-    "guard": "fonts: false at once without a font set",
+    "guard": "fonts: false when the font set cannot be read, is missing, has no load, or a load throws at once (one try)",
     "file": "src/enhance/env.ts",
-    "old": "        if (set === null) {\n          resolve(false);\n          return;\n        }",
-    "new": "        if (set === null) {\n          resolve(true);\n          return;\n        }",
+    "old": "        try {\n          const set = doc.fonts;\n          loads = Promise.all(FACES.map((face) => set.load(face)));\n        } catch (e) {\n          loads = Promise.reject(e);\n        }",
+    "new": "        const set = doc.fonts;\n        loads = Promise.all(FACES.map((face) => set.load(face)));",
     "tests": "test/enhance-seams.test.ts"
   },
   {
@@ -377,8 +406,8 @@ the canvas, the clock and the two root-scoped lookups, and a document with no wi
     "id": "L2-T7a-M36",
     "guard": "a disconnected observer is not started again once not live",
     "file": "src/enhance/env.ts",
-    "old": "        if (live()) o.observe(el);",
-    "new": "        o.observe(el);",
+    "old": "        if (live() && !cancelled) o.observe(el);",
+    "new": "        if (!cancelled) o.observe(el);",
     "tests": "test/enhance-seams.test.ts"
   },
   {
@@ -475,27 +504,26 @@ the canvas, the clock and the two root-scoped lookups, and a document with no wi
 ## Styles: `journal.setStyle` (LD11) (L2-T7a-M48 to L2-T7a-M63)
 
 The closed list, `important` for its three names only, the refused values, the conditional restore of value and
-priority, and the style attribute the CSSOM leaves: removed only when the element had none, and read first so a
-browser that serializes it lazily cannot bring it back (the last row is measured in Chromium, the one browser that
-shows it).
+priority, and the style attribute the CSSOM leaves: removed only when the element had none, and read first so a browser
+that serializes it lazily cannot bring it back (the last row is measured in Chromium, the one browser that shows it).
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M48 | setStyle refuses a property off the list | `src/enhance/journal.ts` | `      if (!plain && !loud) throw new Error` → `      if (false) throw new Error` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "refuses a name off the list" |
-| L2-T7a-M49 | setStyle takes important only for fill, stroke and stroke-width, and those only with it | `src/enhance/journal.ts` | `      if (loud !== important) throw new Error` → `      if (false) throw new Error` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "takes important only for fill, stroke and stroke-width, and those only with it" |
-| L2-T7a-M50 | the closed list (a name added) | `src/enhance/journal.ts` | `  '--thead-h', '--fig-w', '--bar-h', 'left',` → `  '--thead-h', '--fig-w', '--bar-h', 'color', 'left',` | `test/enhance-seams.test.ts`: 3 failed \| 85 passed (88). "the closed list is the plan's, and fill, stroke and stroke-width go only with important"; "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "refuses a name off the list" |
-| L2-T7a-M51 | the important list (a name added) | `src/enhance/journal.ts` | `export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width'] as const;` → `export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'opacity'] as const;` | `test/enhance-seams.test.ts`: 4 failed \| 84 passed (88). "the closed list is the plan's, and fill, stroke and stroke-width go only with important"; "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "a host's own declarations survive, and the attribute stays when the host had one"; "takes important only for fill, stroke and stroke-width, and those only with it" |
-| L2-T7a-M52 | a value over 200 code units is refused | `src/enhance/journal.ts` | `value.length > STYLE_VALUE_MAX \|\| ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
-| L2-T7a-M53 | a value with url() is refused | `src/enhance/journal.ts` | `(?:url\|src\|image\|` → `(?:src\|image\|` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
-| L2-T7a-M54 | a value with a backslash is refused | `src/enhance/journal.ts` | `/[\\;{}]\|` → `/[;{}]\|` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
-| L2-T7a-M55 | a value that could end the declaration is refused | `src/enhance/journal.ts` | `/[\\;{}]\|` → `/[\\]\|` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
-| L2-T7a-M56 | setStyle writes nothing once not live | `src/enhance/journal.ts` | `      if (!live()) return; ⏎       const style = el.style;` → `      const style = el.style;` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "writes nothing once the instance is not live"; "a write after an await, once destroyed, is refused (RF5)" |
-| L2-T7a-M57 | undo restores only while the value and priority are still the library's | `src/enhance/journal.ts` | `if (style.getPropertyValue(name) !== r.last.value \|\| style.getPropertyPriority(name) !== r.last.p…` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "restores conditionally: a value or a priority the host changed since stays the host's" |
-| L2-T7a-M58 | undo restores the original priority too | `src/enhance/journal.ts` | `          else style.setProperty(name, r.value, r.priority);` → `          else style.setProperty(name, r.value);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a host's own declarations survive, and the attribute stays when the host had one" |
-| L2-T7a-M59 | the last written value is what the browser holds after the write | `src/enhance/journal.ts` | `      rec.last = { value: style.getPropertyValue(name), priority: style.getPropertyPriority(name) };` → `      void rec;` | `test/enhance-seams.test.ts`: 6 failed \| 82 passed (88). "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "a value written twice is restored to the original, once"; "a host's own declarations survive, and the attribute stays when the host had one"; "an element whose style attribute the host left empty keeps it, empty"; "an element the host gave an inline style after the library's first write keeps it, attribute and all"; and 1 more |
-| L2-T7a-M60 | important is written with its priority | `src/enhance/journal.ts` | `      else style.setProperty(name, value, important ? 'important' : '');` → `      else style.setProperty(name, value);` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "restores conditionally: a value or a priority the host changed since stays the host's" |
-| L2-T7a-M61 | undo removes the empty style attribute the CSSOM leaves | `src/enhance/journal.ts` | `            if (style.length === 0 && el.getAttribute('style') !== null) el.removeAttribute('styl…` → (deleted) | `test/enhance-seams.test.ts`: 3 failed \| 85 passed (88). "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "a value written twice is restored to the original, once"; "through enhance: a style written by a feature is undone by destroy" |
-| L2-T7a-M62 | an attribute the element had stays, even empty | `src/enhance/journal.ts` | `        if (!el.hasAttribute('style')) { ⏎           undo.push(` → `        if (true) { ⏎           undo.push(` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "an element whose style attribute the host left empty keeps it, empty" |
+| L2-T7a-M48 | setStyle refuses a property off the list | `src/enhance/journal.ts` | `      if (!plain && !loud) throw new Error` → `      if (false) throw new Error` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "refuses a name off the list" |
+| L2-T7a-M49 | setStyle takes important only for fill, stroke and stroke-width, and those only with it | `src/enhance/journal.ts` | `      if (loud !== important) throw new Error` → `      if (false) throw new Error` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "takes important only for fill, stroke and stroke-width, and those only with it" |
+| L2-T7a-M50 | the closed list (a name added) | `src/enhance/journal.ts` | `  '--thead-h', '--fig-w', '--bar-h', 'left',` → `  '--thead-h', '--fig-w', '--bar-h', 'color', 'left',` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "the closed list is the plan's, and fill, stroke and stroke-width go only with important"; "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "refuses a name off the list" |
+| L2-T7a-M51 | the important list (a name added) | `src/enhance/journal.ts` | `export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width'] as const;` → `export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'opacity'] as const;` | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "the closed list is the plan's, and fill, stroke and stroke-width go only with important"; "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "a host's own declarations survive, and the attribute stays when the host had one"; "takes important only for fill, stroke and stroke-width, and those only with it" |
+| L2-T7a-M52 | a value over 200 code units is refused | `src/enhance/journal.ts` | `value.length > STYLE_VALUE_MAX \|\| ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
+| L2-T7a-M53 | a value with url() is refused | `src/enhance/journal.ts` | `(?:url\|src\|image\|` → `(?:src\|image\|` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
+| L2-T7a-M54 | a value with a backslash is refused | `src/enhance/journal.ts` | `/[\\;{}]\|` → `/[;{}]\|` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
+| L2-T7a-M55 | a value that could end the declaration is refused | `src/enhance/journal.ts` | `/[\\;{}]\|` → `/[\\]\|` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "refuses a value that could load a resource, escape or end the declaration, or is over 200 code units" |
+| L2-T7a-M56 | setStyle writes nothing once not live | `src/enhance/journal.ts` | `      if (!live()) return; ⏎       const style = el.style;` → `      const style = el.style;` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "writes nothing once the instance is not live"; "a write after an await, once destroyed, is refused (RF5)" |
+| L2-T7a-M57 | undo restores only while the value and priority are still the library's | `src/enhance/journal.ts` | `if (style.getPropertyValue(name) !== r.last.value \|\| style.getPropertyPriority(name) !== r.last.p…` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "restores conditionally: a value or a priority the host changed since stays the host's" |
+| L2-T7a-M58 | undo restores the original priority too | `src/enhance/journal.ts` | `          else style.setProperty(name, r.value, r.priority);` → `          else style.setProperty(name, r.value);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a host's own declarations survive, and the attribute stays when the host had one" |
+| L2-T7a-M59 | the last written value is what the browser holds after the write | `src/enhance/journal.ts` | `      rec.last = { value: style.getPropertyValue(name), priority: style.getPropertyPriority(name) };` → `      void rec;` | `test/enhance-seams.test.ts`: 6 failed \| 90 passed (96). "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "a value written twice is restored to the original, once"; "a host's own declarations survive, and the attribute stays when the host had one"; "an element whose style attribute the host left empty keeps it, empty"; "an element the host gave an inline style after the library's first write keeps it, attribute and all"; and 1 more |
+| L2-T7a-M60 | important is written with its priority | `src/enhance/journal.ts` | `      else style.setProperty(name, value, important ? 'important' : '');` → `      else style.setProperty(name, value);` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "restores conditionally: a value or a priority the host changed since stays the host's" |
+| L2-T7a-M61 | undo removes the empty style attribute the CSSOM leaves | `src/enhance/journal.ts` | `            if (style.length === 0 && el.getAttribute('style') !== null) el.removeAttribute('styl…` → (deleted) | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "every listed name is written, and undo restores the element byte for byte (no style attribute left)"; "a value written twice is restored to the original, once"; "through enhance: a style written by a feature is undone by destroy" |
+| L2-T7a-M62 | an attribute the element had stays, even empty | `src/enhance/journal.ts` | `        if (!el.hasAttribute('style')) { ⏎           undo.push(` → `        if (true) { ⏎           undo.push(` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "an element whose style attribute the host left empty keeps it, empty" |
 | L2-T7a-M63 | the attribute is read before it is removed, so a lazy serialization cannot bring it back (a real browser) | `src/enhance/journal.ts` | `style.length === 0 && el.getAttribute('style') !== null` → `style.length === 0` | `test/browser/seams.test.ts`: 1 failed \| 1 passed \| 2 skipped (4). "setStyle applies under the strict policy, important included, where a style attribute is refused; undo leaves no attribute" |
 
 ### The rows, as `mutate.mjs` reads them
@@ -635,26 +663,26 @@ shows it).
 
 ## Reader state: the position and the UI memory (LD8) (L2-T7a-M64 to L2-T7a-M78)
 
-The two keys, the local values read back, the write-behind and its deletes, own fields only, nothing read after
-startup and no UI write over fields never read, and the shared-object merge the prefs and the UI memory now use.
+The two keys, the local values read back, the write-behind and its deletes, own fields only, nothing read after startup
+and no UI write over fields never read, and the shared-object merge the prefs and the UI memory now use.
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M64 | the position key | `src/enhance/state.ts` | ``   return `docreader:pos:${posKey}`; `` → ``   return `docreader:position:${posKey}`; `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the keys: docreader:pos:<posKey> and docreader:ui, beside the prototype's two" |
-| L2-T7a-M65 | the UI key | `src/enhance/state.ts` | `export const UI_KEY = 'docreader:ui';` → `export const UI_KEY = 'docreader:ui-memory';` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the keys: docreader:pos:<posKey> and docreader:ui, beside the prototype's two" |
-| L2-T7a-M66 | a position written since startup reads back locally | `src/enhance/state.ts` | `      if (posLocal.has(posKey)) return posLocal.get(posKey); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back"; "without storage the position and the UI memory are local only" |
-| L2-T7a-M67 | a position is written behind | `src/enhance/state.ts` | `      writeBehind(posKeyOf(posKey), value === null ? null : JSON.stringify(value));` → `      void value;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back" |
-| L2-T7a-M68 | a null position deletes it | `src/enhance/state.ts` | `      writeBehind(posKeyOf(posKey), value === null ? null : JSON.stringify(value));` → `      writeBehind(posKeyOf(posKey), JSON.stringify(value));` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back" |
-| L2-T7a-M69 | a UI field is an own field of the stored object | `src/enhance/state.ts` | `      return Object.hasOwn(held, name) ? held[name] : undefined;` → `      return held[name];` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a field named like a prototype key reads as absent and round-trips as an own field" |
-| L2-T7a-M70 | a UI read after startup, with the key never read, does not read it | `src/enhance/state.ts` | `      if (!ui.loaded && sealed) return undefined; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
-| L2-T7a-M71 | a UI write after startup, with the key never read, stays local | `src/enhance/state.ts` | `      if (!ui.loaded && sealed) { ⏎         uiLocal.set(name, value === null ? undefined : value)…` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
-| L2-T7a-M72 | a UI field written locally reads back | `src/enhance/state.ts` | `      if (uiLocal.has(name)) return uiLocal.get(name); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "without storage the position and the UI memory are local only"; "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
-| L2-T7a-M73 | seal marks the snapshot closed | `src/enhance/state.ts` | `      sealed = true; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
-| L2-T7a-M74 | a write keeps the stored fields it does not know | `src/enhance/state.ts` | `        let next: Record<string, unknown> = { ...base };` → `        let next: Record<string, unknown> = {};` | `test/enhance-seams.test.ts`: 3 failed \| 85 passed (88). "writeUi merges one field into the stored object, keeping the fields it does not know; null deletes a field"; "a field named like a prototype key reads as absent and round-trips as an own field"; "two roots on one storage object: a UI field one wrote is never dropped by the other's write" |
-| L2-T7a-M75 | a field set to undefined (a UI null) is deleted | `src/enhance/state.ts` | `          if (v === undefined) delete next[k];` → `          if (v === undefined) next = { ...next, [k]: null };` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "writeUi merges one field into the stored object, keeping the fields it does not know; null deletes a field" |
-| L2-T7a-M76 | a shared object merges the newest value another root queued | `src/enhance/state.ts` | `          if (isPlainRecord(r)) base = { ...base, ...r };` → `          void r;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "two roots on one storage object: a UI field one wrote is never dropped by the other's write" |
-| L2-T7a-M77 | an unchanged object is not written again | `src/enhance/state.ts` | `        if (after !== before) writeBehind(key, after);` → `        writeBehind(key, after);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "writeUi merges one field into the stored object, keeping the fields it does not know; null deletes a field" |
-| L2-T7a-M78 | a stored UI value that is not an object reads as empty | `src/enhance/state.ts` | `          held = isPlainRecord(r) ? { ...r } : {};` → `          held = (r ?? {}) as Record<string, unknown>;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a stored UI value that is not an object is ignored, and the first write replaces it" |
+| L2-T7a-M64 | the position key | `src/enhance/state.ts` | ``   return `docreader:pos:${posKey}`; `` → ``   return `docreader:position:${posKey}`; `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the keys: docreader:pos:<posKey> and docreader:ui, beside the prototype's two" |
+| L2-T7a-M65 | the UI key | `src/enhance/state.ts` | `export const UI_KEY = 'docreader:ui';` → `export const UI_KEY = 'docreader:ui-memory';` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the keys: docreader:pos:<posKey> and docreader:ui, beside the prototype's two" |
+| L2-T7a-M66 | a position written since startup reads back locally | `src/enhance/state.ts` | `      if (posLocal.has(posKey)) return posLocal.get(posKey); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back"; "without storage the position and the UI memory are local only" |
+| L2-T7a-M67 | a position is written behind | `src/enhance/state.ts` | `      writeBehind(posKeyOf(posKey), value === null ? null : JSON.stringify(value));` → `      void value;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back" |
+| L2-T7a-M68 | a null position deletes it | `src/enhance/state.ts` | `      writeBehind(posKeyOf(posKey), value === null ? null : JSON.stringify(value));` → `      writeBehind(posKeyOf(posKey), JSON.stringify(value));` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back" |
+| L2-T7a-M69 | a UI field is an own field of the stored object | `src/enhance/state.ts` | `      return Object.hasOwn(held, name) ? held[name] : undefined;` → `      return held[name];` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a field named like a prototype key reads as absent and round-trips as an own field" |
+| L2-T7a-M70 | a UI read after startup, with the key never read, does not read it | `src/enhance/state.ts` | `      if (!ui.loaded && sealed) return undefined; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
+| L2-T7a-M71 | a UI write after startup, with the key never read, stays local | `src/enhance/state.ts` | `      if (!ui.loaded && sealed) { ⏎         uiLocal.set(name, value === null ? undefined : value)…` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
+| L2-T7a-M72 | a UI field written locally reads back | `src/enhance/state.ts` | `      if (uiLocal.has(name)) return uiLocal.get(name); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "without storage the position and the UI memory are local only"; "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
+| L2-T7a-M73 | seal marks the snapshot closed | `src/enhance/state.ts` | `      sealed = true; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten" |
+| L2-T7a-M74 | a write keeps the stored fields it does not know | `src/enhance/state.ts` | `        let next: Record<string, unknown> = { ...base };` → `        let next: Record<string, unknown> = {};` | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "writeUi merges one field into the stored object, keeping the fields it does not know; null deletes a field"; "a field named like a prototype key reads as absent and round-trips as an own field"; "two roots on one storage object: a UI field one wrote is never dropped by the other's write"; "a write asked for once the instance is not live is dropped: a later instance on the same storage never writes it" |
+| L2-T7a-M75 | a field set to undefined (a UI null) is deleted | `src/enhance/state.ts` | `          if (v === undefined) delete next[k];` → `          if (v === undefined) next = { ...next, [k]: null };` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "writeUi merges one field into the stored object, keeping the fields it does not know; null deletes a field" |
+| L2-T7a-M76 | a shared object merges the newest value another root queued | `src/enhance/state.ts` | `          if (isPlainRecord(r)) base = { ...base, ...r };` → `          void r;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "two roots on one storage object: a UI field one wrote is never dropped by the other's write" |
+| L2-T7a-M77 | an unchanged object is not written again | `src/enhance/state.ts` | `        if (after !== before) writeBehind(key, after);` → `        writeBehind(key, after);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "writeUi merges one field into the stored object, keeping the fields it does not know; null deletes a field" |
+| L2-T7a-M78 | a stored UI value that is not an object reads as empty | `src/enhance/state.ts` | `          held = isPlainRecord(r) ? { ...r } : {};` → `          held = (r ?? {}) as Record<string, unknown>;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a stored UI value that is not an object is ignored, and the first write replaces it" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -785,32 +813,32 @@ startup and no UI write over fields never read, and the shared-object merge the 
 
 ## The lifecycle, the feature list and folds (L2-T7a-M79 to L2-T7a-M101)
 
-Section 0's units and fingerprints measured before any feature builds, per-instance chrome ids (RF2), the build
-through the list and its stop, the second phase (LD5), the build order, and the folds feature reading its own option
-and printing through env.
+Section 0's units and fingerprints measured before any feature builds, per-instance chrome ids (RF2), the build through
+the list and its stop, the second phase (LD5), the build order, and the folds feature reading its own option and
+printing through env.
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M79 | the sections are measured before any feature builds | `src/enhance/lifecycle.ts` | `    sections, ⏎     vocab: createVocab(options),` → `    get sections() { ⏎       return measureSections(root); ⏎     }, ⏎     vocab: createVocab(opti…` | `test/enhance-seams.test.ts`: 4 failed \| 84 passed (88). "one unit per level-2 heading with an id among the root's children, its blocks up to the next h1 or h2"; "a fingerprint ignores chrome text: it is the source's, though the fold controls now sit in every heading"; "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes"; "minutes are the section's reading time, measured on the source before the chrome" |
-| L2-T7a-M80 | a section heading has an id | `src/enhance/lifecycle.ts` | `      heading = c.localName === 'h2' && c.id !== '' ? (c as HTMLElement) : null;` → `      heading = c.localName === 'h2' ? (c as HTMLElement) : null;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes" |
-| L2-T7a-M81 | an h1 ends a section | `src/enhance/lifecycle.ts` | `    if (c.localName === 'h1' \|\| c.localName === 'h2') {` → `    if (c.localName === 'h2') {` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "one unit per level-2 heading with an id among the root's children, its blocks up to the next h1 or h2" |
-| L2-T7a-M82 | script and dl blocks are left out of the fingerprint | `src/enhance/lifecycle.ts` | `    for (const m of members) if (m.localName !== 'script' && m.localName !== 'dl') text += ` → `    for (const m of members) if (true) text += ` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes" |
-| L2-T7a-M83 | the separator between a section's texts | `src/enhance/lifecycle.ts` | `` text += `\u0001${m.textContent ?? ''}` `` → `` text += `${m.textContent ?? ''}` `` | `test/enhance-seams.test.ts`: 3 failed \| 85 passed (88). "one unit per level-2 heading with an id among the root's children, its blocks up to the next h1 or h2"; "a fingerprint ignores chrome text: it is the source's, though the fold controls now sit in every heading"; "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes" |
-| L2-T7a-M84 | the sections are frozen | `src/enhance/lifecycle.ts` | `  flush(); ⏎   return Object.freeze(out);` → `  flush(); ⏎   return out;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the units and their member lists are frozen" |
-| L2-T7a-M85 | a chrome id skips the document's ids | `src/enhance/lifecycle.ts` | `    for (let k = 2; taken.has(id) \|\| issued.has(id); k += 1)` → `    for (let k = 2; issued.has(id); k += 1)` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "skips an id the document already has, inside the root or outside it, and one another instance issued" |
-| L2-T7a-M86 | a chrome id skips every id issued in the document | `src/enhance/lifecycle.ts` | `    for (let k = 2; taken.has(id) \|\| issued.has(id); k += 1)` → `    for (let k = 2; taken.has(id); k += 1)` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "two roots in one document get disjoint ids for the same names"; "skips an id the document already has, inside the root or outside it, and one another instance issued" |
-| L2-T7a-M87 | the document's ids are read from the whole document | `src/enhance/lifecycle.ts` | `inst.root.ownerDocument.querySelectorAll('[id]')` → `inst.root.querySelectorAll('[id]')` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "skips an id the document already has, inside the root or outside it, and one another instance issued" |
-| L2-T7a-M88 | each instance of a document has its own number | `src/enhance/lifecycle.ts` | `  reg.next += 1; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "skips an id the document already has, inside the root or outside it, and one another instance issued" |
-| L2-T7a-M89 | a chrome id's name is checked | `src/enhance/lifecycle.ts` | `    if (typeof name !== 'string' \|\| !CHROME_ID_NAME.test(name)) {` → `    if (false) {` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "refuses a name that is not 1 to 32 lower-case letters, digits and dashes, starting with a letter" |
-| L2-T7a-M90 | an instance's chrome ids are released at teardown | `src/enhance/lifecycle.ts` | `    for (const id of mine) issued.delete(id); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "an instance's ids are released when it is torn down" |
-| L2-T7a-M91 | the build stops once the instance is not live | `src/enhance/lifecycle.ts` | `    f.build(ctx); ⏎     if (!live()) return;` → `    f.build(ctx);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the startup builds through the list, in order, inside the startup operation, and stops once destroyed" |
-| L2-T7a-M92 | the second phase starts once the layout is built | `src/enhance/lifecycle.ts` | `    inst.state?.seal(); ⏎     secondPhase(inst);` → `    inst.state?.seal();` | `test/enhance-seams.test.ts`: 3 failed \| 85 passed (88). "starts each after in order, once the startup has built every feature, inside an operation"; "enhance resolves without waiting for the second phase"; "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run" |
-| L2-T7a-M93 | no second phase when the startup was destroyed | `src/enhance/lifecycle.ts` | `    if (!isLive(inst)) { ⏎       const cleanup = await settled(destroyInstance(inst));` → `    secondPhase(inst); ⏎     if (!isLive(inst)) { ⏎       const cleanup = await settled(destroyIn…` | `test/enhance-seams.test.ts`: 3 failed \| 85 passed (88). "starts each after in order, once the startup has built every feature, inside an operation"; "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run"; "no after starts when the startup failed or was destroyed" |
-| L2-T7a-M94 | each after starts inside an operation | `src/enhance/lifecycle.ts` | `    operate(inst, () => { ⏎       try { ⏎         // A rejection` → `    ((g: () => void) => g())(() => { ⏎       try { ⏎         // A rejection` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "starts each after in order, once the startup has built every feature, inside an operation" |
-| L2-T7a-M95 | a rejected after is never unhandled | `src/enhance/lifecycle.ts` | `        Promise.resolve(after(ctx)).catch(() => undefined);` → `        void after(ctx);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run" |
-| L2-T7a-M96 | an after that throws is swallowed | `src/enhance/lifecycle.ts` | `      } catch { ⏎         // a throw before its first await, likewise ⏎       }` → `      } finally { ⏎         // a throw before its first await, likewise ⏎       }` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run" |
-| L2-T7a-M97 | features: the build order | `src/enhance/features.ts` | `    { name: 'ids', build: buildIds }, ⏎     { name: 'plans', build: buildPlans },` → `    { name: 'plans', build: buildPlans }, ⏎     { name: 'ids', build: buildIds },` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "lists every feature once, in the reference's build order" |
-| L2-T7a-M98 | features: a feature that waits on the host has its after | `src/enhance/features.ts` | `    { name: 'since', build: buildSince, after: afterSince },` → `    { name: 'since', build: buildSince },` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "every module of src/enhance that exports build is registered, under its file name, and every stub exports build (and after when it waits on the host)" |
+| L2-T7a-M79 | the sections are measured before any feature builds | `src/enhance/lifecycle.ts` | `    sections, ⏎     vocab,` → `    get sections() { ⏎       return measureSections(root); ⏎     }, ⏎     vocab,` | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "one unit per level-2 heading with an id among the root's children, its blocks up to the next h1 or h2"; "a fingerprint ignores chrome text: it is the source's, though the fold controls now sit in every heading"; "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes"; "minutes are the section's reading time, measured on the source before the chrome" |
+| L2-T7a-M80 | a section heading has an id | `src/enhance/lifecycle.ts` | `      heading = c.localName === 'h2' && c.id !== '' ? (c as HTMLElement) : null;` → `      heading = c.localName === 'h2' ? (c as HTMLElement) : null;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes" |
+| L2-T7a-M81 | an h1 ends a section | `src/enhance/lifecycle.ts` | `    if (c.localName === 'h1' \|\| c.localName === 'h2') {` → `    if (c.localName === 'h2') {` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "one unit per level-2 heading with an id among the root's children, its blocks up to the next h1 or h2" |
+| L2-T7a-M82 | script and dl blocks are left out of the fingerprint | `src/enhance/lifecycle.ts` | `    for (const m of members) if (m.localName !== 'script' && m.localName !== 'dl') text += ` → `    for (const m of members) if (true) text += ` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes" |
+| L2-T7a-M83 | the separator between a section's texts | `src/enhance/lifecycle.ts` | `` text += `\u0001${m.textContent ?? ''}` `` → `` text += `${m.textContent ?? ''}` `` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "one unit per level-2 heading with an id among the root's children, its blocks up to the next h1 or h2"; "a fingerprint ignores chrome text: it is the source's, though the fold controls now sit in every heading"; "a heading with no id ends the unit before it and starts none; script and dl count neither in the fingerprint nor the minutes" |
+| L2-T7a-M84 | the sections are frozen | `src/enhance/lifecycle.ts` | `  flush(); ⏎   return Object.freeze(out);` → `  flush(); ⏎   return out;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the units and their member lists are frozen" |
+| L2-T7a-M85 | a chrome id skips the document's ids | `src/enhance/lifecycle.ts` | `    for (let k = 2; taken.has(id) \|\| issued.has(id); k += 1)` → `    for (let k = 2; issued.has(id); k += 1)` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "skips an id the document already has, inside the root or outside it, and one this instance issued" |
+| L2-T7a-M86 | a chrome id skips every id issued in the document | `src/enhance/lifecycle.ts` | `    for (let k = 2; taken.has(id) \|\| issued.has(id); k += 1)` → `    for (let k = 2; taken.has(id); k += 1)` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "two roots in one document get disjoint ids for the same names"; "skips an id the document already has, inside the root or outside it, and one this instance issued" |
+| L2-T7a-M87 | the document's ids are read from the whole document | `src/enhance/lifecycle.ts` | `inst.root.ownerDocument.querySelectorAll('[id]')` → `inst.root.querySelectorAll('[id]')` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "skips an id the document already has, inside the root or outside it, and one this instance issued" |
+| L2-T7a-M88 | each instance of a document has its own number | `src/enhance/lifecycle.ts` | `  reg.next += 1; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "skips an id the document already has, inside the root or outside it, and one this instance issued" |
+| L2-T7a-M89 | a chrome id's name is checked | `src/enhance/lifecycle.ts` | `    if (typeof name !== 'string' \|\| !CHROME_ID_NAME.test(name)) {` → `    if (false) {` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "refuses a name that is not 1 to 32 lower-case letters, digits and dashes, starting with a letter" |
+| L2-T7a-M90 | an instance's chrome ids are released at teardown | `src/enhance/lifecycle.ts` | `    for (const id of mine) issued.delete(id); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "an instance's ids are released when it is torn down, and none is issued after" |
+| L2-T7a-M91 | the build stops once the instance is not live | `src/enhance/lifecycle.ts` | `    f.build(ctx); ⏎     if (!live()) return;` → `    f.build(ctx);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the startup builds through the list, in order, inside the startup operation, and stops once destroyed" |
+| L2-T7a-M92 | the second phase starts once the layout is built | `src/enhance/lifecycle.ts` | `    inst.state?.seal(); ⏎     secondPhase(inst);` → `    inst.state?.seal();` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "starts each after in order, once the startup has built every feature, inside an operation"; "enhance resolves without waiting for the second phase"; "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run" |
+| L2-T7a-M93 | no second phase when the startup was destroyed | `src/enhance/lifecycle.ts` | `    if (!isLive(inst)) { ⏎       const cleanup = await settled(destroyInstance(inst));` → `    secondPhase(inst); ⏎     if (!isLive(inst)) { ⏎       const cleanup = await settled(destroyIn…` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "starts each after in order, once the startup has built every feature, inside an operation"; "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run"; "no after starts when the startup failed or was destroyed" |
+| L2-T7a-M94 | each after starts inside an operation | `src/enhance/lifecycle.ts` | `    operate(inst, () => { ⏎       try { ⏎         // A rejection` → `    ((g: () => void) => g())(() => { ⏎       try { ⏎         // A rejection` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "starts each after in order, once the startup has built every feature, inside an operation" |
+| L2-T7a-M95 | a rejected after is never unhandled | `src/enhance/lifecycle.ts` | `        Promise.resolve(after(ctx)).catch(() => undefined);` → `        void after(ctx);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run" |
+| L2-T7a-M96 | an after that throws is swallowed | `src/enhance/lifecycle.ts` | `      } catch { ⏎         // a throw before its first await, likewise ⏎       }` → `      } finally { ⏎         // a throw before its first await, likewise ⏎       }` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a rejected or throwing after is swallowed: no unhandled rejection, and the others still run" |
+| L2-T7a-M97 | features: the build order | `src/enhance/features.ts` | `    { name: 'ids', build: buildIds }, ⏎     { name: 'plans', build: buildPlans },` → `    { name: 'plans', build: buildPlans }, ⏎     { name: 'ids', build: buildIds },` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "lists every feature once, in the reference's build order" |
+| L2-T7a-M98 | features: a feature that waits on the host has its after | `src/enhance/features.ts` | `    { name: 'since', build: buildSince, after: afterSince },` → `    { name: 'since', build: buildSince },` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "every module of src/enhance that exports build is registered, under its file name, and every stub exports build (and after when it waits on the host)" |
 | L2-T7a-M99 | features: folds are built through the list | `src/enhance/features.ts` | `    { name: 'folds', build: buildFolds }, ⏎ ` → (deleted) | `test/enhance-folds.test.ts`: 12 failed \| 3 passed (15). "each h2 with blocks gets an .h-fold button in an .h-ctl at its end, and a hidden .fold-note right after it"; "the note carries the section's reading time when it is a minute or more"; "the button folds: blocks hidden until found, heading .folded, note shown, button says Unfold; again unfolds"; "the note unfolds"; "find-in-page opens a fold: beforematch on a hidden block unfolds its section"; and 1 more |
 | L2-T7a-M100 | folds: the folds option is read by the feature | `src/enhance/folds.ts` | `  if (!ctx.options.folds \|\| !ctx.info.isDocument) return;` → `  if (!ctx.info.isDocument) return;` | `test/enhance-folds.test.ts`: 1 failed \| 14 passed (15). "no controls when folds is false, or when the page is not a document" |
 | L2-T7a-M101 | folds: printing shows folded sections, and they fold again after | `src/enhance/folds.ts` | `        if (printing && m.getAttribute('hidden') === 'until-found')` → `        if (!printing && m.getAttribute('hidden') === 'until-found')` | `test/enhance-folds.test.ts`: 3 failed \| 12 passed (15). "printing shows folded sections, and they fold again after"; "a block the host hid itself while its section was folded stays hidden when printing starts"; "a block the host hid while printing is not folded over when printing ends" |
@@ -823,8 +851,8 @@ and printing through env.
     "id": "L2-T7a-M79",
     "guard": "the sections are measured before any feature builds",
     "file": "src/enhance/lifecycle.ts",
-    "old": "    sections,\n    vocab: createVocab(options),",
-    "new": "    get sections() {\n      return measureSections(root);\n    },\n    vocab: createVocab(options),",
+    "old": "    sections,\n    vocab,",
+    "new": "    get sections() {\n      return measureSections(root);\n    },\n    vocab,",
     "tests": "test/enhance-seams.test.ts"
   },
   {
@@ -1012,9 +1040,9 @@ Each of the three word lists the status marks use comes from the vocabulary, not
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M102 | statusOf reads the vocabulary's status words | `src/enhance/status.ts` | `  for (const { re, role } of vocab.status) {` → `  for (const { re, role } of [{ re: /^(agreed\|pending)\b/i, role: 'ok' as const }]) {` | `test/enhance-seams.test.ts`: 5 failed \| 83 passed (88). "status words: the first a text opens with, as a whole word, any case; the role by list"; "a word list is literal: every metacharacter is escaped when it is compiled (LD9)"; "an empty list matches nothing"; "the defaults reproduce the prototype's marks"; "a vocabulary of other words marks those words instead, and the header words decide the column" |
-| L2-T7a-M103 | a status column is named by the vocabulary's header words | `src/enhance/status.ts` | `      const named = vocab.statusHeader.test(head);` → `      const named = /\bstatus\b/i.test(head);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a vocabulary of other words marks those words instead, and the header words decide the column" |
-| L2-T7a-M104 | a ruling column is named by the vocabulary's ruling words | `src/enhance/status.ts` | `      const asked = vocab.rulingHeader.test(head) && ` → `      const asked = /ruling\|ruled\|answer\|\?$/i.test(head) && ` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the ruling-header words are the vocabulary's too" |
+| L2-T7a-M102 | statusOf reads the vocabulary's status words | `src/enhance/status.ts` | `  for (const { re, role } of vocab.status) {` → `  for (const { re, role } of [{ re: /^(agreed\|pending)\b/i, role: 'ok' as const }]) {` | `test/enhance-seams.test.ts`: 5 failed \| 91 passed (96). "status words: the first a text opens with, as a whole word, any case; the role by list"; "a word list is literal: every metacharacter is escaped when it is compiled (LD9)"; "an empty list matches nothing"; "the defaults reproduce the prototype's marks"; "a vocabulary of other words marks those words instead, and the header words decide the column" |
+| L2-T7a-M103 | a status column is named by the vocabulary's header words | `src/enhance/status.ts` | `      const named = vocab.statusHeader.test(head);` → `      const named = /\bstatus\b/i.test(head);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a vocabulary of other words marks those words instead, and the header words decide the column" |
+| L2-T7a-M104 | a ruling column is named by the vocabulary's ruling words | `src/enhance/status.ts` | `      const asked = vocab.rulingHeader.test(head) && ` → `      const asked = /ruling\|ruled\|answer\|\?$/i.test(head) && ` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the ruling-header words are the vocabulary's too" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -1054,34 +1082,34 @@ rule-ID grammars and their prefixes, and the frozen copies.
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M105 | a word is literal: every metacharacter escaped | `src/enhance/vocab.ts` | `  return word.replace(/[.*+?^${}()\|[\]\\]/g, '\\$&');` → `  return word;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "a word list is literal: every metacharacter is escaped when it is compiled (LD9)" |
-| L2-T7a-M106 | an empty list matches nothing | `src/enhance/vocab.ts` | ``   return words.length === 0 ? NEVER : `(?:${words.map(literal).join('\|')})`; `` → ``   return `(?:${words.map(literal).join('\|')})`; `` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "an empty list matches nothing"; "a vocabulary of other words marks those words instead, and the header words decide the column" |
-| L2-T7a-M107 | the default status words | `src/enhance/vocab.ts` | `      ok: ['ruled', 'accepted', 'agreed', 'kept',` → `      ok: ['ruled', 'accepted', 'kept',` | `test/enhance-seams.test.ts`: 4 failed \| 84 passed (88). "the defaults are the documented lists"; "status words: the first a text opens with, as a whole word, any case; the role by list"; "the defaults reproduce the prototype's marks"; "the ruling-header words are the vocabulary's too" |
-| L2-T7a-M108 | the default status-header words | `src/enhance/vocab.ts` | `    statusHeaders: ['status', 'statuses', 'state',` → `    statusHeaders: ['status', 'statuses', 'statement', 'state',` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "the defaults are the documented lists"; "status headers: named as a whole word; a ruling header by a word anywhere, or a question" |
-| L2-T7a-M109 | the default addressees: you alone | `src/enhance/vocab.ts` | `    addressees: ['you'],` → `    addressees: ['you', 'reviewer'],` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "the defaults are the documented lists"; "qualifiers and addressees, as whole words" |
-| L2-T7a-M110 | the default qualifiers: none | `src/enhance/vocab.ts` | `    qualifiers: [],` → `    qualifiers: ['annex'],` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "the defaults are the documented lists"; "an empty list matches nothing" |
-| L2-T7a-M111 | a status word opens the text as a whole word | `src/enhance/vocab.ts` | `` new RegExp(`^(${anyOf(w.status[r])})\\b`, 'i') `` → `` new RegExp(`^(${anyOf(w.status[r])})`, 'i') `` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "status words: the first a text opens with, as a whole word, any case; the role by list"; "a word list is literal: every metacharacter is escaped when it is compiled (LD9)" |
-| L2-T7a-M112 | a status-header word is a whole word | `src/enhance/vocab.ts` | ``     statusHeader: new RegExp(`\\b${anyOf(w.statusHeaders)}\\b`, 'i'), `` → ``     statusHeader: new RegExp(`${anyOf(w.statusHeaders)}\\b`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "status headers: named as a whole word; a ruling header by a word anywhere, or a question" |
-| L2-T7a-M113 | a header that ends in a question mark asks one | `src/enhance/vocab.ts` | `` w.rulingHeaders.length === 0 ? '\\?$' : `${anyOf(w.rulingHeaders)}\|\\?$` `` → `w.rulingHeaders.length === 0 ? NEVER : anyOf(w.rulingHeaders)` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "status headers: named as a whole word; a ruling header by a word anywhere, or a question"; "an empty list matches nothing" |
-| L2-T7a-M114 | an ID opens with 1 to 4 capitals | `src/enhance/vocab.ts` | `w.ids.prefixes === null ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes)` → `w.ids.prefixes === null ? '[A-Z]{1,5}' : anyOf(w.ids.prefixes)` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter" |
-| L2-T7a-M115 | an ID ends at the end, white space or , . : ; ) | `src/enhance/vocab.ts` | ``     id: new RegExp(`^(${idBody})(?=$\|[\\s,.:;)])`), `` → ``     id: new RegExp(`^(${idBody})`), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter" |
-| L2-T7a-M116 | ids false: no IDs at all | `src/enhance/vocab.ts` | `  const idHead = w.ids === false ? null :` → `  const idHead = w.ids === false ? '[A-Z]{1,4}' :` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the ID grammar with prefixes, and off" |
-| L2-T7a-M117 | ID prefixes narrow the grammar | `src/enhance/vocab.ts` | `w.ids.prefixes === null ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes)` → `w.ids.prefixes === null \|\| true ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes)` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the ID grammar with prefixes, and off" |
-| L2-T7a-M118 | idScan is global and fresh | `src/enhance/vocab.ts` | ``     idScan: () => new RegExp(`\\b(${idBody})\\b`, 'g'), `` → ``     idScan: () => new RegExp(`\\b(${idBody})\\b`), `` | `test/enhance-seams.test.ts`: 2 failed \| 86 passed (88). "the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter"; "the ID grammar with prefixes, and off" |
-| L2-T7a-M119 | a rule ID opens with two or more capitals | `src/enhance/vocab.ts` | `  const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{2,}' : anyOf(w.ruleIds.prefixes);` → `  const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{1,}' : anyOf(w.ruleIds.prefixes);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the rule-ID grammar: two or more capitals, then dash-separated parts of capitals or digits; prefixes narrow it" |
-| L2-T7a-M120 | rule-ID prefixes narrow the grammar | `src/enhance/vocab.ts` | `  const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{2,}' : anyOf(w.ruleIds.prefixes);` → `  const ruleHead = '[A-Z]{2,}';` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the rule-ID grammar: two or more capitals, then dash-separated parts of capitals or digits; prefixes narrow it" |
+| L2-T7a-M105 | a word is literal: every metacharacter escaped | `src/enhance/vocab.ts` | `  return word.replace(/[.*+?^${}()\|[\]\\]/g, '\\$&');` → `  return word;` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "a word list is literal: every metacharacter is escaped when it is compiled (LD9)"; "qualifiers and addressees, as whole words" |
+| L2-T7a-M106 | an empty list matches nothing | `src/enhance/vocab.ts` | ``   return words.length === 0 ? NEVER : `(?:${words.map(literal).join('\|')})`; `` → ``   return `(?:${words.map(literal).join('\|')})`; `` | `test/enhance-seams.test.ts`: 3 failed \| 93 passed (96). "an empty list matches nothing"; "the rule-ID list joins and the decisions table's header word"; "a vocabulary of other words marks those words instead, and the header words decide the column" |
+| L2-T7a-M107 | the default status words | `src/enhance/vocab.ts` | `      ok: ['ruled', 'accepted', 'agreed', 'kept',` → `      ok: ['ruled', 'accepted', 'kept',` | `test/enhance-seams.test.ts`: 5 failed \| 91 passed (96). "the defaults are the documented lists"; "status words: the first a text opens with, as a whole word, any case; the role by list"; "the defaults reproduce the prototype's marks"; "a cell split into bullet lines (section 8, Task 10) is marked by its first line's text, past a hidden bullet"; "the ruling-header words are the vocabulary's too" |
+| L2-T7a-M108 | the default status-header words | `src/enhance/vocab.ts` | `    statusHeaders: ['status', 'statuses', 'state',` → `    statusHeaders: ['status', 'statuses', 'statement', 'state',` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "status headers: named as a whole word; a ruling header by a word anywhere, or a question" |
+| L2-T7a-M109 | the default addressees: you alone | `src/enhance/vocab.ts` | `    addressees: ['you'],` → `    addressees: ['you', 'reviewer'],` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "qualifiers and addressees, as whole words" |
+| L2-T7a-M110 | the default qualifiers: none | `src/enhance/vocab.ts` | `    qualifiers: [],` → `    qualifiers: ['annex'],` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "an empty list matches nothing" |
+| L2-T7a-M111 | a status word opens the text as a whole word | `src/enhance/vocab.ts` | `` new RegExp(`^(${anyOf(w.status[r])})\\b`, 'i') `` → `` new RegExp(`^(${anyOf(w.status[r])})`, 'i') `` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "status words: the first a text opens with, as a whole word, any case; the role by list"; "a word list is literal: every metacharacter is escaped when it is compiled (LD9)" |
+| L2-T7a-M112 | a status-header word is a whole word | `src/enhance/vocab.ts` | ``     statusHeader: new RegExp(`\\b${anyOf(w.statusHeaders)}\\b`, 'i'), `` → ``     statusHeader: new RegExp(`${anyOf(w.statusHeaders)}\\b`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "status headers: named as a whole word; a ruling header by a word anywhere, or a question" |
+| L2-T7a-M113 | a header that ends in a question mark asks one | `src/enhance/vocab.ts` | `` w.rulingHeaders.length === 0 ? '\\?$' : `${anyOf(w.rulingHeaders)}\|\\?$` `` → `w.rulingHeaders.length === 0 ? NEVER : anyOf(w.rulingHeaders)` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "status headers: named as a whole word; a ruling header by a word anywhere, or a question"; "an empty list matches nothing" |
+| L2-T7a-M114 | an ID opens with 1 to 4 capitals | `src/enhance/vocab.ts` | `w.ids.prefixes === null ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes)` → `w.ids.prefixes === null ? '[A-Z]{1,5}' : anyOf(w.ids.prefixes)` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter" |
+| L2-T7a-M115 | an ID ends at the end, white space or , . : ; ) | `src/enhance/vocab.ts` | ``     id: new RegExp(`^(${idBody})(?=$\|[\\s,.:;)])`), `` → ``     id: new RegExp(`^(${idBody})`), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter" |
+| L2-T7a-M116 | ids false: no IDs at all | `src/enhance/vocab.ts` | `  const idHead = w.ids === false ? null :` → `  const idHead = w.ids === false ? '[A-Z]{1,4}' :` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the ID grammar with prefixes, and off" |
+| L2-T7a-M117 | ID prefixes narrow the grammar | `src/enhance/vocab.ts` | `w.ids.prefixes === null ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes)` → `w.ids.prefixes === null \|\| true ? '[A-Z]{1,4}' : anyOf(w.ids.prefixes)` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the ID grammar with prefixes, and off" |
+| L2-T7a-M118 | idScan is global and fresh | `src/enhance/vocab.ts` | ``     idScan: () => new RegExp(`\\b(${idBody})\\b`, 'g'), `` → ``     idScan: () => new RegExp(`\\b(${idBody})\\b`), `` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the ID grammar: 1 to 4 capitals, an optional dash, a number with dotted or dashed parts, an optional letter"; "the ID grammar with prefixes, and off" |
+| L2-T7a-M119 | a rule ID opens with two or more capitals | `src/enhance/vocab.ts` | `  const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{2,}' : anyOf(w.ruleIds.prefixes);` → `  const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{1,}' : anyOf(w.ruleIds.prefixes);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the rule-ID grammar: two or more capitals, then dash-separated parts of capitals or digits; prefixes narrow it" |
+| L2-T7a-M120 | rule-ID prefixes narrow the grammar | `src/enhance/vocab.ts` | `  const ruleHead = w.ruleIds.prefixes === null ? '[A-Z]{2,}' : anyOf(w.ruleIds.prefixes);` → `  const ruleHead = '[A-Z]{2,}';` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the rule-ID grammar: two or more capitals, then dash-separated parts of capitals or digits; prefixes narrow it" |
 | L2-T7a-M121 | a qualifier is a whole word before the mention | `src/enhance/vocab.ts` | ``     qualifier: new RegExp(`\\b${anyOf(w.qualifiers)}\\s+$`, 'i'), `` → ``     qualifier: new RegExp(`${anyOf(w.qualifiers)}\\s+$`, 'i'), `` | `test/enhance-seams.test.ts`: no tests. "(the file failed to load)" |
-| L2-T7a-M122 | an addressee matches in any case | `src/enhance/vocab.ts` | ``     addressee: new RegExp(`\\b${anyOf(w.addressees)}\\b`, 'i'), `` → ``     addressee: new RegExp(`\\b${anyOf(w.addressees)}\\b`), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "qualifiers and addressees, as whole words" |
-| L2-T7a-M123 | a task heading's word keeps its case | `src/enhance/vocab.ts` | ``       task: new RegExp(`^(${anyOf(w.plan.task)})\\s+([\\w.-]*\\w)\\s*[:.—–]\\s*`), `` → ``       task: new RegExp(`^(${anyOf(w.plan.task)})\\s+([\\w.-]*\\w)\\s*[:.—–]\\s*`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the plan grammars: a task heading, a step title with its owner, and the owner line" |
-| L2-T7a-M124 | an owner column opens with a whole word | `src/enhance/vocab.ts` | ``       who: new RegExp(`^${anyOf(w.attention.who)}\\b`, 'i'), `` → ``       who: new RegExp(`^${anyOf(w.attention.who)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "attention words" |
-| L2-T7a-M125 | a blocking answer opens with a whole word | `src/enhance/vocab.ts` | ``       blocking: new RegExp(`^\\s*${anyOf(w.attention.blocking)}\\b`, 'i'), `` → ``       blocking: new RegExp(`^\\s*${anyOf(w.attention.blocking)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "attention words" |
-| L2-T7a-M126 | an item key: a capital and 1 to 9 capitals or digits | `src/enhance/vocab.ts` | `    itemKey: /^[A-Z][A-Z0-9]{1,9}-\d+$/,` → `    itemKey: /^[A-Z][A-Z0-9]{1,10}-\d+$/,` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "git's merge subjects, the commit-prefix rule and the item-key shape" |
-| L2-T7a-M127 | an item heading takes a space or a dash between words | `src/enhance/vocab.ts` | `words.map((h) => h.split(/[- ]+/).map(literal).join('[- ]')).join('\|')` → `words.map((h) => literal(h)).join('\|')` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "git's merge subjects, the commit-prefix rule and the item-key shape" |
+| L2-T7a-M122 | an addressee matches in any case | `src/enhance/vocab.ts` | ``     addressee: new RegExp(`\\b${anyOf(w.addressees)}\\b`, 'i'), `` → ``     addressee: new RegExp(`\\b${anyOf(w.addressees)}\\b`), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "qualifiers and addressees, as whole words" |
+| L2-T7a-M123 | a task heading's word keeps its case | `src/enhance/vocab.ts` | ``       task: new RegExp(`^(${anyOf(w.plan.task)})\\s+([\\w.-]*\\w)\\s*[:.—–]\\s*`), `` → ``       task: new RegExp(`^(${anyOf(w.plan.task)})\\s+([\\w.-]*\\w)\\s*[:.—–]\\s*`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the plan grammars: a task heading, a step title with its owner, and the owner line" |
+| L2-T7a-M124 | an owner column opens with a whole word | `src/enhance/vocab.ts` | ``       who: new RegExp(`^${anyOf(w.attention.who)}\\b`, 'i'), `` → ``       who: new RegExp(`^${anyOf(w.attention.who)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "attention words" |
+| L2-T7a-M125 | a blocking answer opens with a whole word | `src/enhance/vocab.ts` | ``       blocking: new RegExp(`^\\s*${anyOf(w.attention.blocking)}\\b`, 'i'), `` → ``       blocking: new RegExp(`^\\s*${anyOf(w.attention.blocking)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "attention words" |
+| L2-T7a-M126 | an item key: a capital and 1 to 9 capitals or digits | `src/enhance/vocab.ts` | `    itemKey: /^[A-Z][A-Z0-9]{1,9}-\d+$/,` → `    itemKey: /^[A-Z][A-Z0-9]{1,10}-\d+$/,` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "git's merge subjects, the commit-prefix rule and the item-key shape" |
+| L2-T7a-M127 | an item heading takes a space or a dash between words | `src/enhance/vocab.ts` | `words.map((h) => h.split(/[- ]+/).map(literal).join('[- ]')).join('\|')` → `words.map((h) => literal(h)).join('\|')` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "git's merge subjects, the commit-prefix rule and the item-key shape" |
 | L2-T7a-M128 | a path may end in a fragment | `src/enhance/vocab.ts` | `` (?:#[\\w-]+)?$`), `` → `` $`), `` | `test/enhance-seams.test.ts`: no tests. "(the file failed to load)" |
-| L2-T7a-M129 | a glossary term header is the whole header | `src/enhance/vocab.ts` | ``       term: new RegExp(`^${anyOf(w.glossary.termHeaders)}$`, 'i'), `` → ``       term: new RegExp(`^${anyOf(w.glossary.termHeaders)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the glossary contract" |
-| L2-T7a-M130 | a merge subject is git's own, case and all | `src/enhance/vocab.ts` | ``     merge: new RegExp(`^Merge ${anyOf(w.mergeForms)}\\b`), `` → ``     merge: new RegExp(`^Merge ${anyOf(w.mergeForms)}\\b`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "git's merge subjects, the commit-prefix rule and the item-key shape" |
-| L2-T7a-M131 | the compiled lists are frozen | `src/enhance/vocab.ts` | `  const list = (a: readonly string[]): string[] => Object.freeze([...a]) as string[];` → `  const list = (a: readonly string[]): string[] => [...a];` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the defaults are a fresh object each time, and the compiled vocabulary holds a frozen copy" |
-| L2-T7a-M132 | the compiled lists are copies | `src/enhance/vocab.ts` | `  const list = (a: readonly string[]): string[] => Object.freeze([...a]) as string[];` → `  const list = (a: readonly string[]): string[] => a as string[];` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the defaults are a fresh object each time, and the compiled vocabulary holds a frozen copy" |
+| L2-T7a-M129 | a glossary term header is the whole header | `src/enhance/vocab.ts` | ``       term: new RegExp(`^${anyOf(w.glossary.termHeaders)}$`, 'i'), `` → ``       term: new RegExp(`^${anyOf(w.glossary.termHeaders)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the glossary contract" |
+| L2-T7a-M130 | a merge subject is git's own, case and all | `src/enhance/vocab.ts` | ``     merge: new RegExp(`^Merge ${anyOf(w.mergeForms)}\\b`), `` → ``     merge: new RegExp(`^Merge ${anyOf(w.mergeForms)}\\b`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "git's merge subjects, the commit-prefix rule and the item-key shape" |
+| L2-T7a-M131 | the compiled lists are frozen | `src/enhance/vocab.ts` | `  const list = (a: readonly string[]): string[] => Object.freeze([...a]) as string[];` → `  const list = (a: readonly string[]): string[] => [...a];` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the defaults are a fresh object each time, and the compiled vocabulary holds a frozen copy" |
+| L2-T7a-M132 | the compiled lists are copies | `src/enhance/vocab.ts` | `  const list = (a: readonly string[]): string[] => Object.freeze([...a]) as string[];` → `  const list = (a: readonly string[]): string[] => a as string[];` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the defaults are a fresh object each time, and the compiled vocabulary holds a frozen copy" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -1320,14 +1348,14 @@ clip, hash, document order, the colour key and the frozen helpers.
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M133 | clip never cuts a surrogate pair | `src/enhance/text.ts` | `  if (end > 0 && isHighSurrogate(t.charCodeAt(end - 1))) end -= 1; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "clip never cuts a surrogate pair in two" |
-| L2-T7a-M134 | clip cuts at a space only past 60% | `src/enhance/text.ts` | `  let end = space > n * 0.6 ? space : n - 1;` → `  let end = space > 0 ? space : n - 1;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "clip collapses white space and cuts at a word, with an ellipsis, within n code units" |
-| L2-T7a-M135 | clip drops trailing punctuation before the ellipsis | `src/enhance/text.ts` | `` .replace(/[\s,;:(—–-]+$/, '')}…`; `` → `` }…`; `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "clip collapses white space and cuts at a word, with an ellipsis, within n code units" |
-| L2-T7a-M136 | clip collapses white space | `src/enhance/text.ts` | `  const t = s.replace(/\s+/g, ' ').trim();` → `  const t = s.trim();` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "clip collapses white space and cuts at a word, with an ellipsis, within n code units" |
-| L2-T7a-M137 | hash is FNV-1a | `src/enhance/text.ts` | `    h = Math.imul(h, 16777619);` → `    h = Math.imul(h, 16777617);` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "hash is the 32-bit FNV-1a of the code units, in base 36" |
-| L2-T7a-M138 | before reads the following bit | `src/enhance/text.ts` | `const FOLLOWING = 4;` → `const FOLLOWING = 2;` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "before and inOrder follow document order" |
-| L2-T7a-M139 | the colour key's swatches are hidden from assistive technology | `src/enhance/text.ts` | `` chrome(doc, 'span', { className: `sw k-${e.role}`, attrs: { 'aria-hidden': 'true' } }) `` → `` chrome(doc, 'span', { className: `sw k-${e.role}` }) `` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "colourKey builds the key as chrome: one item per colour role, with a swatch and a neutral label" |
-| L2-T7a-M140 | the text helpers are frozen | `src/enhance/text.ts` | `  return Object.freeze({ clip, hash, before, inOrder, colourKey });` → `  return { clip, hash, before, inOrder, colourKey };` | `test/enhance-seams.test.ts`: 1 failed \| 87 passed (88). "the context carries the helpers, frozen, the same functions" |
+| L2-T7a-M133 | clip never cuts a surrogate pair | `src/enhance/text.ts` | `  if (end > 0 && isHighSurrogate(t.charCodeAt(end - 1))) end -= 1; ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "clip never cuts a surrogate pair in two" |
+| L2-T7a-M134 | clip cuts at a space only past 60% | `src/enhance/text.ts` | `  let end = space > n * 0.6 ? space : n - 1;` → `  let end = space > 0 ? space : n - 1;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "clip collapses white space and cuts at a word, with an ellipsis, within n code units" |
+| L2-T7a-M135 | clip drops trailing punctuation before the ellipsis | `src/enhance/text.ts` | `` .replace(/[\s,;:(—–-]+$/, '')}…`; `` → `` }…`; `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "clip collapses white space and cuts at a word, with an ellipsis, within n code units" |
+| L2-T7a-M136 | clip collapses white space | `src/enhance/text.ts` | `  const t = s.replace(/\s+/g, ' ').trim();` → `  const t = s.trim();` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "clip collapses white space and cuts at a word, with an ellipsis, within n code units" |
+| L2-T7a-M137 | hash is FNV-1a | `src/enhance/text.ts` | `    h = Math.imul(h, 16777619);` → `    h = Math.imul(h, 16777617);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "hash is the 32-bit FNV-1a of the code units, in base 36" |
+| L2-T7a-M138 | before reads the following bit | `src/enhance/text.ts` | `const FOLLOWING = 4;` → `const FOLLOWING = 2;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "before and inOrder follow document order" |
+| L2-T7a-M139 | the colour key's swatches are hidden from assistive technology | `src/enhance/text.ts` | `` chrome(doc, 'span', { className: `sw k-${e.role}`, attrs: { 'aria-hidden': 'true' } }) `` → `` chrome(doc, 'span', { className: `sw k-${e.role}` }) `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "colourKey builds the key as chrome: one item per colour role, with a swatch and a neutral label" |
+| L2-T7a-M140 | the text helpers are frozen | `src/enhance/text.ts` | `  return Object.freeze({ clip, hash, before, inOrder, colourKey: (doc: Document) => colourKey(doc…` → `  return { clip, hash, before, inOrder, colourKey: (doc: Document) => colourKey(doc, vocab.colour…` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the context carries the helpers, frozen; its colour key is the instance's vocabulary's" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -1393,8 +1421,8 @@ clip, hash, document order, the colour key and the frozen helpers.
     "id": "L2-T7a-M140",
     "guard": "the text helpers are frozen",
     "file": "src/enhance/text.ts",
-    "old": "  return Object.freeze({ clip, hash, before, inOrder, colourKey });",
-    "new": "  return { clip, hash, before, inOrder, colourKey };",
+    "old": "  return Object.freeze({ clip, hash, before, inOrder, colourKey: (doc: Document) => colourKey(doc, vocab.colourKey) });",
+    "new": "  return { clip, hash, before, inOrder, colourKey: (doc: Document) => colourKey(doc, vocab.colourKey) };",
     "tests": "test/enhance-seams.test.ts"
   }
 ]
@@ -1403,32 +1431,32 @@ clip, hash, document order, the colour key and the frozen helpers.
 ## The walls, their sites, and the pack allowlist (L2-T7a-M141 to L2-T7a-M161)
 
 Each new wall (the window, timers, observers, fonts, sizes, lookups, the clock and inline style), the one receiver let
-through (`env`), the exact allowances of env.ts and journal.ts, the language's Date, the dashed module name; then a
+through (the Env), the exact allowances of env.ts and journal.ts, the language's Date, the dashed module name; then a
 use of each refused name put into another file, which the walls catch; and the pack test's allowlist for
 `diagram-tools`.
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T7a-M141 | walls: inline style is refused outside journal.ts | `test/enhance-walls.test.ts` | `const STYLE_MEMBERS: readonly string[] = ['style'];` → `const STYLE_MEMBERS: readonly string[] = [];` | `test/enhance-walls.test.ts`: 3 failed \| 10 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan reads code, not comments or strings, and sees each banned shape" |
-| L2-T7a-M142 | walls: the window is refused outside env.ts | `test/enhance-walls.test.ts` | `  'defaultView', 'view', ⏎ ` → (deleted) | `test/enhance-walls.test.ts`: 3 failed \| 10 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees string keys, keys built at run time, page members, URL and handler attributes, and id matches" |
-| L2-T7a-M143 | walls: timers are refused outside env.ts | `test/enhance-walls.test.ts` | `  'setTimeout', 'clearTimeout', ` → `  'clearTimeout', ` | `test/enhance-walls.test.ts`: 2 failed \| 11 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M144 | walls: observers are refused outside env.ts | `test/enhance-walls.test.ts` | `  'ResizeObserver', 'IntersectionObserver', 'MutationObserver', 'PerformanceObserver', ⏎ ` → (deleted) | `test/enhance-walls.test.ts`: 2 failed \| 11 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M145 | walls: the fonts, media queries and sizes are refused outside env.ts | `test/enhance-walls.test.ts` | `  'fonts', 'matchMedia', 'innerWidth', ` → `  'innerWidth', ` | `test/enhance-walls.test.ts`: 2 failed \| 11 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M146 | walls: a point lookup and computed styles are refused outside env.ts | `test/enhance-walls.test.ts` | `  'elementFromPoint', 'getComputedStyle', ⏎ ` → (deleted) | `test/enhance-walls.test.ts`: 2 failed \| 11 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M147 | walls: env itself is the one receiver let through | `test/enhance-walls.test.ts` | `!/(?:^\|\.)env$/.test(node.expression.getText(sf))` → `true` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M148 | walls: the clock is refused outside env.ts | `test/enhance-walls.test.ts` | `&& node.name.text === 'now') at(node, 'Date.now');` → `&& node.name.text === 'now') void 0;` | `test/enhance-walls.test.ts`: 2 failed \| 11 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M149 | walls: new Date() with no argument is refused | `test/enhance-walls.test.ts` | `&& (node.arguments?.length ?? 0) === 0) at(node, 'new Date()');` → `&& (node.arguments?.length ?? 0) === 0) void 0;` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M150 | walls: a window member by a string key is refused | `test/enhance-walls.test.ts` | `\|\| members.has(key.text) \|\| windowMembers.has(key.text)) at(` → `\|\| members.has(key.text)) at(` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
-| L2-T7a-M151 | walls: env.ts's allowance is exact | `test/enhance-walls.test.ts` | `    '.setTimeout': 3,` → `    '.setTimeout': 4,` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen" |
-| L2-T7a-M152 | walls: journal.ts's allowance is exact | `test/enhance-walls.test.ts` | `  'src/enhance/journal.ts': { '.style': 1 },` → `  'src/enhance/journal.ts': { '.style': 2 },` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen" |
-| L2-T7a-M153 | walls: folds.ts no longer reaches the window | `test/enhance-walls.test.ts` | `  'src/enhance/journal.ts': { '.style': 1 },` → `  'src/enhance/journal.ts': { '.style': 1 }, ⏎   'src/enhance/folds.ts': { '.defaultView': 1 },` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "each allowed site is used exactly as allowed, so an exception cannot widen unseen" |
-| L2-T7a-M154 | walls: the language's Date is allowed | `test/enhance-walls.test.ts` | `'AggregateError', 'Array', 'Boolean', 'Date', 'Error',` → `'AggregateError', 'Array', 'Boolean', 'Error',` | `test/enhance-walls.test.ts`: 2 failed \| 11 passed (13). "no source file names a DOM-library global beyond the language's own objects"; "the language's own objects are allowed; the DOM's clock and timers are not" |
-| L2-T7a-M155 | walls: a dashed module name is a sibling file | `test/enhance-walls.test.ts` | `.filter((spec) => !/^\.\/[a-z]+(?:-[a-z]+)*\.js$/.test(spec))` → `.filter((spec) => !/^\.\/[a-z]+\.js$/.test(spec))` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "every source imports only sibling files of src/enhance, named in lower-case words joined by dashes" |
-| L2-T7a-M156 | site: the window outside env.ts is caught | `src/enhance/folds.ts` | `  ctx.env.onPrint((printing) => {` → `  void root.ownerDocument.defaultView; ⏎   ctx.env.onPrint((printing) => {` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
-| L2-T7a-M157 | site: inline style outside journal.ts is caught | `src/enhance/status.ts` | `  const { root, journal, vocab } = ctx;` → `  const { root, journal, vocab } = ctx; ⏎   void root.style;` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
-| L2-T7a-M158 | site: the clock outside env.ts is caught | `src/enhance/text.ts` | `  let h = 0x811c9dc5;` → `  let h = 0x811c9dc5 + Date.now() * 0;` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
-| L2-T7a-M159 | site: the fonts outside env.ts are caught | `src/enhance/editorial.ts` | `  const doc = root.ownerDocument; ⏎  ⏎   // ── 0.` → `  const doc = root.ownerDocument; ⏎   void doc.fonts; ⏎  ⏎   // ── 0.` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
-| L2-T7a-M160 | site: a timer on an event's window is caught | `src/enhance/scroll.ts` | `  void ctx; ⏎ ` → `  void ctx; ⏎   void ((ctx as unknown as { e: UIEvent }).e.view?.setTimeout); ⏎ ` | `test/enhance-walls.test.ts`: 1 failed \| 12 passed (13). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2-T7a-M141 | walls: inline style is refused outside journal.ts | `test/enhance-walls.test.ts` | `const STYLE_MEMBERS: readonly string[] = ['style'];` → `const STYLE_MEMBERS: readonly string[] = [];` | `test/enhance-walls.test.ts`: 4 failed \| 10 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on"; "the scan reads code, not comments or strings, and sees each banned shape" |
+| L2-T7a-M142 | walls: the window is refused outside env.ts | `test/enhance-walls.test.ts` | `  'defaultView', 'view', 'contentWindow', ⏎ ` → `  'contentWindow', ⏎ ` | `test/enhance-walls.test.ts`: 4 failed \| 10 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on"; "the scan sees string keys, keys built at run time, page members, URL and handler attributes, and id matches" |
+| L2-T7a-M143 | walls: timers are refused outside env.ts | `test/enhance-walls.test.ts` | `  'setTimeout', 'clearTimeout', ` → `  'clearTimeout', ` | `test/enhance-walls.test.ts`: 3 failed \| 11 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M144 | walls: observers are refused outside env.ts | `test/enhance-walls.test.ts` | `  'ResizeObserver', 'IntersectionObserver', 'MutationObserver', 'PerformanceObserver', ⏎ ` → (deleted) | `test/enhance-walls.test.ts`: 2 failed \| 12 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
+| L2-T7a-M145 | walls: the fonts, media queries and sizes are refused outside env.ts | `test/enhance-walls.test.ts` | `  'fonts', 'matchMedia', 'innerWidth', ` → `  'innerWidth', ` | `test/enhance-walls.test.ts`: 3 failed \| 11 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M146 | walls: a point lookup and computed styles are refused outside env.ts | `test/enhance-walls.test.ts` | `  'scrollingElement', 'elementFromPoint', 'getComputedStyle', ⏎ ` → `  'scrollingElement', ⏎ ` | `test/enhance-walls.test.ts`: 3 failed \| 11 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M147 | walls: the Env is the one receiver let through | `test/enhance-walls.test.ts` | `!onEnv(node.expression, node.name.text)` → `true` | `test/enhance-walls.test.ts`: 2 failed \| 12 passed (14). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M148 | walls: the clock is refused outside env.ts | `test/enhance-walls.test.ts` | `        if (p.name.text === 'now') at(p, 'Date.now');` → `        if (p.name.text === 'now') void 0;` | `test/enhance-walls.test.ts`: 2 failed \| 12 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
+| L2-T7a-M149 | walls: new Date() with no argument is refused | `test/enhance-walls.test.ts` | `        if ((p.arguments?.length ?? 0) === 0) at(p, 'new Date()');` → `        if ((p.arguments?.length ?? 0) === 0) void 0;` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
+| L2-T7a-M150 | walls: a window member by a string key is refused | `test/enhance-walls.test.ts` | `\|\| members.has(key.text) \|\| windowMembers.has(key.text)) at(` → `\|\| members.has(key.text)) at(` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
+| L2-T7a-M151 | walls: env.ts's allowance is exact | `test/enhance-walls.test.ts` | `    '.setTimeout': 3,` → `    '.setTimeout': 4,` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen" |
+| L2-T7a-M152 | walls: journal.ts's allowance is exact | `test/enhance-walls.test.ts` | `  'src/enhance/journal.ts': { '.style': 1 },` → `  'src/enhance/journal.ts': { '.style': 2 },` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen" |
+| L2-T7a-M153 | walls: folds.ts no longer reaches the window | `test/enhance-walls.test.ts` | `  'src/enhance/journal.ts': { '.style': 1 },` → `  'src/enhance/journal.ts': { '.style': 1 }, ⏎   'src/enhance/folds.ts': { '.defaultView': 1 },` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen" |
+| L2-T7a-M154 | walls: the language's Date is allowed | `test/enhance-walls.test.ts` | `'AggregateError', 'Array', 'Boolean', 'Date', 'Error',` → `'AggregateError', 'Array', 'Boolean', 'Error',` | `test/enhance-walls.test.ts`: 2 failed \| 12 passed (14). "no source file names a DOM-library global beyond the language's own objects"; "the language's own objects are allowed; the DOM's clock and timers are not" |
+| L2-T7a-M155 | walls: a dashed module name is a sibling file | `test/enhance-walls.test.ts` | `.filter((spec) => !/^\.\/[a-z]+(?:-[a-z]+)*\.js$/.test(spec))` → `.filter((spec) => !/^\.\/[a-z]+\.js$/.test(spec))` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "every source imports only sibling files of src/enhance, named in lower-case words joined by dashes" |
+| L2-T7a-M156 | site: the window outside env.ts is caught | `src/enhance/folds.ts` | `  ctx.env.onPrint((printing) => {` → `  void root.ownerDocument.defaultView; ⏎   ctx.env.onPrint((printing) => {` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2-T7a-M157 | site: inline style outside journal.ts is caught | `src/enhance/status.ts` | `  const { root, journal, vocab } = ctx;` → `  const { root, journal, vocab } = ctx; ⏎   void root.style;` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2-T7a-M158 | site: the clock outside env.ts is caught | `src/enhance/text.ts` | `  let h = 0x811c9dc5;` → `  let h = 0x811c9dc5 + Date.now() * 0;` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2-T7a-M159 | site: the fonts outside env.ts are caught | `src/enhance/editorial.ts` | `  const doc = root.ownerDocument; ⏎  ⏎   // ── 0.` → `  const doc = root.ownerDocument; ⏎   void doc.fonts; ⏎  ⏎   // ── 0.` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
+| L2-T7a-M160 | site: a timer on an event's window is caught | `src/enhance/scroll.ts` | `  void ctx; ⏎ ` → `  void ctx; ⏎   void ((ctx as unknown as { e: UIEvent }).e.view?.setTimeout); ⏎ ` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "no source file names a forbidden identifier, a selector with # or built at run time, or a style string" |
 | L2-T7a-M161 | pack: a dashed module name may be packed | `test/pack.test.ts` | `/^dist\/(?:render\|conformance\|enhance)\/[A-Za-z]+(?:-[a-z]+)*\.(?:js\|d\.ts)$/` → `/^dist\/(?:render\|conformance\|enhance)\/[A-Za-z]+\.(?:js\|d\.ts)$/` | `test/pack.test.ts`: 1 failed \| 9 passed (10). "holds nothing else: no references, scripts, sources, tests, CI files or working papers" |
 
 ### The rows, as `mutate.mjs` reads them
@@ -1447,8 +1475,8 @@ use of each refused name put into another file, which the walls catch; and the p
     "id": "L2-T7a-M142",
     "guard": "walls: the window is refused outside env.ts",
     "file": "test/enhance-walls.test.ts",
-    "old": "  'defaultView', 'view',\n",
-    "new": "",
+    "old": "  'defaultView', 'view', 'contentWindow',\n",
+    "new": "  'contentWindow',\n",
     "tests": "test/enhance-walls.test.ts"
   },
   {
@@ -1479,15 +1507,15 @@ use of each refused name put into another file, which the walls catch; and the p
     "id": "L2-T7a-M146",
     "guard": "walls: a point lookup and computed styles are refused outside env.ts",
     "file": "test/enhance-walls.test.ts",
-    "old": "  'elementFromPoint', 'getComputedStyle',\n",
-    "new": "",
+    "old": "  'scrollingElement', 'elementFromPoint', 'getComputedStyle',\n",
+    "new": "  'scrollingElement',\n",
     "tests": "test/enhance-walls.test.ts"
   },
   {
     "id": "L2-T7a-M147",
-    "guard": "walls: env itself is the one receiver let through",
+    "guard": "walls: the Env is the one receiver let through",
     "file": "test/enhance-walls.test.ts",
-    "old": "!/(?:^|\\.)env$/.test(node.expression.getText(sf))",
+    "old": "!onEnv(node.expression, node.name.text)",
     "new": "true",
     "tests": "test/enhance-walls.test.ts"
   },
@@ -1495,16 +1523,16 @@ use of each refused name put into another file, which the walls catch; and the p
     "id": "L2-T7a-M148",
     "guard": "walls: the clock is refused outside env.ts",
     "file": "test/enhance-walls.test.ts",
-    "old": "&& node.name.text === 'now') at(node, 'Date.now');",
-    "new": "&& node.name.text === 'now') void 0;",
+    "old": "        if (p.name.text === 'now') at(p, 'Date.now');",
+    "new": "        if (p.name.text === 'now') void 0;",
     "tests": "test/enhance-walls.test.ts"
   },
   {
     "id": "L2-T7a-M149",
     "guard": "walls: new Date() with no argument is refused",
     "file": "test/enhance-walls.test.ts",
-    "old": "&& (node.arguments?.length ?? 0) === 0) at(node, 'new Date()');",
-    "new": "&& (node.arguments?.length ?? 0) === 0) void 0;",
+    "old": "        if ((p.arguments?.length ?? 0) === 0) at(p, 'new Date()');",
+    "new": "        if ((p.arguments?.length ?? 0) === 0) void 0;",
     "tests": "test/enhance-walls.test.ts"
   },
   {
@@ -1606,12 +1634,380 @@ use of each refused name put into another file, which the walls catch; and the p
 ]
 ```
 
+## The review's fix round (L2-T7a-M162 to L2-T7a-M200)
+
+The guards the fix round added or re-pinned: a cancelled observer, a canvas that throws, a write asked for once not
+live, the snapshot that wins, the chrome id's form and its refusal after destroy, the print guards of folds, the status
+marks as their own step after the bullet lines, the new word lists and the colour key, and the walls by type (the Env
+exemption, destructured members, the other style routes, the scrolling element, a frame's window, the clock by its name,
+a DOM global) and in a real browser (`important` over an `!important` rule).
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T7a-M162 | a cancelled observer is never started again (its handle cancelled it; teardown no longer tracks it) | `src/enhance/env.ts` | `        if (live() && !cancelled) o.observe(el);` → `        if (live()) o.observe(el);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "an observer cancelled by its own handle observes nothing again, so none is left attached after destroy" |
+| L2-T7a-M163 | textWidth: null when the canvas throws for a context | `src/enhance/env.ts` | `        try { ⏎           canvas = doc.createElement('canvas').getContext('2d'); ⏎         } catc…` → `        canvas = doc.createElement('canvas').getContext('2d');` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "textWidth is null when the canvas refuses a context by throwing" |
+| L2-T7a-M164 | a write asked for once the instance is not live is neither sent nor queued | `src/enhance/state.ts` | `    if (!writer.live()) return; ⏎     const slot = slotOf(storage, key);` → `    const slot = slotOf(storage, key);` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a write asked for once the instance is not live is dropped: a later instance on the same storage never writes it" |
+| L2-T7a-M165 | the snapshot wins over a value that had landed before it was read (was L2P-M87) | `src/enhance/state.ts` | `    const seen = slot?.landed ?? 0;` → `    const seen = 0;` | `test/enhance-state.test.ts`: 1 failed \| 28 passed (29). "a later instance merges with a write still in flight when it started, but not with one its snapshot holds" |
+| L2-T7a-M166 | a chrome id is outside render()'s id alphabet | `src/enhance/lifecycle.ts` | ``     const base = `docreader.${String(no)}.${name}`; `` → ``     const base = `docreader-${String(no)}-${name}`; `` | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "two roots in one document get disjoint ids for the same names"; "skips an id the document already has, inside the root or outside it, and one this instance issued"; "an issued id is one render() never writes, so a root rendered later cannot take it"; "refuses a name that is not 1 to 32 lower-case letters, digits and dashes, starting with a letter" |
+| L2-T7a-M167 | no chrome id is issued once the instance is not live | `src/enhance/lifecycle.ts` | `    if (!live()) throw new Error('docreader: chromeId after a destroy'); ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "an instance's ids are released when it is torn down, and none is issued after" |
+| L2-T7a-M168 | print: a block the host hid itself while folded stays hidden (was L2P-M56) | `src/enhance/folds.ts` | `        if (printing && m.getAttribute('hidden') === 'until-found')` → `        if (printing)` | `test/enhance-folds.test.ts`: 1 failed \| 14 passed (15). "a block the host hid itself while its section was folded stays hidden when printing starts" |
+| L2-T7a-M169 | print: a block the host hid while printing is not folded over (was L2P-M57) | `src/enhance/folds.ts` | `        else if (!printing && !m.hasAttribute('hidden'))` → `        else if (!printing)` | `test/enhance-folds.test.ts`: 1 failed \| 14 passed (15). "a block the host hid while printing is not folded over when printing ends" |
+| L2-T7a-M170 | the status marks are a step of the build (after tables, before ids) | `src/enhance/features.ts` | `    { name: 'status', build: buildStatusMarks }, ⏎ ` → (deleted) | `test/enhance-seams.test.ts`: 4 failed \| 92 passed (96). "the defaults reproduce the prototype's marks"; "a vocabulary of other words marks those words instead, and the header words decide the column"; "the ruling-header words are the vocabulary's too"; "lists every feature once, in the reference's build order" |
+| L2-T7a-M171 | a cell's lead text is its first bullet line's | `src/enhance/status.ts` | `  for (let c = host.firstChild; c !== null && c.nodeType === 1 && (c as Element).classList.contai…` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a cell split into bullet lines (section 8, Task 10) is marked by its first line's text, past a hidden bullet" |
+| L2-T7a-M172 | the lead text passes over hidden chrome only: chrome | `src/enhance/status.ts` | `(n as Element).hasAttribute(CHROME_ATTR) && (n as Element).hasAttribute('hidden')` → `(n as Element).hasAttribute('hidden')` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a leading element that is not hidden chrome is no status word, as before" |
+| L2-T7a-M173 | the lead text passes over hidden chrome only: hidden | `src/enhance/status.ts` | `(n as Element).hasAttribute(CHROME_ATTR) && (n as Element).hasAttribute('hidden')` → `(n as Element).hasAttribute(CHROME_ATTR)` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "a leading element that is not hidden chrome is no status word, as before" |
+| L2-T7a-M174 | the default glossary alias stop words | `src/enhance/vocab.ts` | `      aliasStops: ['the', 'for', 'a', 'an'],` → `      aliasStops: ['the', 'for'],` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "the glossary contract" |
+| L2-T7a-M175 | an alias stop word is the whole text | `src/enhance/vocab.ts` | ``       aliasStop: new RegExp(`^${anyOf(w.glossary.aliasStops)}$`, 'i'), `` → ``       aliasStop: new RegExp(`^${anyOf(w.glossary.aliasStops)}`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the glossary contract" |
+| L2-T7a-M176 | the default name joins of a term cell | `src/enhance/vocab.ts` | `      nameJoins: ['and'],` → `      nameJoins: [],` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "the glossary contract" |
+| L2-T7a-M177 | a term cell's names split on the join words | `src/enhance/vocab.ts` | `\|\\s+${anyOf(w.glossary.nameJoins)}\\s+` → (deleted) | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the glossary contract" |
+| L2-T7a-M178 | the default rule-ID list joins | `src/enhance/vocab.ts` | `    ruleIdJoins: ['and'],` → `    ruleIdJoins: [],` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "the rule-ID list joins and the decisions table's header word" |
+| L2-T7a-M179 | a rule-ID list join may follow a comma | `src/enhance/vocab.ts` | `\|,\\s*${anyOf(w.ruleIdJoins)})` → `)` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the rule-ID list joins and the decisions table's header word" |
+| L2-T7a-M180 | the default decisions-table header word | `src/enhance/vocab.ts` | `    decisionTableHeaders: ['status'],` → `    decisionTableHeaders: ['statuses'],` | `test/enhance-seams.test.ts`: 2 failed \| 94 passed (96). "the defaults are the documented lists"; "the rule-ID list joins and the decisions table's header word" |
+| L2-T7a-M181 | a decisions-table header word may sit inside a word | `src/enhance/vocab.ts` | `    decisionTable: new RegExp(anyOf(w.decisionTableHeaders), 'i'),` → ``     decisionTable: new RegExp(`\\b${anyOf(w.decisionTableHeaders)}\\b`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the rule-ID list joins and the decisions table's header word" |
+| L2-T7a-M182 | a step's owner names the reader by the word anywhere | `src/enhance/vocab.ts` | `    addresseeAnywhere: new RegExp(anyOf(w.addressees), 'i'),` → ``     addresseeAnywhere: new RegExp(`\\b${anyOf(w.addressees)}\\b`, 'i'), `` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "qualifiers and addressees, as whole words" |
+| L2-T7a-M183 | a step owner's words are literal | `src/enhance/vocab.ts` | `    addresseeAnywhere: new RegExp(anyOf(w.addressees), 'i'),` → `    addresseeAnywhere: new RegExp(w.addressees.join('\|'), 'i'),` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "qualifiers and addressees, as whole words" |
+| L2-T7a-M184 | the colour key's labels are the reference layout's | `src/enhance/vocab.ts` | `      { role: 'nav', label: 'Links, contents, section numbers' },` → `      { role: 'nav', label: 'Links, contents and section numbers' },` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "colourKey builds the key as chrome: one item per colour role, with a swatch and a neutral label" |
+| L2-T7a-M185 | the context's colour key is the instance vocabulary's | `src/enhance/text.ts` | `colourKey: (doc: Document) => colourKey(doc, vocab.colourKey) });` → `colourKey: (doc: Document) => colourKey(doc) });` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "the context carries the helpers, frozen; its colour key is the instance's vocabulary's" |
+| L2-T7a-M186 | walls: the Env exemption needs the Env type | `test/enhance-walls.test.ts` | `    if (sym?.getName() !== 'Env' \|\| !(sym.declarations ?? []).some((d) => rel(d.getSourceFile().f…` → (deleted) | `test/enhance-walls.test.ts`: 2 failed \| 12 passed (14). "each allowed site is used exactly as allowed, so an exception cannot widen unseen"; "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M187 | walls: the Env exemption covers only the names Env declares | `test/enhance-walls.test.ts` | `    return checker.getPropertiesOfType(type).some((p) => p.getName() === name);` → `    return true;` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M188 | walls: a destructured member is refused | `test/enhance-walls.test.ts` | `        if (members.has(text) \|\| (windowMembers.has(text) && !onEnv(node.parent, text))) at(` → `        if ((windowMembers.has(text) && !onEnv(node.parent, text))) at(` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M189 | walls: a destructured window member is refused | `test/enhance-walls.test.ts` | `        if (members.has(text) \|\| (windowMembers.has(text) && !onEnv(node.parent, text))) at(` → `        if (members.has(text)) at(` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M190 | walls: a destructured Env member is let through | `test/enhance-walls.test.ts` | `(windowMembers.has(text) && !onEnv(node.parent, text))` → `windowMembers.has(text)` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M191 | walls: a destructured key built at run time is refused | `test/enhance-walls.test.ts` | `      } else if (ts.isComputedPropertyName(key) && builtString(key.expression)) at(key, '{ [<memb…` → `      } ⏎ ` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M192 | walls: the other style routes are refused | `test/enhance-walls.test.ts` | `const STYLESHEET_MEMBERS: readonly string[] = ['attributeStyleMap', 'styleSheets', 'adoptedStyleS…` → `const STYLESHEET_MEMBERS: readonly string[] = [];` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M193 | walls: the page's scrolling element is refused outside env.ts | `test/enhance-walls.test.ts` | `  'scrollingElement', 'elementFromPoint',` → `  'elementFromPoint',` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M194 | walls: Date() is refused outside env.ts | `test/enhance-walls.test.ts` | `      } else if (ts.isCallExpression(p) && p.expression === node) at(p, 'Date()');` → `      } else if (ts.isCallExpression(p) && p.expression === node) void 0;` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through" |
+| L2-T7a-M195 | walls: Date passed on or read by a key is refused | `test/enhance-walls.test.ts` | `      else at(node, 'Date'); ⏎ ` → (deleted) | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M196 | walls: Date as a type names no clock | `test/enhance-walls.test.ts` | `isValueReference(node) && !inType(node)) {` → `isValueReference(node)) {` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M197 | walls: a member named Date is no reference to it | `test/enhance-walls.test.ts` | `node.text === 'Date' && isValueReference(node) && ` → `node.text === 'Date' && ` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+| L2-T7a-M198 | walls: a global timer in src/enhance is caught (was L2P-M63) | `src/enhance/folds.ts` | `  ctx.env.onPrint((printing) => {` → `  void setTimeout; ⏎   ctx.env.onPrint((printing) => {` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "no source file names a DOM-library global beyond the language's own objects" |
+| L2-T7a-M199 | important beats an id-scoped !important rule, in a real browser | `src/enhance/journal.ts` | `      else style.setProperty(name, value, important ? 'important' : '');` → `      else style.setProperty(name, value);` | `test/browser/seams.test.ts`: 1 failed \| 1 passed \| 2 skipped (4). "setStyle applies under the strict policy, important included, where a style attribute is refused; undo leaves no attribute" |
+| L2-T7a-M200 | walls: a frame's window is refused outside env.ts | `test/enhance-walls.test.ts` | `  'defaultView', 'view', 'contentWindow', ⏎ ` → `  'defaultView', 'view', ⏎ ` | `test/enhance-walls.test.ts`: 1 failed \| 13 passed (14). "the scan sees a destructured member, an alias named env, the other style routes, a frame's window and the clock passed on" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T7a-M162",
+    "guard": "a cancelled observer is never started again (its handle cancelled it; teardown no longer tracks it)",
+    "file": "src/enhance/env.ts",
+    "old": "        if (live() && !cancelled) o.observe(el);",
+    "new": "        if (live()) o.observe(el);",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M163",
+    "guard": "textWidth: null when the canvas throws for a context",
+    "file": "src/enhance/env.ts",
+    "old": "        try {\n          canvas = doc.createElement('canvas').getContext('2d');\n        } catch {\n          canvas = null;\n        }",
+    "new": "        canvas = doc.createElement('canvas').getContext('2d');",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M164",
+    "guard": "a write asked for once the instance is not live is neither sent nor queued",
+    "file": "src/enhance/state.ts",
+    "old": "    if (!writer.live()) return;\n    const slot = slotOf(storage, key);",
+    "new": "    const slot = slotOf(storage, key);",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M165",
+    "guard": "the snapshot wins over a value that had landed before it was read (was L2P-M87)",
+    "file": "src/enhance/state.ts",
+    "old": "    const seen = slot?.landed ?? 0;",
+    "new": "    const seen = 0;",
+    "tests": "test/enhance-state.test.ts"
+  },
+  {
+    "id": "L2-T7a-M166",
+    "guard": "a chrome id is outside render()'s id alphabet",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "    const base = `docreader.${String(no)}.${name}`;",
+    "new": "    const base = `docreader-${String(no)}-${name}`;",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M167",
+    "guard": "no chrome id is issued once the instance is not live",
+    "file": "src/enhance/lifecycle.ts",
+    "old": "    if (!live()) throw new Error('docreader: chromeId after a destroy');\n",
+    "new": "",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M168",
+    "guard": "print: a block the host hid itself while folded stays hidden (was L2P-M56)",
+    "file": "src/enhance/folds.ts",
+    "old": "        if (printing && m.getAttribute('hidden') === 'until-found')",
+    "new": "        if (printing)",
+    "tests": "test/enhance-folds.test.ts"
+  },
+  {
+    "id": "L2-T7a-M169",
+    "guard": "print: a block the host hid while printing is not folded over (was L2P-M57)",
+    "file": "src/enhance/folds.ts",
+    "old": "        else if (!printing && !m.hasAttribute('hidden'))",
+    "new": "        else if (!printing)",
+    "tests": "test/enhance-folds.test.ts"
+  },
+  {
+    "id": "L2-T7a-M170",
+    "guard": "the status marks are a step of the build (after tables, before ids)",
+    "file": "src/enhance/features.ts",
+    "old": "    { name: 'status', build: buildStatusMarks },\n",
+    "new": "",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M171",
+    "guard": "a cell's lead text is its first bullet line's",
+    "file": "src/enhance/status.ts",
+    "old": "  for (let c = host.firstChild; c !== null && c.nodeType === 1 && (c as Element).classList.contains('cell-line'); c = host.firstChild) host = c as Element;\n",
+    "new": "",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M172",
+    "guard": "the lead text passes over hidden chrome only: chrome",
+    "file": "src/enhance/status.ts",
+    "old": "(n as Element).hasAttribute(CHROME_ATTR) && (n as Element).hasAttribute('hidden')",
+    "new": "(n as Element).hasAttribute('hidden')",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M173",
+    "guard": "the lead text passes over hidden chrome only: hidden",
+    "file": "src/enhance/status.ts",
+    "old": "(n as Element).hasAttribute(CHROME_ATTR) && (n as Element).hasAttribute('hidden')",
+    "new": "(n as Element).hasAttribute(CHROME_ATTR)",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M174",
+    "guard": "the default glossary alias stop words",
+    "file": "src/enhance/vocab.ts",
+    "old": "      aliasStops: ['the', 'for', 'a', 'an'],",
+    "new": "      aliasStops: ['the', 'for'],",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M175",
+    "guard": "an alias stop word is the whole text",
+    "file": "src/enhance/vocab.ts",
+    "old": "      aliasStop: new RegExp(`^${anyOf(w.glossary.aliasStops)}$`, 'i'),",
+    "new": "      aliasStop: new RegExp(`^${anyOf(w.glossary.aliasStops)}`, 'i'),",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M176",
+    "guard": "the default name joins of a term cell",
+    "file": "src/enhance/vocab.ts",
+    "old": "      nameJoins: ['and'],",
+    "new": "      nameJoins: [],",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M177",
+    "guard": "a term cell's names split on the join words",
+    "file": "src/enhance/vocab.ts",
+    "old": "|\\\\s+${anyOf(w.glossary.nameJoins)}\\\\s+",
+    "new": "",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M178",
+    "guard": "the default rule-ID list joins",
+    "file": "src/enhance/vocab.ts",
+    "old": "    ruleIdJoins: ['and'],",
+    "new": "    ruleIdJoins: [],",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M179",
+    "guard": "a rule-ID list join may follow a comma",
+    "file": "src/enhance/vocab.ts",
+    "old": "|,\\\\s*${anyOf(w.ruleIdJoins)})",
+    "new": ")",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M180",
+    "guard": "the default decisions-table header word",
+    "file": "src/enhance/vocab.ts",
+    "old": "    decisionTableHeaders: ['status'],",
+    "new": "    decisionTableHeaders: ['statuses'],",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M181",
+    "guard": "a decisions-table header word may sit inside a word",
+    "file": "src/enhance/vocab.ts",
+    "old": "    decisionTable: new RegExp(anyOf(w.decisionTableHeaders), 'i'),",
+    "new": "    decisionTable: new RegExp(`\\\\b${anyOf(w.decisionTableHeaders)}\\\\b`, 'i'),",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M182",
+    "guard": "a step's owner names the reader by the word anywhere",
+    "file": "src/enhance/vocab.ts",
+    "old": "    addresseeAnywhere: new RegExp(anyOf(w.addressees), 'i'),",
+    "new": "    addresseeAnywhere: new RegExp(`\\\\b${anyOf(w.addressees)}\\\\b`, 'i'),",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M183",
+    "guard": "a step owner's words are literal",
+    "file": "src/enhance/vocab.ts",
+    "old": "    addresseeAnywhere: new RegExp(anyOf(w.addressees), 'i'),",
+    "new": "    addresseeAnywhere: new RegExp(w.addressees.join('|'), 'i'),",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M184",
+    "guard": "the colour key's labels are the reference layout's",
+    "file": "src/enhance/vocab.ts",
+    "old": "      { role: 'nav', label: 'Links, contents, section numbers' },",
+    "new": "      { role: 'nav', label: 'Links, contents and section numbers' },",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M185",
+    "guard": "the context's colour key is the instance vocabulary's",
+    "file": "src/enhance/text.ts",
+    "old": "colourKey: (doc: Document) => colourKey(doc, vocab.colourKey) });",
+    "new": "colourKey: (doc: Document) => colourKey(doc) });",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M186",
+    "guard": "walls: the Env exemption needs the Env type",
+    "file": "test/enhance-walls.test.ts",
+    "old": "    if (sym?.getName() !== 'Env' || !(sym.declarations ?? []).some((d) => rel(d.getSourceFile().fileName) === 'src/enhance/env.ts')) return false;\n",
+    "new": "",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M187",
+    "guard": "walls: the Env exemption covers only the names Env declares",
+    "file": "test/enhance-walls.test.ts",
+    "old": "    return checker.getPropertiesOfType(type).some((p) => p.getName() === name);",
+    "new": "    return true;",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M188",
+    "guard": "walls: a destructured member is refused",
+    "file": "test/enhance-walls.test.ts",
+    "old": "        if (members.has(text) || (windowMembers.has(text) && !onEnv(node.parent, text))) at(",
+    "new": "        if ((windowMembers.has(text) && !onEnv(node.parent, text))) at(",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M189",
+    "guard": "walls: a destructured window member is refused",
+    "file": "test/enhance-walls.test.ts",
+    "old": "        if (members.has(text) || (windowMembers.has(text) && !onEnv(node.parent, text))) at(",
+    "new": "        if (members.has(text)) at(",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M190",
+    "guard": "walls: a destructured Env member is let through",
+    "file": "test/enhance-walls.test.ts",
+    "old": "(windowMembers.has(text) && !onEnv(node.parent, text))",
+    "new": "windowMembers.has(text)",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M191",
+    "guard": "walls: a destructured key built at run time is refused",
+    "file": "test/enhance-walls.test.ts",
+    "old": "      } else if (ts.isComputedPropertyName(key) && builtString(key.expression)) at(key, '{ [<member built at run time>] }');\n",
+    "new": "      }\n",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M192",
+    "guard": "walls: the other style routes are refused",
+    "file": "test/enhance-walls.test.ts",
+    "old": "const STYLESHEET_MEMBERS: readonly string[] = ['attributeStyleMap', 'styleSheets', 'adoptedStyleSheets', 'insertRule'];",
+    "new": "const STYLESHEET_MEMBERS: readonly string[] = [];",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M193",
+    "guard": "walls: the page's scrolling element is refused outside env.ts",
+    "file": "test/enhance-walls.test.ts",
+    "old": "  'scrollingElement', 'elementFromPoint',",
+    "new": "  'elementFromPoint',",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M194",
+    "guard": "walls: Date() is refused outside env.ts",
+    "file": "test/enhance-walls.test.ts",
+    "old": "      } else if (ts.isCallExpression(p) && p.expression === node) at(p, 'Date()');",
+    "new": "      } else if (ts.isCallExpression(p) && p.expression === node) void 0;",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M195",
+    "guard": "walls: Date passed on or read by a key is refused",
+    "file": "test/enhance-walls.test.ts",
+    "old": "      else at(node, 'Date');\n",
+    "new": "",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M196",
+    "guard": "walls: Date as a type names no clock",
+    "file": "test/enhance-walls.test.ts",
+    "old": "isValueReference(node) && !inType(node)) {",
+    "new": "isValueReference(node)) {",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M197",
+    "guard": "walls: a member named Date is no reference to it",
+    "file": "test/enhance-walls.test.ts",
+    "old": "node.text === 'Date' && isValueReference(node) && ",
+    "new": "node.text === 'Date' && ",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M198",
+    "guard": "walls: a global timer in src/enhance is caught (was L2P-M63)",
+    "file": "src/enhance/folds.ts",
+    "old": "  ctx.env.onPrint((printing) => {",
+    "new": "  void setTimeout;\n  ctx.env.onPrint((printing) => {",
+    "tests": "test/enhance-walls.test.ts"
+  },
+  {
+    "id": "L2-T7a-M199",
+    "guard": "important beats an id-scoped !important rule, in a real browser",
+    "file": "src/enhance/journal.ts",
+    "old": "      else style.setProperty(name, value, important ? 'important' : '');",
+    "new": "      else style.setProperty(name, value);",
+    "tests": "test/browser/seams.test.ts"
+  },
+  {
+    "id": "L2-T7a-M200",
+    "guard": "walls: a frame's window is refused outside env.ts",
+    "file": "test/enhance-walls.test.ts",
+    "old": "  'defaultView', 'view', 'contentWindow',\n",
+    "new": "  'defaultView', 'view',\n",
+    "tests": "test/enhance-walls.test.ts"
+  }
+]
+```
 ## Visual check
 
 Task 7a builds no visible part: its check is that the demo is pixel-identical to the demo before it. The demo
 (`scripts/demo/build.mjs`, the core sample) was built from the branch's parent, before any change of this task, and
-again from its final code; `scripts/visual/compare.mjs --offline` compared the two at 1440×1000 and 390×844, in light,
-dark and sans with wide. In each of the six combinations, 48 blocks are in both pages, with 0 differences in any box
-or computed value, and the two full-page screenshots are byte-identical (the same sha256 for each pair). The
-comparison with the reference layout is not repeated here: Task 6's report stands, since nothing it measures moved.
-
+again from its final code, after the fix round; `scripts/visual/compare.mjs --offline` compared the two at 1440×1000
+and 390×844, in light, dark and sans with wide. In each of the six combinations, 48 blocks are in both pages, with 0
+differences in any box or computed value, and the two full-page screenshots are byte-identical (the same sha256 for
+each pair). The comparison with the reference layout is not repeated here: Task 6's report stands, since nothing it
+measures moved.
