@@ -426,10 +426,9 @@ function build(inst: Instance, opts: NormalizedOptions): void {
 function changePrefs(inst: Instance, change: Partial<Prefs>): void {
   const state = inst.state;
   if (state === null) return;
-  const generation = inst.generation;
   const was = state.prefs;
-  const changed = state.setPrefs(change); // may call the host's set()
-  if (inst.generation !== generation || !isLive(inst)) return;
+  const changed = state.setPrefs(change); // may call the host's set(), which may destroy the instance
+  // Once it is not live, the journal refuses the attributes, the events emit nothing and no relayout runs.
   applyPrefs(inst.control.journal, inst.root, state.prefs);
   const ctx = inst.ctx;
   if (!changed || ctx === null) return;

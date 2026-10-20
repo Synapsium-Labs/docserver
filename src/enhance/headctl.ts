@@ -9,13 +9,14 @@
 //                              slot per heading. `h` is a heading (h1 to h6) inside the root. Everything goes through
 //                              the journal, so destroy removes it; nothing is written once the instance is not live.
 //   The first call for a heading also names it: a heading with neither aria-label nor aria-labelledby gets an
-//   aria-label of its own text, read before the controls exist (each child's text trimmed, joined by spaces), so its
-//   accessible name is its title and never a control's label. (The reference wrapped the title in a span with a made-up
+//   aria-label of its own text, read before the controls exist (each child's text trimmed, joined by spaces, a chrome
+//   button left out: the plan's Outline button sits in a task heading before its controls), so its accessible name is
+//   its title and never a control's label. (The reference wrapped the title in a span with a made-up
 //   id and pointed aria-labelledby at it; a label needs no id that could collide with the document's.)
 // The controls of a heading are kept in a WeakMap, never in an expando on the element.
 //
 // Import-inert: declarations only.
-import { chrome, type Journal } from './journal.js';
+import { CHROME_ATTR, chrome, type Journal } from './journal.js';
 
 /** The slots of a heading's controls, in their order. */
 export const HEAD_SLOTS = ['anchor', 'mark', 'fold'] as const;
@@ -29,10 +30,11 @@ export interface HeadCtlArgs {
   readonly journal: Journal;
 }
 
-/** A heading's text: each child's text trimmed, joined by spaces. */
+/** A heading's text: each child's text trimmed, joined by spaces; a chrome button (a control) left out. */
 function headingText(h: Element): string {
   const parts: string[] = [];
   for (const n of Array.from(h.childNodes)) {
+    if (n.nodeType === 1 && (n as Element).localName === 'button' && (n as Element).hasAttribute(CHROME_ATTR)) continue;
     const t = (n.textContent ?? '').trim();
     if (t !== '') parts.push(t);
   }

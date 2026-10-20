@@ -997,6 +997,22 @@ describe('headCtl: one .h-ctl per heading, slots in fixed order', () => {
     expect((h3.lastElementChild as Element).className).toBe('h-ctl');
   });
 
+  it('the label leaves out a chrome button the heading holds already (the plan\'s Outline button), and only that', async () => {
+    const root = mount();
+    probe((ctx) => {
+      const h3 = find(ctx.root, 'h3');
+      const doc = ctx.root.ownerDocument;
+      ctx.journal.insert(chrome(doc, 'span', { className: 'task-id', text: 'Task 1' }), h3, h3.firstChild);
+      ctx.journal.insert(chrome(doc, 'button', { className: 'task-open', text: 'Show all' }), h3, null);
+      const own = doc.createElement('button');
+      own.textContent = 'own';
+      h3.append(own); // not chrome: the heading's own (a probe's stand-in)
+      ctx.headCtl(h3, 'mark', chrome(doc, 'button', { className: 'h-mark', text: 'Mark read' }));
+    });
+    await enhance(root);
+    expect(find(root, 'h3').getAttribute('aria-label')).toBe('Task 1 Agreed own');
+  });
+
   it('a heading that already has a label keeps it; destroy removes every control and the label', async () => {
     const root = mount();
     const named = find(root, 'h3');
@@ -1633,7 +1649,7 @@ describe('folds, the page and the prefs: the rest of their guards', () => {
     const bar = chrome(document, 'div');
     ctx.journal.insert(bar, root, code.nextSibling);
     expect(ctx.folds.join(bar, code)).toBe(true);
-    expect(ctx.folds.join(bar, child(root, 'h2', '3-plan').nextElementSibling as Element)).toBe(false);
+    expect(ctx.folds.join(bar, find(root, 'figure'))).toBe(false); // a member of another section: joined already
     expect(ctx.folds.sectionOf(bar)).toBe(child(root, 'h2', '2-design'));
   });
 

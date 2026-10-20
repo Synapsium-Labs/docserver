@@ -120,11 +120,11 @@ export function createNav(args: NavArgs): Nav {
   };
 
   const goTo = (el: Element, how: GoToHow = {}): void => {
-    if (!live() || !root.contains(el)) return;
+    if (!root.contains(el)) return;
     const push = how.push ?? true;
     const focus = how.focus ?? true;
-    reveal(el);
-    if (!live()) return; // a revealer may call the host, which may destroy
+    reveal(el); // does nothing once the instance is not live
+    if (!live()) return; // destroyed before, or by a revealer (which may call the host)
     position.holdBar();
     const target = el as HTMLElement;
     if (typeof target.scrollIntoView === 'function') {
