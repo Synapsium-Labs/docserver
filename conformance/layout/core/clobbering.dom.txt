@@ -1,0 +1,101 @@
+h1
+  "Clobbering"
+p hidden=""
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+p
+  "Every heading and anchor below has an id"…
+h2 .folded aria-label="jump"
+  "jump"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: jump"
+      "Unfold"
+button .fold-note chrome aria-label="Unfold: jump"
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor hidden="until-found"
+p hidden="until-found"
+  "A heading and an anchor named like the q"…
+h2 aria-label="keys"
+  "keys"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: keys"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: keys" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+p
+  "Named like the keys sheet."
+h2 aria-label="xcard"
+  "xcard"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: xcard"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: xcard" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+p
+  "Named like a preview card."
+h2 aria-label="toc-contents"
+  "toc-contents"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: toc-contents"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: toc-contents" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+p
+  "Named like the contents rail."
+h2 .folded aria-label="__proto__"
+  "__proto__"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: __proto__"
+      "Unfold"
+button .fold-note chrome aria-label="Unfold: __proto__"
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor hidden="until-found"
+p hidden="until-found"
+  "Named like the prototype key."
+h2 aria-label="constructor"
+  "constructor"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: constructor"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: constructor" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+span .doc-anchor
+p
+  "Named like two inherited properties."
+h2 aria-label="data-docreader-root"
+  "data-docreader-root"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: data-docreader-root"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: data-docreader-root" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+p
+  "Named like the root's own mark."

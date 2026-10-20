@@ -1,7 +1,8 @@
-// The verdict ratchet and the golden-move rule (docserver L1, Task 11; architecture section D). The pure
-// functions of scripts/ratchet.mjs, one case per kind of weakening and the tightenings that pass; then the
-// command itself, run with this Node against throwaway git repositories made in the system temp directory
-// (git's global and system configuration are ignored there, and nothing is pushed or fetched).
+// The verdict ratchet and the golden-move rule (docserver L1, Task 11; architecture section D), and the Level 2
+// rules (docserver L2, Task 6): a moved layout snapshot is named in a Layout-moved trailer, and a hostile layout case
+// is never removed or edited. The pure functions of scripts/ratchet.mjs, one case per kind of weakening and the
+// tightenings that pass; then the command itself, run with this Node against throwaway git repositories made in the
+// system temp directory (git's global and system configuration are ignored there, and nothing is pushed or fetched).
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,8 +12,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   checkGoldenMoves,
   checkHostileInputs,
+  checkLayoutHostile,
+  checkLayoutMoves,
   compareVerdicts,
   expectedIds,
+  hostileLayoutIds,
+  layoutChanges,
+  movedLayoutIds,
   parseTrailerIds,
   type RatchetEntry,
 } from '../scripts/ratchet.mjs';
@@ -151,6 +157,57 @@ describe('parseTrailerIds and expectedIds', () => {
   });
 });
 
+describe('Level 2: layout moves and hostile layout cases', () => {
+  const L = 'conformance/layout/';
+  const changes = layoutChanges(
+    [`M\t${L}core/a.dom.txt`, `A\t${L}core/new.dom.txt`, `D\t${L}core/gone.dom.txt`, `T\t${L}core/b.dom.txt`, `M\t${L}core/c.md`, `M\tREADME.md`, `M\t${L}core/x/deep.md`, ''].join('\n'),
+  );
+
+  it('reads the name-status lines under conformance/layout/ only, as case ids and kinds', () => {
+    expect(changes.map((c) => [c.status, c.id, c.kind])).toEqual([
+      ['M', 'core/a', 'dom.txt'],
+      ['A', 'core/new', 'dom.txt'],
+      ['D', 'core/gone', 'dom.txt'],
+      ['T', 'core/b', 'dom.txt'],
+      ['M', 'core/c', 'md'],
+    ]);
+  });
+
+  it('a modified, retyped or deleted snapshot is a move; an added one is a new case', () => {
+    expect(movedLayoutIds(changes)).toEqual(['core/a', 'core/b', 'core/gone']);
+  });
+
+  it('the trailers name exactly the moved cases', () => {
+    expect(checkLayoutMoves(['core/a'], ['core/a'])).toEqual([]);
+    expect(checkLayoutMoves(['core/a', 'core/b'], ['core/a', 'core/z'])).toEqual([
+      'core/b: its layout snapshot changed, and no Layout-moved trailer names it',
+      'core/z: a Layout-moved trailer names it, and its layout snapshot did not change',
+    ]);
+  });
+
+  it('the hostile cases are those whose options file says hostile: true', () => {
+    const files = [
+      { path: `${L}core/h.options.json`, text: '{"options":{},"scope":["x"],"hostile":true}' },
+      { path: `${L}core/p.options.json`, text: '{"options":{},"scope":["x"]}' },
+      { path: `${L}core/h.md`, text: 'not json' },
+    ];
+    expect(hostileLayoutIds(files)).toEqual(['core/h']);
+    expect(() => hostileLayoutIds([{ path: `${L}core/q.options.json`, text: '{' }])).toThrow(SyntaxError);
+  });
+
+  it('a hostile case is never removed and its input and options never change; its snapshot may move', () => {
+    const at = (status: string, file: string): string => `${status}\t${L}core/h.${file}`;
+    const verdict = (...lines: string[]): string[] => checkLayoutHostile(['core/h'], layoutChanges(lines.join('\n')));
+    expect(verdict(at('M', 'dom.txt'))).toEqual([]);
+    expect(verdict(at('M', 'md'))).toEqual(["core/h: a hostile layout case's input or options changed (add a new case instead)"]);
+    expect(verdict(at('M', 'options.json'))).toEqual(["core/h: a hostile layout case's input or options changed (add a new case instead)"]);
+    for (const file of ['md', 'options.json', 'dom.txt']) {
+      expect(verdict(at('D', file))).toEqual(['core/h: a hostile layout case was removed (a hostile case is never removed)']);
+    }
+    expect(checkLayoutHostile(['core/h'], layoutChanges(`M\t${L}core/p.md`))).toEqual([]);
+  });
+});
+
 describe('the shipped hostile.json', () => {
   it('keeps every verdict against itself', () => {
     const shipped = JSON.parse(
@@ -212,9 +269,9 @@ describe('the ratchet command', () => {
     const dir = repo();
     commit(dir, { 'README.md': 'x\n' }, 'start');
     commit(dir, { 'conformance/hostile.json': hostile(1000) }, 'verdicts');
-    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 0 verdicts kept, 0 golden moves named\n', err: '' });
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 0 verdicts kept, 0 golden moves named, 0 hostile layout cases kept, 0 layout moves named\n', err: '' });
     commit(dir, { 'README.md': 'y\n' }, 'readme');
-    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 1 verdicts kept, 0 golden moves named\n', err: '' });
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 1 verdicts kept, 0 golden moves named, 0 hostile layout cases kept, 0 layout moves named\n', err: '' });
   });
 
   it('a weaker verdict exits 1 and names it; a tighter one passes', () => {
@@ -242,7 +299,7 @@ describe('the ratchet command', () => {
       err: 'ratchet: b: a Goldens-moved trailer names it, and its expected files did not change\n',
     });
     git(dir, 'commit', '-q', '--amend', '-m', 'move a golden\n\nGoldens-moved: a\nCo-Authored-By: Test <noreply@example.invalid>');
-    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 0 verdicts kept, 1 golden moves named\n', err: '' });
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 0 verdicts kept, 1 golden moves named, 0 hostile layout cases kept, 0 layout moves named\n', err: '' });
   });
 
   it('on a branch, only the branch is read: a move on the base after the fork is not the branch\'s', () => {
@@ -253,7 +310,7 @@ describe('the ratchet command', () => {
     git(dir, 'checkout', '-q', 'main');
     commit(dir, { 'conformance/expected/a.html': '<p>2</p>\n' }, 'move on main\n\nGoldens-moved: a');
     git(dir, 'checkout', '-q', 'topic');
-    expect(ratchet(dir, '--base', 'main')).toEqual({ status: 0, out: 'ratchet: 0 verdicts kept, 0 golden moves named\n', err: '' });
+    expect(ratchet(dir, '--base', 'main')).toEqual({ status: 0, out: 'ratchet: 0 verdicts kept, 0 golden moves named, 0 hostile layout cases kept, 0 layout moves named\n', err: '' });
   });
 
   it('an edited input of a hostile case exits 1 and names it; a new case beside it passes', () => {
@@ -261,7 +318,7 @@ describe('the ratchet command', () => {
     const verdicts = `${JSON.stringify([{ id: 'h-case', verdict: { outcome: 'rendered', exact: true } }])}\n`;
     commit(dir, { 'conformance/hostile.json': verdicts, 'conformance/corpus/h-case.md': '<script>x</script>\n' }, 'start');
     commit(dir, { 'conformance/corpus/h-case-2.md': 'more\n' }, 'a new input');
-    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 1 verdicts kept, 0 golden moves named\n', err: '' });
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({ status: 0, out: 'ratchet: 1 verdicts kept, 0 golden moves named, 0 hostile layout cases kept, 0 layout moves named\n', err: '' });
     commit(dir, { 'conformance/corpus/h-case.md': 'x\n' }, 'weaken the input');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
       status: 1,
@@ -277,6 +334,76 @@ describe('the ratchet command', () => {
     const r = ratchet(dir, '--base', 'HEAD^');
     expect(r.status).toBe(1);
     expect(r.err).toContain('SyntaxError');
+  });
+
+  const layoutCase = (hostile: boolean, dom: string): Record<string, string> => ({
+    'conformance/layout/core/a.md': '# A\n',
+    'conformance/layout/core/a.options.json': JSON.stringify({ options: {}, scope: ['x'], ...(hostile ? { hostile: true } : {}) }),
+    'conformance/layout/core/a.dom.txt': dom,
+  });
+  const moved = (n: number, kept = 0): { status: number; out: string; err: string } => ({
+    status: 0,
+    out: `ratchet: 0 verdicts kept, 0 golden moves named, ${String(kept)} hostile layout cases kept, ${String(n)} layout moves named\n`,
+    err: '',
+  });
+
+  it('a moved layout snapshot needs a Layout-moved trailer naming exactly its case; a new case needs none', () => {
+    const dir = repo();
+    commit(dir, { 'conformance/hostile.json': '[]\n', ...layoutCase(false, 'h1\n') }, 'start');
+    commit(dir, { 'conformance/layout/core/b.md': '# B\n', 'conformance/layout/core/b.options.json': '{"options":{},"scope":["x"]}', 'conformance/layout/core/b.dom.txt': 'h1\n' }, 'a new case');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(0));
+    commit(dir, { 'conformance/layout/core/a.dom.txt': 'h2\n' }, 'move a snapshot');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: core/a: its layout snapshot changed, and no Layout-moved trailer names it\n',
+    });
+    git(dir, 'commit', '-q', '--amend', '-m', 'move a snapshot\n\nLayout-moved: core/a, core/b');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: core/b: a Layout-moved trailer names it, and its layout snapshot did not change\n',
+    });
+    git(dir, 'commit', '-q', '--amend', '-m', 'move a snapshot\n\nLayout-moved: core/a\nCo-Authored-By: Test <noreply@example.invalid>');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(1));
+  });
+
+  it('a hostile layout case is never removed or edited; its snapshot moves with a trailer; another case may change', () => {
+    const dir = repo();
+    commit(dir, { 'conformance/hostile.json': '[]\n', ...layoutCase(true, 'h1\n'), 'conformance/layout/core/p.md': '# P\n', 'conformance/layout/core/p.options.json': '{"options":{},"scope":["x"]}', 'conformance/layout/core/p.dom.txt': 'h1\n' }, 'start');
+    commit(dir, { 'conformance/layout/core/p.md': '# P, edited\n' }, 'edit an ordinary case');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(0, 1));
+    commit(dir, { 'conformance/layout/core/a.dom.txt': 'h2\n' }, 'move the hostile snapshot\n\nLayout-moved: core/a');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(1, 1));
+    commit(dir, { 'conformance/layout/core/a.md': '# A, weaker\n' }, 'edit the hostile input');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: "ratchet: core/a: a hostile layout case's input or options changed (add a new case instead)\n",
+    });
+    commit(dir, { 'conformance/layout/core/a.md': '# A\n' }, 'restore');
+    git(dir, 'rm', '-q', 'conformance/layout/core/a.md', 'conformance/layout/core/a.options.json', 'conformance/layout/core/a.dom.txt');
+    git(dir, 'commit', '-q', '-m', 'remove the hostile case\n\nLayout-moved: core/a');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: core/a: a hostile layout case was removed (a hostile case is never removed)\n',
+    });
+  });
+
+  it('a hostile layout case moved to a new name is a removal: renames are not followed', () => {
+    const dir = repo();
+    commit(dir, { 'conformance/hostile.json': '[]\n', ...layoutCase(true, 'h1\n') }, 'start');
+    for (const kind of ['md', 'options.json', 'dom.txt']) {
+      git(dir, 'mv', `conformance/layout/core/a.${kind}`, `conformance/layout/core/renamed.${kind}`);
+    }
+    git(dir, 'commit', '-q', '-m', 'rename the hostile case\n\nLayout-moved: core/a');
+    expect(git(dir, 'diff', '--name-status', 'HEAD^', 'HEAD')).toMatch(/^R100\t/m); // git itself sees renames here
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: core/a: a hostile layout case was removed (a hostile case is never removed)\n',
+    });
   });
 
   it('usage errors exit 2', () => {

@@ -1,0 +1,7 @@
+{
+  "options": {
+    "storageKey": "case",
+    "storage": { "snapshot": { "docreader:doc:case:folds": "[\"2-design\"]" } }
+  },
+  "scope": ["h-ctl", "fold-note", "folded", "[hidden]", "h2[aria-label]"]
+}

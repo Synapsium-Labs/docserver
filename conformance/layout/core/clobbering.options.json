@@ -1,0 +1,8 @@
+{
+  "options": {
+    "storageKey": "case",
+    "storage": { "snapshot": { "docreader:doc:case:folds": "[\"__proto__\",\"jump\",\"toString\"]" } }
+  },
+  "scope": ["h-ctl", "fold-note", "folded", "doc-anchor", "[hidden]", "h2[aria-label]"],
+  "hostile": true
+}

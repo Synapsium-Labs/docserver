@@ -5,9 +5,10 @@
 // (the 100.64/10 block) addresses, e-mail addresses outside the reserved example domains and noreply, and
 // credential shapes. It scans the tree: every file of the checkout, minus the root .git (a directory, or in a
 // linked worktree a file holding an absolute path), the build outputs that .gitignore keeps out (node_modules,
-// dist, coverage, logs, packed tarballs, and the demo page's demo-out/ at the root), docs/, which holds the
-// programme's working papers and is scrubbed separately before the repository goes public, two named root-level
-// scratch directories that tools create and git never tracks, and the woff2 fonts directly in assets/fonts, which
+// dist, coverage, logs, packed tarballs, the demo page's demo-out/ and the visual comparison's visual-out/ at the
+// root), docs/, which holds the programme's working papers and is scrubbed separately before the repository goes
+// public, two named root-level scratch directories that tools create and git never tracks, and the woff2 fonts
+// directly in assets/fonts, which
 // are binary and pinned by hash instead. It walks the directory rather than asking git, so it works in a copy that has no .git;
 // where a .git exists, a case checks that the scratch list hides no tracked path. The root-level skips apply at
 // the root only: a nested directory of the same name is scanned. Its own synthetic positives are built at run
@@ -29,7 +30,10 @@ const ROOT_SKIP: Readonly<Record<string, string>> = {
   '.superpowers': 'scratch that a planning workflow creates and git never tracks',
   'graphify-out': 'scratch that a code-graph tool creates and git never tracks',
   'demo-out': 'the demo page scripts/demo/build.mjs writes (copies of the assets among it); git-ignored',
+  'visual-out': 'the screenshots and reports scripts/visual/compare.mjs writes (a measured page may name anything); git-ignored',
 };
+/** The ROOT_SKIP entries that a script of this repository writes, so .gitignore must keep them out of git. */
+const WRITTEN = ['demo-out', 'visual-out'];
 /** Files never read as text, by name: ignored logs, editor litter and packed tarballs. */
 const SKIP_FILE = /(?:\.log|\.tgz|^\.DS_Store)$/;
 /**
@@ -161,7 +165,7 @@ describe('public-ready: the scanner', () => {
     }
     expect(
       files.filter(
-        (f) => /^(?:node_modules|dist|docs|\.git|\.superpowers|graphify-out|demo-out)\//.test(f) || f === '.git' || f.endsWith('.tgz') || SKIP_PATH.test(f),
+        (f) => /^(?:node_modules|dist|docs|\.git|\.superpowers|graphify-out|demo-out|visual-out)\//.test(f) || f === '.git' || f.endsWith('.tgz') || SKIP_PATH.test(f),
       ),
     ).toEqual([]);
   });
@@ -190,7 +194,13 @@ describe('public-ready: the walk skips the root entries only', () => {
   const hit = `${j('/ho', 'me/someone/x')}\n`;
 
   it('skips a root .git file, a root .git directory and each named root scratch directory', () => {
-    const files = { '.superpowers/sdd/x.md': hit, 'graphify-out/graph.json': hit, 'src/a.ts': 'export {};\n' };
+    const files = {
+      '.superpowers/sdd/x.md': hit,
+      'graphify-out/graph.json': hit,
+      'demo-out/index.html': hit,
+      'visual-out/report.txt': hit,
+      'src/a.ts': 'export {};\n',
+    };
     expect(withTree({ ...files, '.git': hit }, (root) => [scannedFiles(root, root), foundIn(root)])).toEqual([['src/a.ts'], []]);
     expect(withTree({ ...files, '.git/config': hit }, (root) => [scannedFiles(root, root), foundIn(root)])).toEqual([['src/a.ts'], []]);
   });
@@ -206,9 +216,15 @@ describe('public-ready: the walk skips the root entries only', () => {
   });
 
   it('a nested directory that shares a skipped name, and a nested .git file or directory, are scanned', () => {
-    const nested = ['src/.superpowers/x', 'src/graphify-out/x', 'src/.git', 'sub/.git/config'];
+    const nested = ['src/.superpowers/x', 'src/graphify-out/x', 'src/.git', 'sub/.git/config', 'scripts/visual/visual-out/x', 'test/demo-out/x'];
     const found = withTree(Object.fromEntries(nested.map((f) => [f, hit])), foundIn);
     expect(found.map((f) => f.split(':')[0])).toEqual([...nested].sort());
+  });
+
+  it('each root directory a script of this repository writes is git-ignored, so it never reaches a commit', () => {
+    const ignored = readFileSync(path.join(ROOT, '.gitignore'), 'utf8').split('\n').map((l) => l.trim());
+    expect(WRITTEN.filter((d) => !ignored.includes(`${d}/`))).toEqual([]);
+    expect(WRITTEN.filter((d) => !Object.hasOwn(ROOT_SKIP, d))).toEqual([]);
   });
 
   // Where a .git exists (CI's checkout, a worktree), the list must not hide anything git tracks. A copy made without

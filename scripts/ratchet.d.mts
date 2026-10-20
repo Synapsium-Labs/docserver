@@ -13,3 +13,17 @@ export declare function checkGoldenMoves(changedIds: readonly string[], trailerI
 export declare function checkHostileInputs(base: readonly RatchetEntry[], changedPaths: readonly string[]): string[];
 export declare function parseTrailerIds(log: string): string[];
 export declare function expectedIds(paths: readonly string[]): string[];
+
+/** One change under conformance/layout/, from `git diff --name-status`. */
+export interface LayoutChange {
+  readonly status: string;
+  readonly path: string;
+  readonly id: string;
+  readonly kind: 'md' | 'options.json' | 'dom.txt';
+}
+
+export declare function layoutChanges(nameStatus: string): LayoutChange[];
+export declare function movedLayoutIds(changes: readonly LayoutChange[]): string[];
+export declare function checkLayoutMoves(movedIds: readonly string[], trailerIds: readonly string[]): string[];
+export declare function hostileLayoutIds(files: readonly { readonly path: string; readonly text: string }[]): string[];
+export declare function checkLayoutHostile(hostileIds: readonly string[], changes: readonly LayoutChange[]): string[];

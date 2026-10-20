@@ -1,0 +1,290 @@
+dl hidden=""
+  div
+    dt
+      "type"
+    dd
+      "spec"
+  div
+    dt
+      "area"
+    dd
+      "reading layout"
+  div
+    dt
+      "status"
+    dd
+      "draft"
+  div
+    dt
+      "rules"
+    dd
+      "R1, R2"
+  div
+    dt
+      "tags"
+    dd
+      "example, demo"
+h1
+  "Example spec"
+p hidden=""
+  strong
+    "Spec"
+  "· · Status: ·"
+  strong
+    "Owner:"
+"2026-10-19Draft project-a team"
+h2
+  "In short"
+p
+  "This example spec shows how the reading "…
+  strong
+    "R1"
+  "says a reader sees the title first, and"
+  strong
+    "R2"
+  "says a section can fold. Check the table"…
+h2 aria-label="1. Context"
+  "1. Context"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Context"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: Context" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+p
+  "Readers open a spec to decide something,"…
+  a
+    "link to the next section"
+  ", some"
+  code
+    "inline code"
+  ", and a footnote"
+  sup
+    a
+      "[1]"
+  "to check the marker."
+p
+  "A longer paragraph makes the measure and"…
+blockquote
+  p
+    "A quoted line sets the voice of the docu"…
+h2 .folded aria-label="2. Design"
+  "2. Design"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: Design"
+      "Unfold"
+button .fold-note chrome aria-label="Unfold: Design"
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+p hidden="until-found"
+  "The design has three parts, and each par"…
+ul hidden="until-found"
+  li
+    "The renderer turns Markdown into safe ma"…
+  li
+    "The enhancer builds the title block, the"…
+  li
+    "The stylesheet gives the page its look a"…
+p hidden="until-found"
+  "A fenced code block shows how a host wou"…
+div hidden="until-found"
+  pre
+    code
+      span
+        "import"
+      "{ render }"
+      span
+        "from"
+      span
+        "'@example/docs/render'"
+      ";"
+      span
+        "import"
+      "{ enhance }"
+      span
+        "from"
+      span
+        "'@example/docs/enhance'"
+      ";"
+      span
+        "const"
+      "result ="
+      span
+        "render"
+      "(markdown);"
+      span
+        "const"
+      "ready ="
+      span
+        "true"
+      ";"
+      span
+        "const"
+      "root ="
+      span
+        "document"
+      "."
+      span
+        "createElement"
+      "("
+      span
+        "'main'"
+      ");"
+      span
+        "show"
+      "(root, result."
+      span
+        "html"
+      ");"
+      span
+        "// the host inserts the safe html"
+      span
+        "// Start the layout; the title comes fro"…
+      span
+        "await"
+      span
+        "enhance"
+      "(root, {"
+      span
+        "info"
+      ": {"
+      span
+        "title"
+      ": result."
+      span
+        "meta"
+      "."
+      span
+        "title"
+      "} });"
+div hidden="until-found"
+  p
+    "Note"
+  p
+    "An alert draws attention to one fact. Th"…
+div hidden="until-found"
+  p
+    "Warning"
+  p
+    "A warning is rarer than a note, and it s"…
+h2 aria-label="3. Decisions"
+  "3. Decisions"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Decisions"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: Decisions" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+p
+  "Each decision has a status, and the stat"…
+div
+  table
+    thead
+      tr
+        th
+          "#"
+        th
+          "Decision"
+        th
+          "Chosen, and why"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "D1"
+        td
+          "Keep the warm palette"
+        td
+          "The reading page stays recognisable"
+        td
+          "Agreed"
+      tr
+        td
+          "D2"
+        td
+          "Fold sections by default"
+        td
+          "Long specs stay short to scan"
+        td
+          "Proposed"
+      tr
+        td
+          "D3"
+        td
+          "Add a rules index"
+        td
+          "Out of scope for this example"
+        td
+          "Later"
+      tr
+        td
+          "D4"
+        td
+          "Drop the old layout"
+        td
+          "Nothing else reads it any more"
+        td
+          "Rejected"
+h2 aria-label="4. Open questions"
+  "4. Open questions"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Open questions"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: Open questions" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+p
+  "Two things are still open. Neither block"…
+ol
+  li
+    "Should a fold remember its state across "…
+  li
+    "Should the stylesheet ship a print layou"…
+h2 aria-label="Where things stand"
+  "Where things stand"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Where things stand"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: Where things stand" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+h3
+  "Agreed"
+ul
+  li
+    "R1: the title block comes first."
+  li
+    "D1: the warm palette stays."
+h3
+  "Waiting on you"
+ul
+  li
+    "D2: whether sections fold by default."
+  li
+    "Q1: the fold memory question in section "…
+h3
+  "Later"
+ul
+  li
+    "D3: a rules index."
+  li
+    "A print layout."
+hr
+section
+  ol
+    li
+      p
+        "A footnote holds a source or a caveat th"…
+        a
+          "↩︎"

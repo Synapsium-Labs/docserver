@@ -1,0 +1,65 @@
+h1
+  "Anchors"
+p hidden=""
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+p
+  "Each anchor below has an id that a page,"…
+h2 aria-label="First section"
+  "First section"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: First section"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: First section" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+p
+  "An anchor named like the quick jump."
+h2 .folded aria-label="Second section"
+  "Second section"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: Second section"
+      "Unfold"
+button .fold-note chrome aria-label="Unfold: Second section"
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor hidden="until-found"
+span .doc-anchor hidden="until-found"
+p hidden="until-found"
+  "Two anchors named like the keys sheet an"…
+h2 aria-label="Third section"
+  "Third section"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Third section"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: Third section" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+span .doc-anchor
+span .doc-anchor
+p
+  "Named like the contents rail and two pro"…
+h2 aria-label="Fourth section"
+  "Fourth section"
+  span .h-ctl chrome
+    button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Fourth section"
+      "Fold"
+button .fold-note chrome aria-label="Unfold: Fourth section" hidden=""
+  span .fn-t chrome
+    "Folded"
+  span .fn-s chrome
+    "Show"
+span .doc-anchor
+span .doc-anchor
+p
+  "Named like an inherited property and the"…
