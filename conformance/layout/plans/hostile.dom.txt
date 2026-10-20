@@ -1,0 +1,172 @@
+button .outline-btn chrome aria-pressed="true"
+  "Outline"
+h1
+  "Hostile plan"
+h2 .task aria-label="Task __proto__: A prototype key as a num"…
+  span .task-id chrome
+    "Task __proto__"
+    span .tmeta chrome
+      "4 steps"
+    span .tmeta chrome
+      "constructor"
+  ": A prototype key as a number"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+p .task-part
+  "Who: constructor."
+ul .task-part
+  li .attn
+    input aria-label="Step __proto__: A prototype key as a ste"…
+    span .step-no chrome
+      "Step __proto__"
+      span .who chrome
+        "you"
+    strong
+      "(): A prototype key as a step"
+  li
+    input aria-label="Step toString: Another"
+    span .step-no chrome
+      "Step toString"
+      span .who chrome
+        "constructor"
+    strong
+      "(): Another"
+  li .attn
+    input aria-label="Step 3: An owner of 24 characters"
+    span .step-no chrome
+      "Step 3"
+      span .who chrome
+        "yyyyyyyyyyyyyyyyyyyy you"
+    strong
+      "(): An owner of 24 characters"
+  li
+    input aria-label="Step 4 (yyyyyyyyyyyyyyyyyyyyy you): An o"…
+    strong
+      "Step 4 (yyyyyyyyyyyyyyyyyyyyy you): An o"…
+h2 .task aria-label="Task __proto__: The same number again"
+  span .task-id chrome
+    "Task __proto__"
+    span .tmeta chrome
+      "16 steps"
+    span .tmeta.yours chrome
+      "you"
+  ": The same number again"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+p .task-part
+  "Who: you. More text after the owner."
+ul .task-part
+  li
+    input aria-label="Step 1: Part 1"
+    span .step-no chrome
+      "Step 1"
+    strong
+      ": Part 1"
+  li
+    input aria-label="Step 2: Part 2"
+    span .step-no chrome
+      "Step 2"
+    strong
+      ": Part 2"
+  li
+    input aria-label="Step 3: Part 3"
+    span .step-no chrome
+      "Step 3"
+    strong
+      ": Part 3"
+  li
+    input aria-label="Step 4: Part 4"
+    span .step-no chrome
+      "Step 4"
+    strong
+      ": Part 4"
+  li
+    input aria-label="Step 5: Part 5"
+    span .step-no chrome
+      "Step 5"
+    strong
+      ": Part 5"
+  li
+    input aria-label="Step 6: Part 6"
+    span .step-no chrome
+      "Step 6"
+    strong
+      ": Part 6"
+  li
+    input aria-label="Step 7: Part 7"
+    span .step-no chrome
+      "Step 7"
+    strong
+      ": Part 7"
+  li
+    input aria-label="Step 8: Part 8"
+    span .step-no chrome
+      "Step 8"
+    strong
+      ": Part 8"
+  li
+    input aria-label="Step 9: Part 9"
+    span .step-no chrome
+      "Step 9"
+    strong
+      ": Part 9"
+  li
+    input aria-label="Step 10: Part 10"
+    span .step-no chrome
+      "Step 10"
+    strong
+      ": Part 10"
+  li
+    input aria-label="Step 11: Part 11"
+    span .step-no chrome
+      "Step 11"
+    strong
+      ": Part 11"
+  li
+    input aria-label="Step 12: Part 12"
+    span .step-no chrome
+      "Step 12"
+    strong
+      ": Part 12"
+  li
+    input aria-label="Step 13: Part 13"
+    span .step-no chrome
+      "Step 13"
+    strong
+      ": Part 13"
+  li
+    input aria-label="Step 14: Part 14"
+    span .step-no chrome
+      "Step 14"
+    strong
+      ": Part 14"
+  li
+    input aria-label="Step 15: Part 15"
+    span .step-no chrome
+      "Step 15"
+    strong
+      ": Part 15"
+  li
+    input aria-label="Step 16: Part 16"
+    span .step-no chrome
+      "Step 16"
+    strong
+      ": Part 16"
+h2 aria-label="outline-btn"
+  "outline-btn"
+h3 .task aria-label="Task task-open: A heading named like the"…
+  span .task-id chrome
+    "Task task-open"
+  ": A heading named like the chrome"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+h3
+  "Task 9: an anchor before the word"
+h3
+  strong
+    "Task 10:"
+  "in bold"
+h2 aria-label="task-part"
+  "task-part"
+p
+  "Who: you."
