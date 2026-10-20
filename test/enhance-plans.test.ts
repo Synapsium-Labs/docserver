@@ -12,7 +12,6 @@ import { destroyEnhancement, enhance, type EnhanceOptions, type ReaderStorage } 
 import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR, chrome } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
-import { OUTLINE, OUTLINE_MIN_STEPS } from '../src/enhance/plans.js';
 import type { RelayoutReason } from '../src/enhance/registry.js';
 import { docKey } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
@@ -240,6 +239,10 @@ const wait = (ms: number): Promise<void> =>
     setTimeout(r, ms);
   });
 
+/** The per-document state name of the outline mode, and the steps a plan needs for it (plans exports build only, C49). */
+const OUTLINE = 'outline';
+const OUTLINE_MIN_STEPS = 20;
+
 /** A storage whose snapshot holds `stored` under the plan's outline key (storageKey "k"), recording every set(). */
 function storageWith(stored: string | undefined): { storage: ReaderStorage; sets: [string, string | null][] } {
   const sets: [string, string | null][] = [];
@@ -342,6 +345,22 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
     expect(ctxOf(root).plan.tasks).toHaveLength(1);
   });
 
+  it('a task heading is named as headCtl names a heading: a chrome button left out, text in other chrome kept', async () => {
+    beforePlans((ctx) => {
+      // An earlier feature wraps the title's last word in a chrome span and adds a chrome button to the heading.
+      const h = heading(ctx.root, 'h2', 'Task 3');
+      const text = h.firstChild as Text;
+      const word = ctx.journal.split(text, 'Task 3: Ship '.length);
+      ctx.journal.wrap([word], chrome(ctx.root.ownerDocument, 'span', { className: 'probe-word' }));
+      ctx.journal.insert(chrome(ctx.root.ownerDocument, 'button', { className: 'probe-btn', text: 'Copy' }), h, null);
+    });
+    const root = mount();
+    await enhance(root);
+    const h = heading(root, 'h2', 'Task 3');
+    expect(h.classList.contains('task')).toBe(true);
+    expect(h.getAttribute('aria-label')).toBe('Task 3: Ship it');
+  });
+
   it('a heading keeps a label it already has, by aria-label or aria-labelledby', async () => {
     const root = mount();
     const h = heading(root, 'h3', 'Task 1:');
@@ -400,6 +419,11 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
         '',
         '1. [ ] **Step 1: An ordered step**',
         '',
+        '### Task 4: D',
+        '',
+        'Who: the build',
+        'team. More.',
+        '',
       ].join('\n'),
     );
     const t0 = performance.now();
@@ -409,6 +433,7 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
     expect(metas(0)).toEqual(['tmeta yours|You, Again']);
     expect(metas(1)).toEqual([]); // a plain list holds no steps
     expect(metas(2)).toEqual(['tmeta|1 step']); // an ordered task list does
+    expect(metas(3)).toEqual(['tmeta|the build team']); // a soft-wrapped owner line, its white space squashed
   });
 });
 
@@ -550,7 +575,6 @@ describe('steps: numbers, owners and bodies', () => {
 
 describe('outline mode (the reference layout, section 23)', () => {
   it(`starts at ${String(OUTLINE_MIN_STEPS)} steps: below that, no parts, no buttons, no tool and no key`, async () => {
-    expect(OUTLINE_MIN_STEPS).toBe(20);
     const short = mount(stepsDoc(19));
     await enhance(short);
     const s = ctxOf(short);
@@ -634,6 +658,27 @@ describe('outline mode (the reference layout, section 23)', () => {
     key(document.body, 'o');
     expect(root.classList.contains('outline')).toBe(false);
     expect(sets).toEqual([[docKey('k', OUTLINE), null]]);
+  });
+
+  it('a stored outline is applied only when the reader can turn it off: with neither the bar nor the keyboard it is left as stored', async () => {
+    const opts = (o: EnhanceOptions): EnhanceOptions => ({ ...o, storage: storageWith('true').storage, storageKey: 'k' });
+    const neither = mount();
+    const { storage, sets } = storageWith('true');
+    await enhance(neither, { chrome: { bar: false }, keyboard: false, storage, storageKey: 'k' });
+    expect(neither.classList.contains('outline')).toBe(false);
+    expect(neither.querySelector('.outline-btn')).toBeNull();
+    key(document.body, 'o');
+    expect(neither.classList.contains('outline')).toBe(false);
+    await destroyEnhancement(neither);
+    expect(sets).toEqual([]); // left as stored, for a reader that can leave it
+    const keysOnly = mount();
+    await enhance(keysOnly, opts({ chrome: { bar: false } }));
+    expect(keysOnly.classList.contains('outline')).toBe(true);
+    await destroyEnhancement(keysOnly);
+    const barOnly = mount();
+    await enhance(barOnly, opts({ keyboard: false }));
+    expect(barOnly.classList.contains('outline')).toBe(true);
+    expect(toolOf(barOnly)?.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('a stored value other than true is no outline, and a short plan never reads the key', async () => {
@@ -861,14 +906,36 @@ describe('teardown, names and safety', () => {
     await enhance(root);
     const h2 = heading(root, 'h2', 'Task 3');
     const fold = h2.querySelector('.h-fold');
-    const names = (): (string | null | undefined)[] => [h2.getAttribute('aria-label'), fold?.getAttribute('aria-label'), heading(root, 'h3', 'Task 1').getAttribute('aria-label')];
-    const want = ['Task 3: Ship it', 'Fold or unfold: Ship it', 'Task 1: Set up the project'];
-    expect(names()).toEqual(want);
+    const note = h2.nextElementSibling;
+    expect(note?.className).toBe('fold-note');
+    const names = (): (string | null | undefined)[] => [
+      h2.getAttribute('aria-label'),
+      heading(root, 'h3', 'Task 1').getAttribute('aria-label'),
+      fold?.getAttribute('aria-label'),
+      note?.getAttribute('aria-label'),
+    ];
+    const before = names();
+    // Plans' own names, exactly; the fold's are folds.ts's (see the known failure below), so only what they leave out.
+    expect(before.slice(0, 2)).toEqual(['Task 3: Ship it', 'Task 1: Set up the project']);
+    for (const n of before) expect(n).not.toMatch(/Show all|Outline/);
     key(document.body, 'o');
     click(h2.querySelector('.task-open') as Element);
-    expect(names()).toEqual(want);
-    const note = h2.nextElementSibling;
-    expect([note?.className, note?.getAttribute('aria-label')]).toEqual(['fold-note', 'Unfold: Ship it']);
+    expect(names()).toEqual(before);
+  });
+
+  // KNOWN FAILURE, an open point for the coordinator: the reference named an h2 task's fold by the heading's label,
+  // taken before the task badge existed ("Fold or unfold: Task 3: Ship it"). folds.ts (Task 7b's file) names it from
+  // the heading's text with all chrome left out, and plans, built before it, has moved "Task 3" into a chrome badge,
+  // so the fold reads "Fold or unfold: Ship it". When folds.ts names the fold as the reference did, this case goes red:
+  // turn it into a plain it().
+  it.fails('an h2 task\'s fold is named as the reference named it, its task number included', async () => {
+    const root = mount();
+    await enhance(root);
+    const h2 = heading(root, 'h2', 'Task 3');
+    expect([h2.querySelector('.h-fold')?.getAttribute('aria-label'), h2.nextElementSibling?.getAttribute('aria-label')]).toEqual([
+      'Fold or unfold: Task 3: Ship it',
+      'Unfold: Task 3: Ship it',
+    ]);
   });
 
   it('a destroy from the host\'s set() while the outline changes: nothing is written after it, and the root is restored', async () => {

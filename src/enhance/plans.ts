@@ -6,11 +6,13 @@
 // number moves into a badge, `span.task-id` ("Task 3"), and the separator into a hidden chrome span; the rest of the
 // heading stays as written. A heading whose first child is not text (a section number, bold text) is no task. The
 // task's parts are the heading's next siblings, up to a heading of its level or above, or a box that holds one
-// (editorial's "In short", a "Where things stand" box). In them, the badge counts the steps (the direct
+// (editorial's "In short", which holds its h2; a "Where things stand" box can never follow a task, as its h2 comes
+// first). In them, the badge counts the steps (the direct
 // items of a task list among the parts) and names the owner of the first owner line, a paragraph that opens with
 // "Who:" (ctx.vocab.plan.who) and names the owner up to its first full stop; the owner is `.yours` when it names the
 // reader (ctx.vocab.addressee, a whole word). A task heading with no label of its own is named by its own text as
-// written ("Task 3: Build the parser"), taken before the badge exists, so its name never holds the badge's counts.
+// written ("Task 3: Build the parser"), taken before the badge exists, so its name never holds the badge's counts: as
+// headCtl names a heading, a chrome button an earlier feature put in it is left out and any other text is kept.
 //
 // Steps. Every `li.task-list-item` of the document. A step title is the item's first `strong` (or, in a loose list,
 // the first paragraph's) whose first text opens with a step word, a number and an optional owner in brackets of at
@@ -36,7 +38,8 @@
 // (slots.tool('outline'), with chrome.bar) and by the `o` key (keys.bind), keeping the reader's place
 // (position.keep) and asking for a relayout ('outline'); turning it off closes every open task. It is per-document
 // state, `outline` (true, or cleared), written behind; a stored true is applied during this build, so the full plan
-// is never shown first. Reveal (ctx.onReveal) opens the task whose parts hold what it shows, in the outline only.
+// is never shown first, but only when the reader can turn it off again (the bar's tool or the key): with neither, it
+// is left as stored and not read. Reveal (ctx.onReveal) opens the task whose parts hold what it shows, in the outline only.
 //
 // It publishes ctx.plan once, during its build: the task headings and the steps in document order, the count of the
 // reader's own steps, and whether the plan takes the outline mode (Tasks 19 and 20 read it).
@@ -48,10 +51,10 @@ import { CHROME_ATTR, chrome } from './journal.js';
 import type { FeatureContext } from './types.js';
 
 /** The per-document state name of the outline mode. */
-export const OUTLINE = 'outline';
+const OUTLINE = 'outline';
 
 /** A plan with this many steps or more takes the outline mode. */
-export const OUTLINE_MIN_STEPS = 20;
+const OUTLINE_MIN_STEPS = 20;
 
 /** The longest name a step's checkbox takes from its title or text, in code units (the reference's). */
 const STEP_LABEL_MAX = 90;
@@ -79,19 +82,23 @@ interface Outlined {
 const level = (n: Element): number => (/^h[1-6]$/.test(n.localName) ? Number(n.localName.slice(1)) : 0);
 
 /**
- * Whether `n` ends the task whose heading is `h`: a heading of its level or above, or a box (editorial's "In short" or
- * a "Where things stand" box) that holds one, as the heading it wraps would have.
+ * Whether `n` ends the task whose heading is `h`: a heading of its level or above, or editorial's "In short" box, which
+ * holds one (its h2), as the heading it wraps would have. (A "Where things stand" box wraps an h3 after that section's
+ * h2, which has ended every task before it, so no task reaches one.)
  */
 function ends(h: Element, n: Element): boolean {
   const l = level(n);
   if (l > 0) return l <= level(h);
-  return n.matches('.short, .callout') && Array.from(n.querySelectorAll('h1, h2, h3')).some((x) => level(x) <= level(h));
+  return n.matches('.short') && Array.from(n.querySelectorAll('h1, h2, h3')).some((x) => level(x) <= level(h));
 }
 
 /** A text with its white space runs as one space, trimmed. */
 const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
 
 const isChrome = (el: Element): boolean => el.hasAttribute(CHROME_ATTR);
+
+/** A chrome button: a control, never part of a heading's name (headCtl's rule, so a task is named as a heading is). */
+const isControl = (el: Element): boolean => el.localName === 'button' && isChrome(el);
 
 export function build(ctx: FeatureContext): void {
   const { root, journal, vocab, state } = ctx;
@@ -123,7 +130,7 @@ export function build(ctx: FeatureContext): void {
       }
     }
     // Named by its own text, before the badge exists.
-    if (!h.hasAttribute('aria-label') && !h.hasAttribute('aria-labelledby')) journal.setAttribute(h, 'aria-label', headingText(h, isChrome));
+    if (!h.hasAttribute('aria-label') && !h.hasAttribute('aria-labelledby')) journal.setAttribute(h, 'aria-label', headingText(h, isControl));
     // "Task 3" | ": " | "Build the parser": the number into the badge, the separator hidden. The number is the first
     // run of its text after the word (white space, which it cannot hold, comes between).
     const idEnd = text.data.indexOf(no, (m[1] as string).length) + no.length;
@@ -294,6 +301,9 @@ export function build(ctx: FeatureContext): void {
     const o = taskOf(el);
     if (o !== undefined) openTask(o, true);
   });
+
+  // With neither the tool nor the key the reader could not leave a stored outline: it is left as stored, unread.
+  if (ctx.slots === null && !ctx.options.keyboard) return;
 
   // A stored outline, applied now, so the full plan is never shown first. Reading it may run host code (a getter of
   // the snapshot) that destroys the instance: then the journal refuses the root's class, and the tool, which is not
