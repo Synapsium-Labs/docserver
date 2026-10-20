@@ -4,7 +4,8 @@
     "noEmit": false,
     "rootDir": "src",
     "outDir": "dist",
-    "declaration": true
+    "declaration": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src"],
   "exclude": ["test"]

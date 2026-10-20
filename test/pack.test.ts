@@ -1,8 +1,8 @@
 // The packed package (docserver L1, Task 12; architecture section F T12). A clean copy of the checkout is built
 // and packed in a temporary directory, as CI's `npm run build` and `npm pack` would, so this test never writes
-// the checkout's own dist/. The tarball must hold the two entries, their declarations and the whole corpus a
-// consumer's runCorpus reads, and nothing else: no Python references, no scripts, no sources, tests or working
-// papers. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
+// the checkout's own dist/. The tarball must hold the three code entries, their declarations, the whole corpus
+// a consumer's runCorpus reads and the layout's assets (its stylesheet, its fonts, and the licence and notices the
+// fonts travel with), and nothing else: no Python references, no scripts, no sources, tests or working papers. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
 // dependencies, which a consumer's install brings (review 458, F7).
 // Then scripts/consumer-smoke.mjs installs the tarball offline (its dependencies linked from this checkout's
 // node_modules) and imports it by package name, exactly as CI's registry-installed smoke does; a second tarball
@@ -43,10 +43,12 @@ const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under str
 
 /** The only places a packed file may live. */
 const ALLOWED = [
-  /^dist\/(?:render|conformance)\/[A-Za-z]+\.(?:js|d\.ts)$/,
+  /^dist\/(?:render|conformance|enhance)\/[A-Za-z]+\.(?:js|d\.ts)$/,
   /^conformance\/(?:manifest|hostile|DEPARTURES)\.json$/,
   /^conformance\/(?:corpus|expected)\/[A-Za-z0-9/_-]+\.(?:md|html|meta\.json)$/,
-  /^(?:package\.json|README\.md|LICENSE)$/,
+  /^assets\/reader\.css$/,
+  /^assets\/fonts\/[A-Za-z0-9._-]+\.(?:woff2|txt|md)$/,
+  /^(?:package\.json|README\.md|LICENSE|THIRD-PARTY-NOTICES)$/,
 ];
 
 interface Packed {
@@ -142,12 +144,14 @@ describe('npm pack', () => {
     expect(TARBALL).toBe('synapsium-labs-docserver-0.1.0.tgz');
   });
 
-  it('holds both entries with their types, the corpus files, the licence and the readme', () => {
+  it('holds the three entries with their types, the corpus files, the licence, the readme, the assets and their notices', () => {
     for (const must of [
       'dist/render/index.js',
       'dist/render/index.d.ts',
       'dist/conformance/index.js',
       'dist/conformance/index.d.ts',
+      'dist/enhance/index.js',
+      'dist/enhance/index.d.ts',
       'conformance/manifest.json',
       'conformance/hostile.json',
       'conformance/DEPARTURES.json',
@@ -155,6 +159,15 @@ describe('npm pack', () => {
       'LICENSE',
       'README.md',
       'package.json',
+      // the layout's stylesheet, its fonts, and the licence and notices the fonts must travel with
+      'assets/reader.css',
+      'assets/fonts/source-serif-4-latin-opsz-normal.woff2',
+      'assets/fonts/source-serif-4-latin-opsz-italic.woff2',
+      'assets/fonts/source-sans-3-latin-wght-normal.woff2',
+      'assets/fonts/source-sans-3-latin-wght-italic.woff2',
+      'assets/fonts/OFL.txt',
+      'assets/fonts/README.md',
+      'THIRD-PARTY-NOTICES',
     ]) {
       expect(packed.files).toContain(must);
     }
@@ -183,6 +196,9 @@ describe('the packed package, imported by name', () => {
         STRICT_LINE,
         'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
         'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
+        'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs',
+        'consumer-smoke: the stylesheet and the font licence resolve through ./assets/* into node_modules',
+        'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
         'consumer-smoke: 82 of 82 cases passed',
         '',
       ].join('\n'),
@@ -205,14 +221,17 @@ describe('the packed package, imported by name', () => {
 
   it('fails, naming the case, when the packed corpus does not pass', () => {
     const lines = brokenSmoke?.stdout.split('\n') ?? [];
-    expect(lines.slice(0, 5)).toEqual([
+    expect(lines.slice(0, 8)).toEqual([
       'consumer-smoke: installed the tarball offline',
       STRICT_LINE,
       'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
       'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
+      'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs',
+      'consumer-smoke: the stylesheet and the font licence resolve through ./assets/* into node_modules',
+      'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
       'consumer-smoke: 81 of 82 cases passed',
     ]);
-    expect(lines[5]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
+    expect(lines[8]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
     expect(brokenSmoke?.status).toBe(1);
   });
 });

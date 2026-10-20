@@ -7,12 +7,14 @@
 // It makes a throwaway consumer project, installs the packed tarball there, and runs a check from inside that
 // project, so every import resolves by package name through the tarball's own exports map, never through this
 // checkout. The check imports `@synapsium-labs/docserver/render` and `/conformance`, confirms the entry
-// resolved into the consumer's node_modules and that a deep import past the exports map is refused, and runs
-// runCorpus(render, { scanRefs }). Before that it typechecks, with this checkout's own typescript, a consumer
-// file that imports both entries together with every packed declaration file (dist/**/*.d.ts, including those
-// neither entry reaches), under the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a
-// packed declaration whose imports a consumer cannot resolve fails the smoke; the consumer gets no Node types,
-// because the packed declarations reference none. It exits 0 only when every case passes, 1 when the check or
+// resolved into the consumer's node_modules and that a deep import past the exports map is refused, imports
+// `/enhance` in Node (it is import-inert) and checks its four exports, resolves the stylesheet and the font licence
+// through `./assets/*`, refuses a deep import of the enhance build, and runs runCorpus(render, { scanRefs }).
+// Before that it typechecks, with this checkout's own typescript, a consumer file that imports the three code
+// entries together with every packed declaration file (dist/**/*.d.ts, including those no entry reaches), under
+// the flags a strict consumer uses (strict, nodenext, skipLibCheck: false), so a packed declaration whose imports
+// a consumer cannot resolve fails the smoke; the consumer gets no Node types, because the packed declarations
+// reference none, and the DOM library, because `./enhance`'s declarations name DOM types. It exits 0 only when every case passes, 1 when the check or
 // the typecheck fails, 2 on a usage error. Without --deps-from, `npm install` fetches the package's dependencies
 // from the registry, as a real consumer would, with `--before` set MIN_AGE_DAYS back from the moment it runs, so
 // the transitive dependencies the lock does not pin obey the same age rule as every direct pin; with it, the
@@ -47,6 +49,8 @@ const CONSUMER_TSCONFIG = {
     skipLibCheck: false,
     noEmit: true,
     target: 'es2022',
+    // ./enhance's declarations name DOM types (Element, Node, AbortSignal): its consumers need the DOM library.
+    lib: ['es2022', 'dom'],
   },
   // Every packed declaration file is listed by pattern, because `import("js-yaml")` in frontMatter.d.ts is
   // reached by neither entry's imports.
@@ -58,14 +62,20 @@ const CHECK_TS = `import { ALLOWLIST, render } from '${PACKAGE}/render';
 import type { RenderResult } from '${PACKAGE}/render';
 import { runCorpus } from '${PACKAGE}/conformance';
 import type { CorpusRun } from '${PACKAGE}/conformance';
+import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs } from '${PACKAGE}/enhance';
+import type { EnhanceOptions } from '${PACKAGE}/enhance';
 
 export const result: RenderResult = render('# title');
 export const run: CorpusRun = runCorpus(render, { timeScale: 1 });
 export const allowlist: unknown = ALLOWLIST;
+export const options: EnhanceOptions = { prefs: { theme: 'dark' }, folds: true };
+export const layout: unknown[] = [enhance, destroyEnhancement, setEnhancementPrefs, EnhanceError];
 `;
 
 /** Runs inside the consumer project; every specifier resolves from there. */
-const check = (timeScale) => `import { render, scanRefs } from '${PACKAGE}/render';
+const check = (timeScale) => `import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { render, scanRefs } from '${PACKAGE}/render';
 import { runCorpus } from '${PACKAGE}/conformance';
 
 const say = (line) => console.log(\`consumer-smoke: \${line}\`);
@@ -88,6 +98,34 @@ try {
   else {
     ok = false;
     say(\`a deep import failed for another reason: \${String(e)}\`);
+  }
+}
+
+const enhanceApi = Object.keys(await import('${PACKAGE}/enhance')).sort().join(', ');
+if (enhanceApi === 'EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs') {
+  say(\`${PACKAGE}/enhance imports in Node and exports exactly \${enhanceApi}\`);
+} else {
+  ok = false;
+  say(\`${PACKAGE}/enhance exports \${enhanceApi}\`);
+}
+
+const assets = ['assets/reader.css', 'assets/fonts/OFL.txt'].map((a) => [a, import.meta.resolve(\`${PACKAGE}/\${a}\`)]);
+const stray = assets.filter(([a, url]) => !url.endsWith(\`/node_modules/${PACKAGE}/\${a}\`) || !existsSync(fileURLToPath(url)));
+if (stray.length === 0) say('the stylesheet and the font licence resolve through ./assets/* into node_modules');
+else {
+  ok = false;
+  for (const [a, url] of stray) say(\`\${a} resolves to \${url}, which is not the installed file\`);
+}
+
+try {
+  await import('${PACKAGE}/dist/enhance/index.js');
+  ok = false;
+  say('a deep import of the enhance build resolved: the exports map must be the whole public surface');
+} catch (e) {
+  if (e?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') say('a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)');
+  else {
+    ok = false;
+    say(\`a deep import of the enhance build failed for another reason: \${String(e)}\`);
   }
 }
 

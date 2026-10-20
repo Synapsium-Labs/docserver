@@ -16,5 +16,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src", "test", "vitest.config.ts"]
+  "include": ["src", "test", "vitest.config.ts"],
+  "exclude": ["src/enhance", "test/enhance-*.test.ts"]
 }

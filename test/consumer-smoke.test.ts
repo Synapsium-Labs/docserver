@@ -46,7 +46,14 @@ if (kind) {
   }
   const conformance = ['export interface CorpusRun { ok: boolean }'];
   if (kind !== 'no-run-corpus') conformance.push('export declare function runCorpus(render: unknown, o?: { timeScale?: number }): CorpusRun;');
-  for (const [sub, lines] of [['render', render], ['conformance', conformance]]) {
+  const enhance = [
+    'export interface EnhanceOptions { prefs?: { theme?: string }; folds?: boolean; signal?: AbortSignal }',
+    'export declare function enhance(root: Element, o?: EnhanceOptions): Promise<void>;',
+    'export declare function destroyEnhancement(root: Element): Promise<void>;',
+    'export declare function setEnhancementPrefs(root: Element, p: { theme?: string }): void;',
+    'export declare class EnhanceError extends Error {}',
+  ];
+  for (const [sub, lines] of [['render', render], ['conformance', conformance], ['enhance', enhance]]) {
     mkdirSync(dir + '/dist/' + sub, { recursive: true });
     writeFileSync(dir + '/dist/' + sub + '/index.d.ts', lines.join('\\n') + '\\n');
     writeFileSync(dir + '/dist/' + sub + '/index.js', '');
@@ -54,7 +61,8 @@ if (kind) {
   writeFileSync(dir + '/package.json', JSON.stringify({
     name: '${PACKAGE}', version: '0.0.0', type: 'module',
     exports: { './render': { types: './dist/render/index.d.ts', import: './dist/render/index.js' },
-               './conformance': { types: './dist/conformance/index.d.ts', import: './dist/conformance/index.js' } },
+               './conformance': { types: './dist/conformance/index.d.ts', import: './dist/conformance/index.js' },
+               './enhance': { types: './dist/enhance/index.d.ts', import: './dist/enhance/index.js' } },
   }));
 }
 `;
@@ -156,5 +164,7 @@ describe('scripts/consumer-smoke.mjs: the strict consumer typecheck', () => {
     expect(SOURCE).toContain('include: [\'check.ts\', `node_modules/${PACKAGE}/dist/**/*.d.ts`],');
     expect(SOURCE).toContain("from '${PACKAGE}/render'");
     expect(SOURCE).toContain("from '${PACKAGE}/conformance'");
+    expect(SOURCE).toContain("from '${PACKAGE}/enhance'");
+    expect(SOURCE).toContain("lib: ['es2022', 'dom'],");
   });
 });

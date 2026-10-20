@@ -5,9 +5,10 @@
 // (the 100.64/10 block) addresses, e-mail addresses outside the reserved example domains and noreply, and
 // credential shapes. It scans the tree: every file of the checkout, minus the root .git (a directory, or in a
 // linked worktree a file holding an absolute path), the build outputs that .gitignore keeps out (node_modules,
-// dist, coverage, logs, packed tarballs), docs/, which holds the programme's working papers and is scrubbed
-// separately before the repository goes public, and two named root-level scratch directories that tools create
-// and git never tracks. It walks the directory rather than asking git, so it works in a copy that has no .git;
+// dist, coverage, logs, packed tarballs, and the demo page's demo-out/ at the root), docs/, which holds the
+// programme's working papers and is scrubbed separately before the repository goes public, two named root-level
+// scratch directories that tools create and git never tracks, and the woff2 fonts directly in assets/fonts, which
+// are binary and pinned by hash instead. It walks the directory rather than asking git, so it works in a copy that has no .git;
 // where a .git exists, a case checks that the scratch list hides no tracked path. The root-level skips apply at
 // the root only: a nested directory of the same name is scanned. Its own synthetic positives are built at run
 // time, so this file holds none of them literally and is scanned like any other.
@@ -27,9 +28,17 @@ const ROOT_SKIP: Readonly<Record<string, string>> = {
   '.git': 'git metadata: a directory, or in a linked worktree a file that holds an absolute path',
   '.superpowers': 'scratch that a planning workflow creates and git never tracks',
   'graphify-out': 'scratch that a code-graph tool creates and git never tracks',
+  'demo-out': 'the demo page scripts/demo/build.mjs writes (copies of the assets among it); git-ignored',
 };
-/** Ignored files: logs, editor litter and packed tarballs. */
+/** Files never read as text, by name: ignored logs, editor litter and packed tarballs. */
 const SKIP_FILE = /(?:\.log|\.tgz|^\.DS_Store)$/;
+/**
+ * Files never read as text, by path from the scanned root: the shipped woff2 fonts in assets/fonts (that directory
+ * only), whose bytes are Brotli-compressed binary, so a text check only finds noise there (byte runs such as a
+ * tilde and a slash). test/enhance-styles.test.ts pins each one to the sha256 that assets/fonts/README.md records,
+ * so a changed, replaced or extra font fails there; a woff2 anywhere else is scanned like any file.
+ */
+const SKIP_PATH = /^assets\/fonts\/[^/]+\.woff2$/;
 
 /** Every regular file under `root` that the scan reads, relative to `root` with forward slashes, sorted. */
 function scannedFiles(dir = ROOT, root = ROOT): string[] {
@@ -37,9 +46,10 @@ function scannedFiles(dir = ROOT, root = ROOT): string[] {
   const atRoot = dir === root;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
+    const rel = path.relative(root, p).split(path.sep).join('/');
     if (atRoot && Object.hasOwn(ROOT_SKIP, e.name)) continue;
     if (e.isDirectory() && !SKIP_DIRS.has(e.name)) out.push(...scannedFiles(p, root));
-    else if (e.isFile() && !SKIP_FILE.test(e.name)) out.push(path.relative(root, p).split(path.sep).join('/'));
+    else if (e.isFile() && !SKIP_FILE.test(e.name) && !SKIP_PATH.test(rel)) out.push(rel);
   }
   return out.sort();
 }
@@ -151,7 +161,7 @@ describe('public-ready: the scanner', () => {
     }
     expect(
       files.filter(
-        (f) => /^(?:node_modules|dist|docs|\.git|\.superpowers|graphify-out)\//.test(f) || f === '.git' || f.endsWith('.tgz'),
+        (f) => /^(?:node_modules|dist|docs|\.git|\.superpowers|graphify-out|demo-out)\//.test(f) || f === '.git' || f.endsWith('.tgz') || SKIP_PATH.test(f),
       ),
     ).toEqual([]);
   });
@@ -187,6 +197,12 @@ describe('public-ready: the walk skips the root entries only', () => {
 
   it('control: a planted hit in an ordinary directory is found', () => {
     expect(withTree({ 'src/a.ts': hit }, foundIn)).toEqual([`src/a.ts:1: home or mount path: ${j('/ho', 'me/')}`]);
+  });
+
+  it('a woff2 is skipped only directly in assets/fonts: one anywhere else, or deeper, is scanned', () => {
+    const files = { 'assets/fonts/a.woff2': hit, 'assets/fonts/sub/b.woff2': hit, 'src/c.woff2': hit, 'd.woff2': hit };
+    const found = withTree(files, foundIn);
+    expect(found.map((f) => f.split(':')[0])).toEqual(['assets/fonts/sub/b.woff2', 'd.woff2', 'src/c.woff2']);
   });
 
   it('a nested directory that shares a skipped name, and a nested .git file or directory, are scanned', () => {
