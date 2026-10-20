@@ -755,6 +755,41 @@ Notes on the measurement.
 ]
 ```
 
+## The coordinator's commit at rebase: the public-readiness walk skips the built Mermaid file (L2-T15-M66, L2-T15-M67)
+
+The review found that `test/public-ready.test.ts` (Task 6's file) read the git-ignored `assets/mermaid/` that the build
+writes, so a local `npm run check` after a build was red. The coordinator's commit at rebase makes the walk skip
+everything under the root's `assets/mermaid/`, as it skips `dist/`, and pins both that a `mermaid` directory anywhere
+else is still scanned and that git tracks nothing under the skipped one. Measured 2026-10-20 on `l2-t15-figures`,
+rebased onto `main`, with the commit's change uncommitted, by `mutate.mjs` on throwaway copies; the checkout's status was
+the same before and after.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T15-M66 | the walk skips the built Mermaid file in assets/mermaid | `test/public-ready.test.ts` | the `\|^assets\/mermaid\//` alternative removed | `test/public-ready.test.ts`: 1 failed \| 9 passed \| 2 skipped (12). "the built Mermaid file in assets/mermaid is skipped; a mermaid directory anywhere else is scanned" |
+| L2-T15-M67 | the Mermaid skip is anchored at the root's assets directory | `test/public-ready.test.ts` | `^assets\/mermaid\/` → `assets\/mermaid` | `test/public-ready.test.ts`: 1 failed \| 9 passed \| 2 skipped (12). "the built Mermaid file in assets/mermaid is skipped; a mermaid directory anywhere else is scanned" |
+
+```json
+[
+  {
+    "id": "L2-T15-M66",
+    "guard": "the walk skips the built Mermaid file in assets/mermaid",
+    "file": "test/public-ready.test.ts",
+    "old": "const SKIP_PATH = /^assets\\/fonts\\/[^/]+\\.woff2$|^assets\\/mermaid\\//;",
+    "new": "const SKIP_PATH = /^assets\\/fonts\\/[^/]+\\.woff2$/;",
+    "tests": "--project unit test/public-ready.test.ts"
+  },
+  {
+    "id": "L2-T15-M67",
+    "guard": "the Mermaid skip is anchored at the root's assets directory",
+    "file": "test/public-ready.test.ts",
+    "old": "const SKIP_PATH = /^assets\\/fonts\\/[^/]+\\.woff2$|^assets\\/mermaid\\//;",
+    "new": "const SKIP_PATH = /^assets\\/fonts\\/[^/]+\\.woff2$|assets\\/mermaid/;",
+    "tests": "--project unit test/public-ready.test.ts"
+  }
+]
+```
+
 ## Visual check
 
 The task names one: the caption, light and dark. `scripts/visual/compare.mjs` compared the demo page for

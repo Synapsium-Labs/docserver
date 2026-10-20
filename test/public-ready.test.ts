@@ -40,9 +40,11 @@ const SKIP_FILE = /(?:\.log|\.tgz|^\.DS_Store)$/;
  * Files never read as text, by path from the scanned root: the shipped woff2 fonts in assets/fonts (that directory
  * only), whose bytes are Brotli-compressed binary, so a text check only finds noise there (byte runs such as a
  * tilde and a slash). test/enhance-styles.test.ts pins each one to the sha256 that assets/fonts/README.md records,
- * so a changed, replaced or extra font fails there; a woff2 anywhere else is scanned like any file.
+ * so a changed, replaced or extra font fails there; a woff2 anywhere else is scanned like any file. And everything
+ * under assets/mermaid, the Mermaid file the build writes (L2 Task 15): third-party code, git-ignored like dist, and
+ * measured by test/mermaid-bundle.test.ts instead.
  */
-const SKIP_PATH = /^assets\/fonts\/[^/]+\.woff2$/;
+const SKIP_PATH = /^assets\/fonts\/[^/]+\.woff2$|^assets\/mermaid\//;
 
 /** Every regular file under `root` that the scan reads, relative to `root` with forward slashes, sorted. */
 function scannedFiles(dir = ROOT, root = ROOT): string[] {
@@ -213,6 +215,19 @@ describe('public-ready: the walk skips the root entries only', () => {
     const files = { 'assets/fonts/a.woff2': hit, 'assets/fonts/sub/b.woff2': hit, 'src/c.woff2': hit, 'd.woff2': hit };
     const found = withTree(files, foundIn);
     expect(found.map((f) => f.split(':')[0])).toEqual(['assets/fonts/sub/b.woff2', 'd.woff2', 'src/c.woff2']);
+  });
+
+  it('the built Mermaid file in assets/mermaid is skipped; a mermaid directory anywhere else is scanned', () => {
+    const files = { 'assets/mermaid/mermaid.mjs': hit, 'assets/mermaidx/y.mjs': hit, 'src/assets/mermaid/z.mjs': hit, 'src/mermaid/x.mjs': hit };
+    const found = withTree(files, foundIn);
+    expect(found.map((f) => f.split(':')[0])).toEqual(['assets/mermaidx/y.mjs', 'src/assets/mermaid/z.mjs', 'src/mermaid/x.mjs']);
+  });
+
+  it.skipIf(!existsSync(path.join(ROOT, '.git')))('assets/mermaid is git-ignored, and git tracks nothing under it', () => {
+    const ignored = readFileSync(path.join(ROOT, '.gitignore'), 'utf8').split('\n').map((l) => l.trim());
+    expect(ignored).toContain('assets/mermaid/');
+    const tracked = execFileSync('git', ['ls-files', '-z', '--', 'assets/mermaid'], { cwd: ROOT, encoding: 'utf8' });
+    expect(tracked).toBe('');
   });
 
   it('a nested directory that shares a skipped name, and a nested .git file or directory, are scanned', () => {
