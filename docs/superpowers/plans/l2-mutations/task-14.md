@@ -7,15 +7,15 @@ a target with no id, and reach), restoring a place, the pin and what releases it
 pointer press), position.keep, the flash, goTo and goToHash, the delegated click, the section link, `j` and `k`, the
 landing and the position written behind (`src/enhance/position.ts`), goToHash in the lifecycle, the entry's exports,
 the README's two lines and the walls' Viewport allowance. Measured 2026-10-20 on branch `l2-t14-nav`, on commit
-`164e74b`, every row, L2-T14-M1 to L2-T14-M152: 151 were measured red (`rc=1`); one is reported (below),
-green with its guard kept.
+`08f671b` (rebased onto `main` at `292a0ab`, with Tasks 9, 11, 13 and 15), every row, L2-T14-M1 to
+L2-T14-M152: 151 were measured red (`rc=1`); one is reported (below), green with its guard kept.
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8) with the changes Task 7b's rows record: a 512 MiB output
 buffer, a run that ends with no exit status reported as KILLED and counted as no verdict (none here), and vitest's
 `Errors` count line, `Unhandled Rejection` and `TypeError` lines kept in what it prints. Each row is applied to its own
 throwaway copy of the working tree (tracked and untracked files, never ignored ones, `node_modules` linked from the
 checkout), its test file runs there with the local `vitest`, and the copy is deleted. Each `old` occurs exactly once
-in its file. The rows ran one at a time, in eight batches of at most 20, with `DOCREADER_BROWSERS=chromium`: the
+in its file. The rows ran one at a time, in eight batches of at most 19, with `DOCREADER_BROWSERS=chromium`: the
 six rows whose tests are in a real browser (`test/browser/nav.test.ts`, and the layout corpus for the section
 link's heading levels) ran in Chromium. No row is WebKit-only; the browser cases are green in both browsers (WebKit in
 the Playwright image, C51). The checkout was never edited: `git status --porcelain` read the same (empty) before and
@@ -24,12 +24,13 @@ failing tests the run printed. Every count line adds up to its total.
 
 Notes on the measurement.
 - Before measuring, every check that no case could redden was removed rather than left unmeasured (the commits
-  `17e3b8b` and `e218533` say which): an array test and an own-property test that the fields' type checks already
+  `0226842` and `3d3738d` say which): an array test and an own-property test that the fields' type checks already
   cover, a second bound on an anchor's id, a live() check that the caller or env.scrollTo already makes, the data-line
   grammar that the id alphabet includes, a pagehide's cancel of a wait that then finds the same place, a walk bound at
   the root that both maps already imply, and `k`'s index test that `?? null` already covers.
-- A first pass over the rows, on the commits before `164e74b`, left five green. L2-T14-M54 and M55 (a touch and a key
-  release the pin) were green because the case read the four events from the list it tests: it now names them itself.
+- A first pass over the rows, before the commits `b2d2625` to `e5b0dd9`, left five green. L2-T14-M54 and M55 (a
+  touch and a key release the pin) were green because the case read the four events from the list it tests: it now
+  names them itself.
   L2-T14-M69 (no place is read while a pin holds) was green because the case kept at the top of the page, where no
   place is read anyway: it now keeps off the top. L2-T14-M98 (goToHash stops when a revealer destroys the instance)
   was green because nothing after the check wrote anything: the case now waits out the bar's hold first and checks it
@@ -41,6 +42,8 @@ Notes on the measurement.
   run of the fences reports no green row.
 - L2-T14-M38 (a browser without scrollIntoView skips it) is measured through Task 7b's cases, whose headings have no
   scrollIntoView in jsdom; its run also counts two errors, the `TypeError`s thrown inside click handlers.
+- Every row was measured again after each rebase onto `main`; the counts here are from the last, and no verdict
+  changed.
 - Eleven rows of Task 7b, and one of Task 7a, named code this task rewrote; their guards are rows here, on the new code
   (the last section maps them).
 
@@ -1067,7 +1070,7 @@ The two click rules this task changed (a modified hash click and a hash link thi
 | L2-T14-M103 | byId: an element that left the root is no answer | `src/enhance/nav.ts` | `    const el = ids.get(id); ⏎     if (el !== undefined && root.contains(el)) return el;` → `    const el = ids.get(id); ⏎     if (el !== undefined) return el;` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "byId: the first element of a repeated id; never an empty id; an element, or a defined ID's target, that left the root is no answer" |
 | L2-T14-M104 | idOf: an id the instance did not read is no answer | `src/enhance/nav.ts` | `(el.id !== '' && ids.get(el.id) === el ? el.id : null)` → `(el.id !== '' ? el.id : null)` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "byId: the first element of a repeated id; never an empty id; an element, or a defined ID's target, that left the root is no answer" |
 | L2-T14-M105 | holdBar holds the bar for BAR_HOLD_MS | `src/enhance/nav.ts` | `    heldUntil = env.now() + BAR_HOLD_MS;` → `    heldUntil = env.now() + BAR_HOLD_MS / 2;` | `test/enhance-services.test.ts`: 1 failed \| 93 passed (94). "goTo holds the bar, focuses only when asked, and scrolls the target into view where it can" |
-| L2-T14-M106 | placeOf takes only an instance's position | `src/enhance/nav.ts` | `  if (place === undefined) throw new Error('docreader: placeOf takes the position of an instance'); ⏎   return place;` → `  return place as Place;` | `test/enhance-nav.test.ts`: 1 failed \| 47 passed (48). "placeOf takes only the position of an instance" |
+| L2-T14-M106 | placeOf takes only an instance's navigation | `src/enhance/nav.ts` | `  if (place === undefined) throw new Error('docreader: placeOf takes the navigation of an instance'); ⏎   return place;` → `  return place as Place;` | `test/enhance-nav.test.ts`: 1 failed \| 47 passed (48). "placeOf takes only the navigation of an instance; createPosition answers its position seam" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -1115,9 +1118,9 @@ The two click rules this task changed (a modified hash click and a hash link thi
   },
   {
     "id": "L2-T14-M106",
-    "guard": "placeOf takes only an instance's position",
+    "guard": "placeOf takes only an instance's navigation",
     "file": "src/enhance/nav.ts",
-    "old": "  if (place === undefined) throw new Error('docreader: placeOf takes the position of an instance');\n  return place;",
+    "old": "  if (place === undefined) throw new Error('docreader: placeOf takes the navigation of an instance');\n  return place;",
     "new": "  return place as Place;",
     "tests": "test/enhance-nav.test.ts"
   }
@@ -1135,7 +1138,7 @@ One link per level-2 and level-3 heading that holds its own id, none in the "In 
 | L2-T14-M109 | the name is the heading's own label | `src/enhance/position.ts` | `(h.getAttribute('aria-label') ?? headingText(h, isControl))` → `headingText(h, isControl)` | `test/enhance-nav.test.ts`: 1 failed \| 47 passed (48). "each level-2 and level-3 heading with its own id gets a # link in the anchor slot; In short and a repeated id get none" |
 | L2-T14-M110 | a chrome control is no part of the name | `src/enhance/position.ts` | `(h.getAttribute('aria-label') ?? headingText(h, isControl))` → `(h.getAttribute('aria-label') ?? headingText(h, () => false))` | `test/enhance-nav.test.ts`: 1 failed \| 47 passed (48). "a control a feature put in a heading before it (a chrome button) is no part of the link's name" |
 | L2-T14-M111 | the name leaves out the section number | `src/enhance/position.ts` | `.replace(NUMBER, '');` → `;` | `test/enhance-nav.test.ts`: 1 failed \| 47 passed (48). "each level-2 and level-3 heading with its own id gets a # link in the anchor slot; In short and a repeated id get none" |
-| L2-T14-M112 | level-2 and level-3 headings only | `src/enhance/position.ts` | `root.querySelectorAll('h2[id], h3[id]')` → `root.querySelectorAll('h2[id], h3[id], h4[id]')` | `test/browser/layout-corpus.test.ts`: 1 failed \| 14 passed \| 10 skipped (25). "nav/links" |
+| L2-T14-M112 | level-2 and level-3 headings only | `src/enhance/position.ts` | `root.querySelectorAll('h2[id], h3[id]')` → `root.querySelectorAll('h2[id], h3[id], h4[id]')` | `test/browser/layout-corpus.test.ts`: 1 failed \| 25 passed \| 21 skipped (47). "nav/links" |
 | L2-T14-M113 | the link goes to the heading | `src/enhance/position.ts` | `href: `#${h.id}`` → `href: '#'` | `test/enhance-nav.test.ts`: 3 failed \| 45 passed (48). "RF1: __proto__, constructor and an id named like chrome are document ids; an id the document lacks lands nowhere"; "each level-2 and level-3 heading with its own id gets a # link in the anchor slot; In short and a repeated id get none"; "a heading whose id another heading holds first gets none; a click on the link goes to its heading with push" |
 | L2-T14-M114 | the link is the heading's anchor control | `src/enhance/position.ts` | `    ctx.headCtl(h, 'anchor', link); ⏎ ` → (deleted) | `test/enhance-nav.test.ts`: 4 failed \| 44 passed (48). "RF1: __proto__, constructor and an id named like chrome are document ids; an id the document lacks lands nowhere"; "each level-2 and level-3 heading with its own id gets a # link in the anchor slot; In short and a repeated id get none"; "a control a feature put in a heading before it (a chrome button) is no part of the link's name"; and 1 more |
 
@@ -1610,7 +1613,7 @@ the new code is in a section above.
 
 The flash, and the section link on hover, against a temporary copy of the reference reader serving the same neutral
 sample (`scripts/demo/samples/core.md`) from a temporary repository, on loopback; ours was the demo page
-(`scripts/demo/build.mjs`) of commit `164e74b`.
+(`scripts/demo/build.mjs`) of commit `08f671b`.
 
 `scripts/visual/compare.mjs` ran in the states light and dark and three named states, made by a scratch setup module:
 `flash-light` and `flash-dark` (the paragraph's link to the second section is clicked, then every animation is paused
