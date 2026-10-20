@@ -2,17 +2,23 @@
 
 Each guard of Task 16, deleted or inverted once, with the tests that go red: the quick jump (`src/enhance/jump.ts`)
 and the keys sheet (`src/enhance/keysheet.ts`). Measured 2026-10-20 on branch `l2-t16-jump`, on commit `5dda33c`, every
-row, L2-T16-M1 to L2-T16-M132: 132 measured red (`rc=1`), none green.
+row, L2-T16-M1 to L2-T16-M132: 132 measured red (`rc=1`), none green. Fix round 1, the same day, on commit `f9bfbd3`:
+L2-T16-M133 to L2-T16-M155, 23 measured red, none green; and two earlier rows re-measured there, red, because the
+fix moved their lines: L2-T16-M95 (now the shared helper's line, so it reddens going too) and L2-T16-M116 (its `old`
+rewritten for the new line). The other rows' Red columns are the first measurement's, at 44 cases; the fix round
+renamed one case they cite, "only keys next to each other share a row", to "keys next to each other with one label
+share a row; only keys next to each other do", and grew the file to 52 cases.
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8) with the two changes its results section records (a 512 MiB
 output buffer, and a run that ends with no exit status reported as KILLED and counted as no verdict). Each row is
 applied to its own throwaway copy of the working tree (tracked and untracked files, never ignored ones, `node_modules`
 linked from the checkout), its tests run there with the local `vitest`, and the copy is deleted. Each `old` occurs
-exactly once in its file. Most rows run `test/enhance-jump.test.ts` (jsdom); L2-T16-M67, L2-T16-M111, L2-T16-M129, L2-T16-M132 run the browser
-cases, `test/browser/jump.test.ts` (M111 and M132 with the jsdom file beside them). Every row ran with
-`DOCREADER_BROWSERS=chromium`, one at a time, in seven batches; no row is WebKit's alone, and WebKit ran the browser
-cases green in the Playwright image (C51). The checkout was never edited: `git status --porcelain` read the same
-(empty) before and after, and so did `HEAD` and the hash of `git diff`. The Red column gives the count line and the
+exactly once in its file. Most rows run `test/enhance-jump.test.ts` (jsdom); L2-T16-M67, L2-T16-M111, L2-T16-M129,
+L2-T16-M132, L2-T16-M145 and L2-T16-M149 run the browser cases, `test/browser/jump.test.ts` (M111, M132, M145 and M149
+with the jsdom file beside them). Every row ran with `DOCREADER_BROWSERS=chromium`, one at a time, in seven batches
+and one for the fix round; no row is WebKit's alone, and WebKit ran the browser cases green in the Playwright image
+(C51), before the fix round and after it. The checkout was never edited: `git status --porcelain` read the same
+(empty) before and after, and so did `HEAD` and the hash of `git diff`, in both rounds. The Red column gives the count line and the
 failing tests the run printed (at most five here). Every count line adds up to its total.
 
 Notes on the measurement.
@@ -23,8 +29,10 @@ Notes on the measurement.
   order across the lists is ever seen), a cut of an ID (the index bounds it), a check that a row's `li` is the
   list's, a check that the section number is an h2's (only an h2 gets one), and the sheet's walk of the box's
   controls with its rect filter (the box holds one control).
-- The Level 2 cases (`conformance/layout/jump/`) pin the closed dialogs' structure and are no rows; the wrapper's
-  rows (M111, M132) also redden them.
+- The Level 2 cases (`conformance/layout/jump/`) pin the closed dialogs' structure and are no rows. They do not see
+  the wrapper: it is a classless chrome div, outside their scoped snapshot, and with M111 or M132 applied both Level 2
+  jump cases stay green (measured in the review). The wrapper is pinned by the jsdom structure cases and the browser
+  viewport cases, the Red columns of M111 and M132.
 - The two edits to Task 7a's and 7b's test files are no guards: the services cases run without the two features,
   whose keys, overlays and tool their probes stand in for, and the seams case counts the features' chrome ids as
   released.
@@ -851,7 +859,7 @@ Opening (once, remembering the focus, closing the card, clearing the field, list
 | L2-T16-M92 | opening focuses the field | `src/enhance/jump.ts` | `    input.focus(); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 3 failed \| 41 passed (44). "opening clears the field, lists the headings and focuses the field; opening again while open does nothing"; "Escape and a click outside the box close it and give the focus back; a click inside the box does not"; "opened with nothing focused, closing takes the focus out of the hidden dialog" |
 | L2-T16-M93 | closing hides the dialog | `src/enhance/jump.ts` | `    jump.classList.remove('open'); ⏎     if (opener` → `    if (opener` | `test/enhance-jump.test.ts`: 4 failed \| 40 passed (44). "opening clears the field, lists the headings and focuses the field; opening again while open does nothing"; "Escape and a click outside the box close it and give the focus back; a click inside the box does not"; ""/" opens it; Ctrl or Cmd with K opens it from a field too, where "/" types"; "RF2: with two roots, "/" opens the focused root's jump, and Escape closes only its own" |
 | L2-T16-M94 | closing gives the focus back | `src/enhance/jump.ts` | `    if (opener !== null) (opener as HTMLElement).focus({ preventScroll: true }); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 2 failed \| 42 passed (44). "Escape and a click outside the box close it and give the focus back; a click inside the box does not"; ""/" opens it; Ctrl or Cmd with K opens it from a field too, where "/" types" |
-| L2-T16-M95 | closing takes the focus out of the hidden dialog | `src/enhance/jump.ts` | `    if (now !== null && box.contains(now)) (now as HTMLElement).blur(); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 43 passed (44). "opened with nothing focused, closing takes the focus out of the hidden dialog" |
+| L2-T16-M95 | closing takes the focus out of the hidden dialog | `src/enhance/jump.ts` | `    if (now !== null && box.contains(now)) (now as HTMLElement).blur(); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 2 failed \| 50 passed (52). "going to a target that takes no focus (gone from the root) takes the focus out of the hidden dialog, and "/" opens it again"; "opened with nothing focused, closing takes the focus out of the hidden dialog" (re-measured in fix round 1: the line is now the shared helper's, for closing and going) |
 | L2-T16-M96 | going hides the dialog | `src/enhance/jump.ts` | `    jump.classList.remove('open'); ⏎     ctx.overlays.close('drawer');` → `    ctx.overlays.close('drawer');` | `test/enhance-jump.test.ts`: 2 failed \| 42 passed (44). "Enter goes to the selected entry: the dialog closes, the target has the focus, and the host hears of it"; "a click on a row goes there; on "Nothing matches" nothing happens" |
 | L2-T16-M97 | going closes the drawer | `src/enhance/jump.ts` | `    ctx.overlays.close('drawer'); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 43 passed (44). "opening closes the preview card; going closes the contents drawer, and closing does not" |
 | L2-T16-M98 | going makes a new history entry | `src/enhance/jump.ts` | `    ctx.nav.goTo(x.target, { push: true });` → `    ctx.nav.goTo(x.target, { push: false });` | `test/enhance-jump.test.ts`: 2 failed \| 42 passed (44). "Enter goes to the selected entry: the dialog closes, the target has the focus, and the host hears of it"; "a click on a row goes there; on "Nothing matches" nothing happens" |
@@ -1094,7 +1102,7 @@ Built only with the keyboard; labelled by its heading's chrome id; the colour ke
 | L2-T16-M113 | the heading carries the chrome id the dialog names | `src/enhance/keysheet.ts` | `chrome(doc, 'h2', { text: 'Keyboard', attrs: { id: headingId } })` → `chrome(doc, 'h2', { text: 'Keyboard' })` | `test/enhance-jump.test.ts`: 2 failed \| 42 passed (44). "is a closed dialog at the root's end, labelled by its heading, with the colour key"; "RF2: "?" opens the focused root's sheet; Escape closes only its own" |
 | L2-T16-M114 | the colour key is in the sheet | `src/enhance/keysheet.ts` | `    ctx.text.colourKey(doc), ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 43 passed (44). "is a closed dialog at the root's end, labelled by its heading, with the colour key" |
 | L2-T16-M115 | the rows are read when the sheet opens | `src/enhance/keysheet.ts` | `    opener = doc.activeElement; ⏎     fill();` → `    opener = doc.activeElement;` | `test/enhance-jump.test.ts`: 4 failed \| 40 passed (44). ""?" opens it, listing the keys that apply now in the sheet's order, then Esc; the focus goes to Close"; "a key bound by a later feature is listed, in the sheet's order; one that does not apply now, or is unlisted, is not"; "only keys next to each other share a row"; "a document with no jump still has its sheet, without "/"" |
-| L2-T16-M116 | keys side by side with one label share a row | `src/enhance/keysheet.ts` | `      if (last !== undefined && last.label === b.label) last.keys.push(b.key); ⏎       else groups.p…` → `      groups.push({ keys: [b.key], label: b.label });` | `test/enhance-jump.test.ts`: 1 failed \| 43 passed (44). "a key bound by a later feature is listed, in the sheet's order; one that does not apply now, or is unlisted, is not" |
+| L2-T16-M116 | keys side by side with one label share a row | `src/enhance/keysheet.ts` | `      } else if (last !== undefined && last.label === b.label) last.keys.push(b.key); ⏎       else g…` → `      } else groups.push` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "keys next to each other with one label share a row; only keys next to each other do" (re-measured in fix round 1) |
 | L2-T16-M117 | the last row is Esc | `src/enhance/keysheet.ts` | `    groups.push({ keys: [...ESCAPE_ROW.keys], label: ESCAPE_ROW.label }); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 4 failed \| 40 passed (44). ""?" opens it, listing the keys that apply now in the sheet's order, then Esc; the focus goes to Close"; "a key bound by a later feature is listed, in the sheet's order; one that does not apply now, or is unlisted, is not"; "only keys next to each other share a row"; "a document with no jump still has its sheet, without "/"" |
 | L2-T16-M118 | a space between two keys | `src/enhance/keysheet.ts` | `        if (i > 0) keys.push(doc.createTextNode(' ')); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 43 passed (44). "a key bound by a later feature is listed, in the sheet's order; one that does not apply now, or is unlisted, is not" |
 | L2-T16-M119 | opening shows the sheet | `src/enhance/keysheet.ts` | `    sheet.classList.add('open'); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 5 failed \| 39 passed (44). ""?" opens it, listing the keys that apply now in the sheet's order, then Esc; the focus goes to Close"; "Close, a click outside the box and Escape close it and give the focus back; a click inside does not"; "opened with nothing focused, closing takes the focus out of the hidden sheet"; ""?" in the jump's field types, and no key opens it over a dialog"; "RF2: "?" opens the focused root's sheet; Escape closes only its own" |
@@ -1152,8 +1160,8 @@ Built only with the keyboard; labelled by its heading's chrome id; the colour ke
     "id": "L2-T16-M116",
     "guard": "keys side by side with one label share a row",
     "file": "src/enhance/keysheet.ts",
-    "old": "      if (last !== undefined && last.label === b.label) last.keys.push(b.key);\n      else groups.push({ keys: [b.key], label: b.label });",
-    "new": "      groups.push({ keys: [b.key], label: b.label });",
+    "old": "      } else if (last !== undefined && last.label === b.label) last.keys.push(b.key);\n      else groups.push",
+    "new": "      } else groups.push",
     "tests": "test/enhance-jump.test.ts"
   },
   {
@@ -1286,6 +1294,226 @@ Built only with the keyboard; labelled by its heading's chrome id; the colour ke
   }
 ]
 ```
+## Fix round 1: `src/enhance/jump.ts` and `src/enhance/keysheet.ts` (L2-T16-M133 to L2-T16-M155)
+
+The guards the review found unpinned or missing: each member of the word class (a digit, a mark and `_`, before a match and as a query's first character), the section number's letter suffix, the exact 200-unit cut; going takes the focus out of the hidden dialog when the target took none; a destroy while a dialog is open closes it first; a press inside either box but off its control takes no focus; the reference's pairs ("j k", "n p") share a sheet row whatever their labels.
+
+| Row | Guard | File | Change | Red (tests in the named files) |
+|---|---|---|---|---|
+| L2-T16-M133 | a query opening on a digit is a word character | `src/enhance/jump.ts` | `const WORD_START = /^[\p{L}\p{M}\p{N}_]/u;` → `const WORD_START = /^[\p{L}\p{M}_]/u;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a word character is a letter, a mark, a digit or "_": before a match, and as a query's first character" |
+| L2-T16-M134 | a digit before a match is a word character | `src/enhance/jump.ts` | `const WORD_END = /[\p{L}\p{M}\p{N}_]$/u;` → `const WORD_END = /[\p{L}\p{M}_]$/u;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a word character is a letter, a mark, a digit or "_": before a match, and as a query's first character" |
+| L2-T16-M135 | a query opening on a mark is a word character | `src/enhance/jump.ts` | `const WORD_START = /^[\p{L}\p{M}\p{N}_]/u;` → `const WORD_START = /^[\p{L}\p{N}_]/u;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a word character is a letter, a mark, a digit or "_": before a match, and as a query's first character" |
+| L2-T16-M136 | a mark before a match is a word character | `src/enhance/jump.ts` | `const WORD_END = /[\p{L}\p{M}\p{N}_]$/u;` → `const WORD_END = /[\p{L}\p{N}_]$/u;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a word character is a letter, a mark, a digit or "_": before a match, and as a query's first character" |
+| L2-T16-M137 | a query opening on "_" is a word character | `src/enhance/jump.ts` | `const WORD_START = /^[\p{L}\p{M}\p{N}_]/u;` → `const WORD_START = /^[\p{L}\p{M}\p{N}]/u;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a word character is a letter, a mark, a digit or "_": before a match, and as a query's first character" |
+| L2-T16-M138 | "_" before a match is a word character | `src/enhance/jump.ts` | `const WORD_END = /[\p{L}\p{M}\p{N}_]$/u;` → `const WORD_END = /[\p{L}\p{M}\p{N}]$/u;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a word character is a letter, a mark, a digit or "_": before a match, and as a query's first character" |
+| L2-T16-M139 | a section number may end in a letter ("2a. ") | `src/enhance/jump.ts` | `const SECTION_NUMBER = /^[A-Z]?\d+[a-z]?\.\s+/;` → `const SECTION_NUMBER = /^[A-Z]?\d+\.\s+/;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "an h2 loses a section number with a letter after it ("2a. "), and keeps the number editorial.ts gave it" |
+| L2-T16-M140 | the cut is exactly 200 code units, not fewer | `src/enhance/jump.ts` | `const TEXT_MAX = 200;` → `const TEXT_MAX = 199;` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a text of 200 code units shows whole; one of 201 is cut to exactly 200, the last the ellipsis" |
+| L2-T16-M141 | going takes the focus out of the hidden dialog when the target took none | `src/enhance/jump.ts` | `    ctx.nav.goTo(x.target, { push: true }); ⏎     release(); ⏎ ` → `    ctx.nav.goTo(x.target, { push: true }); ⏎ ` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "going to a target that takes no focus (gone from the root) takes the focus out of the hidden dialog, and "/" opens it again" |
+| L2-T16-M142 | closing takes the focus out of the hidden dialog (the call in close) | `src/enhance/jump.ts` | `    if (opener !== null) (opener as HTMLElement).focus({ preventScroll: true }); ⏎     release(); ⏎ ` → `    if (opener !== null) (opener as HTMLElement).focus({ preventScroll: true }); ⏎ ` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "opened with nothing focused, closing takes the focus out of the hidden dialog" |
+| L2-T16-M143 | a destroy while the jump is open closes it first | `src/enhance/jump.ts` | `  journal.defer(() => { ⏎     if (isOpen()) close(); ⏎   }); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a destroy while a dialog is open gives the focus back to the element that had it; one after it closed moves no focus" |
+| L2-T16-M144 | a destroy closes the jump only when it is open | `src/enhance/jump.ts` | `    if (isOpen()) close();` → `    close();` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a destroy while a dialog is open gives the focus back to the element that had it; one after it closed moves no focus" |
+| L2-T16-M145 | a press inside the jump's box takes no focus | `src/enhance/jump.ts` | `  journal.listen(box, 'mousedown', (e) => { ⏎     if (e.target !== input) e.preventDefault(); ⏎   })…` → (deleted) | `test/enhance-jump.test.ts`, `test/browser/jump.test.ts`: 2 failed \| 56 passed \| 6 skipped (64). "a press inside either box keeps the focus there: the sheet's Tab stays on Close, the jump's field keeps typing"; "a press inside the box keeps the focus in the field: only the field takes a press's focus" |
+| L2-T16-M146 | a press on the field takes the focus | `src/enhance/jump.ts` | `    if (e.target !== input) e.preventDefault();` → `    e.preventDefault();` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a press inside the box keeps the focus in the field: only the field takes a press's focus" |
+| L2-T16-M147 | a destroy while the sheet is open closes it first | `src/enhance/keysheet.ts` | `  journal.defer(() => { ⏎     if (isOpen()) close(); ⏎   }); ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a destroy while a dialog is open gives the focus back to the element that had it; one after it closed moves no focus" |
+| L2-T16-M148 | a destroy closes the sheet only when it is open | `src/enhance/keysheet.ts` | `    if (isOpen()) close();` → `    close();` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a destroy while a dialog is open gives the focus back to the element that had it; one after it closed moves no focus" |
+| L2-T16-M149 | a press inside the sheet's box takes no focus | `src/enhance/keysheet.ts` | `  journal.listen(box, 'mousedown', (e) => { ⏎     if ((e.target as Element).closest('button') === nu…` → (deleted) | `test/enhance-jump.test.ts`, `test/browser/jump.test.ts`: 2 failed \| 56 passed \| 6 skipped (64). "a press inside either box keeps the focus there: the sheet's Tab stays on Close, the jump's field keeps typing"; "a press inside the box keeps the focus on Close: only a button takes a press's focus" |
+| L2-T16-M150 | a press on a button takes the focus | `src/enhance/keysheet.ts` | `    if ((e.target as Element).closest('button') === null) e.preventDefault();` → `    e.preventDefault();` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "a press inside the box keeps the focus on Close: only a button takes a press's focus" |
+| L2-T16-M151 | "j k" is a pair | `src/enhance/keysheet.ts` | `  { first: 'j', second: 'k', label: 'Next / previous section' }, ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "the reference's pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own" |
+| L2-T16-M152 | "n p" is a pair | `src/enhance/keysheet.ts` | `  { first: 'n', second: 'p', label: 'Next / previous change' }, ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "the reference's pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own" |
+| L2-T16-M153 | a pair's row reads the pair's label | `src/enhance/keysheet.ts` | `        last.label = pair.label; ⏎ ` → (deleted) | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "the reference's pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own" |
+| L2-T16-M154 | a pair's first key is the key before | `src/enhance/keysheet.ts` | `(p) => p.first === last.keys[last.keys.length - 1] && p.second === b.key` → `(p) => p.second === b.key` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "the reference's pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own" |
+| L2-T16-M155 | a pair's second key is this one | `src/enhance/keysheet.ts` | `(p) => p.first === last.keys[last.keys.length - 1] && p.second === b.key` → `(p) => p.first === last.keys[last.keys.length - 1]` | `test/enhance-jump.test.ts`: 1 failed \| 51 passed (52). "the reference's pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T16-M133",
+    "guard": "a query opening on a digit is a word character",
+    "file": "src/enhance/jump.ts",
+    "old": "const WORD_START = /^[\\p{L}\\p{M}\\p{N}_]/u;",
+    "new": "const WORD_START = /^[\\p{L}\\p{M}_]/u;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M134",
+    "guard": "a digit before a match is a word character",
+    "file": "src/enhance/jump.ts",
+    "old": "const WORD_END = /[\\p{L}\\p{M}\\p{N}_]$/u;",
+    "new": "const WORD_END = /[\\p{L}\\p{M}_]$/u;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M135",
+    "guard": "a query opening on a mark is a word character",
+    "file": "src/enhance/jump.ts",
+    "old": "const WORD_START = /^[\\p{L}\\p{M}\\p{N}_]/u;",
+    "new": "const WORD_START = /^[\\p{L}\\p{N}_]/u;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M136",
+    "guard": "a mark before a match is a word character",
+    "file": "src/enhance/jump.ts",
+    "old": "const WORD_END = /[\\p{L}\\p{M}\\p{N}_]$/u;",
+    "new": "const WORD_END = /[\\p{L}\\p{N}_]$/u;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M137",
+    "guard": "a query opening on \"_\" is a word character",
+    "file": "src/enhance/jump.ts",
+    "old": "const WORD_START = /^[\\p{L}\\p{M}\\p{N}_]/u;",
+    "new": "const WORD_START = /^[\\p{L}\\p{M}\\p{N}]/u;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M138",
+    "guard": "\"_\" before a match is a word character",
+    "file": "src/enhance/jump.ts",
+    "old": "const WORD_END = /[\\p{L}\\p{M}\\p{N}_]$/u;",
+    "new": "const WORD_END = /[\\p{L}\\p{M}\\p{N}]$/u;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M139",
+    "guard": "a section number may end in a letter (\"2a. \")",
+    "file": "src/enhance/jump.ts",
+    "old": "const SECTION_NUMBER = /^[A-Z]?\\d+[a-z]?\\.\\s+/;",
+    "new": "const SECTION_NUMBER = /^[A-Z]?\\d+\\.\\s+/;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M140",
+    "guard": "the cut is exactly 200 code units, not fewer",
+    "file": "src/enhance/jump.ts",
+    "old": "const TEXT_MAX = 200;",
+    "new": "const TEXT_MAX = 199;",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M141",
+    "guard": "going takes the focus out of the hidden dialog when the target took none",
+    "file": "src/enhance/jump.ts",
+    "old": "    ctx.nav.goTo(x.target, { push: true });\n    release();\n",
+    "new": "    ctx.nav.goTo(x.target, { push: true });\n",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M142",
+    "guard": "closing takes the focus out of the hidden dialog (the call in close)",
+    "file": "src/enhance/jump.ts",
+    "old": "    if (opener !== null) (opener as HTMLElement).focus({ preventScroll: true });\n    release();\n",
+    "new": "    if (opener !== null) (opener as HTMLElement).focus({ preventScroll: true });\n",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M143",
+    "guard": "a destroy while the jump is open closes it first",
+    "file": "src/enhance/jump.ts",
+    "old": "  journal.defer(() => {\n    if (isOpen()) close();\n  });\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M144",
+    "guard": "a destroy closes the jump only when it is open",
+    "file": "src/enhance/jump.ts",
+    "old": "    if (isOpen()) close();",
+    "new": "    close();",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M145",
+    "guard": "a press inside the jump's box takes no focus",
+    "file": "src/enhance/jump.ts",
+    "old": "  journal.listen(box, 'mousedown', (e) => {\n    if (e.target !== input) e.preventDefault();\n  });\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts test/browser/jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M146",
+    "guard": "a press on the field takes the focus",
+    "file": "src/enhance/jump.ts",
+    "old": "    if (e.target !== input) e.preventDefault();",
+    "new": "    e.preventDefault();",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M147",
+    "guard": "a destroy while the sheet is open closes it first",
+    "file": "src/enhance/keysheet.ts",
+    "old": "  journal.defer(() => {\n    if (isOpen()) close();\n  });\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M148",
+    "guard": "a destroy closes the sheet only when it is open",
+    "file": "src/enhance/keysheet.ts",
+    "old": "    if (isOpen()) close();",
+    "new": "    close();",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M149",
+    "guard": "a press inside the sheet's box takes no focus",
+    "file": "src/enhance/keysheet.ts",
+    "old": "  journal.listen(box, 'mousedown', (e) => {\n    if ((e.target as Element).closest('button') === null) e.preventDefault();\n  });\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts test/browser/jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M150",
+    "guard": "a press on a button takes the focus",
+    "file": "src/enhance/keysheet.ts",
+    "old": "    if ((e.target as Element).closest('button') === null) e.preventDefault();",
+    "new": "    e.preventDefault();",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M151",
+    "guard": "\"j k\" is a pair",
+    "file": "src/enhance/keysheet.ts",
+    "old": "  { first: 'j', second: 'k', label: 'Next / previous section' },\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M152",
+    "guard": "\"n p\" is a pair",
+    "file": "src/enhance/keysheet.ts",
+    "old": "  { first: 'n', second: 'p', label: 'Next / previous change' },\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M153",
+    "guard": "a pair's row reads the pair's label",
+    "file": "src/enhance/keysheet.ts",
+    "old": "        last.label = pair.label;\n",
+    "new": "",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M154",
+    "guard": "a pair's first key is the key before",
+    "file": "src/enhance/keysheet.ts",
+    "old": "(p) => p.first === last.keys[last.keys.length - 1] && p.second === b.key",
+    "new": "(p) => p.second === b.key",
+    "tests": "test/enhance-jump.test.ts"
+  },
+  {
+    "id": "L2-T16-M155",
+    "guard": "a pair's second key is this one",
+    "file": "src/enhance/keysheet.ts",
+    "old": "(p) => p.first === last.keys[last.keys.length - 1] && p.second === b.key",
+    "new": "(p) => p.first === last.keys[last.keys.length - 1]",
+    "tests": "test/enhance-jump.test.ts"
+  }
+]
+```
 ## Visual check
 
 The quick jump with results and the keys sheet, light and dark, at 1440 px and at 390 px. Ours was the demo page of
@@ -1315,8 +1543,16 @@ box, head, heading, Close, list, every row's term, key and label, the colour key
   17.5 px, bottom margin 13.75 px) and its items the `li` rule (bottom margin 5.625 px), so the items are narrower
   (by 8.75 px each in the two columns at 1440 px, where four labels wrap, and by 17.5 px in the one at 390 px).
 - **Expected.** The button's place: the bar is unplaced until Task 12 (LD10); its size and inner boxes match. The
-  sheet's rows: "j k" (Task 14) and "m" (Task 18) are absent until those tasks bind them, so the key column is 28 px
-  wide (41.38 px with "j k") and the box shorter. The colour key's ID example reads "IDs: R14, F3, …" (C48).
+  sheet's rows: "j k" and "m" are absent until Tasks 14 and 18 bind those keys, so the key column is 28 px wide
+  (41.38 px with "j k") and the box shorter. "j k" shares one row, "Next / previous section", once Task 14 binds both
+  keys, whatever labels it gives them: since fix round 1 the sheet pairs "j k" and "n p" itself (keysheet.ts's
+  `PAIRS`), and Task 14's branch labels them "Next section" and "Previous section". The colour key's ID example reads
+  "IDs: R14, F3, …" (C48).
+- **Not compared: ID and figure rows (carried).** The sample has no ID table, rule paragraph or figure, because the
+  index (Task 9) and the figures (Task 15) were not on `main`, so this side would list none. So an ID row's `.lvl.id`
+  (the monospaced, ID-coloured tag) and `.jk` (its kind, cut with an ellipsis at 11em), and a figure row's "Fig N"
+  tag, were never set beside the reference's. Carried: compare a query that lists ID and figure rows once Tasks 9 and
+  15 are below this branch, or in Task 24's parity pass.
 - **The fix is the stylesheet's** (`assets/reader.css`, not this task's file; the PR names it as an open point). With
   these four rules added to a scratch copy of the demo's stylesheet, the jump has 0 differences in all four
   combinations and the sheet only the expected ones:
