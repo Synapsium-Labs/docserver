@@ -1,0 +1,24 @@
+h1
+  "Code"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "1. No copy given"
+p
+  "Without the host's copy, a code block ge"…
+div .codehilite
+  pre
+    code
+      span
+        "const"
+      "a ="
+      span
+        "1"
+      ";"
+div .codehilite
+  pre
+    code
+      "line 1 line 2 line 3 line 4 line 5 line "…

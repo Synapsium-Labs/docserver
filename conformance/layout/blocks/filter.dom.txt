@@ -1,0 +1,277 @@
+h1
+  "Filters"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "1. Twelve rows"
+p
+  "A table of twelve rows or more gets a fi"…
+div .tbl-tools chrome
+  span chrome aria-live="polite"
+  input chrome aria-label="Filter this table's 12 rows"
+div .table-wrapper
+  table
+    thead
+      tr
+        th
+          "Row"
+        th
+          "Item"
+        th
+          "Note"
+    tbody
+      tr
+        td
+          "R1"
+        td
+          "Item 1"
+        td
+          "Note 1"
+      tr
+        td
+          "R2"
+        td
+          "Item 2"
+        td
+          "Note 2"
+      tr
+        td
+          "R3"
+        td
+          "Item 3"
+        td
+          "Note 3"
+      tr
+        td
+          "R4"
+        td
+          "Item 4"
+        td
+          "Note 4"
+      tr
+        td
+          "R5"
+        td
+          "Item 5"
+        td
+          "Note 5"
+      tr
+        td
+          "R6"
+        td
+          "Item 6"
+        td
+          "Note 6"
+      tr
+        td
+          "R7"
+        td
+          "Item 7"
+        td
+          "Note 7"
+      tr
+        td
+          "R8"
+        td
+          "Item 8"
+        td
+          "Note 8"
+      tr
+        td
+          "R9"
+        td
+          "Item 9"
+        td
+          "Note 9"
+      tr
+        td
+          "R10"
+        td
+          "Item 10"
+        td
+          "Note 10"
+      tr
+        td
+          "R11"
+        td
+          "Item 11"
+        td
+          "Note 11"
+      tr
+        td
+          "R12"
+        td
+          "Item 12"
+        td
+          "Note 12"
+h2
+  "2. Eleven rows"
+p
+  "A table of eleven rows gets none."
+div .table-wrapper
+  table
+    thead
+      tr
+        th
+          "Row"
+        th
+          "Item"
+        th
+          "Note"
+    tbody
+      tr
+        td
+          "S1"
+        td
+          "Item 1"
+        td
+          "Note 1"
+      tr
+        td
+          "S2"
+        td
+          "Item 2"
+        td
+          "Note 2"
+      tr
+        td
+          "S3"
+        td
+          "Item 3"
+        td
+          "Note 3"
+      tr
+        td
+          "S4"
+        td
+          "Item 4"
+        td
+          "Note 4"
+      tr
+        td
+          "S5"
+        td
+          "Item 5"
+        td
+          "Note 5"
+      tr
+        td
+          "S6"
+        td
+          "Item 6"
+        td
+          "Note 6"
+      tr
+        td
+          "S7"
+        td
+          "Item 7"
+        td
+          "Note 7"
+      tr
+        td
+          "S8"
+        td
+          "Item 8"
+        td
+          "Note 8"
+      tr
+        td
+          "S9"
+        td
+          "Item 9"
+        td
+          "Note 9"
+      tr
+        td
+          "S10"
+        td
+          "Item 10"
+        td
+          "Note 10"
+      tr
+        td
+          "S11"
+        td
+          "Item 11"
+        td
+          "Note 11"
+h2
+  "3. Two columns"
+p
+  "A table of two columns gets one too, and"…
+div .tbl-tools chrome
+  span chrome aria-live="polite"
+  input chrome aria-label="Filter this table's 12 rows"
+div .table-wrapper
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Value"
+    tbody
+      tr
+        td
+          "T1"
+        td
+          "Value 1"
+      tr
+        td
+          "T2"
+        td
+          "Value 2"
+      tr
+        td
+          "T3"
+        td
+          "Value 3"
+      tr
+        td
+          "T4"
+        td
+          "Value 4"
+      tr
+        td
+          "T5"
+        td
+          "Value 5"
+      tr
+        td
+          "T6"
+        td
+          "Value 6"
+      tr
+        td
+          "T7"
+        td
+          "Value 7"
+      tr
+        td
+          "T8"
+        td
+          "Value 8"
+      tr
+        td
+          "T9"
+        td
+          "Value 9"
+      tr
+        td
+          "T10"
+        td
+          "Value 10"
+      tr
+        td
+          "T11"
+        td
+          "Value 11"
+      tr
+        td
+          "T12"
+        td
+          "Value 12"
