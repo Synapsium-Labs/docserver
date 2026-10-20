@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C51)
+### Coordinator rulings for L2 (C40-C52)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -208,6 +208,16 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   Why: each follows the code the review measured, and nine tasks build from it in parallel. Cost if wrong: a later task's brief names the old shape and its implementer follows the code instead.
 - **C50 (2026-10-20, operator and coordinator): the coordinator merges L2 without waiting, and Question 1 takes its default.** The operator, 2026-10-20: "GO AHEAD as I said DO NOT wait for me unless you truly need me". So #13 and each stacked task merge once their review and CI are done (C4), in the task table's order. Each is squash-merged as L1 was, and the next PR is rebased onto `main` and retargeted. Question 1 takes the plan's default (LD4, LD10): `./enhance` takes adapters only. The URL options (`mermaidUrl`, `resolveLink`, `changesUrl`, `bar` and an issue-tracker base) become a small helper in L3's `./host`, or recipes in the README. Tools in a host's own bar wait for an additive option. Once #13 has merged, later rulings land through a ledger PR of their own. Cost if wrong: a viewer that wants the URL options before L3 writes a few lines of adapter code.
 - **C51 (2026-10-20, coordinator): WebKit runs on the build box after all, in the Playwright image; C45 is narrowed.** The browser tests run in WebKit in the official Playwright image of the pinned version, `mcr.microsoft.com/playwright:v1.63.0-noble`: `docker run --rm --network none`, as the box's own user, on a copy of the tree. No root is needed and no system package is installed. So a task runs its browser cases in both browsers before it hands off; CI stays the arbiter. Task 7b's first WebKit run in CI failed one case, and the image reproduced it at once. WebKit fires the font set's `loading` event for the faces of a stylesheet added after `enhance()`, but never `loadingdone`, so the fonts wait now asks again at `loading` too. Cost if wrong: a 2 GB image on the box, and a WebKit difference that the image's build does not share with CI's.
+- **C52 (2026-10-20, coordinator, from L2 Task 8's review): Task 8 as built, and the merge order within a group.**
+  - **The three lists C48 left open:** `rulingHeaders` and `attention.openStatus` are options, because they read status and header words, which are options. `decisionHeaders` stays format contract, beside the technical header words.
+  - **A whole word is whole in any script.** The lists read as whole words compile per word, with Unicode-aware lookarounds and the `u` flag, in place of the reference's ASCII `\b`. Before, a word with a non-ASCII edge, or one ending in punctuation, could never match. This departs from the reference: "Doneé" opens no status, and the default ID scan finds no ID that touches a non-ASCII letter. A feature that copies one of these patterns keeps its flags (`new RegExp(re)`), never its `source` alone.
+  - **The item link departs from the reference on purpose.** It uses the class `item-link`, leaves an author's own link alone, writes at most 64 links, and routes their clicks through one listener on the byline.
+  - **Task 8's edits outside its writers list stand:** two option rows in `README.md` (Task 5's guard requires a row per option), one line of `test/enhance-options.test.ts`, and two expectations of `test/enhance-seams.test.ts` that had pinned the defect above.
+  - **A `live()` check after a host call-out stays even when no case can redden it.** LD5 requires one after each await, so its row is reported green (Task 8's M123, M124 and M186). A check that is neither a plan rule nor measurable is still dropped (C49).
+  - **Carried to Task 14:** export `VocabularyOptions` by name, with C47's types. **Carried to Task 24:** the README text in Task 8's PR body: the namespaced storage keys, the item link's row, the vocabulary table, and the "nothing to act on yet" sentence. Task 14 still updates the `pos` row (C48).
+  - **Merge order within a group:** a group's tasks merge in the order their reviews finish, each rebased onto `main`; disjoint files keep that mechanical. The task table's order binds across groups only, so a task starts once its "Depends on" tasks have merged.
+
+  Why: each follows the code the review measured, or keeps a finished task from waiting on a slower neighbour. Cost if wrong: a feature that rebuilds a pattern from its `source` alone loses Unicode matching. The reviews of Tasks 9, 11 and 13 check for that.
 
 ## Carried constraints (reviewers get these)
 
