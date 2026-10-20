@@ -68,7 +68,7 @@ import { createHeadCtl } from './headctl.js';
 import { createHost } from './host.js';
 import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { createKeys } from './keys.js';
-import { createNavigation } from './nav.js';
+import { createNavigation, createPosition } from './nav.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
 import { createOverlays } from './overlays.js';
 import { sectionMinutes } from './reading.js';
@@ -368,7 +368,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   const overlays = createOverlays(live);
   const keys = createKeys({ root, journal, overlays, keyboard: options.keyboard, live, operate: operateHere });
   const bar = options.chrome.bar ? createBar({ root, journal, isDocument: info.isDocument }) : null;
-  const { nav, position } = createNavigation({
+  const navigation = createNavigation({
     root,
     journal,
     host,
@@ -379,6 +379,8 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     operate: operateHere,
     bar: bar?.slots.bar ?? null,
   });
+  const { nav } = navigation;
+  const position = createPosition(navigation);
   const relayout = createRelayout({ env, events, position, live });
   const ctx: FeatureContext = {
     root,

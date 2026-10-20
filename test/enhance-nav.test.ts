@@ -25,7 +25,7 @@ import {
 import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
-import { checkAnchor, FLASH_MS, HEAD_GAP, ID_GAP, parseToken, PIN_MS, PIN_RELEASE, placeOf, SMOOTH_MS, TOKEN, tokenOf } from '../src/enhance/nav.js';
+import { checkAnchor, createPosition, FLASH_MS, HEAD_GAP, ID_GAP, parseToken, PIN_MS, PIN_RELEASE, placeOf, SMOOTH_MS, TOKEN, tokenOf } from '../src/enhance/nav.js';
 import type { IndexEntry } from '../src/enhance/registry.js';
 import { docKey, posKeyOf } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
@@ -704,11 +704,11 @@ describe('position.keep', () => {
     const bar = find(root, 'nav.topbar');
     s.tops.set(bar, 1000);
     s.y = 990; // the bar's bottom is 30 px down the viewport
-    placeOf(ctxOf(root).position).anchor();
+    placeOf(ctxOf(root).nav).anchor();
     expect(s.points[0]).toEqual([240, 42]);
     root.classList.add('bar-hidden');
     s.points.length = 0;
-    placeOf(ctxOf(root).position).anchor();
+    placeOf(ctxOf(root).nav).anchor();
     expect(s.points[0]).toEqual([240, 12]);
   });
 
@@ -720,7 +720,7 @@ describe('position.keep', () => {
     s.boxes.set(root, [0, 1440]);
     s.boxes.set(title, [370, 300]);
     s.y = 500;
-    const { anchor } = placeOf(ctxOf(root).position);
+    const { anchor } = placeOf(ctxOf(root).nav);
     anchor();
     expect(s.points[0]).toEqual([470, 12]);
     s.boxes.set(title, [370, 900]);
@@ -753,11 +753,11 @@ describe('position.keep', () => {
     s.boxes.set(blocks[16] as Element, [500, 300]); // the 17th
     s.boxes.set(root, [30, 600]);
     s.y = 100;
-    placeOf(ctxOf(root).position).anchor();
+    placeOf(ctxOf(root).nav).anchor();
     expect(s.points[0]).toEqual([230, 12]);
     s.boxes.set(blocks[15] as Element, [500, 300]); // the 16th
     s.points.length = 0;
-    placeOf(ctxOf(root).position).anchor();
+    placeOf(ctxOf(root).nav).anchor();
     expect(s.points[0]).toEqual([600, 12]);
   });
 
@@ -815,10 +815,10 @@ describe('position.keep', () => {
     s.tops.set(para, 300);
     s.y = 280;
     s.hit = refs[1] as Element;
-    expect(placeOf(ctxOf(root).position).anchor()).toEqual({ line: para.getAttribute('data-line'), offset: 20, y: 280 });
+    expect(placeOf(ctxOf(root).nav).anchor()).toEqual({ line: para.getAttribute('data-line'), offset: 20, y: 280 });
     s.hit = refs[0] as Element;
     s.tops.set(refs[0] as Element, 310);
-    expect(placeOf(ctxOf(root).position).anchor()).toEqual({ line: 'fnref1', offset: 30, y: 280 });
+    expect(placeOf(ctxOf(root).nav).anchor()).toEqual({ line: 'fnref1', offset: 30, y: 280 });
   });
 
   it('a block that left the root since is no place to restore: back to the scroll position', async () => {
@@ -827,7 +827,7 @@ describe('position.keep', () => {
     await enhance(root);
     const para = blockAfter(root, '3-plan');
     s.tops.set(para, 2000);
-    const { restore } = placeOf(ctxOf(root).position);
+    const { restore } = placeOf(ctxOf(root).nav);
     restore({ line: para.getAttribute('data-line'), offset: 30, y: 1500 });
     expect(s.scrolled.at(-1)).toEqual([1970, 'auto']);
     para.remove();
@@ -851,9 +851,9 @@ describe('position.keep', () => {
     s.tops.set(para, 500);
     s.y = 450;
     s.hit = inner;
-    expect(placeOf(ctxOf(root).position).anchor()).toEqual({ line: para.getAttribute('data-line'), offset: 50, y: 450 });
+    expect(placeOf(ctxOf(root).nav).anchor()).toEqual({ line: para.getAttribute('data-line'), offset: 50, y: 450 });
     s.hit = find(root, 'nav.topbar');
-    expect(placeOf(ctxOf(root).position).anchor()).toEqual({ line: null, offset: 0, y: 450 });
+    expect(placeOf(ctxOf(root).nav).anchor()).toEqual({ line: null, offset: 0, y: 450 });
   });
 });
 
@@ -940,7 +940,7 @@ describe('the pin', () => {
     r2.remove();
     ctxOf(root).position.keep(() => undefined);
     expect(s.scrolled).toHaveLength(1);
-    const place = placeOf(ctxOf(root).position);
+    const place = placeOf(ctxOf(root).nav);
     await destroyEnhancement(root);
     const add = vi.spyOn(document, 'addEventListener');
     place.pin(() => undefined);
@@ -964,8 +964,13 @@ describe('the pin', () => {
     expect(s.points).toEqual([]); // with a pin, keep reads no place, wherever the page is
   });
 
-  it('placeOf takes only the position of an instance', () => {
-    expect(() => placeOf({ keep: (fn) => fn(), holdBar: () => undefined, barHeld: () => false })).toThrow(/position of an instance/);
+  it('placeOf takes only the navigation of an instance; createPosition answers its position seam', async () => {
+    expect(() => placeOf({ byId: () => null, idOf: () => null, goTo: () => undefined, goToHash: () => undefined })).toThrow(/navigation of an instance/);
+    stage();
+    const root = mount();
+    await enhance(root);
+    const ctx = ctxOf(root);
+    expect(createPosition({ nav: ctx.nav, position: ctx.position })).toBe(ctx.position);
   });
 
   it('a pin whose scroll throws ends there, and the throw goes no further', async () => {
