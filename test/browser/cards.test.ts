@@ -4,7 +4,7 @@
 // the trigger; it follows the trigger on scroll and hides once the trigger has left the window. And a mouse resting on
 // a trigger shows its card after the delay, through the browser's own pointer events.
 import { afterAll, expect, it } from 'vitest';
-import { GAP, LEAD, EDGE, SHOW_DELAY_MS } from '../../src/enhance/cards.js';
+import { GAP, LEAD, EDGE, MIN_HEIGHT, ROOM, SHOW_DELAY_MS } from '../../src/enhance/cards.js';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type OpenedDoc } from './harness.js';
 
 afterAll(closeBrowsers);
@@ -117,6 +117,8 @@ describeBrowsers((browser) => {
       expect(card.left).toBeCloseTo(s.trigger.left - LEAD, 0);
       expect(overlaps(card, s.trigger)).toBe(false);
       expect(card.bottom).toBeLessThanOrEqual(s.viewport.h);
+      // its max-height is its natural height (the room below is ample), which the inline value holds over the stylesheet's
+      expect(s.maxHeight).toBeCloseTo(card.height, 0);
     });
   });
 
@@ -129,6 +131,24 @@ describeBrowsers((browser) => {
       expect(overlaps(card, s.trigger)).toBe(false);
       // under the bar: --bar-h (48 px by default) and 16 px of room
       expect(card.top).toBeGreaterThanOrEqual(48 + 16 - 1);
+      // the max-height: at most the room above, at least the floor, and the card no taller
+      expect(s.maxHeight).toBeLessThanOrEqual(s.trigger.top - 48 - ROOM + 0.5);
+      expect(s.maxHeight).toBeGreaterThanOrEqual(MIN_HEIGHT);
+      expect(card.height).toBeLessThanOrEqual(s.maxHeight + 0.5);
+    });
+  });
+
+  it('the max-height caps a card taller than the room on its side: it ends ROOM above the window\'s bottom, less GAP', async () => {
+    await withDoc(browser, { width: 390, height: 400 }, async (doc) => {
+      const s = await showAt(doc, 0, 200);
+      expect(s.open).toBe(true);
+      const card = s.card as Box;
+      const below = s.viewport.h - s.trigger.bottom - ROOM;
+      expect(below).toBeGreaterThan(s.trigger.top - 48 - ROOM); // below is the side with more room
+      expect(card.top).toBeCloseTo(s.trigger.bottom + GAP, 0);
+      expect(s.maxHeight).toBeCloseTo(below, 0);
+      expect(card.height).toBeCloseTo(below, 0);
+      expect(card.bottom).toBeCloseTo(s.viewport.h - ROOM + GAP, 0);
     });
   });
 

@@ -155,16 +155,27 @@ function pointer(target: EventTarget, type: string, init: PointerEventInit = {})
   return e;
 }
 
+/** A pointer's click: detail 1 (a key's click has detail 0), and no pointerType (a MouseEvent, as older engines send). */
 function click(target: Element, init: MouseEventInit = {}): MouseEvent {
-  const e = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...init });
+  const e = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1, ...init });
   target.dispatchEvent(e);
   return e;
 }
 
-/** A tap: a touch pointerdown, then the click a touch screen sends (a MouseEvent with no pointerType, as WebKit's). */
-function tap(target: Element): MouseEvent {
+/** A click that names its pointer: a PointerEvent, detail 1 unless `init` says otherwise. */
+function pclick(target: Element, pointerType: string, init: PointerEventInit = {}): PointerEvent {
+  const e = new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1, pointerType, ...init });
+  target.dispatchEvent(e);
+  return e;
+}
+
+/**
+ * A tap: a touch pointerdown, then the click a touch screen sends. By default that click is WebKit's: a PointerEvent
+ * that names 'mouse' (measured in the pinned Playwright WebKit); Chromium's names 'touch'.
+ */
+function tap(target: Element, says = 'mouse'): MouseEvent {
   pointer(target, 'pointerdown', { pointerType: 'touch' });
-  return click(target);
+  return pclick(target, says);
 }
 
 /** A chrome diagram block in the root, as Task 23 makes them: `.dnode` with data-ref or data-term. */
@@ -681,6 +692,45 @@ describe('focus', () => {
     expect(isOpen(root)).toBe(false);
   });
 
+  it('a press on the card\'s text keeps it, though the focus leaves for nothing; the press is forgotten once it hides', async () => {
+    const root = await open();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const d1 = link(root, 'xref', 'D1');
+    focus(d1);
+    pointer(theCard(root).querySelector('.xc-body') as Element, 'pointerdown');
+    d1.blur();
+    vi.advanceTimersByTime(HIDE_DELAY_MS * 4);
+    expect(isOpen(root)).toBe(true);
+    // a press elsewhere in the root is no press on the card: the focus leaving for nothing hides it again
+    focus(d1);
+    pointer(d1, 'pointerdown');
+    d1.blur();
+    vi.advanceTimersByTime(HIDE_DELAY_MS);
+    expect(isOpen(root)).toBe(false);
+    // a press on the card, then the card hidden by a key: the next card hides when the focus leaves for nothing
+    focus(d1);
+    pointer(theCard(root).querySelector('.xc-body') as Element, 'pointerdown');
+    key(d1, 'Escape');
+    expect(isOpen(root)).toBe(false);
+    d1.blur();
+    focus(link(root, 'xref', 'D2'));
+    link(root, 'xref', 'D2').blur();
+    vi.advanceTimersByTime(HIDE_DELAY_MS);
+    expect(isOpen(root)).toBe(false);
+  });
+
+  it('the focus back on the trigger shown within the delay keeps its card', async () => {
+    const root = await open();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const d1 = link(root, 'xref', 'D1');
+    focus(d1);
+    d1.blur();
+    vi.advanceTimersByTime(HIDE_DELAY_MS - 1);
+    focus(d1);
+    vi.advanceTimersByTime(HIDE_DELAY_MS * 4);
+    expect([isOpen(root), d1.getAttribute('aria-expanded')]).toEqual([true, 'true']);
+  });
+
   it('focus leaving the page (to nothing) hides it', async () => {
     const root = await open();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -829,16 +879,41 @@ describe('touch: the first tap previews, the second goes', () => {
     expect([onHash.mock.calls.length, isOpen(root)]).toEqual([1, false]);
   });
 
-  it('a click that names no pointer (a key\'s) is read by the last pointerdown', async () => {
+  it('a pointer\'s click that names no pointer, long after its pointerdown, is read by that pointerdown', async () => {
     const onHash = vi.fn();
     const root = await open(DOC, { onHash });
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(1_000_000);
     const d2 = link(root, 'xref', 'D2');
     pointer(d2, 'pointerdown', { pointerType: 'mouse' });
-    d2.dispatchEvent(new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType: '' }));
+    now.mockReturnValue(1_000_000 + FRESH_MS * 2);
+    pclick(d2, '');
     expect([onHash.mock.calls.length, isOpen(root)]).toEqual([1, false]);
     pointer(d2, 'pointerdown', { pointerType: 'pen' });
-    d2.dispatchEvent(new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType: '' }));
+    now.mockReturnValue(1_000_000 + FRESH_MS * 4);
+    pclick(d2, '');
     expect([onHash.mock.calls.length, isOpen(root)]).toEqual([1, true]);
+  });
+
+  it('a key\'s click (detail 0) goes at once, however lately a touch came down', async () => {
+    const onHash = vi.fn();
+    const root = await open(DOC, { onHash });
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(1_000_000);
+    const d2 = link(root, 'xref', 'D2');
+    pointer(root.querySelector('h1') as Element, 'pointerdown', { pointerType: 'touch' });
+    now.mockReturnValue(1_000_000 + 10_000);
+    focus(d2);
+    key(d2, 'Escape');
+    expect(isOpen(root)).toBe(false);
+    // Chromium's click for Enter names no pointer; WebKit's may name one: a key's click is told by its detail
+    let n = 0;
+    for (const says of ['', 'mouse', 'touch']) {
+      pointer(root.querySelector('h1') as Element, 'pointerdown', { pointerType: 'touch' });
+      pclick(d2, says, { detail: 0 });
+      n += 1;
+      expect([isOpen(root), onHash.mock.calls.length], `"${says}"`).toEqual([false, n]);
+    }
   });
 
   it('the pointer is heard before the trigger\'s own handlers: one that stops the pointerdown does not make a tap a click', async () => {
@@ -867,7 +942,7 @@ describe('touch: the first tap previews, the second goes', () => {
     pointer(d2, 'pointerdown', { pointerType: 'mouse' });
     focus(d2);
     expect(isOpen(root)).toBe(true);
-    d2.dispatchEvent(new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType: 'touch' }));
+    pclick(d2, 'touch');
     expect(onHash).toHaveBeenCalledTimes(1);
   });
 
@@ -880,23 +955,55 @@ describe('touch: the first tap previews, the second goes', () => {
     expect([heard.mock.calls.length, isOpen(root)]).toEqual([0, true]);
   });
 
-  it('a mouse click goes at once, whatever the last pointer; a click event that names its pointer is read by it', async () => {
+  it('a mouse click goes at once; a click that names touch after a mouse\'s pointerdown is read by its own word', async () => {
     const onHash = vi.fn();
     const root = await open(DOC, { onHash });
     const d2 = link(root, 'xref', 'D2');
     pointer(d2, 'pointerdown', { pointerType: 'mouse' });
     click(d2);
     expect([onHash.mock.calls.length, isOpen(root)]).toEqual([1, false]);
-    // a touch pointerdown, then a click that says it came from a mouse: the click's own word wins
-    pointer(d2, 'pointerdown', { pointerType: 'touch' });
-    const e = new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse' });
-    d2.dispatchEvent(e);
-    expect(onHash.mock.calls.length).toBe(2);
-    // and a click that says touch, after a mouse pointerdown, previews
+    // a click that says touch, after a mouse pointerdown, previews
     pointer(d2, 'pointerdown', { pointerType: 'mouse' });
-    const t = new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType: 'touch' });
-    d2.dispatchEvent(t);
-    expect([onHash.mock.calls.length, isOpen(root), t.defaultPrevented]).toEqual([2, true, true]);
+    const t = pclick(d2, 'touch');
+    expect([onHash.mock.calls.length, isOpen(root), t.defaultPrevented]).toEqual([1, true, true]);
+  });
+
+  it('a click within FRESH_MS of a touch is the touch\'s, whatever it names; later, its own word wins', async () => {
+    const onHash = vi.fn();
+    const root = await open(DOC, { onHash });
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(1_000_000);
+    const d2 = link(root, 'xref', 'D2');
+    pointer(d2, 'pointerdown', { pointerType: 'touch' });
+    now.mockReturnValue(1_000_000 + FRESH_MS - 1);
+    expect([pclick(d2, 'mouse').defaultPrevented, isOpen(root), onHash.mock.calls.length]).toEqual([true, true, 0]);
+    key(d2, 'Escape');
+    pointer(d2, 'pointerdown', { pointerType: 'touch' });
+    now.mockReturnValue(1_000_000 + FRESH_MS * 2 - 1);
+    pclick(d2, 'mouse');
+    expect([isOpen(root), onHash.mock.calls.length]).toEqual([false, 1]);
+  });
+
+  it('a tap previews and the next goes, whatever its click names: WebKit\'s "mouse", Chromium\'s "touch", or none', async () => {
+    for (const says of ['mouse', 'touch', '']) {
+      const onHash = vi.fn();
+      const root = await open(DOC, { onHash });
+      const d2 = link(root, 'xref', 'D2');
+      expect([tap(d2, says).defaultPrevented, isOpen(root), onHash.mock.calls.length], `"${says}"`).toEqual([true, true, 0]);
+      expect([tap(d2, says).defaultPrevented, isOpen(root), onHash.mock.calls.length], `"${says}"`).toEqual([true, false, 1]);
+      await destroyEnhancement(root);
+    }
+  });
+
+  it('WebKit\'s tap: a touch, the focus, then a click that names "mouse"; the first previews, the second goes', async () => {
+    const onHash = vi.fn();
+    const root = await open(DOC, { onHash });
+    const d2 = link(root, 'xref', 'D2');
+    pointer(d2, 'pointerdown', { pointerType: 'touch' });
+    focus(d2);
+    expect([pclick(d2, 'mouse').defaultPrevented, isOpen(root), onHash.mock.calls.length]).toEqual([true, true, 0]);
+    tap(d2);
+    expect([isOpen(root), onHash.mock.calls.length]).toEqual([false, 1]);
   });
 });
 
@@ -1186,6 +1293,26 @@ describe('diagram blocks and show(ctx, trigger) (Task 23)', () => {
     block.addEventListener('keydown', (e) => e.preventDefault());
     key(block, 'Enter');
     expect(isOpen(root)).toBe(false);
+  });
+
+  it('Enter or Space on a block that shows no card leaves the key and the focus alone, whatever card is open', async () => {
+    const root = await open();
+    const ctx = ctxOf(root);
+    const hidden = chrome(document, 'div', { className: 'rv-hide' });
+    ctx.journal.insert(hidden, root, null);
+    focus(link(root, 'xref', 'D1'));
+    expect(isOpen(root)).toBe(true);
+    for (const block of [dnode(root, { ref: 'D2' }, hidden), dnode(root, { ref: 'Z9' })]) {
+      for (const k of ['Enter', ' ']) {
+        block.focus();
+        const e = key(block, k);
+        expect([e.defaultPrevented, document.activeElement === block, theCard(root).getAttribute('aria-label')], `${block.textContent} ${k}`).toEqual([
+          false,
+          true,
+          'D1 preview',
+        ]);
+      }
+    }
   });
 
   it('data-term names a term first; an empty one leaves data-ref to name an ID', async () => {

@@ -46,13 +46,18 @@
 //     back to the trigger; over the card the hide is called off. Leaving another trigger leaves an open card alone. A
 //     drag (a button held) that leaves a block in the full-screen figure (`.fig-overlay`, Task 23) keeps the card;
 //   - focus on a trigger shows its card at once; focus moving anywhere but the card or its trigger hides it after
-//     HIDE_DELAY_MS;
+//     HIDE_DELAY_MS, unless it left for nothing after a press on the card (its text takes no focus); the focus back on
+//     the trigger shown within the delay keeps it;
 //   - a click on a trigger, captured on the root before any other listener (glossary.ts's own, nav's), by a pointer
-//     other than a mouse (the click's pointerType, or the last pointerdown's when it names none, as WebKit's click
-//     does): the first tap shows the card and goes nowhere; the next tap on it goes, as a click does. A focus that
-//     comes within FRESH_MS of a touch's pointerdown (a tap that focuses the link first) shows the card and leaves the
-//     next click a first tap still. A diagram block goes nowhere itself: any click shows its card;
-//   - Enter or Space on a diagram block shows its card and moves the focus to the card's last link;
+//     other than a mouse: the first tap shows the card and goes nowhere; the next tap on it goes, as a click does. A
+//     click's pointer is the last pointerdown's when that came within FRESH_MS and was not a mouse's, whatever the
+//     click names (WebKit's click after a tap names 'mouse'); else the click's own pointerType, or the last
+//     pointerdown's when it names none. A click with detail 0 (a key's, or a script's) is no tap: it goes. A focus
+//     that comes within FRESH_MS of a touch's pointerdown (a tap that focuses the link first, as both engines do)
+//     shows the card and leaves the next click a first tap still. A diagram block goes nowhere itself: any click
+//     shows its card;
+//   - Enter or Space on a diagram block shows its card and moves the focus to the card's last link; on a block that
+//     shows no card, the key and the focus are left alone;
 //   - Tab on the trigger shown moves into the card; in the card, Shift+Tab on its first stop goes back to the trigger,
 //     and Tab on its last hides it and puts the focus back on the trigger, from where the browser moves on;
 //   - Escape in the card hides it and puts the focus back on the trigger; Escape elsewhere reaches the card through
@@ -166,7 +171,7 @@ function scrub(box: Element): void {
   for (const el of Array.from(box.querySelectorAll('*'))) {
     el.removeAttribute('id');
     el.removeAttribute('data-line');
-    el.setAttribute('data-docreader-chrome', '');
+    el.setAttribute(CHROME_ATTR, '');
   }
 }
 
@@ -276,6 +281,8 @@ export function build(ctx: FeatureContext): void {
   /** The last pointerdown's pointer, and when it came. */
   let lastPointer = 'mouse';
   let lastDown = 0;
+  /** True when the last pointerdown in the root was on the card, until the card hides. */
+  let pressedCard = false;
   /** A trigger being given the focus back: its focus shows nothing. */
   let quiet: Element | null = null;
   /** Triggers a tap focused: their next click still previews. */
@@ -284,6 +291,8 @@ export function build(ctx: FeatureContext): void {
     c?.();
     return null;
   };
+  /** True within FRESH_MS of a pointerdown that was not a mouse's: a tap is under way. */
+  const tapping = (): boolean => lastPointer !== 'mouse' && env.now() - lastDown < FRESH_MS;
 
   /** The trigger at `t`: a link the layout made or a diagram block, in this root. */
   const triggerOf = (t: EventTarget | null): Element | null => {
@@ -321,6 +330,7 @@ export function build(ctx: FeatureContext): void {
       if (shown === null || card === null) return;
       journal.setAttribute(shown, 'aria-expanded', 'false');
       shown = null;
+      pressedCard = false;
       following = stop(following);
       journal.toggleClass(card, 'open', false);
     };
@@ -452,6 +462,7 @@ export function build(ctx: FeatureContext): void {
       const type = (event as PointerEvent).pointerType;
       lastPointer = type === '' ? 'mouse' : type;
       lastDown = env.now();
+      pressedCard = inCard(elementOf(event.target));
     },
     true,
   );
@@ -485,12 +496,17 @@ export function build(ctx: FeatureContext): void {
   });
   journal.listen(root, 'focusin', (event) => {
     const a = triggerOf(event.target);
-    if (a === null || a === shown || a === quiet) return;
+    if (a === null || a === quiet) return;
+    if (a === shown) {
+      hideTimer = stop(hideTimer); // the focus came back within the delay
+      return;
+    }
     showFor(a);
-    if (lastPointer !== 'mouse' && env.now() - lastDown < FRESH_MS) fresh.add(a);
+    if (tapping()) fresh.add(a);
   });
   journal.listen(root, 'focusout', (event) => {
     const to = elementOf((event as FocusEvent).relatedTarget);
+    if (to === null && pressedCard) return; // a press on the card's text, which takes no focus
     if (shown !== null && (to === null || !(to === shown || inCard(to)))) hide(false);
   });
   journal.listen(
@@ -504,8 +520,11 @@ export function build(ctx: FeatureContext): void {
         showFor(a);
         return;
       }
+      if (e.detail === 0) return; // a key's click (or a script's): it goes
+      // During a tap, the tap's pointer, whatever the click names (WebKit's names 'mouse'); else the click's own word,
+      // or the last pointerdown's when it names none.
       const own = (e as { pointerType?: unknown }).pointerType;
-      const type = typeof own === 'string' && own !== '' ? own : lastPointer;
+      const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;
       if (type !== 'mouse' && (a !== shown || fresh.has(a))) {
         fresh.delete(a);
         e.preventDefault();
@@ -521,8 +540,8 @@ export function build(ctx: FeatureContext): void {
     const t = elementOf(e.target);
     const block = t === null ? null : t.closest('.dnode');
     if (block !== null && (e.key === 'Enter' || e.key === ' ')) {
+      if (!showFor(block)) return; // a block that shows no card leaves the key and the focus alone
       e.preventDefault();
-      showFor(block);
       const all = stops();
       all[all.length - 1]?.focus();
       return;
