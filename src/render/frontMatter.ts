@@ -165,10 +165,15 @@ function refuseMergeSource(): never {
 
 /**
  * The name of the property that makes a sequence unmergeable (ruling C39). It is a string because js-yaml
- * merges a source by the string keys of Object.keys, so a Symbol key cannot stand in for it. Only an author
- * who writes this exact key can reach it; that is a known parity gap, described at parseFrontMatter.
+ * merges a source by the string keys of Object.keys, so a Symbol key cannot stand in for it. js-yaml skips a
+ * source key the destination already owns, so no block may be able to put this key on a destination: it is
+ * 2 * FM_MAX_CHARS NULs, and a block under FM_MAX_CHARS code points spells fewer than FM_MAX_CHARS / 2 of
+ * them (each NUL takes a two-character escape, and js-yaml refuses a literal one). Aliases do not help: a
+ * sequence key can grow far past its source (ruling C31), but it joins two or more items with commas, and a
+ * key of one item is that item's text, so an all-NUL key is never longer than one scalar. Exported so a test
+ * can read it: a block spells one NUL key per length, so no block-level test sees every length the key could take.
  */
-const MERGE_REFUSAL = '\u0000merge source is a sequence';
+export const MERGE_REFUSAL = '\u0000'.repeat(2 * FM_MAX_CHARS);
 
 /**
  * The YAML of a front-matter block as a mapping, or null (too long, a load error, or not a mapping).
@@ -193,14 +198,11 @@ const MERGE_REFUSAL = '\u0000merge source is a sequence';
  *   sequences, and nowhere else: a list of mappings, a mapping and a sequence key are read without it.
  * - The symbols cannot clash with an author's key, and they are removed again before the mapping is
  *   returned, so what the caller gets is a plain object. The refusal's property is a string, removed in
- *   the same place, and that leaves a known parity gap (ruling C39). js-yaml's mergeMappings skips a source
- *   key the destination already owns, so the sequence is not refused when the destination already has a key
- *   equal to MERGE_REFUSAL's name. That happens in two ways: (1) the author wrote the key before the `<<`,
- *   with a YAML escape (`"\0merge source is a sequence"` or `"\u0000..."`; a literal NUL is refused by
- *   js-yaml); (2) an earlier source of the same merge list brought it in, e.g. `m: &m {"\0...": 1}` with
- *   `<<: [*m, *t]`. A key written after the `<<` does not bypass it. Then the sequence merges as the keys
- *   0, 1, ..., where the reference refuses the block. That is all: nothing throws and nothing is polluted.
- *   A Symbol key cannot close the gap, because mergeMappings reads `Object.keys(source)`.
+ *   the same place. js-yaml's mergeMappings skips a source key the destination already owns, so a
+ *   destination that held MERGE_REFUSAL's name would let the sequence merge as the keys 0, 1, ... A block
+ *   could reach the destination with its own key in three ways: a key written before the `<<` (with a YAML
+ *   escape), an earlier source of the same merge list, or a separate earlier `<<` pair. None of them can
+ *   spell that name, which is longer than any key a block under FM_MAX_CHARS can make (MERGE_REFUSAL).
  */
 export function parseFrontMatter(content: string): FrontMapping | null {
   if (cpLength(content) >= FM_MAX_CHARS) return null;

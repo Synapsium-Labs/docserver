@@ -8,7 +8,7 @@ import { normaliseForCompare } from '../src/conformance/normalise.js';
 import { checkOutputSafety } from '../src/conformance/oracle.js';
 import { createEngine } from '../src/render/engine.js';
 import { createEnv } from '../src/render/env.js';
-import { FM_MAX_CHARS, frontRecord, parseFrontMatter } from '../src/render/frontMatter.js';
+import { FM_MAX_CHARS, frontRecord, MERGE_REFUSAL, parseFrontMatter } from '../src/render/frontMatter.js';
 import { cpLength } from '../src/render/pyText.js';
 import { render } from '../src/render/index.js';
 import type { FrontEntry } from '../src/render/types.js';
@@ -251,18 +251,27 @@ describe('PD2: scalars render their source text, without Python (rulings C1 and 
 
   it("C17 (e): a multi-source `<<` list keeps its sources' order, where the reference reversed the sources", () => {
     // Reference (PyYAML), measured on the same inputs: the keys come out b, a, x for the first and a, b, c for
-    // the second.
+    // the second, in the strip and in its frontList.
     const referenceFirst = dl('1-4', item('b', '2') + item('a', '1') + item('x', '0'));
     const referenceSecond = dl('1-3', item('a', '1') + item('b', '2') + item('c', '1'));
+    const referenceFirstList = [scalar('b', '2'), scalar('a', '1'), scalar('x', '0')];
+    const referenceSecondList = [scalar('a', '1'), scalar('b', '2'), scalar('c', '1')];
     const first = render('---\nx: 0\n<<: [{a: 1}, {b: 2}]\n---\n');
     expect(first.html).toBe(dl('1-4', item('x', '0') + item('a', '1') + item('b', '2')));
     expect(first.html).not.toBe(referenceFirst);
-    expect(first.meta.frontList?.map((e) => e.key)).toEqual(['x', 'a', 'b']);
+    expect(first.meta.frontList).toEqual([scalar('x', '0'), scalar('a', '1'), scalar('b', '2')]);
+    expect(first.meta.frontList).not.toEqual(referenceFirstList);
     // Both sources give `a`: the earlier source wins, a=1, in the reference and here; only the order differs.
     const second = render('---\n<<: [{a: 1, c: 1}, {a: 2, b: 2}]\n---\n');
     expect(second.html).toBe(dl('1-3', item('a', '1') + item('c', '1') + item('b', '2')));
     expect(second.html).not.toBe(referenceSecond);
     expect(second.meta.frontList).toEqual([scalar('a', '1'), scalar('c', '1'), scalar('b', '2')]);
+    expect(second.meta.frontList).not.toEqual(referenceSecondList);
+    // The values agree: sorted by key, the reference's frontList and this one are the same entries.
+    const byKey = (l: readonly FrontEntry[] | null | undefined): FrontEntry[] =>
+      [...(l ?? [])].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    expect(byKey(first.meta.frontList)).toEqual(byKey(referenceFirstList));
+    expect(byKey(second.meta.frontList)).toEqual(byKey(referenceSecondList));
   });
 
   it('C17: U+0085 is not a line break, so this value fails the load, where the reference read two keys', () => {
@@ -431,6 +440,81 @@ describe('PD2: a merge source that is a sequence fails the load, as in the refer
       dl('1-4', item('a', '1') + item('b', '2') + item('title', 'T')),
     );
     expect(render('---\n<<: {a: 1}\ntitle: T\n---\n').html).toBe(dl('1-4', item('a', '1') + item('title', 'T')));
+  });
+
+  // The refusal is a property whose getter throws, under a string key, and js-yaml's merge skips a source key the
+  // destination already owns. A block that puts the refusal's own key on the destination before the sequence is
+  // merged would load the sequence as the keys 0, 1, ... So the key is one no block under FM_MAX_CHARS can
+  // spell. Three routes reach the destination with an author's key, and each is refused, as the reference (run
+  // on these inputs) refuses each: html '' and meta null. The key text below is the one the refusal used before.
+  const OLD_KEY = 'merge source is a sequence';
+
+  it('route 1: a key spelt with a YAML escape before the `<<` (\\0, \\u0000, \\x00)', () => {
+    for (const nul of ['\\0', '\\u0000', '\\x00']) {
+      refused(`---\n"${nul}${OLD_KEY}": 1\nt: &t [a, b]\n<<: [*t]\n---\n`);
+    }
+  });
+
+  it('route 2: a key brought in by an earlier source of the same merge list', () => {
+    refused(`---\nm: &m {"\\0${OLD_KEY}": 1}\nt: &t [a, b]\n<<: [*m, *t]\n---\n`);
+  });
+
+  it('route 3: a key brought in by a separate earlier `<<` pair, inline or through an alias', () => {
+    refused(`---\n<<: {"\\0${OLD_KEY}": 1}\nt: &t [a, b]\n<<: [*t]\n---\n`);
+    refused(`---\nm: &m {"\\0${OLD_KEY}": 1}\n<<: *m\nt: &t [a, b]\n<<: [*t]\n---\n`);
+  });
+
+  // A block writes fewer than FM_MAX_CHARS / 2 NULs: each takes a two-character escape, and js-yaml refuses a
+  // literal NUL. The shortest block that puts a NUL key before a `<<` is the key, a null value, and the merge:
+  // `"` + n escapes + `":\n<<: [[]]`. With the content below FM_MAX_CHARS (the cap is strict), that is n =
+  // 9993 for a cap of 20000, and one more escape reaches the cap. That longest key, before the `<<`, is still
+  // refused. js-yaml loads that key on its own (the control below). The reference renders nothing for both
+  // blocks, because PyYAML refuses a simple key whose source is longer than 1024 characters; that departure
+  // predates this case and is not ruled here. A block can only fail to spell the refusal's key if that key is all
+  // NULs and longer than n, so the case also reads the key itself: a block spells one NUL key per length, and no
+  // set of blocks small enough to run here covers every length below n.
+  it('a NUL key as long as a block under the cap can make it, before the `<<`, is still refused', () => {
+    const tail = '":\n<<: [[]]';
+    const n = Math.floor((FM_MAX_CHARS - 1 - 1 - tail.length) / 2);
+    const content = `"${'\\0'.repeat(n)}${tail}`;
+    expect(cpLength(content)).toBeLessThan(FM_MAX_CHARS);
+    expect(cpLength(content) + 2).toBeGreaterThanOrEqual(FM_MAX_CHARS);
+    expect(MERGE_REFUSAL).toMatch(/^\0+$/);
+    expect(MERGE_REFUSAL.length).toBeGreaterThan(n);
+    expect(parseFrontMatter(`"${'\\0'.repeat(n)}":`)).toEqual({ ['\u0000'.repeat(n)]: null });
+    refused(`---\n${content}\n---\n`);
+  });
+
+  // The refusal's property is defined on every sequence the block holds and removed after the load; its key is
+  // one constant string, built once, so its length costs nothing per sequence. The case compares a block of
+  // 6000 sequences with the same block of 6000 mappings (each mapping gets two marks, each sequence one
+  // property), timed in turn, by the median of 11 renders each. Measured on Node 24, the sequences' median is
+  // about 0.6 to 0.8 of the mappings', with the short key this task replaced and with the long one alike; a key
+  // built afresh for each sequence makes it about 7.5. The bound of 3 leaves room for noise either way.
+  it('a block of 6000 sequences costs no more than the same block of mappings: the long key is built once', () => {
+    const seqs = `---\na: [${Array(6000).fill('[]').join(',')}]\nb: 1\n---\n`;
+    const maps = `---\na: [${Array(6000).fill('{}').join(',')}]\nb: 1\n---\n`;
+    expect(cpLength(seqs)).toBeLessThan(FM_MAX_CHARS);
+    expect(render(seqs).html).toBe(dl('1-4', item('a', '') + item('b', '1')));
+    expect(render(maps).html).toBe(dl('1-4', item('a', '') + item('b', '1')));
+    const median = (xs: number[]): number => [...xs].sort((x, y) => x - y)[xs.length >> 1] ?? Number.NaN;
+    const timeOf = (src: string): number => {
+      const started = performance.now();
+      render(src);
+      return performance.now() - started;
+    };
+    const ts: number[] = [];
+    const tm: number[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      timeOf(seqs);
+      timeOf(maps);
+    }
+    for (let i = 0; i < 11; i += 1) {
+      ts.push(timeOf(seqs));
+      tm.push(timeOf(maps));
+    }
+    expect(median(ts)).toBeLessThan(1000);
+    expect(median(ts)).toBeLessThan(3 * median(tm));
   });
 
   it('the merge refusal leaves no mark behind: a sequence from a loaded block is a plain array', () => {
@@ -662,8 +746,9 @@ describe('keys are cut to FM_MAX_VALUE code points, as values are (ruling C31, p
   // The collision with a later null or mapping value: frontEntries skips a null and a mapping (as it does for
   // any key), so meta.frontList lists only the earlier key and meta.front keeps the earlier value; the strip
   // still shows the later key, with an empty value for null and an ellipsis for a mapping. Reference
-  // (measured on the same inputs, whose keys are not cut and so do not collide): the same meta, and a strip
-  // with the later value as `None` (PD2 renders null empty) or an ellipsis.
+  // (measured on the same inputs): it keeps the uncut keys, so they do not collide. Its frontList holds one
+  // entry, the uncut 501-character key ending in `x` with the value `one`, and its strip shows both uncut
+  // keys, the later value as `None` (PD2 renders null empty) or an ellipsis.
   it('two long keys that collide, the later holding null or a mapping: meta keeps the earlier, the strip shows both', () => {
     const head = 'k'.repeat(500);
     const nul = render(`---\n${head}x: one\n${head}y:\n---\n`);
