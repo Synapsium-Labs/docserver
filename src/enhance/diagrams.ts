@@ -486,12 +486,9 @@ export async function after(ctx: FeatureContext): Promise<void> {
   void loading.then((mod) => {
     const early = mermaidOf(mod);
     if (early === null) return;
+    // A throw of the module's is the queue's to absorb: each call initialises again.
     void enqueue(early, () => {
-      try {
-        ctx.operate(() => early.initialize(config()));
-      } catch {
-        // a throw of the module's: each call initialises again
-      }
+      ctx.operate(() => early.initialize(config()));
       return Promise.resolve();
     });
   });
