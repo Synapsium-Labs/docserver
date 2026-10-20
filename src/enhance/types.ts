@@ -1,9 +1,16 @@
 // The types of `./enhance`: the public ones (re-exported by index.ts) and the context every feature builds with.
 // Import-inert: declarations only.
-import type { Env } from './env.js';
+import type { BarSlots } from './bar.js';
+import type { Cancel, Env } from './env.js';
+import type { Folds } from './folds.js';
+import type { HeadCtl } from './headctl.js';
 import type { Host } from './host.js';
 import type { Journal } from './journal.js';
+import type { Keys } from './keys.js';
+import type { Nav, Position } from './nav.js';
 import type { FeatureOptions } from './options.js';
+import type { Overlays } from './overlays.js';
+import type { Block, Events, Figures, IdIndex, PageSlot, PlanSlot, RelayoutReason, Terms } from './registry.js';
 import type { ReaderState } from './state.js';
 import type { TextTools } from './text.js';
 import type { Vocab } from './vocab.js';
@@ -242,4 +249,52 @@ export interface FeatureContext {
   chromeId(name: string): string;
   /** Text helpers (text.ts): clip, hash, document order, and the colour key. */
   readonly text: TextTools;
+
+  // ── The shared services (docserver L2, Task 7b; LD1): made before the first feature builds. Each module's header is
+  //    its contract; a feature reads another's work here, never from that feature's module, with two exceptions the
+  //    plan names: changes.ts exports showChanges (Task 20, for Task 22) and cards.ts exports cards.show (Task 17, for
+  //    Task 23). Each is an export of its module that takes the context and finds its own instance's state through a
+  //    WeakMap keyed by the context, so it never reaches another root's.
+  /** Every defined ID (registry.ts; LD6): the first definition wins; all() in document order. */
+  readonly index: IdIndex;
+  /** The glossary's terms (registry.ts; defined by glossary.ts). */
+  readonly terms: Terms;
+  /** The document's tables and code blocks, in document order, each with the flags features set (registry.ts; frozen). */
+  readonly blocks: readonly Block[];
+  /** The numbered figures (registry.ts; added by figures.ts). */
+  readonly figures: Figures;
+  /** Tasks, steps and the outline's threshold (registry.ts; published by plans.ts). */
+  readonly plan: PlanSlot;
+  /** The byline, the facts panel's seam and what waits on the reader (registry.ts; published by editorial.ts). */
+  readonly page: PageSlot;
+  /** prefs, relayout, spy, marks, changes, reveal (registry.ts). */
+  readonly events: Events;
+  /** Show an element whatever hides it: the author's details, then each revealer (reveal.ts). */
+  reveal(el: Element): void;
+  /** Register a revealer for what this feature hides (reveal.ts). */
+  onReveal(fn: (el: Element) => void): Cancel;
+  /** The reader's popups and panels, and the Escape order (overlays.ts). */
+  readonly overlays: Overlays;
+  /** The keyboard layer: bind a key; the keys that apply now (keys.ts). */
+  readonly keys: Keys;
+  /** byId, idOf and goTo, and the delegated click (nav.ts). */
+  readonly nav: Nav;
+  /** keep(fn), holdBar(), barHeld() (nav.ts; Task 14 completes keep). */
+  readonly position: Position;
+  /** Ask for a relayout: coalesced to one run at the next frame (relayout.ts). */
+  relayout(reason: RelayoutReason): void;
+  /** Measure again on every relayout (relayout.ts). */
+  onRelayout(fn: (reasons: ReadonlySet<RelayoutReason>) => void): Cancel;
+  /** Put a control in a heading's `.h-ctl`, slots in fixed order (headctl.ts). */
+  readonly headCtl: HeadCtl;
+  /** The bar's skeleton: bar, tools, running head, progress, skip link (bar.ts); null without chrome.bar. */
+  readonly slots: BarSlots | null;
+  /** The folds' members API (folds.ts): empty without folds. */
+  readonly folds: Folds;
+  /**
+   * Change the prefs, as setEnhancementPrefs does: put them on the root, write them behind, emit 'prefs', and ask for
+   * a relayout ('prefs' for the width or face, 'lens' for the lens). Throws EnhanceError('invalid-options') for a bad
+   * value; does nothing once the instance is not live.
+   */
+  setPrefs(change: Partial<Prefs>): void;
 }

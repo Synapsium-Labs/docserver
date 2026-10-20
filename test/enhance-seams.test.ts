@@ -161,6 +161,7 @@ describe('env: the root\'s window behind one module (RF5)', () => {
   it('destroy cancels every pending timeout, frame and idle callback with the window\'s own cancel', async () => {
     const root = mount();
     await enhance(root);
+    await wait(50); // the startup's own relayout (Task 7b) has had its frame, so every pending call is this case's
     const view = viewOf(root);
     const timers = captureScheduler(view, 'setTimeout', 'clearTimeout');
     const frames = captureScheduler(view, 'requestAnimationFrame', 'cancelAnimationFrame');
@@ -302,7 +303,8 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       remove(type, fn, o as boolean);
     }) as never);
     await destroyEnhancement(root);
-    expect(removed.sort()).toEqual(['afterprint', 'beforeprint', 'pagehide', 'resize', 'scroll']);
+    // Each of the case's five, and relayout's own resize listener (Task 7b).
+    expect(removed.sort()).toEqual(['afterprint', 'beforeprint', 'pagehide', 'resize', 'resize', 'scroll']);
     for (const t of ['scroll', 'resize', 'beforeprint', 'afterprint', 'pagehide']) view.dispatchEvent(new Event(t));
     expect(seen).toHaveLength(5);
   });
@@ -396,7 +398,7 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       value: {
         load: (spec: string) => {
           loads.push(spec);
-          return gate.then(() => []);
+          return gate.then(() => [{ status: 'loaded' }]);
         },
       },
     });
