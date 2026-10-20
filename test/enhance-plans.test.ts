@@ -928,7 +928,7 @@ describe('teardown, names and safety', () => {
   // the heading's text with all chrome left out, and plans, built before it, has moved "Task 3" into a chrome badge,
   // so the fold reads "Fold or unfold: Ship it". When folds.ts names the fold as the reference did, this case goes red:
   // turn it into a plain it().
-  it.fails('an h2 task\'s fold is named as the reference named it, its task number included', async () => {
+  it('an h2 task\'s fold is named as the reference named it, its task number included', async () => {
     const root = mount();
     await enhance(root);
     const h2 = heading(root, 'h2', 'Task 3');

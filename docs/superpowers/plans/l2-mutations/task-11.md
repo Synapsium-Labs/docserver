@@ -753,6 +753,33 @@ The rows the review asked for: the publish of `ctx.plan`, the owner line's white
 ]
 ```
 
+## The coordinator's commit at rebase: a fold named as the reference named it (L2-T11-M71)
+
+The review found that an h2 task's fold was named without its task number ("Fold or unfold: Ship it"), where the
+reference named it before plans ran ("Fold or unfold: Task 3: Ship it"). The fix is in `src/enhance/folds.ts`, Task
+7b's file, so the coordinator made it at rebase (C53). A fold is now named from its heading's own label when an earlier
+feature gave it one: plans names a task heading with its task number, before the badge becomes chrome. The case that
+stated the reference's names as a known failure (`it.fails`) is now an ordinary case, and the suite has no expected
+failure left. Measured 2026-10-20 on `l2-t11-plans`, rebased onto `main`, with the change uncommitted, by `mutate.mjs`
+on a throwaway copy; the checkout's status was the same before and after.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T11-M71 | a fold is named from its heading's own label when an earlier feature gave it one | `src/enhance/folds.ts` | `(h.getAttribute('aria-label') ?? headingText(h, isChrome))` → `(headingText(h, isChrome))` | `test/enhance-plans.test.ts`: 1 failed \| 52 passed (53). "an h2 task's fold is named as the reference named it, its task number included" |
+
+```json
+[
+  {
+    "id": "L2-T11-M71",
+    "guard": "a fold is named from its heading's own label when an earlier feature gave it one",
+    "file": "src/enhance/folds.ts",
+    "old": "    const bare = (h.getAttribute('aria-label') ?? headingText(h, isChrome)).replace(",
+    "new": "    const bare = (headingText(h, isChrome)).replace(",
+    "tests": "--project unit test/enhance-plans.test.ts test/enhance-folds.test.ts"
+  }
+]
+```
+
 ## Visual check
 
 **The plan sample, full and in outline.** `scripts/demo/samples/plans.md`, built into the demo

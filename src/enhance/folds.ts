@@ -167,7 +167,10 @@ export function buildFolds(ctx: FeatureContext): void {
       members.push(n);
     }
     if (members.length === 0) continue;
-    const bare = headingText(h, isChrome).replace(/^[A-Z]?\d+[a-z]?\.\s+/, '');
+    // A heading an earlier feature has named (plans names a task heading with its task number, before its badge
+    // becomes chrome) is named that way here too, as the reference named the fold before plans ran; otherwise its
+    // own text, chrome left out.
+    const bare = (h.getAttribute('aria-label') ?? headingText(h, isChrome)).replace(/^[A-Z]?\d+[a-z]?\.\s+/, '');
     const minutes = formatMinutes(sectionMinutes(h, members));
     const btn = chrome(doc, 'button', {
       className: 'h-fold',
