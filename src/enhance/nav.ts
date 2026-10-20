@@ -283,8 +283,8 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
   // ── the reader's place
   /** The block a hit lies in: the nearest element from it up that the document had with a data-line or an id. */
   const blockAt = (hit: Element | null): { readonly el: Element; readonly line: string } | null => {
-    for (let n = hit; n !== null && n !== root; n = n.parentElement) {
-      const line = n.getAttribute('data-line');
+    for (let n = hit; n !== null; n = n.parentElement) {
+      const line = n.getAttribute('data-line'); // both maps hold elements inside the root only
       if (line !== null && lines.get(line) === n) return { el: n, line };
       const id = docId(n);
       if (id !== null && LINE_OR_ID.test(id)) return { el: n, line: id }; // never a footnote reference's `fnref1:1`
