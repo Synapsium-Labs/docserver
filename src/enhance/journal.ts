@@ -9,9 +9,36 @@
 //
 // While the instance is not live, every write method refuses (does nothing), so no DOM write can follow a
 // destroy, whatever a feature forgets to check.
+//
+// Styles (LD11): setStyle is the library's one style write, and this file its one reach into an element's inline
+// style. It writes through the CSSOM (`style.setProperty`), which a strict Content Security Policy allows where it
+// refuses a style attribute, and only the properties of a closed list, each a feature's measured value: three only
+// with `!important` (a definition dot's and ring's paint, which must beat a diagram's own `!important` rules) and the
+// others never with it. A value that could load a resource, escape or end the declaration is refused. Undo is
+// conditional like an attribute's: each property goes back to the value and priority it had, unless the host has
+// changed it since; an element that had no style attribute loses the empty one the CSSOM leaves.
 
 /** The attribute every element the library creates carries, so teardown and tests find chrome without classes. */
 export const CHROME_ATTR = 'data-docreader-chrome';
+
+/** The style properties setStyle writes without `important` (LD11's closed list). */
+export const STYLE_PROPS = [
+  '--thead-h', '--fig-w', '--bar-h', 'left', 'top', 'right', 'width', 'max-height', 'transform', 'opacity', 'stroke-dasharray', 'stroke-dashoffset',
+] as const;
+
+/** The style properties setStyle writes only with `important`: a definition dot's and ring's paint. */
+export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width'] as const;
+
+export type StyleProp = (typeof STYLE_PROPS)[number] | (typeof IMPORTANT_STYLE_PROPS)[number];
+
+/** The longest style value setStyle writes, in code units. */
+const STYLE_VALUE_MAX = 200;
+
+/** A style value that could load a resource (a url() or an image function), escape a character, or end its declaration. */
+const STYLE_VALUE_REFUSED = /[\\;{}]|(?:url|src|image|image-set|cross-fade|element|paint)\s*\(/i;
+
+/** An element with an inline style: HTML, SVG or MathML. */
+export type Styled = Element & ElementCSSInlineStyle;
 
 export interface Journal {
   /** Set (a string) or remove (null) an attribute; undo restores the original only if the value is still ours. */
@@ -48,6 +75,13 @@ export interface Journal {
   ): void;
   /** A cleanup callback, run in its place in the reverse order. */
   defer(fn: () => void): void;
+  /**
+   * Set (a string) or remove (null) one style property through the CSSOM: a name of STYLE_PROPS, or with `important`
+   * one of IMPORTANT_STYLE_PROPS; anything else, or a refused value, throws. Undo restores the property's value and
+   * priority only while they are still what the library last wrote, and removes the style attribute the CSSOM leaves
+   * when the element had none and nothing is left in it.
+   */
+  setStyle(el: Styled, prop: StyleProp, value: string | null, important?: boolean): void;
 }
 
 /** The lifecycle's own handle on a journal: the writer, plus the undo that teardown runs once. */
@@ -60,6 +94,12 @@ export interface JournalControl {
 interface AttrRecord {
   readonly original: string | null;
   last: string | null;
+}
+
+interface StyleRecord {
+  readonly value: string;
+  readonly priority: string;
+  last: { value: string; priority: string };
 }
 
 interface ClassRecord {
@@ -85,6 +125,7 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
   const undo: (() => void)[] = [];
   const attrs = new Map<Element, Map<string, AttrRecord>>();
   const classes = new Map<Element, Map<string, ClassRecord>>();
+  const styles = new Map<Element, Map<string, StyleRecord>>();
 
   const journal: Journal = {
     setAttribute(el, name, value) {
@@ -210,6 +251,45 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
       if (!live()) return;
       undo.push(fn);
     },
+
+    setStyle(el, prop, value, important = false) {
+      const name: string = prop;
+      const plain = (STYLE_PROPS as readonly string[]).includes(name);
+      const loud = (IMPORTANT_STYLE_PROPS as readonly string[]).includes(name);
+      if (!plain && !loud) throw new Error(`docreader: journal.setStyle refuses the property ${JSON.stringify(name)}`);
+      if (loud !== important) throw new Error('docreader: journal.setStyle takes important only for fill, stroke and stroke-width, and those only with it');
+      if (value !== null && (value.length > STYLE_VALUE_MAX || STYLE_VALUE_REFUSED.test(value))) {
+        throw new Error('docreader: journal.setStyle refuses this value');
+      }
+      if (!live()) return;
+      const style = el.style;
+      let byProp = styles.get(el);
+      if (byProp === undefined) {
+        styles.set(el, (byProp = new Map()));
+        // The element's first style write: when it had no style attribute, the last undo removes the empty one. A
+        // browser may serialize the CSSOM into the attribute lazily, on the next read: reading it first makes the
+        // removal stick, where removing an attribute not yet written would let that later read bring it back empty.
+        if (!el.hasAttribute('style')) {
+          undo.push(() => {
+            if (style.length === 0 && el.getAttribute('style') !== null) el.removeAttribute('style');
+          });
+        }
+      }
+      let rec = byProp.get(name);
+      if (rec === undefined) {
+        const r: StyleRecord = { value: style.getPropertyValue(name), priority: style.getPropertyPriority(name), last: { value: '', priority: '' } };
+        byProp.set(name, (rec = r));
+        undo.push(() => {
+          if (style.getPropertyValue(name) !== r.last.value || style.getPropertyPriority(name) !== r.last.priority) return; // the host changed it since
+          if (r.value === '') style.removeProperty(name);
+          else style.setProperty(name, r.value, r.priority);
+        });
+      }
+      if (value === null) style.removeProperty(name);
+      else style.setProperty(name, value, important ? 'important' : '');
+      // What the browser holds now (it may have normalised the value, or refused it): the next undo compares with that.
+      rec.last = { value: style.getPropertyValue(name), priority: style.getPropertyPriority(name) };
+    },
   };
 
   return {
@@ -226,6 +306,7 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
       }
       attrs.clear();
       classes.clear();
+      styles.clear();
       return faults;
     },
   };

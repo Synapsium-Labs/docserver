@@ -15,9 +15,12 @@
 //      'aborted', reserving nothing. Steps 1 and 2 then run again, because reading the options may have run host
 //      code that enhanced this root, or one around or inside it.
 //   4. The instance is reserved (added to the registry) before any DOM write, host callback or await.
-//   5. Startup runs as one operation: read state, apply prefs, the editorial core, folds; then the instance is
-//      active. If an instance on an overlapping root is still being torn down (a destroy requested inside one of
-//      its operations), startup first waits for that teardown.
+//   5. Startup runs as one operation: measure the sections (section 0, before any node moves), read state, apply
+//      prefs, then build every feature through features.ts, in order, stopping once the instance is not live; then
+//      the instance is active, and the second phase starts: each feature's `after`, inside an operation, in order
+//      (LD5; enhance() does not wait for it, and its failures are the feature's to show). If an instance on an
+//      overlapping root is still being torn down (a destroy requested inside one of its operations), startup first
+//      waits for that teardown.
 //   6. A throw rolls back (teardown) and then rejects 'initialization', or with the EnhanceError thrown. A destroy
 //      or abort during startup rolls back and then rejects 'aborted'. A rejection always follows the rollback.
 //   enhance itself is not async: it returns the promise it stored on the instance, so step 1 can return it again.
@@ -31,17 +34,27 @@
 // createHost alone, so a feature's context carries the options without them and reaches the host only through
 // `ctx.host`.
 //
+// The seams every feature builds with (Task 7a): `env` (the root's window, env.ts), `sections`, `vocab` (vocab.ts),
+// `chromeId` and `text` (text.ts). Chrome ids are per instance: `docreader.<n>.<name>`, where n counts the instances
+// of the document, so two instances never issue the same id. The dots keep them out of render()'s id alphabet
+// (letters, digits, `_` and `-`, for anchors and heading slugs alike), so no root rendered into the document later
+// can carry one; an id the document held at the instance's first call, or one the instance issued, is skipped by a
+// `.<k>` suffix. An instance's ids are released at its teardown, and it issues none once it is not live.
+//
 // destroyEnhancement(root): marks the instance destroying and bumps its generation first, so no further write
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
 // when the outermost operation unwinds. The promise settles after the teardown; every call for that root returns
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
-import { buildEditorial } from './editorial.js';
-import { buildFolds } from './folds.js';
+import { createEnv } from './env.js';
+import { features, type Feature } from './features.js';
 import { createHost } from './host.js';
-import { createJournal, type JournalControl } from './journal.js';
+import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
+import { sectionMinutes } from './reading.js';
 import { applyPrefs, createReaderState, type ReaderState } from './state.js';
-import { EnhanceError, type EnhanceOptions, type FeatureContext, type Prefs, type ResolvedInfo } from './types.js';
+import { hash, textTools } from './text.js';
+import { EnhanceError, type EnhanceOptions, type FeatureContext, type Prefs, type ResolvedInfo, type SectionUnit } from './types.js';
+import { createVocab } from './vocab.js';
 
 type Phase = 'initializing' | 'active' | 'destroying' | 'destroyed';
 
@@ -65,6 +78,8 @@ interface Instance {
   pendingPrefs: Partial<Prefs> | null;
   /** The context features were built with, once startup made it. */
   ctx: FeatureContext | null;
+  /** The features startup builds, in order: the second phase starts their `after`s once startup succeeded. */
+  built: readonly Feature[];
   /** destroyEnhancement's promise, once a destroy was requested. */
   destroyed: Promise<void> | null;
   settle: ((faults: unknown[]) => void) | null;
@@ -75,6 +90,11 @@ let registry: WeakMap<Document, Set<Instance>> | undefined;
 let byRoot: WeakMap<Element, Set<Instance>> | undefined;
 /** The last destroy promise of each root, so repeated calls return the same promise. */
 let lastDestroy: WeakMap<Element, Promise<void>> | undefined;
+/** Per document: how many instances asked for chrome ids, and every chrome id its live instances issued. */
+let chromeIds: WeakMap<Document, { next: number; readonly issued: Set<string> }> | undefined;
+
+/** A chrome id's name: 1 to 32 lower-case letters, digits and dashes, starting with a letter. */
+const CHROME_ID_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 
 function isElement(v: unknown): v is HTMLElement {
   return typeof v === 'object' && v !== null && (v as { nodeType?: unknown }).nodeType === 1 && (v as Node).ownerDocument !== null;
@@ -115,6 +135,11 @@ export function registrySize(doc: Document): number {
 /** For tests: the context of the instance on `root` (live, or still tearing down), once startup made it. */
 export function contextOf(root: Element): FeatureContext | undefined {
   return findByRoot(root)?.ctx ?? undefined;
+}
+
+/** For tests: how many chrome ids are issued, and not yet released, in a document. */
+export function chromeIdsIssued(doc: Document): number {
+  return chromeIds?.get(doc)?.issued.size ?? 0;
 }
 
 /**
@@ -191,6 +216,65 @@ function destroyInstance(inst: Instance): Promise<void> {
   return destroyed;
 }
 
+/**
+ * The document's level-2 sections (the reference layout's section 0), measured before any feature moves a node: for
+ * each h2 with an id among the root's children, the children after it up to the next h1 or h2, their reading time
+ * and the fingerprint of their source text. An h2 without an id ends the section before it and starts none.
+ */
+function measureSections(root: Element): readonly SectionUnit[] {
+  const out: SectionUnit[] = [];
+  let heading: HTMLElement | null = null;
+  let members: Element[] = [];
+  const flush = (): void => {
+    if (heading === null) return;
+    let text = heading.textContent ?? '';
+    for (const m of members) if (m.localName !== 'script' && m.localName !== 'dl') text += `\u0001${m.textContent ?? ''}`;
+    out.push(Object.freeze({ heading, members: Object.freeze(members), minutes: sectionMinutes(heading, members), fingerprint: hash(text) }));
+  };
+  for (const c of Array.from(root.children)) {
+    if (c.localName === 'h1' || c.localName === 'h2') {
+      flush();
+      heading = c.localName === 'h2' && c.id !== '' ? (c as HTMLElement) : null;
+      members = [];
+    } else members.push(c);
+  }
+  flush();
+  return Object.freeze(out);
+}
+
+/** The chrome ids of one instance: a new id per call, unique in the document; all released when the instance is torn down. */
+function chromeIdsOf(inst: Instance, journal: Journal, live: () => boolean): (name: string) => string {
+  chromeIds ??= new WeakMap();
+  let reg = chromeIds.get(inst.doc);
+  if (reg === undefined) chromeIds.set(inst.doc, (reg = { next: 1, issued: new Set() }));
+  const { issued } = reg;
+  const no = reg.next;
+  reg.next += 1;
+  const mine: string[] = [];
+  journal.defer(() => {
+    for (const id of mine) issued.delete(id);
+  });
+  /** The document's ids, read at the first call (by attribute, never by a lookup). */
+  let taken: Set<string> | null = null;
+  return (name) => {
+    if (typeof name !== 'string' || !CHROME_ID_NAME.test(name)) {
+      throw new Error('docreader: chromeId takes a name of 1 to 32 lower-case letters, digits and dashes, starting with a letter');
+    }
+    // Its release has run, or will run before anything could insert the element: an id issued now would stay issued.
+    if (!live()) throw new Error('docreader: chromeId after a destroy');
+    if (taken === null) {
+      taken = new Set();
+      for (const el of Array.from(inst.root.ownerDocument.querySelectorAll('[id]'))) taken.add(el.id);
+    }
+    const base = `docreader.${String(no)}.${name}`;
+    let id = base;
+    for (let k = 2; taken.has(id) || issued.has(id); k += 1) id = `${base}.${String(k)}`;
+    issued.add(id);
+    mine.push(id);
+    return id;
+  };
+}
+
 /** The document check, measured before any feature moves a node (see ResolvedInfo.isDocument). */
 function isDocument(root: Element): boolean {
   let h1 = 0;
@@ -227,10 +311,10 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   const { root } = inst;
   const generation = inst.generation;
   const live = (): boolean => inst.generation === generation && isLive(inst);
+  // Section 0: before any node moves, and before any host code can run.
+  const sections = measureSections(root);
   const state = createReaderState({
-    storage: opts.storage,
-    storageKey: opts.storageKey,
-    explicit: opts.prefs,
+    options: opts,
     operate: (fn) => {
       operate(inst, fn);
     },
@@ -246,23 +330,54 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     if (!live()) return;
   }
   const operateHere = <T>(fn: () => T): T | undefined => operate(inst, fn);
+  const journal = inst.control.journal;
   // The host's functions stay out of the context: features call them through `host` alone.
   const { callbacks, ...options } = opts;
+  const vocab = createVocab(options);
   const ctx: FeatureContext = {
     root,
-    journal: inst.control.journal,
+    journal,
     state,
     info: resolveInfo(root, opts.info),
     options,
     host: createHost(callbacks, live, operateHere),
     live,
     operate: operateHere,
+    env: createEnv(root, journal, live, operateHere),
+    sections,
+    vocab,
+    chromeId: chromeIdsOf(inst, journal, live),
+    text: textTools(vocab),
   };
   inst.ctx = ctx;
-  applyPrefs(ctx.journal, root, state.prefs);
-  buildEditorial(ctx);
-  if (!live()) return;
-  if (opts.folds) buildFolds(ctx);
+  applyPrefs(journal, root, state.prefs);
+  const list = features();
+  inst.built = list;
+  for (const f of list) {
+    f.build(ctx);
+    if (!live()) return;
+  }
+}
+
+/**
+ * The second phase (LD5): each feature's `after`, inside an operation, in order; enhance() does not wait. Called only
+ * once startup has succeeded and the instance is active.
+ */
+function secondPhase(inst: Instance): void {
+  const ctx = inst.ctx;
+  if (ctx === null) return;
+  for (const f of inst.built) {
+    const after = f.after;
+    if (after === undefined) continue;
+    operate(inst, () => {
+      try {
+        // A rejection is the feature's to show (its own failed mark); here it only must not go unhandled.
+        Promise.resolve(after(ctx)).catch(() => undefined);
+      } catch {
+        // a throw before its first await, likewise
+      }
+    });
+  }
 }
 
 /** Wait for a destroy promise without rejecting: the cleanup error, or undefined when it was clean. */
@@ -304,6 +419,7 @@ async function startup(inst: Instance, opts: NormalizedOptions, blockers: readon
     }
     inst.phase = 'active';
     inst.state?.seal();
+    secondPhase(inst);
   } catch (e) {
     // Whatever went wrong (a host signal that throws, say), the reservation never outlives a rejection: roll back
     // first. After the two refusals above this finds the teardown done and returns at once.
@@ -365,6 +481,7 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
     state: null,
     pendingPrefs: null,
     ctx: null,
+    built: [],
     destroyed: null,
     settle: null,
   };

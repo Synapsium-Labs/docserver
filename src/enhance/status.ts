@@ -4,35 +4,29 @@
 // that reads as a status column, a cell's leading status word ("Agreed", "Pending, see below") is shown as a
 // dot-and-word mark, `span.pill.<ok|wait|no|info>`.
 //
-// A column qualifies when (a) its header holds one of the words Status, State, Result, Verdict, Outcome (each also
-// plural), Stands or Fate as a whole word ("Current status" does, "Statement" does not), or (b) its header names a
-// ruling or asks a question and at least half its filled cells open on a status word, or (c) at least 60% of its
-// filled cells (three or more, none over three words) open on one. The first column never does. Only the cell's
-// first text (directly, or alone inside a strong, em or b) is read.
+// The words are the vocabulary's (`ctx.vocab`, vocab.ts): the status words by colour role, and the header words. A
+// column qualifies when (a) its header holds a status-header word as a whole word (by default Status, State,
+// Result, Verdict, Outcome, each also plural, Stands or Fate: "Current status" does, "Statement" does not), or (b)
+// its header names a ruling or asks a question and at least half its filled cells open on a status word, or (c) at
+// least 60% of its filled cells (three or more, none over three words) open on one. The first column never does.
+// Only the cell's first text (directly, or alone inside a strong, em or b) is read. A cell section 8 split into
+// bullet lines (Task 10's `span.cell-line`) is read by its first line, as the reference's lead text descends into it;
+// a bullet split off the line's text and kept in it as hidden chrome (a chrome element with `hidden`) is passed over.
+// So the marks are built after the bullet lines: their own step in features.ts, after `tables` and before `ids`,
+// whose ID rows read the marks.
 //
 // The text is never edited: the word's text node is split off (journal.split) and moved into the mark (journal.wrap);
 // a comma, semicolon, colon or full stop right after it joins the mark in a `span.pill-wrap`, so it never wraps to
 // the next line alone. Destroy joins the text again.
-import { chrome, type Journal } from './journal.js';
+import { CHROME_ATTR, chrome, type Journal } from './journal.js';
 import { words } from './reading.js';
+import type { FeatureContext } from './types.js';
+import type { StatusRole, Vocab } from './vocab.js';
 
-/** The status words, each with its colour role. A word must open the cell's text. */
-// Open before v1: the status words and the header patterns are this format's defaults, built in; the public
-// release makes them an option (the word table and the patterns), with a neutral documented default.
-const STATUS: readonly (readonly [RegExp, string])[] = [
-  [/^(ruled|accepted|agreed|kept|confirmed|measured|done|verified|yes|implemented|approved)\b/i, 'ok'],
-  [/^(awaiting|proposed|pending|open|waiting|partly|partial|to do|in review|draft)\b/i, 'wait'],
-  [/^(rejected|withdrawn|dropped|removed|refused|no|diverges|blocked)\b/i, 'no'],
-  [/^(changed|amended|deferred|later|pinned|judgement|sourced|reported|superseded)\b/i, 'info'],
-];
-
-/** A header that names a status column, as a whole word (so "Statement" or "Restated" does not). */
-const STATUS_HEADER = /\b(?:status(?:es)?|states?|results?|verdicts?|outcomes?|stands|fate)\b/i;
-
-/** The status word a text opens with, and its role; null when it opens with none. */
-export function statusOf(s: string): { readonly word: string; readonly role: string } | null {
+/** The status word a text opens with, as the text spells it, and its colour role; null when it opens with none. */
+export function statusOf(vocab: Vocab, s: string): { readonly word: string; readonly role: StatusRole } | null {
   const t = s.trim();
-  for (const [re, role] of STATUS) {
+  for (const { re, role } of vocab.status) {
     const m = re.exec(t);
     if (m !== null) return { word: m[0], role };
   }
@@ -41,10 +35,21 @@ export function statusOf(s: string): { readonly word: string; readonly role: str
 
 const txt = (n: Node): string => (n.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-/** The text node a cell's text opens with: its first non-blank child, or the one text inside a leading strong/em/b. */
+/** A node the lead text passes over: blank text, or hidden chrome (a bullet split off a line). */
+function skipped(n: Node): boolean {
+  if (n.nodeType === 3) return (n as Text).data.trim() === '';
+  return n.nodeType === 1 && (n as Element).hasAttribute(CHROME_ATTR) && (n as Element).hasAttribute('hidden');
+}
+
+/**
+ * The text node a cell's text opens with: past leading bullet lines (`span.cell-line`) into the first, its first
+ * child not passed over, or the one text inside a leading strong/em/b.
+ */
 function leadText(cell: Element): Text | null {
-  let f = cell.firstChild;
-  while (f !== null && f.nodeType === 3 && (f as Text).data.trim() === '') f = f.nextSibling;
+  let host: Element = cell;
+  for (let c = host.firstChild; c !== null && c.nodeType === 1 && (c as Element).classList.contains('cell-line'); c = host.firstChild) host = c as Element;
+  let f = host.firstChild;
+  while (f !== null && skipped(f)) f = f.nextSibling;
   if (f === null) return null;
   if (f.nodeType === 1) {
     const e = f as Element;
@@ -56,10 +61,10 @@ function leadText(cell: Element): Text | null {
 }
 
 /** Put the mark on one cell's leading status word. */
-function mark(journal: Journal, doc: Document, node: Text): void {
+function mark(journal: Journal, vocab: Vocab, doc: Document, node: Text): void {
   const data = node.data;
   const s = data.replace(/^\s+/, '');
-  const hit = statusOf(s);
+  const hit = statusOf(vocab, s);
   if (hit === null) return;
   const cut = s.search(/[,;:(]|\.(\s|$)/);
   let head = (cut > 0 ? s.slice(0, cut) : s).trim();
@@ -100,8 +105,9 @@ function shapeTable(wrapper: Element, heads: readonly string[], rows: readonly H
   }
 }
 
-/** Mark the status words of every table under `root` (render()'s `div.table-wrapper > table`). */
-export function buildStatusMarks(root: Element, journal: Journal): void {
+/** Mark the status words of every table under the root (render()'s `div.table-wrapper > table`). */
+export function buildStatusMarks(ctx: FeatureContext): void {
+  const { root, journal, vocab } = ctx;
   const doc = root.ownerDocument;
   for (const w of Array.from(root.querySelectorAll('.table-wrapper'))) {
     const table = w.querySelector('table');
@@ -120,15 +126,15 @@ export function buildStatusMarks(root: Element, journal: Journal): void {
       if (cells.length === 0) return;
       const hits = cells.filter((c) => {
         const l = leadText(c);
-        return l !== null && statusOf(l.data) !== null;
+        return l !== null && statusOf(vocab, l.data) !== null;
       });
-      const named = STATUS_HEADER.test(head);
-      const asked = /ruling|ruled|answer|\?$/i.test(head) && hits.length >= cells.length * 0.5;
+      const named = vocab.statusHeader.test(head);
+      const asked = vocab.rulingHeader.test(head) && hits.length >= cells.length * 0.5;
       const short = hits.length >= cells.length * 0.6 && cells.length >= 3 && cells.every((c) => words(c.textContent ?? '') <= 3);
       if (!named && !asked && !short) return;
       for (const c of hits) {
         const l = leadText(c);
-        if (l !== null) mark(journal, doc, l);
+        if (l !== null) mark(journal, vocab, doc, l);
       }
     });
   }

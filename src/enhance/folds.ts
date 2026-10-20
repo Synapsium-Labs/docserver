@@ -8,7 +8,8 @@
 // library hid are ever shown again: a block the author hid stays as the author left it. Printing shows folded
 // sections; they fold again after.
 //
-// Only a document (ResolvedInfo.isDocument) gets folds, and `folds: false` turns them off. The folded headings are
+// Only a document (ResolvedInfo.isDocument) gets folds, and `folds: false` turns them off (checked here: the
+// lifecycle builds every feature through features.ts). The folded headings are
 // per-document state, a JSON array of heading ids in document order under docreader:doc:<storageKey>:folds; an id
 // that no longer names a heading is dropped at the next write.
 //
@@ -48,7 +49,7 @@ function headingText(h: Element, withChrome: boolean): string {
 
 export function buildFolds(ctx: FeatureContext): void {
   const { root, journal, state } = ctx;
-  if (!ctx.info.isDocument) return;
+  if (!ctx.options.folds || !ctx.info.isDocument) return;
   const doc = root.ownerDocument;
   const sections: Section[] = [];
 
@@ -133,20 +134,14 @@ export function buildFolds(ctx: FeatureContext): void {
     show(s);
   }
 
-  // Print shows everything, whatever is folded.
-  const view = doc.defaultView;
-  if (view !== null) {
-    journal.listen(view, 'beforeprint', () => {
-      for (const s of sections) {
-        if (!s.folded) continue;
-        for (const m of s.hid) if (m.getAttribute('hidden') === 'until-found') journal.setAttribute(m, 'hidden', null);
+  // Print shows everything, whatever is folded (the root's window, through env).
+  ctx.env.onPrint((printing) => {
+    for (const s of sections) {
+      if (!s.folded) continue;
+      for (const m of s.hid) {
+        if (printing && m.getAttribute('hidden') === 'until-found') journal.setAttribute(m, 'hidden', null);
+        else if (!printing && !m.hasAttribute('hidden')) journal.setAttribute(m, 'hidden', 'until-found');
       }
-    });
-    journal.listen(view, 'afterprint', () => {
-      for (const s of sections) {
-        if (!s.folded) continue;
-        for (const m of s.hid) if (!m.hasAttribute('hidden')) journal.setAttribute(m, 'hidden', 'until-found');
-      }
-    });
-  }
+    }
+  });
 }
