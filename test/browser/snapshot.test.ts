@@ -63,7 +63,7 @@ describe('snapshot: source nodes', () => {
 });
 
 describe('snapshot: the scope', () => {
-  it('a class brings its element and the whole subtree in: classes, the chrome mark, role, aria-*, hidden, data-docreader-*, data-label', () => {
+  it('a class on chrome brings its element and the whole subtree in: classes, the chrome mark, role, aria-*, hidden, data-docreader-*, data-label', () => {
     const { root, isSource } = setup('<p>Lead</p>');
     const box = chrome('div', 'zeta alpha');
     box.setAttribute('role', 'note');
@@ -87,20 +87,46 @@ describe('snapshot: the scope', () => {
     );
   });
 
-  it('[name] brings in a source element that carries it, by itself; never chrome, and not its children', () => {
+  it('[name] brings in a source element that carries it, by itself, showing only that attribute; never chrome, and not its children', () => {
     const { root, isSource } = setup('<h2 aria-label="Two" class="folded">Two</h2><p hidden="until-found"><em class="k">x</em></p>');
     const btn = chrome('button', 'h-fold', 'Fold');
     btn.setAttribute('aria-expanded', 'true');
     btn.setAttribute('hidden', '');
     (root.firstElementChild as Element).append(btn);
     expect(snapshot(root, ['[hidden]', '[aria-label]'], isSource)).toBe(
-      ['h2 .folded aria-label="Two"', '  "Two"', 'p hidden="until-found"', '  em', '    "x"', ''].join('\n'),
+      ['h2 aria-label="Two"', '  "Two"', 'p hidden="until-found"', '  em', '    "x"', ''].join('\n'),
     );
   });
 
-  it('an entry that is neither a class name nor [attribute] is refused', () => {
+  it('tag[name] brings in only a source element of that tag that carries the attribute', () => {
+    const { root, isSource } = setup('<h2 aria-label="Two">Two</h2><p aria-label="P" hidden>x</p>');
+    expect(snapshot(root, ['h2[aria-label]', 'h3[hidden]'], isSource)).toBe(['h2 aria-label="Two"', '  "Two"', 'p', '  "x"', ''].join('\n'));
+  });
+
+  it('a class on a source element brings in that element alone: chrome a later feature puts inside it moves nothing', () => {
+    const { root, isSource } = setup('<h2>One</h2><h2 class="folded">Two</h2>');
+    const before = snapshot(root, ['folded'], isSource);
+    for (const h of Array.from(root.querySelectorAll('h2'))) h.append(chrome('a', 'h-link', '#'));
+    expect(snapshot(root, ['folded'], isSource)).toBe(before);
+    expect(before).toBe(['h2', '  "One"', 'h2 .folded', '  "Two"', ''].join('\n'));
+  });
+
+  it('a source element in scope shows only what the scope names: a later feature\'s label or mark on it moves nothing', () => {
+    const { root, isSource } = setup('<h2 class="folded" hidden="until-found">Two</h2>');
+    const scope = ['folded', '[hidden]'];
+    const before = snapshot(root, scope, isSource);
+    const h2 = root.firstElementChild as Element;
+    h2.classList.add('marked');
+    h2.setAttribute('aria-describedby', 'x');
+    h2.setAttribute('data-docreader-seen', '1');
+    h2.setAttribute('role', 'heading');
+    expect(snapshot(root, scope, isSource)).toBe(before);
+    expect(before).toBe(['h2 .folded hidden="until-found"', '  "Two"', ''].join('\n'));
+  });
+
+  it('an entry that is neither a class name nor [attribute] nor tag[attribute] is refused', () => {
     const { root, isSource } = setup('<p>x</p>');
-    for (const bad of ['.dot', '#id', 'a b', '[Hidden]', '[x]y', '']) {
+    for (const bad of ['.dot', '#id', 'a b', '[Hidden]', '[x]y', '', 'H2[x]', 'h2 [x]', '.h2[x]', 'h2[]']) {
       expect(() => snapshot(root, [bad], isSource)).toThrow('invalid scope entries');
     }
   });

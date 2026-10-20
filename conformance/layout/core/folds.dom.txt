@@ -1,4 +1,4 @@
-dl .doc-meta hidden=""
+dl hidden=""
   div
     dt
       "type"
@@ -43,7 +43,7 @@ p
   strong
     "R2"
   "says a section can fold. Check the table"…
-h2
+h2 aria-label="1. Context"
   "1. Context"
   span .h-ctl chrome
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Context"
@@ -71,11 +71,7 @@ blockquote
   p
     "A quoted line sets the voice of the docu"…
 h2 .folded aria-label="2. Design"
-  span .sec-no chrome
-    "2"
-  span chrome hidden=""
-    "."
-  "Design"
+  "2. Design"
   span .h-ctl chrome
     button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: Design"
       "Unfold"
@@ -95,7 +91,7 @@ ul hidden="until-found"
     "The stylesheet gives the page its look a"…
 p hidden="until-found"
   "A fenced code block shows how a host wou"…
-div .codehilite hidden="until-found"
+div hidden="until-found"
   pre
     code
       span
@@ -165,17 +161,17 @@ div .codehilite hidden="until-found"
       span
         "title"
       "} });"
-div .gh-alert.gh-note hidden="until-found"
+div hidden="until-found"
   p
     "Note"
   p
     "An alert draws attention to one fact. Th"…
-div .gh-alert.gh-warning hidden="until-found"
+div hidden="until-found"
   p
     "Warning"
   p
     "A warning is rarer than a note, and it s"…
-h2
+h2 aria-label="3. Decisions"
   "3. Decisions"
   span .h-ctl chrome
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Decisions"
@@ -236,7 +232,7 @@ div
           "Nothing else reads it any more"
         td
           "Rejected"
-h2
+h2 aria-label="4. Open questions"
   "4. Open questions"
   span .h-ctl chrome
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Open questions"
@@ -253,7 +249,7 @@ ol
     "Should a fold remember its state across "…
   li
     "Should the stylesheet ship a print layou"…
-h2
+h2 aria-label="Where things stand"
   "Where things stand"
   span .h-ctl chrome
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Where things stand"

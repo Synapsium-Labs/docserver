@@ -6,10 +6,15 @@
 // data-docreader-* and data-label. Nothing else, and no sizes or style values: the snapshot is structural.
 //
 // The scope is a list of entries:
-// - a class name (`byline`, `table-wrapper`): an element with that class is in scope with its whole subtree, chrome
-//   and source alike, so a component's inside shows in full;
-// - `[name]` (`[hidden]`, `[aria-label]`): a SOURCE element that carries that attribute is in scope by itself (its
-//   children are judged on their own). Chrome is never in scope by an attribute: only its class brings it in.
+// - a class name (`byline`, `table-wrapper`): a CHROME element with that class is in scope with its whole subtree,
+//   chrome and source alike, so a component's inside shows in full; a SOURCE element with that class is in scope by
+//   itself (its children are judged on their own);
+// - `[name]` or `tag[name]` (`[hidden]`, `h2[aria-label]`): a SOURCE element that carries that attribute (and has
+//   that tag, when one is given) is in scope by itself. Chrome is never in scope by an attribute: only its class
+//   brings it in.
+// A source element in scope by itself shows only what the scope names: the scope's classes it carries and the
+// attributes its entries name. So a later feature that marks, labels or hides a source element moves a case only
+// when the case named that mark, and the chrome it puts inside a source element in scope stays transparent.
 //
 // Chrome outside the scope is transparent: its children stand in its place, and the texts on either side of it join.
 // Chrome's own text (a button's label, a reading time) is left out there; source text it holds (a word the layout
@@ -29,23 +34,35 @@ export const CHROME_ATTR = 'data-docreader-chrome';
 /** How many code points of a text or attribute value the snapshot keeps. */
 export const TEXT_CUT = 40;
 
-/** A valid scope entry: a class name, or `[attribute]`. */
-export const SCOPE_ENTRY = /^(?:-?[A-Za-z_][\w-]*|\[[a-z][a-z0-9-]*\])$/;
+/** A valid scope entry: a class name, `[attribute]` or `tag[attribute]`. */
+export const SCOPE_ENTRY = /^(?:-?[A-Za-z_][\w-]*|(?:[a-z][a-z0-9]*)?\[[a-z][a-z0-9-]*\])$/;
 
 type Out = { kind: 'el'; head: string; children: Out[] } | { kind: 'text'; text: string };
 
 interface Scope {
   readonly classes: readonly string[];
-  readonly attrs: readonly string[];
+  /** Each `[name]` or `tag[name]` entry: the attribute, and the tag it is narrowed to (null: any). */
+  readonly attrs: readonly { readonly tag: string | null; readonly name: string }[];
 }
 
 function parseScope(scope: readonly string[]): Scope {
   const bad = scope.filter((s) => !SCOPE_ENTRY.test(s));
   if (bad.length > 0) throw new Error(`snapshot: invalid scope entries ${JSON.stringify(bad)}`);
   return {
-    classes: scope.filter((s) => !s.startsWith('[')),
-    attrs: scope.filter((s) => s.startsWith('[')).map((s) => s.slice(1, -1)),
+    classes: scope.filter((s) => !s.includes('[')),
+    attrs: scope
+      .filter((s) => s.includes('['))
+      .map((s) => {
+        const at = s.indexOf('[');
+        return { tag: at === 0 ? null : s.slice(0, at), name: s.slice(at + 1, -1) };
+      }),
   };
+}
+
+/** The attributes of `el` that the scope's attribute entries name (for its tag), sorted by name. */
+function namedAttrs(el: Element, scope: Scope): string[] {
+  const names = scope.attrs.filter((a) => (a.tag === null || a.tag === el.localName) && el.hasAttribute(a.name)).map((a) => a.name);
+  return [...new Set(names)].sort();
 }
 
 /** The first `TEXT_CUT` code points of `s` as a JSON string, then `…` when anything was cut. */
@@ -54,20 +71,31 @@ function cut(s: string): string {
   return points.length > TEXT_CUT ? `${JSON.stringify(points.slice(0, TEXT_CUT).join(''))}…` : JSON.stringify(s);
 }
 
-/** What the layout put on an element in scope: classes, the chrome mark, role, aria-*, hidden, data-docreader-*, data-label. */
-function head(el: Element, inScope: boolean): string {
-  const tag = el.localName;
-  if (!inScope) return tag;
-  const parts = [tag];
+/** The rank of an attribute in a head: role, aria-*, hidden, data-docreader-*, data-label; then by name. */
+function byRank(a: string, b: string): number {
+  const rank = (n: string): number => (n === 'role' ? 0 : n.startsWith('aria-') ? 1 : n === 'hidden' ? 2 : n === 'data-label' ? 4 : 3);
+  return rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+/** What the layout put on an element in a component's subtree: classes, the chrome mark, role, aria-*, hidden, data-docreader-*, data-label. */
+function fullHead(el: Element): string {
+  const parts = [el.localName];
   const classes = Array.from(el.classList).sort();
   if (classes.length > 0) parts.push(`.${classes.join('.')}`);
   if (el.hasAttribute(CHROME_ATTR)) parts.push('chrome');
   const named = Array.from(el.attributes)
     .map((a) => a.name)
     .filter((n) => n === 'role' || n === 'hidden' || n === 'data-label' || n.startsWith('aria-') || (n.startsWith('data-docreader-') && n !== CHROME_ATTR));
-  const rank = (n: string): number => (n === 'role' ? 0 : n.startsWith('aria-') ? 1 : n === 'hidden' ? 2 : n === 'data-label' ? 4 : 3);
-  named.sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
+  named.sort(byRank);
   for (const n of named) parts.push(`${n}=${cut(el.getAttribute(n) ?? '')}`);
+  return parts.join(' ');
+}
+
+/** A source element in scope by itself: only the scope's classes it carries and the attributes the scope names. */
+function namedHead(el: Element, classes: readonly string[], attrs: readonly string[]): string {
+  const parts = [el.localName];
+  if (classes.length > 0) parts.push(`.${[...classes].sort().join('.')}`);
+  for (const n of [...attrs].sort(byRank)) parts.push(`${n}=${cut(el.getAttribute(n) ?? '')}`);
   return parts.join(' ');
 }
 
@@ -81,17 +109,21 @@ function walkChildren(parent: Node, inScope: boolean, scope: Scope, isSource: (t
     if (n.nodeType !== 1) continue;
     const el = n as Element;
     const chrome = el.hasAttribute(CHROME_ATTR);
-    const byClass = scope.classes.some((c) => el.classList.contains(c));
-    // Chrome comes in by its class (or an ancestor's) only; an attribute never brings it in.
-    if (chrome && !inScope && !byClass) {
+    const classes = scope.classes.filter((c) => el.classList.contains(c));
+    const children: Out[] = [];
+    if (inScope || (chrome && classes.length > 0)) {
+      // Inside a component in scope, or a component's own chrome: the whole subtree, in full.
+      walkChildren(el, true, scope, isSource, children);
+      into.push({ kind: 'el', head: fullHead(el), children });
+      continue;
+    }
+    if (chrome) {
       walkChildren(el, false, scope, isSource, into); // transparent
       continue;
     }
-    const byAttr = scope.attrs.some((a) => el.hasAttribute(a));
-    const subtree = inScope || byClass;
-    const children: Out[] = [];
-    walkChildren(el, subtree, scope, isSource, children);
-    into.push({ kind: 'el', head: head(el, subtree || byAttr), children });
+    // A source element: by itself, showing only what the scope names on it.
+    walkChildren(el, false, scope, isSource, children);
+    into.push({ kind: 'el', head: namedHead(el, classes, namedAttrs(el, scope)), children });
   }
 }
 

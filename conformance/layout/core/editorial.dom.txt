@@ -1,4 +1,4 @@
-dl .doc-meta hidden=""
+dl hidden=""
   div
     dt
       "type"
