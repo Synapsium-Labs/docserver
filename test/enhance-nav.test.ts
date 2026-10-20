@@ -860,7 +860,7 @@ describe('position.keep', () => {
 describe('the pin', () => {
   it('holds after every relayout and every keep until the reader acts: a wheel, a touch, a key or a pointer press', async () => {
     const s = stage();
-    for (const type of PIN_RELEASE) {
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) {
       const root = mount();
       await enhance(root, { initialHash: '3-plan' });
       const { position } = ctxOf(root);
