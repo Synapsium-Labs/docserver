@@ -958,9 +958,10 @@ describe('the pin', () => {
     goToHash(root, '3-plan');
     expect(t.delays().filter((ms) => ms === PIN_MS)).toHaveLength(1);
     t.run(FLASH_MS);
+    s.y = 500;
     ctxOf(root).position.keep(() => undefined);
     expect(s.intoView.at(-1)?.[0]).toBe(el(root, 'h2', '3-plan'));
-    expect(s.points).toEqual([]); // with a pin, keep reads no place
+    expect(s.points).toEqual([]); // with a pin, keep reads no place, wherever the page is
   });
 
   it('placeOf takes only the position of an instance', () => {
