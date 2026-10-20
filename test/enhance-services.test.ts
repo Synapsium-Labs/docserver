@@ -26,11 +26,16 @@ import type { FeatureContext } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
 import { LARGE_PLAN_BYTES, LARGE_PLAN_COUNTS, largePlan } from './fixtures/large-plan.js';
 
-const hooks = vi.hoisted(() => ({ probes: [] as unknown[] }));
+const hooks = vi.hoisted(() => ({ probes: [] as unknown[], beforeFolds: [] as unknown[] }));
 
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
-  return { ...real, features: () => [...real.features(), ...(hooks.probes as Feature[])] };
+  const features = (): Feature[] => {
+    const list = [...real.features()];
+    const at = list.findIndex((f) => f.name === 'folds');
+    return [...list.slice(0, at), ...(hooks.beforeFolds as Feature[]), ...list.slice(at), ...(hooks.probes as Feature[])];
+  };
+  return { ...real, features };
 });
 
 const DOC = [
@@ -106,6 +111,7 @@ afterEach(async () => {
   for (const root of mounted.splice(0)) await destroyEnhancement(root).catch(() => undefined);
   document.body.replaceChildren();
   hooks.probes.length = 0;
+  hooks.beforeFolds.length = 0;
   delete (document as unknown as { fonts?: unknown }).fonts;
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -1809,6 +1815,21 @@ describe('cancels, labels, refusals and sizes: the review round', () => {
     expect(title?.getAttribute('aria-label')).toBe('Title');
     expect(title?.querySelector('.h-fold')?.getAttribute('aria-label')).toBe('Fold or unfold: Title');
     expect(two?.getAttribute('aria-label')).toBe('Two spaces');
+  });
+
+  it('a fold\'s name leaves out the chrome a feature built before it put in the heading (a read mark\'s control)', async () => {
+    const root = mount(['# Labels', '', '## Run `npm ci`, then **go**.', '', 'Text.', '', '## Two', '', 'More.', '', '## Three', '', 'End.', ''].join('\n'));
+    hooks.beforeFolds.push({
+      name: 'marks-probe',
+      build: (ctx: FeatureContext) => {
+        const h = Array.from(ctx.root.children).find((c) => c.localName === 'h2') as HTMLElement;
+        ctx.headCtl(h, 'mark', chrome(ctx.root.ownerDocument, 'button', { className: 'h-mark', text: 'Mark read' }));
+      },
+    } satisfies Feature);
+    await enhance(root);
+    const h = Array.from(root.children).find((c) => c.localName === 'h2');
+    expect(h?.querySelector('.h-fold')?.getAttribute('aria-label')).toBe('Fold or unfold: Run npm ci, then go.');
+    expect(h?.getAttribute('aria-label')).toBe('Run npm ci, then go.');
   });
 
   it('folds.join takes only a node the feature put in the root: one outside it, nested, or of the document is refused', async () => {
