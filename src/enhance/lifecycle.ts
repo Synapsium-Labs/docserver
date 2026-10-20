@@ -22,9 +22,14 @@
 //      or abort during startup rolls back and then rejects 'aborted'. A rejection always follows the rollback.
 //   enhance itself is not async: it returns the promise it stored on the instance, so step 1 can return it again.
 //
-// Operations: startup, every handler (journal.listen), setEnhancementPrefs and every storage completion run
-// through operate(). operate refuses once the instance is not live and counts its depth; a destroy requested
-// while the depth is above zero defers the teardown until the outermost operation unwinds.
+// Operations: startup, every handler (journal.listen), setEnhancementPrefs, every storage completion and every
+// call to a host callback (host.ts) run through operate(). operate refuses once the instance is not live and counts
+// its depth; a destroy requested while the depth is above zero defers the teardown until the outermost operation
+// unwinds.
+//
+// The host's callbacks: normalizeOptions keeps the functions apart (`callbacks`), and build() hands them to
+// createHost alone, so a feature's context carries the options without them and reaches the host only through
+// `ctx.host`.
 //
 // destroyEnhancement(root): marks the instance destroying and bumps its generation first, so no further write
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
@@ -32,6 +37,7 @@
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
 import { buildEditorial } from './editorial.js';
 import { buildFolds } from './folds.js';
+import { createHost } from './host.js';
 import { createJournal, type JournalControl } from './journal.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
 import { applyPrefs, createReaderState, type ReaderState } from './state.js';
@@ -57,6 +63,8 @@ interface Instance {
   state: ReaderState | null;
   /** setEnhancementPrefs changes made before startup created the state; applied as soon as it exists. */
   pendingPrefs: Partial<Prefs> | null;
+  /** The context features were built with, once startup made it. */
+  ctx: FeatureContext | null;
   /** destroyEnhancement's promise, once a destroy was requested. */
   destroyed: Promise<void> | null;
   settle: ((faults: unknown[]) => void) | null;
@@ -102,6 +110,11 @@ function findByRoot(root: Node): Instance | undefined {
 /** For tests: how many instances the registry holds for a document (teardown releases each one). */
 export function registrySize(doc: Document): number {
   return registry?.get(doc)?.size ?? 0;
+}
+
+/** For tests: the context of the instance on `root` (live, or still tearing down), once startup made it. */
+export function contextOf(root: Element): FeatureContext | undefined {
+  return findByRoot(root)?.ctx ?? undefined;
 }
 
 /**
@@ -198,7 +211,15 @@ function resolveInfo(root: Element, info: NormalizedInfo | null): ResolvedInfo {
     const text = h1 === null ? '' : (h1.textContent ?? '').replace(/\s+/g, ' ').trim();
     title = text === '' ? null : text;
   }
-  return { title, frontList: info?.frontList ?? null, isDocument: isDocument(root) };
+  return {
+    title,
+    frontList: info?.frontList ?? null,
+    isDocument: isDocument(root),
+    sha: info?.sha ?? null,
+    draft: info?.draft ?? false,
+    commits: info?.commits ?? null,
+    only: info?.only ?? null,
+  };
 }
 
 /** The startup build, run inside the startup operation. */
@@ -224,15 +245,20 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     state.setPrefs(pending); // may call the host's set()
     if (!live()) return;
   }
+  const operateHere = <T>(fn: () => T): T | undefined => operate(inst, fn);
+  // The host's functions stay out of the context: features call them through `host` alone.
+  const { callbacks, ...options } = opts;
   const ctx: FeatureContext = {
     root,
     journal: inst.control.journal,
     state,
     info: resolveInfo(root, opts.info),
-    options: opts,
+    options,
+    host: createHost(callbacks, live, operateHere),
     live,
-    operate: (fn) => operate(inst, fn),
+    operate: operateHere,
   };
+  inst.ctx = ctx;
   applyPrefs(ctx.journal, root, state.prefs);
   buildEditorial(ctx);
   if (!live()) return;
@@ -338,6 +364,7 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
     teardownPending: false,
     state: null,
     pendingPrefs: null,
+    ctx: null,
     destroyed: null,
     settle: null,
   };

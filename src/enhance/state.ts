@@ -3,8 +3,10 @@
 // calls the host's set() after each local change.
 //
 // Storage keys (the README states them):
-//   docreader:prefs                      a JSON object { theme, width, font }, reader-wide
+//   docreader:prefs                      a JSON object { theme, width, font, lens }, reader-wide
 //   docreader:doc:<storageKey>:<name>    per-document JSON, such as docreader:doc:project-a:specs:x.md:folds
+// Two more are reserved, under the same prefix, for later versions: docreader:pos:<posKey> (the reading position)
+// and docreader:ui (reader-wide UI memory). Nothing reads or writes them yet.
 // Invalid stored JSON, or a stored value of the wrong shape, is ignored, never thrown.
 //
 // Reading: the snapshot object is read once, when the state is created; each key is read at most once after
@@ -24,7 +26,7 @@
 // has since replaced. A host that shares one store between several enhance() calls passes the same storage object
 // to each; two objects are two queues.
 import type { Journal } from './journal.js';
-import { isPrefValue, PREF_VALUES } from './options.js';
+import { isPrefValue, PREF_VALUES, prefNames } from './options.js';
 import type { Prefs, ReaderStorage } from './types.js';
 
 // Open before v1: the `docreader:` prefix is fixed; the public release gives it a namespace option or states why not.
@@ -37,7 +39,7 @@ export function docKey(storageKey: string, name: string): string {
 
 /** The defaults: the first value each pref accepts. */
 export function defaultPrefs(): Prefs {
-  return { theme: PREF_VALUES.theme[0], width: PREF_VALUES.width[0], font: PREF_VALUES.font[0] };
+  return { theme: PREF_VALUES.theme[0], width: PREF_VALUES.width[0], font: PREF_VALUES.font[0], lens: PREF_VALUES.lens[0] };
 }
 
 export interface ReaderState {
@@ -217,7 +219,7 @@ export function createReaderState(args: StateArgs): ReaderState {
   const storedRecord = parseJson(readRaw(PREFS_KEY));
   let persisted: Record<string, unknown> = isPlainRecord(storedRecord) ? { ...storedRecord } : {};
   let prefs: Prefs = defaultPrefs();
-  for (const name of ['theme', 'width', 'font'] as const) {
+  for (const name of prefNames()) {
     const v = persisted[name];
     if (isPrefValue(name, v)) prefs = { ...prefs, [name]: v };
   }
@@ -232,7 +234,7 @@ export function createReaderState(args: StateArgs): ReaderState {
 
     setPrefs(change) {
       const next: Prefs = { ...prefs, ...change };
-      const changed = next.theme !== prefs.theme || next.width !== prefs.width || next.font !== prefs.font;
+      const changed = prefNames().some((name) => next[name] !== prefs[name]);
       prefs = next;
       const base = prefsBase();
       const before = JSON.stringify(base);
@@ -261,7 +263,10 @@ export function createReaderState(args: StateArgs): ReaderState {
   };
 }
 
-/** Put the prefs on the root: data-theme (absent for 'auto', so the stylesheet's system rule applies), data-width, data-font. */
+/**
+ * Put the prefs on the root: data-theme (absent for 'auto', so the stylesheet's system rule applies), data-width,
+ * data-font. The lens is stored and restored with them; the feature that shows it puts its class on the root.
+ */
 export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Prefs>): void {
   journal.setAttribute(root, 'data-theme', prefs.theme === 'auto' ? null : prefs.theme);
   journal.setAttribute(root, 'data-width', prefs.width);
