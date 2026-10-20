@@ -1,5 +1,5 @@
-// Scrolling: the progress line, the running head, the phone bar and the scroll spy (docserver L2, Task 12), from the
-// reference layout's section 17, with the bar's skeleton (bar.ts) placed by the stylesheet's bar block.
+// Scrolling: the progress line, the running head, the phone bar and the scroll spy (built by docserver L2 Task 12),
+// from the reference layout's section 17, with the bar's skeleton (bar.ts) placed by the stylesheet's bar block.
 //
 // One frame per burst of scroll events (env.onScroll, then env.frame), and one right after every relayout (the
 // 'relayout' event: sizes moved, so the place did; the first one, 'start', is the first frame after startup):
