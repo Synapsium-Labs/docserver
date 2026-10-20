@@ -27,8 +27,8 @@
 // paragraph }`. An ID longer than the index takes (200 code units) is left out of the index and of the rules index.
 //
 // Section 4, the rules index: a list key of the front matter (info.frontList) whose every value is a rule ID is a rule
-// key ("rules: [AB-1, AB-2]", "implements: [AB-3]"). Each is taken out of the facts panel and shown first: in the
-// summary, its label ("Rules index · N rules" for the key `rules`, else the key with a capital, "Implements 1 rule"),
+// key ("rules: [AB-1, AB-2]", "refines: [AB-3]"). Each is taken out of the facts panel and shown first: in the
+// summary, its label ("Rules index · N rules" for the key `rules`, else the key with a capital, "Refines 1 rule"),
 // then its rules' statuses counted by their first word in lower case (`span.cnt.<role>`, most first, a tie in the
 // order first seen); in the panel's body, before the panel's own keys, an `ol` with one item per value: a link
 // `a.rlink` to the rule (`#<ID>`) holding `span.rid` and `span.rtitle`, then the rule's status as a pill (an empty

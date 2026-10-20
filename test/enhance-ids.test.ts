@@ -426,9 +426,9 @@ describe('the rules index (rules.ts; the reference layout, section 4)', () => {
   });
 
   it('a key other than rules is named by itself; a list key with a value that is not a rule ID stays the panel\'s own', async () => {
-    const md = ['---', 'implements: [AB-1]', 'covers: [AB-2, AB-3, other]', '---', '', '# T', '', '`AB-1` — _done_. Text.', ''].join('\n');
+    const md = ['---', 'refines: [AB-1]', 'covers: [AB-2, AB-3, other]', '---', '', '# T', '', '`AB-1` — _done_. Text.', ''].join('\n');
     const root = await enhanced(md, { rules: true });
-    expect(summary(root)).toBe('Implements 1 rule · 1 done · 3 covers');
+    expect(summary(root)).toBe('Refines 1 rule · 1 done · 3 covers');
     expect(Array.from(facts(root).querySelectorAll('dt')).map((d) => d.textContent)).toEqual(['covers']);
   });
 
