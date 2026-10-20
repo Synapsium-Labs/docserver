@@ -1,0 +1,8 @@
+{
+  "options": {
+    "storageKey": "case",
+    "storage": { "snapshot": { "docreader:pos:case": "{\"line\":\"h2[id=jump]\",\"offset\":0,\"y\":40}" } }
+  },
+  "scope": ["h-anchor", "h-ctl", "flash", "[tabindex]"],
+  "hostile": true
+}
