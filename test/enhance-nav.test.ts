@@ -420,6 +420,26 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     expect(s.scrolled.at(-1)).toEqual([7000 - 48 - ID_GAP, 'auto']);
   });
 
+  it('with no stylesheet in force (every margin 0), a paragraph lands at the top, and a row below the head\'s room', async () => {
+    const s = stage();
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((() => ({ getPropertyValue: (prop: string) => (prop === 'scroll-margin-top' ? '0px' : '') })) as never);
+    hooks.before.push({
+      name: 'rule',
+      build: (ctx: FeatureContext) => {
+        ctx.index.define({ id: 'P-ONE', kind: 'rule', title: 'One', status: null, group: 'Plan', target: blockAfter(ctx.root, '3-plan'), row: null, heads: [] });
+      },
+    } satisfies Feature);
+    defineRow('R1');
+    const root = mount();
+    s.tops.set(blockAfter(root, '3-plan'), 7000);
+    s.tops.set(row(root, 'R1'), 5000);
+    await enhance(root, { initialHash: 'P-ONE' });
+    expect(s.scrolled).toEqual([[7000, 'auto']]);
+    s.y = 0;
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([5000 - HEAD_GAP, 'auto']);
+  });
+
   it('the [id] margin is read off the first heading, past an anchor that comes before it', async () => {
     const s = stage();
     vi.spyOn(window, 'getComputedStyle').mockImplementation(((target: Element) => ({
@@ -527,6 +547,7 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
       { line: '5-5', y: 100 },
       { line: '5-5', offset: 10 },
       { ...good, line: 5 },
+      { ...good, line: ['5-5'] },
       { ...good, line: '' },
       { ...good, line: 'a'.repeat(TOKEN.line + 1) },
       { ...good, line: 'h2#x' },
@@ -764,10 +785,24 @@ describe('position.keep', () => {
     now.mockReturnValue(1_000_000 + SMOOTH_MS + 1);
     position.keep(() => undefined);
     expect(s.intoView.at(-1)?.[0]).toBe(el(root, 'h2', '3-plan')); // the pin held
+    // a jump made at once ends the wait: once its pin is released, keep anchors again
+    now.mockReturnValue(2_000_000);
+    nav.goTo(design, { focus: false });
+    now.mockReturnValue(2_000_100);
+    goToHash(root, '3-plan');
+    document.dispatchEvent(new Event('wheel'));
+    s.y = 50;
     s.points.length = 0;
-    goToHash(root, null);
     position.keep(() => undefined);
-    expect(s.points.length).toBe(0); // at the top: nothing to anchor
+    expect(s.points.length).toBeGreaterThan(0);
+    // and so does going to the top
+    now.mockReturnValue(3_000_000);
+    nav.goTo(design, { focus: false });
+    goToHash(root, null);
+    s.y = 50;
+    s.points.length = 0;
+    position.keep(() => undefined);
+    expect(s.points.length).toBeGreaterThan(0);
   });
 
   it('a footnote reference\'s id holds a colon: the paragraph around it is the anchor', async () => {
@@ -928,6 +963,10 @@ describe('the pin', () => {
     expect(s.points).toEqual([]); // with a pin, keep reads no place
   });
 
+  it('placeOf takes only the position of an instance', () => {
+    expect(() => placeOf({ keep: (fn) => fn(), holdBar: () => undefined, barHeld: () => false })).toThrow(/position of an instance/);
+  });
+
   it('a pin whose scroll throws ends there, and the throw goes no further', async () => {
     stage();
     const root = mount();
@@ -1065,10 +1104,13 @@ describe('goToHash (LD7)', () => {
     s.y = 0;
     position.keep(() => undefined);
     expect(s.intoView).toEqual([]);
+    const enhanced: boolean[] = [];
     onReveal(() => {
       void destroyEnhancement(root);
+      enhanced.push(root.hasAttribute('data-docreader-root')); // inside goToHash's operation, the teardown waits
     });
     goToHash(root, 'details');
+    expect(enhanced).toEqual([true]);
     expect(s.intoView).toEqual([]);
     expect(el(root, 'h3', 'details').classList.contains('flash')).toBe(false);
   });
@@ -1166,6 +1208,22 @@ describe('j and k', () => {
     s.y = 280; // Scope is 120 px down
     key(h['1-scope'] as HTMLElement, 'j');
     expect(s.intoView.at(-1)?.[0]).toBe(h['2-design']);
+    s.h = 1000; // 300 px
+    s.y = 150; // Scope is 250 px down
+    key(h['1-scope'] as HTMLElement, 'j');
+    expect(s.intoView.at(-1)?.[0]).toBe(h['2-design']);
+  });
+
+  it('k measures from the bar\'s bottom: within 40 px below it is still a section\'s start', async () => {
+    const s = stage();
+    const root = mount();
+    await enhance(root);
+    const h = sections(root, s);
+    const bar = find(root, 'nav.topbar');
+    s.y = 1020; // Design is 20 px above the viewport's top
+    s.tops.set(bar, s.y + 10); // the bar's bottom is 30 px down
+    key(h['1-scope'] as HTMLElement, 'k');
+    expect(s.intoView.at(-1)?.[0]).toBe(h['2-design']);
   });
 
   it('a document with no sections lists neither key', async () => {
@@ -1205,6 +1263,22 @@ describe('the section link', () => {
     expect(el(root, 'h2', '2-design').getAttribute('aria-label')).toBe('2. Design');
     await destroyEnhancement(root);
     expect(root.querySelectorAll('a.h-anchor, .h-ctl')).toHaveLength(0);
+  });
+
+  it('a control a feature put in a heading before it (a chrome button) is no part of the link\'s name', async () => {
+    stage();
+    hooks.before.push({
+      name: 'button',
+      build: (ctx: FeatureContext) => {
+        const b = document.createElement('button');
+        b.setAttribute(CHROME_ATTR, '');
+        b.textContent = 'Outline';
+        ctx.journal.insert(b, el(ctx.root, 'h3', 'details'), null);
+      },
+    } satisfies Feature);
+    const root = mount();
+    await enhance(root);
+    expect(find(el(root, 'h3', 'details'), 'a.h-anchor').getAttribute('aria-label')).toBe('Link to Details');
   });
 
   it('a heading whose id another heading holds first gets none; a click on the link goes to its heading with push', async () => {

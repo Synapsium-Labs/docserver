@@ -109,7 +109,7 @@ export function build(ctx: FeatureContext): void {
       const si = sec === null ? -1 : heads.indexOf(sec);
       let back: HTMLElement | null = null;
       if (sec !== null && sec.getBoundingClientRect().top < place.barBottom() - BACK_PX) back = sec;
-      else if (si > 0) back = heads[si - 1] ?? null;
+      else back = heads[si - 1] ?? null; // none before the first section
       if (back === null) return false;
       nav.goTo(back, { push: false });
       return true;
@@ -144,15 +144,12 @@ export function build(ctx: FeatureContext): void {
     const text = tokenOf(now);
     if (text === last) return;
     last = text;
-    state.writePos(posKey, now === null ? null : { line: now.line, offset: now.offset, y: now.y });
+    state.writePos(posKey, now);
   };
   let waiting: Cancel | null = null;
   env.onScroll(() => {
-    waiting?.();
-    waiting = env.timeout(() => {
-      waiting = null;
-      save();
-    }, SAVE_MS);
+    waiting?.(); // a burst of scrolling is one wait
+    waiting = env.timeout(save, SAVE_MS);
   });
   env.onPageHide(save); // a wait still pending then finds the same place, and writes nothing
 }
