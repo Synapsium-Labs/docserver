@@ -6,9 +6,11 @@
 //   the spy      the section being read: the last level-2 section (ctx.sections, in document order) whose heading's
 //                top is above the reading line, max(LINE_MIN, LINE_SHARE of the window's height) from the window's
 //                top; null before the first. And the read-mark unit there (Task 18's): on a plan whose tasks take the
-//                outline mode (ctx.plan.outlineable), each task heading (an h3 with an id) is a unit, and so is each
-//                section but "In short" and the sections that hold tasks; the unit is the last one above the line
-//                that is not hidden (a folded section's member). Elsewhere the unit is the section itself, but never
+//                outline mode (ctx.plan.outlineable), each task heading (ctx.plan.tasks) is a unit, and so is each
+//                section but "In short" and the sections whose members hold a task heading; the unit is the last one
+//                above the line that is not hidden (a folded section's member). (The reference took its task units
+//                from the h3 task headings with an id: an h2 task heading is its section's own, a unit already, and
+//                every heading render() makes has an id.) Elsewhere the unit is the section itself, but never
 //                "In short", and a page that is not a document (ResolvedInfo.isDocument) has none. Each search is a
 //                binary search over headings in document order, whose tops only grow down the page (a hidden task
 //                heading is left out of its list, which is made again at every relayout), so a frame reads at most
@@ -34,10 +36,12 @@
 //                from what the root holds, so the stylesheet's 48px stands until something (the day view's banner,
 //                Task 22) makes the bar taller. A bar that is not laid out (printing) measures nothing.
 // The running head's text for each section is read once, when the feature builds: the heading's own accessible name
-// when the layout gave it one (editorial.ts names a numbered heading by its whole text), else its text without the
-// layout's chrome; less a leading number ("3. "), as the reference's `bare`; and the number from the heading's
-// `span.sec-no` (editorial.ts). The document's title is ResolvedInfo.title (the host's info.title, else the h1's text).
-// The running head is set at build to the title, so it is never empty; the first frame corrects it.
+// when the layout gave it one (editorial.ts names a numbered heading by its whole text, headctl.ts any other heading
+// it puts a control in), else its text without the layout's chrome; less a leading number ("3. "), as the reference's
+// `bare`; and the number from the heading's `span.sec-no` (editorial.ts; render() writes no class, so only the layout
+// makes one). "In short" is the section inside the layout's `div.short`. The document's title is ResolvedInfo.title
+// (the host's info.title, else the h1's text). The running head is set to the title when the feature builds, so the
+// page's first frame shows it before the spy has run; the first frame corrects it.
 //
 // A host that scrolls an inner element (not the window) is out of scope for L2: the spy listens to the window's
 // scroll, and the bar sticks to the window's top.
@@ -78,9 +82,6 @@ export const DAY_VIEW = 'ver-on';
 /** A leading section number, as editorial.ts reads one ("3. ", "F2. "): the running head leaves it out of the title. */
 const SEC_NO = /^[A-Z]?\d+[a-z]?\.\s+/;
 
-/** A text with its runs of white space as one space, trimmed. */
-const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
-
 /** True for an element the layout made. */
 const isChrome = (el: Element): boolean => el.hasAttribute(CHROME_ATTR);
 
@@ -91,10 +92,10 @@ interface Head {
   readonly inShort: boolean;
 }
 
-/** Whether `el` sits in the layout's "In short" box (editorial.ts's chrome `div.short`), below `root`. */
+/** Whether `el` sits in the layout's "In short" box (editorial.ts's `div.short`), below `root`. */
 function inShort(el: Element, root: Element): boolean {
   for (let n = el.parentElement; n !== null && n !== root; n = n.parentElement) {
-    if (n.classList.contains('short') && isChrome(n)) return true;
+    if (n.classList.contains('short')) return true;
   }
   return false;
 }
@@ -103,13 +104,13 @@ function inShort(el: Element, root: Element): boolean {
 function headOf(h: HTMLElement, root: Element): Head {
   let no: string | null = null;
   for (const c of Array.from(h.children)) {
-    if (c.classList.contains('sec-no') && isChrome(c)) {
-      no = squash(c.textContent ?? '');
+    if (c.classList.contains('sec-no')) {
+      no = c.textContent ?? '';
       break;
     }
   }
   const label = h.getAttribute('aria-label') ?? headingText(h, isChrome);
-  return { no: no === '' ? null : no, title: squash(label).replace(SEC_NO, ''), inShort: inShort(h, root) };
+  return { no, title: label.replace(SEC_NO, ''), inShort: inShort(h, root) };
 }
 
 /** The index of the last heading in `list` whose top is above `line`, or -1: a binary search, one rect read a probe. */
@@ -141,7 +142,7 @@ export function build(ctx: FeatureContext): void {
   const h1 = root.querySelector('h1');
 
   // The read-mark units (Task 18 marks them): the reference layout's section 14.
-  const tasks = ctx.plan.outlineable ? ctx.plan.tasks.filter((h) => h.localName === 'h3' && h.id !== '') : [];
+  const tasks = ctx.plan.outlineable ? ctx.plan.tasks : [];
   const holders = new Set(ctx.sections.filter((s) => tasks.some((t) => s.members.includes(t))).map((s) => s.heading));
   const units: readonly HTMLElement[] = ctx.info.isDocument
     ? ctx.text.inOrder([...sections.filter((h) => !(heads.get(h)?.inShort ?? false) && !holders.has(h)), ...tasks])
@@ -162,7 +163,7 @@ export function build(ctx: FeatureContext): void {
   let scrolled = false;
   let hidden = false;
   let running = `\u0000${title}`;
-  if (slots !== null && title !== '') slots.running.replaceChildren(doc.createTextNode(title));
+  if (slots !== null) slots.running.replaceChildren(doc.createTextNode(title));
 
   const hide = (on: boolean): void => {
     if (on === hidden) return;
