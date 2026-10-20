@@ -1094,7 +1094,8 @@ describe('the format contract: the box headings, the callout kinds and the front
     const root = mount(md);
     await enhance(root, { info: { title: r.meta.title, frontList: r.meta.frontList } });
     expect(Array.from(root.querySelectorAll('div.short > h2')).map((h) => text(h))).toEqual(['Summary']);
-    expect(Array.from(root.querySelectorAll('div.callout')).map((b) => `${b.className}:${text(b.querySelector('h3'))}`)).toEqual([
+    // a heading's own text, before its controls (its section link, Task 14)
+    expect(Array.from(root.querySelectorAll('div.callout')).map((b) => `${b.className}:${text(b.querySelector('h3')?.firstChild ?? null)}`)).toEqual([
       'callout agreed:Settled',
       'callout waiting:Pending answers',
       'callout later:Someday',
