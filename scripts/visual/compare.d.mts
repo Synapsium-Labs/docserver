@@ -8,7 +8,7 @@ export interface Prefs {
 
 export interface Block {
   readonly key: string;
-  readonly box: { readonly x: number; readonly width: number; readonly height: number };
+  readonly box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
   readonly style: Readonly<Record<string, string>>;
 }
 
@@ -32,12 +32,15 @@ export interface Args {
   readonly states: readonly string[];
   readonly expected: string | undefined;
   readonly setup: string | undefined;
+  readonly offline: boolean;
 }
 
 export declare const VIEWPORTS: Readonly<Record<'desktop' | 'phone', { readonly width: number; readonly height: number }>>;
 export declare const STATES: Readonly<Record<'light' | 'dark' | 'sans-wide', Prefs>>;
 export declare const PROPS: readonly string[];
 export declare const TOLERANCE: number;
+export declare const INSTALL: string;
+export declare const OFFLINE_ARGS: readonly string[];
 export declare const USAGE: string;
 export declare function parseArgs(argv: readonly string[]): Args;
 export declare function pageUrl(arg: string): string;

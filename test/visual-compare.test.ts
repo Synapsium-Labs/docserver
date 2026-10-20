@@ -1,9 +1,11 @@
 // The visual comparison script's pure parts (scripts/visual/compare.mjs; docserver L2, Task 6): its command line,
-// the 0.1 px tolerance on boxes and lengths, exact comparison of every other value (font-family by its generic
-// family), blocks that only one page holds, and how an --expected file names a difference. The script itself, in a
+// the 0.1 px tolerance on boxes (x from the column's origin, the gap from the block before, width, height) and
+// lengths, exact comparison of every other value (font-family by its generic family), blocks that only one page
+// holds, how an --expected file names a difference, and what --offline adds to the launch. The script itself, in a
 // real browser, is test/browser/visual-compare.test.ts.
 import { describe, expect, it } from 'vitest';
 import {
+  OFFLINE_ARGS,
   PROPS,
   STATES,
   TOLERANCE,
@@ -23,32 +25,47 @@ const style = (over: Record<string, string> = {}): Record<string, string> => ({
   ...Object.fromEntries(PROPS.map((p) => [p, p === 'fontFamily' ? '"Face A", serif' : '0px'])),
   ...over,
 });
-const block = (key: string, x: number, width = 700, height = 20, over: Record<string, string> = {}): Block => ({
+const block = (key: string, x: number, width = 700, height = 20, over: Record<string, string> = {}, y = 0): Block => ({
   key,
-  box: { x, width, height },
+  box: { x, y, width, height },
   style: style(over),
 });
 
 describe('compare.mjs: the command line', () => {
-  it('takes the two pages, and optionally the states, an expected file and a setup module', () => {
+  it('takes the two pages, and optionally the states, an expected file, a setup module and --offline', () => {
     expect(parseArgs(['--ours', 'a.html', '--reference', 'http://127.0.0.1:1/x'])).toEqual({
       ours: 'a.html',
       reference: 'http://127.0.0.1:1/x',
       states: ['light', 'dark', 'sans-wide'],
       expected: undefined,
       setup: undefined,
+      offline: false,
     });
-    expect(parseArgs(['--reference', 'b', '--ours', 'a', '--states', 'light, folded', '--expected', 'e.json', '--setup', 's.mjs'])).toEqual({
+    expect(parseArgs(['--reference', 'b', '--offline', '--ours', 'a', '--states', 'light, folded', '--expected', 'e.json', '--setup', 's.mjs'])).toEqual({
       ours: 'a',
       reference: 'b',
       states: ['light', 'folded'],
       expected: 'e.json',
       setup: 's.mjs',
+      offline: true,
     });
+    expect(parseArgs(['--ours', 'a', '--reference', 'b', '--offline']).offline).toBe(true);
+  });
+
+  it('--offline maps every host name and address to "not found" in Chromium', () => {
+    expect(OFFLINE_ARGS).toEqual(['--host-resolver-rules=MAP * ~NOTFOUND']);
   });
 
   it('refuses a missing page, an unknown or repeated flag, and a bad state name', () => {
-    for (const bad of [[], ['--ours', 'a'], ['--ours', 'a', '--reference'], ['--ours', 'a', '--reference', 'b', '--width', '1'], ['--ours', 'a', '--ours', 'b', '--reference', 'c']]) {
+    for (const bad of [
+      [],
+      ['--ours', 'a'],
+      ['--ours', 'a', '--reference'],
+      ['--ours', 'a', '--reference', 'b', '--width', '1'],
+      ['--ours', 'a', '--ours', 'b', '--reference', 'c'],
+      ['--ours', 'a', '--reference', 'b', '--offline', '--offline'],
+      ['--offline', 'a', '--ours', 'a', '--reference', 'b'],
+    ]) {
       expect(() => parseArgs(bad)).toThrow(USAGE);
     }
     expect(() => parseArgs(['--ours', 'a', '--reference', 'b', '--states', 'Light'])).toThrow('bad state names');
@@ -91,6 +108,27 @@ describe('compare.mjs: what counts as a difference', () => {
     const ours = [block('h1@1-1', 100), block('p@3-3', 100.1, 700.05), block('p@5-5', 140)];
     const ref = [block('h1@1-1', 300), block('p@3-3', 300, 700), block('p@5-5', 339.8)];
     expect(diffBlocks(ours, ref)).toEqual([{ block: 'p@5-5', prop: 'box.x', ours: 40, reference: 39.8 }]);
+  });
+
+  it('the gap from the block before that both pages hold is held to 0.1 px; a shift of the whole column is not a gap', () => {
+    const ref = [block('h1@1-1', 0, 700, 20, {}, 100), block('dl@2-2', 0, 700, 20, {}, 130), block('p@3-3', 0, 700, 20, {}, 160)];
+    // Our page holds the whole column 300 px lower (chrome above it), and a spacer of 50 px before p@3-3; dl@2-2 is
+    // ours only, so p@3-3's gap is measured from h1@1-1 in both pages.
+    const ours = [block('h1@1-1', 0, 700, 20, {}, 400), block('p@3-3', 0, 700, 20, {}, 510.05)];
+    expect(diffBlocks(ours, ref)).toEqual([
+      { block: 'p@3-3', prop: 'box.gap', ours: 110.05, reference: 60 },
+      { block: 'dl@2-2', prop: 'present', ours: 'no', reference: 'yes' },
+    ]);
+    expect(diffBlocks([block('h1@1-1', 0, 700, 20, {}, 400), block('p@3-3', 0, 700, 20, {}, 460.1)], ref).map((d) => d.prop)).toEqual(['present']);
+  });
+
+  it('a block with no box (not laid out) has no gap, and the next gap is measured from the block before it', () => {
+    // thead@2-2 is hidden in both pages (a 0 by 0 box at the top of each); our column starts 200 px lower.
+    const ref = [block('h1@1-1', 0, 700, 20, {}, 100), block('thead@2-2', 0, 0, 0, {}, 0), block('p@3-3', 0, 700, 20, {}, 160)];
+    const ours = [block('h1@1-1', 0, 700, 20, {}, 300), block('thead@2-2', 0, 0, 0, {}, 0), block('p@3-3', 0, 700, 20, {}, 360)];
+    expect(diffBlocks(ours, ref)).toEqual([]);
+    const spaced = [ours[0], ours[1], block('p@3-3', 0, 700, 20, {}, 361)] as Block[];
+    expect(diffBlocks(spaced, ref)).toEqual([{ block: 'p@3-3', prop: 'box.gap', ours: 61, reference: 60 }]);
   });
 
   it('a computed value that differs is named with both values; a block in one page only is "present"', () => {

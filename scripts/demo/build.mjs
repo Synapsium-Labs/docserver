@@ -1,24 +1,37 @@
 // Builds a demo page for the reading layout: a sample (scripts/demo/samples/core.md unless --sample names another
 // Markdown file) rendered by the repo's own render(), inserted in a root element, then enhanced. It writes demo-out/
-// (git-ignored): index.html, demo.js and assets/ (a copy of the stylesheet and fonts). Open demo-out/index.html in
-// a browser; the query parameters theme (auto, light, dark), width (standard, wide) and font (serif, sans) choose
-// the prefs, through setEnhancementPrefs. The page's <html> carries data-ready="false" until the layout is built
-// and the prefs applied, then "true": scripts/visual/compare.mjs waits for it.
+// (git-ignored; --out names another directory, which must not exist yet): index.html, demo.js and assets/ (a copy
+// of the stylesheet and fonts). Open index.html in a browser; the query parameters theme (auto, light, dark), width
+// (standard, wide) and font (serif, sans) choose the prefs, through setEnhancementPrefs. The page's <html> carries
+// data-ready="false" until the layout is built and the prefs applied, then "true": scripts/visual/compare.mjs waits
+// for it.
 //
-// Run it from the repository root: node scripts/demo/build.mjs [--sample <file>]
+// Run it from the repository root: node scripts/demo/build.mjs [--sample <file>] [--out <dir>]
+import { existsSync } from 'node:fs';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
+const USAGE = 'usage: node scripts/demo/build.mjs [--sample <file>] [--out <dir>]';
 const repo = fileURLToPath(new URL('../../', import.meta.url));
-const out = path.join(repo, 'demo-out');
 const args = process.argv.slice(2);
-if (!(args.length === 0 || (args.length === 2 && args[0] === '--sample' && args[1] !== ''))) {
-  console.error('usage: node scripts/demo/build.mjs [--sample <file>]');
+const given = {};
+for (let i = 0; i < args.length; i += 2) {
+  const key = { '--sample': 'sample', '--out': 'out' }[args[i]];
+  const value = args[i + 1];
+  if (key === undefined || value === undefined || value === '' || Object.hasOwn(given, key)) {
+    console.error(USAGE);
+    process.exit(2);
+  }
+  given[key] = value;
+}
+const sample = given.sample === undefined ? path.join(repo, 'scripts', 'demo', 'samples', 'core.md') : path.resolve(given.sample);
+const out = given.out === undefined ? path.join(repo, 'demo-out') : path.resolve(given.out);
+if (given.out !== undefined && existsSync(out)) {
+  console.error(`demo: ${out} exists; --out names a directory that does not exist yet`);
   process.exit(2);
 }
-const sample = args.length === 2 ? path.resolve(args[1]) : path.join(repo, 'scripts', 'demo', 'samples', 'core.md');
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
