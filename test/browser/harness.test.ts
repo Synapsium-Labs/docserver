@@ -112,14 +112,20 @@ describeBrowsers((browser) => {
   it('opens a page from its own origin, enhanced, with the fonts, nothing missing, aborted or refused', async () => {
     const doc = await openDoc(DOC, {}, { browser });
     try {
-      const state = await doc.page.evaluate(() => ({
-        origin: location.origin,
-        enhanced: document.querySelector('main[data-harness-root]')?.hasAttribute('data-docreader-root') ?? false,
-        // The package's own faces that loaded (the local fallbacks depend on the machine's fonts, so they are left out).
-        faces: [...document.fonts]
-          .filter((f) => f.status === 'loaded' && !f.family.includes('Fallback'))
-          .map((f) => `${f.family.replaceAll('"', '')} ${f.style}`),
-      }));
+      const state = await doc.page.evaluate(async () => {
+        // WebKit may not have started a face's load when the page settles (font-display: swap), so ask for the
+        // serif face explicitly; a face that cannot be fetched or decoded then stays out of the loaded list.
+        await document.fonts.load('16px "Docreader Serif"').catch(() => []);
+        await document.fonts.ready;
+        return {
+          origin: location.origin,
+          enhanced: document.querySelector('main[data-harness-root]')?.hasAttribute('data-docreader-root') ?? false,
+          // The package's own faces that loaded (the local fallbacks depend on the machine's fonts, so they are left out).
+          faces: [...document.fonts]
+            .filter((f) => f.status === 'loaded' && !f.family.includes('Fallback'))
+            .map((f) => `${f.family.replaceAll('"', '')} ${f.style}`),
+        };
+      });
       expect(state).toMatchObject({ origin: ORIGIN, enhanced: true });
       expect(state.faces).toContain('Docreader Serif normal');
       expect(await doc.violations()).toEqual([]);
