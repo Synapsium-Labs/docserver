@@ -1110,10 +1110,12 @@ describe('goToHash (LD7)', () => {
       void destroyEnhancement(root);
       enhanced.push(root.hasAttribute('data-docreader-root')); // inside goToHash's operation, the teardown waits
     });
+    now.mockReturnValue(1_000_000 + 60_000); // the bar's hold is long over
     goToHash(root, 'details');
     expect(enhanced).toEqual([true]);
     expect(s.intoView).toEqual([]);
     expect(el(root, 'h3', 'details').classList.contains('flash')).toBe(false);
+    expect(position.barHeld()).toBe(false); // nothing after the destroy, the bar's hold included
   });
 
   it('a root not enhanced, still starting or destroyed: nothing', async () => {
