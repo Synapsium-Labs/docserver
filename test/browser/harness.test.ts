@@ -2,7 +2,7 @@
 // excluded browser is reported; that a browser that cannot start names the install command; that the test process
 // opens no socket (the browser is driven over a pipe); that each selected browser starts in its block's hook; that a
 // page loads from its own origin only, enhanced, with the fonts, under either policy and with no violation; that an
-// unserved path is counted as missing (a browser's own favicon request aside); that a routed request to another
+// unserved path is counted as missing (a favicon request never reaches the route); that a routed request to another
 // origin is aborted and counted; that one let past the route reaches no host, by name or by address (a listener on
 // this machine sees no connection, where a browser without the wall connects to it); and what each policy refuses.
 import dgram from 'node:dgram';
@@ -140,7 +140,9 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('an unserved path on the page\'s origin is counted as missing; a favicon request is not', async () => {
+  it('an unserved path on the page\'s origin is counted as missing; a favicon request never reaches the route', async () => {
+    // playwright-core aborts every request for a path ending in /favicon.ico before routing it, so the harness needs
+    // no exemption for a browser's own favicon request; this pins that, should a later version route it.
     const links = '<link rel="stylesheet" href="/favicon.ico"><link rel="stylesheet" href="/nope.css">';
     const doc = await openDoc(DOC, {}, { browser, html: (h) => `${links}${h}` });
     try {

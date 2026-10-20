@@ -257,7 +257,8 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
     if (url.origin === ORIGIN) {
       const f = files.get(url.pathname);
       if (f === undefined) {
-        if (url.pathname !== '/favicon.ico') missing.push(url.pathname); // a browser may ask for one on its own
+        // (A request for /favicon.ico never comes here: playwright-core aborts it before any route sees it.)
+        missing.push(url.pathname);
         await route.fulfill({ status: 404, body: '' });
         return;
       }
