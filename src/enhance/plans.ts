@@ -63,8 +63,15 @@ interface Task {
   readonly heading: HTMLElement;
   /** The heading's next siblings up to the end of the task. */
   readonly parts: readonly Element[];
-  /** Its "Show all" button (the outline mode only). */
-  btn: HTMLButtonElement | null;
+}
+
+/** A task in the outline mode. */
+interface Outlined {
+  readonly heading: HTMLElement;
+  /** Its own parts: those no task inside it holds. */
+  readonly own: readonly Element[];
+  /** Its "Show all" button. */
+  readonly btn: HTMLButtonElement;
   /** Shown whole in the outline. */
   opened: boolean;
 }
@@ -128,7 +135,7 @@ export function build(ctx: FeatureContext): void {
     if (steps > 0) journal.insert(chrome(doc, 'span', { className: 'tmeta', text: `${String(steps)} ${steps === 1 ? 'step' : 'steps'}` }), badge, null);
     if (who !== '') journal.insert(chrome(doc, 'span', { className: vocab.addressee.test(who) ? 'tmeta yours' : 'tmeta', text: who }), badge, null);
     journal.toggleClass(h, 'task', true);
-    tasks.push({ heading: h, parts, btn: null, opened: false });
+    tasks.push({ heading: h, parts });
   }
 
   // ── Steps
@@ -200,33 +207,33 @@ export function build(ctx: FeatureContext): void {
   /** Each part's task: the innermost (the last walked) when two tasks share it. */
   const ownerOf = new Map<Element, Task>();
   for (const t of tasks) for (const p of t.parts) ownerOf.set(p, t);
-  const ownParts = new Map<Task, Element[]>(tasks.map((t) => [t, t.parts.filter((p) => ownerOf.get(p) === t)]));
   for (const p of ownerOf.keys()) journal.toggleClass(p, 'task-part', true);
-
-  let outlined = false;
-
-  /** Show a task whole in the outline, or as its step titles again; a task already so changes nothing. */
-  const openTask = (t: Task, on: boolean): void => {
-    if (t.opened === on) return;
-    t.opened = on;
-    journal.toggleClass(t.heading, 't-open', on);
-    for (const p of ownParts.get(t) ?? []) journal.toggleClass(p, 't-open', on);
-    if (t.btn !== null) {
-      t.btn.setAttribute('aria-expanded', String(on));
-      t.btn.textContent = on ? 'Outline' : 'Show all';
-    }
-    ctx.relayout('outline');
-  };
-
+  const outlinedOf = new Map<Task, Outlined>();
   for (const t of tasks) {
     const btn = chrome(doc, 'button', { className: 'task-open', text: 'Show all', attrs: { type: 'button', 'aria-expanded': 'false' } });
     // Before the heading's controls, when a feature built before this one made them.
     const ctl = Array.from(t.heading.children).find((c) => isChrome(c) && c.classList.contains('h-ctl')) ?? null;
     journal.insert(btn, t.heading, ctl);
-    journal.listen(btn, 'click', () => {
-      openTask(t, !t.opened);
+    outlinedOf.set(t, { heading: t.heading, own: t.parts.filter((p) => ownerOf.get(p) === t), btn, opened: false });
+  }
+
+  let outlined = false;
+
+  /** Show a task whole in the outline, or as its step titles again; a task already so changes nothing. */
+  const openTask = (o: Outlined, on: boolean): void => {
+    if (o.opened === on) return;
+    o.opened = on;
+    journal.toggleClass(o.heading, 't-open', on);
+    for (const p of o.own) journal.toggleClass(p, 't-open', on);
+    o.btn.setAttribute('aria-expanded', String(on));
+    o.btn.textContent = on ? 'Outline' : 'Show all';
+    ctx.relayout('outline');
+  };
+
+  for (const o of outlinedOf.values()) {
+    journal.listen(o.btn, 'click', () => {
+      openTask(o, !o.opened);
     });
-    t.btn = btn;
   }
 
   let tool: HTMLButtonElement | null = null;
@@ -234,7 +241,7 @@ export function build(ctx: FeatureContext): void {
   /** Put the outline on the DOM. Calls no host code. */
   const show = (on: boolean): void => {
     journal.toggleClass(root, 'outline', on);
-    if (!on) for (const t of tasks) openTask(t, false);
+    if (!on) for (const o of outlinedOf.values()) openTask(o, false);
     tool?.setAttribute('aria-pressed', String(on));
   };
 
@@ -273,10 +280,10 @@ export function build(ctx: FeatureContext): void {
   });
 
   /** The task whose part holds `el` (a part is a child of the root, or of a box in it), or undefined. */
-  const taskOf = (el: Element): Task | undefined => {
+  const taskOf = (el: Element): Outlined | undefined => {
     for (let n: Element | null = el; n !== null; n = n.parentElement) {
       const t = ownerOf.get(n);
-      if (t !== undefined) return t;
+      if (t !== undefined) return outlinedOf.get(t);
     }
     return undefined;
   };
@@ -284,8 +291,8 @@ export function build(ctx: FeatureContext): void {
   // Reveal opens the task whose part holds the target, in the outline only.
   ctx.onReveal((el) => {
     if (!outlined) return;
-    const t = taskOf(el);
-    if (t !== undefined) openTask(t, true);
+    const o = taskOf(el);
+    if (o !== undefined) openTask(o, true);
   });
 
   // A stored outline, applied now, so the full plan is never shown first. Reading it may run host code (a getter of

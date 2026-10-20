@@ -309,9 +309,11 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
   });
 
   it('an empty heading is no task; a task with nothing after its separator keeps an empty title', async () => {
-    const root = mount(['# P', '', '###', '', '### Task 7:', '', 'Text.', ''].join('\n'));
+    const root = mount(['# P', '', '###', '', '### Task 7:', '', 'Text.', '', '### Task k: A number its word holds too', ''].join('\n'));
     await enhance(root);
-    const [empty, bare] = Array.from(root.querySelectorAll('h3'));
+    const [empty, bare, k] = Array.from(root.querySelectorAll('h3'));
+    expect(k?.querySelector('.task-id')?.textContent).toBe('Task k');
+    expect(k?.querySelector('.task-id + span[hidden]')?.textContent).toBe(': ');
     expect(empty?.childNodes).toHaveLength(0);
     expect(bare?.classList.contains('task')).toBe(true);
     expect(Array.from(bare?.childNodes ?? []).map((n) => [(n as Element).className, n.textContent])).toEqual([
@@ -319,7 +321,16 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
       ['', ':'],
     ]);
     expect(bare?.getAttribute('aria-label')).toBe('Task 7:');
-    expect(ctxOf(root).plan.tasks).toEqual([bare]);
+    expect(ctxOf(root).plan.tasks).toEqual([bare, k]);
+  });
+
+  it('a heading whose first child is a comment that reads like a task is no task (a host\'s edit)', async () => {
+    const root = mount(stepsDoc(2));
+    const h = heading(root, 'h3', 'Task list');
+    h.prepend(document.createComment('Task 4: in a comment'));
+    await enhance(root);
+    expect(h.classList.contains('task')).toBe(false);
+    expect(h.firstChild?.nodeType).toBe(8);
   });
 
   it('a chrome heading an earlier feature made is no task', async () => {
@@ -383,6 +394,10 @@ describe('tasks: headings, badges and owners (the reference layout, section 7)',
         'Who has no colon. Who: you.',
         '',
         '- Who: you, in a list.',
+        '',
+        '#### Who: a heading.',
+        '',
+        '&#32;Who: you, after a space.',
         '',
         '### Task 3: C',
         '',
@@ -620,6 +635,10 @@ describe('outline mode (the reference layout, section 23)', () => {
     expect(root.classList.contains('outline')).toBe(true);
     expect(toolOf(root)?.getAttribute('aria-pressed')).toBe('true');
     expect(sets).toEqual([]);
+    // The stored outline is the one in force: o turns it off.
+    key(document.body, 'o');
+    expect(root.classList.contains('outline')).toBe(false);
+    expect(sets).toEqual([[docKey('k', OUTLINE), null]]);
   });
 
   it('a stored value other than true is no outline, and a short plan never reads the key', async () => {
