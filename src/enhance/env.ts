@@ -327,19 +327,19 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
         const ask = (): void => {
           // One guard for every way the font set can fail: a getter that throws, no font set, no load, a load that
           // throws at once. Each answers false, as a load that rejects does.
-          let set: FontFaceSet | undefined;
+          let set: FontFaceSet;
           let loads: Promise<unknown[]>;
           try {
             set = doc.fonts;
-            const faces = set;
-            loads = Promise.all(FACES.map((face) => faces.load(face)));
-          } catch (e) {
-            loads = Promise.reject(e);
+            loads = Promise.all(FACES.map((face) => set.load(face)));
+          } catch {
+            finish(false);
+            return;
           }
           loads.then(
             (found) => {
               if (found.every(loadedFace)) finish(true);
-              else if (set !== undefined) hear(set);
+              else hear(set);
             },
             () => {
               finish(false);
