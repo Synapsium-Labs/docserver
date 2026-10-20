@@ -1,9 +1,11 @@
-// Builds a demo page for the reading layout: scripts/demo/sample.md rendered by the repo's own render(), inserted in a
-// root element, then enhanced. It writes demo-out/ (git-ignored): index.html, demo.js and assets/ (a copy of
-// the stylesheet and fonts). Open demo-out/index.html in a browser; the query parameters theme (auto, light, dark),
-// width (standard, wide) and font (serif, sans) choose the prefs, through setEnhancementPrefs.
+// Builds a demo page for the reading layout: a sample (scripts/demo/samples/core.md unless --sample names another
+// Markdown file) rendered by the repo's own render(), inserted in a root element, then enhanced. It writes demo-out/
+// (git-ignored): index.html, demo.js and assets/ (a copy of the stylesheet and fonts). Open demo-out/index.html in
+// a browser; the query parameters theme (auto, light, dark), width (standard, wide) and font (serif, sans) choose
+// the prefs, through setEnhancementPrefs. The page's <html> carries data-ready="false" until the layout is built
+// and the prefs applied, then "true": scripts/visual/compare.mjs waits for it.
 //
-// Run it from the repository root: node scripts/demo/build.mjs
+// Run it from the repository root: node scripts/demo/build.mjs [--sample <file>]
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,7 +13,12 @@ import { build } from 'esbuild';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const out = path.join(repo, 'demo-out');
-const sample = path.join(repo, 'scripts', 'demo', 'sample.md');
+const args = process.argv.slice(2);
+if (!(args.length === 0 || (args.length === 2 && args[0] === '--sample' && args[1] !== ''))) {
+  console.error('usage: node scripts/demo/build.mjs [--sample <file>]');
+  process.exit(2);
+}
+const sample = args.length === 2 ? path.resolve(args[1]) : path.join(repo, 'scripts', 'demo', 'samples', 'core.md');
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
@@ -62,12 +69,13 @@ const json = JSON.stringify({ title: result.meta.title, frontList: result.meta.f
   .replaceAll('>', '\\u003e')
   .replaceAll('&', '\\u0026');
 
+const title = (result.meta.title ?? 'Sample').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const page = `<!doctype html>
-<html lang="en">
+<html lang="en" data-ready="false">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Example spec</title>
+<title>${title}</title>
 <link rel="stylesheet" href="assets/reader.css">
 <style>html, body { margin: 0; } [data-demo-root] { min-height: 100vh; }</style>
 </head>
