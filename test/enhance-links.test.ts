@@ -748,6 +748,16 @@ describe('glossary: what makes a glossary, and its terms (the reference layout, 
     expect(find(hand, 'a.term').getAttribute('href')).toBe('#words%20used');
   });
 
+  it('in hand-written html, a glossary row with one cell names no term', async () => {
+    const root = mountHtml(
+      '<h1>Hand-written</h1><h2 id="glossary">Glossary</h2><div class="table-wrapper"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody><tr><td>Lantern</td></tr><tr><td>Beacon</td><td>A signal</td></tr></tbody></table></div><h2 id="use">Use</h2><p>A lantern and a beacon.</p>',
+    );
+    await enhance(root);
+    expect(ctxOf(root).terms.all().map((t) => t.name)).toEqual(['Beacon']);
+    expect(root.querySelectorAll('td.termcell')).toHaveLength(1);
+    expect(linked(root, 'term')).toEqual(['p:beacon']);
+  });
+
   it('a numbered or lettered heading counts by its words, and a glossary under an h3 by the h3', async () => {
     const root = mount(
       [
