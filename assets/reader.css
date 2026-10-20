@@ -6,8 +6,10 @@
 
    Type: Source Serif 4 (prose and headings) and Source Sans 3 (labels, tables, chrome), both SIL OFL 1.1, self-hosted
    from ./fonts/ (see fonts/README.md). Colours are tokens declared on the root: dark applies when data-theme is "dark",
-   or when the system is dark and data-theme is not "light". A host may override any token on the root, for example
-   --bar-h, the height of a fixed header of its own that sticky table heads and anchor jumps must clear.
+   or when the system is dark and data-theme is not "light". A host may override any token on the root. One is
+   measured: --bar-h, the height sticky table heads and anchor jumps clear, is the reader's own bar's (48px, or what
+   the reader measures when something makes the bar taller); a host that builds its own bar instead (chrome.bar false)
+   may set it to the height of a fixed header of its own.
 
    Ids and classes. The reader's own popups and panels (the settings menu, the preview card, the quick jump, the keys
    sheet, the contents panels, the full-screen figure) are keyed on CLASSES here, never on ids: a rendered document's
@@ -16,13 +18,15 @@
    .aa-btn, .jump-btn).
 
    State classes on the root. The reader's own view modes, which were classes on the page body, are classes on the
-   root: .outline (plans as an outline), .lens-product (implementation detail quieter) and .scrolled (the running head
-   shows once the reader has scrolled).
+   root: .outline (plans as an outline), .lens-product (implementation detail quieter), .scrolled (the running head
+   shows once the reader has scrolled) and .bar-hidden (on a phone, the bar slides away while the reader scrolls down).
 
    Left out, because they style the page that hosts the reader and mean nothing inside an embedded root; a host that
    wants any of them writes its own:
-     - the top bar and its home link (.topbar, .topbar-inner, .topbar-home), the breadcrumb, the site footer, and the
-       rules keyed on the page's body classes that move them (body.bar-hidden, body.ver-on);
+     - the hosting page's own top bar parts, its home link (.topbar-home) and its breadcrumb, the site footer, and the
+       day view's rules (body.ver-on), which the day view brings. The bar itself is the reader's, the root's sticky
+       first child (its block below, at its marker, with the .scrolled and .bar-hidden states on the root), and it
+       holds no link out of the document;
      - the contents rail's placement and its show and hide states (position, the 1240px layout shift, body.has-toc,
        body.no-toc, body.toc-open, the drawer button, the scrim): they place a rail against the viewport, which an
        embedded root must not assume. The rail's inner type and structure stay;
@@ -692,6 +696,33 @@
 [data-docreader-root] .bar-tools .chg-nav button.ic { font-size: 16px; line-height: 1; }
 [data-docreader-root] .bar-tools .chg-nav button.hide { color: var(--text-muted); }
 /* ─── marker: the bar's placement in the root (sticky, with its .scrolled and .bar-hidden states) goes below ─── */
+/* ─── the bar: the root's sticky top (LD10) ──────────────────────────────── */
+/* The bar is the root's first box (the skip link before it is fixed): as wide as the root, its side margins undoing
+   the root's gutter, and at the root's top edge, its top margin undoing the root's top padding (--bar-gap, which must
+   equal it); it sticks at the window's top while the root scrolls by. Below its 48px row it is padded by that top
+   padding and 1px for the line under the row, so the reading column starts where it would under a page-level bar of
+   48px and a 1px border: a margin there would collapse into the first block's own top margin. The padding is
+   transparent and lets the pointer through to the text beneath; the bar's children take the pointer. The line under
+   the row is the row's shadow, in the bar's colour until the title is scrolled past (.scrolled), then the border's.
+   --bar-h is the bar's height less its padding (scroll.ts measures it); the row's 48px is fixed, so the measure never
+   feeds back into it. On a phone the bar slides up by its row and the line (.bar-hidden, scroll.ts), and a table's
+   sticky head and a figure's tools move up with it. The progress line, also the root's child, keeps the window's
+   width. The running head's room beside the contents rail is the rail's (its marker, below). */
+[data-docreader-root][data-docreader-root]:not(i) > .topbar { --bar-gap: 52px; position: sticky; top: 0; z-index: 100; max-width: none; margin: calc(-1 * var(--bar-gap)) calc(-1 * var(--pad)) 0; padding: 0 0 calc(var(--bar-gap) + 1px); pointer-events: none; transition: transform .25s ease; }
+[data-docreader-root] .topbar > * { pointer-events: auto; }
+[data-docreader-root] .topbar-inner { display: flex; align-items: center; gap: 16px; height: 48px; padding: 0 16px 0 20px; font-family: var(--sans); background: var(--topbar-bg); box-shadow: 0 1px 0 var(--topbar-bg); transition: box-shadow .2s; }
+[data-docreader-root]:not(i).scrolled .topbar-inner { box-shadow: 0 1px 0 var(--border); }
+[data-docreader-root][data-docreader-root]:not(i).bar-hidden > .topbar { transform: translateY(calc(var(--bar-gap) - 100%)); }
+[data-docreader-root].bar-hidden .table-wrapper.fits th { top: 0; }
+[data-docreader-root].bar-hidden figure.mermaid-figure .tools { top: 6px; }
+[data-docreader-root][data-docreader-root]:not(i) > .doc-progress { max-width: none; margin: 0; }
+@media (max-width: 700px) {
+  [data-docreader-root][data-docreader-root]:not(i) > .topbar { --bar-gap: 28px; }
+  [data-docreader-root] .topbar-inner { gap: 8px; padding: 0 8px 0 14px; }
+}
+@media print {
+  [data-docreader-root] .topbar { display: none !important; }
+}
 /* ─── running head and bar tools ─────────────────────────────────────────── */
 [data-docreader-root] .running-head { flex: 1; min-width: 0; text-align: center; font-family: var(--prose); font-style: italic; font-size: 14.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity .25s; }
 [data-docreader-root]:not(i).scrolled .running-head { opacity: 1; }

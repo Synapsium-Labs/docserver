@@ -1,7 +1,9 @@
-// The bar's skeleton (docserver L2, Task 7b; Task 12 styles it and drives it), from the reference layout's section 13:
+// The bar's skeleton (docserver L2, Task 7b; Task 12 places and drives it), from the reference layout's section 13:
 // a skip link, the bar with its running head and its tool tray, and the progress line, all chrome inside the root
-// (LD10), made only with `chrome.bar` (the default). Unstyled here: until Task 12 places the bar, the running head is
-// empty and the tray holds only what features put in it, so the reading column does not move.
+// (LD10), made only with `chrome.bar` (the default). The stylesheet's bar block (reader.css, at its marker) makes the
+// bar the root's sticky top, as wide as the root, taking the root's own top padding below it so the reading column
+// starts where it would without the bar; scroll.ts fills the running head, moves the progress line, toggles the root
+// classes `scrolled` and `bar-hidden`, and measures `--bar-h`.
 //
 // The root's children, ahead of the document:
 //   a.skip-link        "Skip to the text", the first stop for the keyboard: it scrolls to the document's first node
@@ -13,14 +15,17 @@
 //                      document node it focuses the root. It makes no hash and calls no host. Only for a document
 //                      (ResolvedInfo.isDocument), as the reference's. It precedes the bar: the stylesheet takes it out
 //                      of the flow (fixed, shown on focus), so the bar is still the first box in the root.
-//   nav.topbar         the bar (`slots.bar`), holding div.topbar-inner, which holds:
+//   nav.topbar         the bar (`slots.bar`): a navigation landmark labelled BAR_LABEL once the tray holds a tool,
+//                      and no landmark (role="none", no label) while it holds none, so an empty bar adds no empty
+//                      landmark to the page. It holds div.topbar-inner, which holds:
 //     div.running-head   the running head (`slots.running`; aria-hidden: it repeats the section's title), and
 //     div.bar-tools      the tool tray (`slots.tools`).
 //   div.doc-progress   the progress line (`slots.progress`).
 // `slots.tool(kind, node)` puts a feature's tool in the tray at its kind's place, in TOOL_ORDER (the order the
 // reference's tray ends up in: the changes stepper, the Outline button, the quick jump, the reading settings, the
-// Contents button), whatever order the features build in; one tool per kind. A feature that adds to the bar itself
-// (the day banner, Task 22) appends to `slots.bar`.
+// Contents button), whatever order the features build in; one tool per kind. The first tool makes the bar a labelled
+// landmark (above). A feature that adds to the bar itself (the day banner, Task 22) appends to `slots.bar`. The bar
+// is the library's own chrome, so these attribute writes are not journaled: teardown removes the bar.
 //
 // The lifecycle makes the skeleton before the first feature builds, so features put their tools in it during their
 // build, and puts it in the root once every feature is built, so no feature's build sees it among the root's children
@@ -29,6 +34,9 @@
 // Import-inert: declarations only.
 import { CHROME_ATTR, chrome, type Journal } from './journal.js';
 import { focusable } from './nav.js';
+
+/** The bar's accessible name once it holds a tool. */
+export const BAR_LABEL = 'Document tools';
 
 /** The tray's tools, in their order. */
 export const TOOL_ORDER = ['changes', 'outline', 'jump', 'settings', 'contents'] as const;
@@ -63,7 +71,7 @@ export function createBar(args: BarArgs): { readonly slots: BarSlots; attach(): 
   const doc = root.ownerDocument;
   const running = chrome(doc, 'div', { className: 'running-head', attrs: { 'aria-hidden': 'true' } });
   const tools = chrome(doc, 'div', { className: 'bar-tools' });
-  const bar = chrome(doc, 'nav', { className: 'topbar' }, [chrome(doc, 'div', { className: 'topbar-inner' }, [running, tools])]);
+  const bar = chrome(doc, 'nav', { className: 'topbar', attrs: { role: 'none' } }, [chrome(doc, 'div', { className: 'topbar-inner' }, [running, tools])]);
   const progress = chrome(doc, 'div', { className: 'doc-progress' });
   const skip = isDocument ? chrome(doc, 'a', { className: 'skip-link', text: 'Skip to the text', attrs: { href: '#' } }) : null;
   if (skip !== null) {
@@ -98,6 +106,10 @@ export function createBar(args: BarArgs): { readonly slots: BarSlots; attach(): 
       }
       journal.insert(node, tools, before);
       placed.set(kind, node);
+      if (bar.hasAttribute('role')) {
+        bar.removeAttribute('role');
+        bar.setAttribute('aria-label', BAR_LABEL);
+      }
     },
   });
   return Object.freeze({
