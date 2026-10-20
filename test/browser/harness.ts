@@ -241,7 +241,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
     if (url.origin === ORIGIN) {
       const f = files.get(url.pathname);
       if (f === undefined) {
-        missing.push(url.pathname);
+        if (url.pathname !== '/favicon.ico') missing.push(url.pathname); // a browser may ask for one on its own
         await route.fulfill({ status: 404, body: '' });
         return;
       }
