@@ -7,7 +7,8 @@ closes it (`src/enhance/cards.ts`); six rows that show the real-browser cases bi
 three rows that show the new Level 2 case, `cards/xrefs`, holds the cross-references it pins (`src/enhance/xrefs.ts`,
 Task 13's code, mutated in the throwaway copy only). Measured 2026-10-20 on branch `l2-t17-cards` at commit
 `7368c0f`, every row, L2-T17-M1 to L2-T17-M178. All 178 are red (`rc=1`): 176 there, and two, L2-T17-M58 and
-L2-T17-M99, measured again at `c506ca2` (below).
+L2-T17-M99, measured again at `c506ca2` (below). The review's fix round added L2-T17-M179 to L2-T17-M196, all red; its own
+section at the end says where each was measured and names the five earlier rows whose code it changed.
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8), with the changes Task 7b's rows file records: a 512 MiB output
 buffer, a run that ends with no exit status counted as no verdict (KILLED), and the `Errors`, `Unhandled Rejection` and
@@ -1747,6 +1748,206 @@ Notes on the measurement.
     "old": "        if (vocab.qualifier.test(s.slice(Math.max(0, m.index - reach), m.index))) continue;\n",
     "new": "",
     "tests": "test/browser/layout-corpus.test.ts -t 'cards/xrefs'"
+  }
+]
+```
+
+## Fix round 1, after the review (L2-T17-M179 to L2-T17-M196)
+
+Measured 2026-10-20 with the same method and `DOCREADER_BROWSERS=chromium`, one row at a time: L2-T17-M193 and
+L2-T17-M196 at commit `b0dffed`, the rest at `2ec4907` (the two commits differ only in `scrub()`'s chrome mark and its
+comment). All 18 are red (`rc=1`). The checkout read the same before and after each batch (`git status --porcelain`,
+`HEAD` and the hash of `git diff` unchanged). The jsdom file now has 91 cases; the browser file has six per browser.
+
+What the round changed, and the rows it supersedes:
+- **A tap's click.** In the pinned Playwright WebKit, the click after a touch tap is a PointerEvent that names
+  `'mouse'`, so reading the click's own `pointerType` first (the reference's order) made the first tap go. A click
+  within `FRESH_MS` of a pointerdown that was not a mouse's is now that pointer's, whatever it names; past that, the
+  click's own word, or the last pointerdown's when it names none. A click with `detail` 0 (a key's) goes. Rows M179 to
+  M184 replace L2-T17-M122 and L2-T17-M123, whose `old` text is gone.
+- **Focus.** A press on the card (its text takes no focus) keeps the card when the focus leaves for nothing, until the
+  card hides (M185 to M188). The focus back on the trigger shown calls off a pending hide (M189); M190 replaces
+  L2-T17-M113.
+- **A block's key.** Enter or Space on a block that shows no card leaves the key and the focus alone (M191); M192
+  replaces L2-T17-M134.
+- **The chrome mark.** `scrub()` keeps `CHROME_ATTR`'s value as a literal, because the CSP wall allows a name in a
+  variable only in `journal.ts`. The content case reads `CHROME_ATTR`, so a drift goes red (M196). M193 is L2-T17-M14
+  measured again.
+- **max-height in a browser** (M194, M195): the browser cases now assert it, and a new case shows it capping a card.
+
+The real-browser proof of the tap needs a touch screen in the context (`hasTouch`), which the harness (Task 6's file)
+does not offer, so no tracked case taps and no row runs in a browser for it. A scratch copy with `hasTouch` added
+showed, in both Chromium and the pinned WebKit image: the first tap previews and the second goes; Enter after a tap
+goes at once (its click has `detail` 0); a press on the card's text keeps it.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T17-M179 | a tap's click is the tap's pointer's, whatever it names (WebKit's 'mouse') | `src/enhance/cards.ts` | `const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;` → `const type = typeof own === 'string' && own !== '' ? own : lastPointer;` | `test/enhance-cards.test.ts` (`rc=1`, red): 8 failed \| 83 passed (91). "an ID: the first tap shows the card and goes nowhere; the second goes, and the card closes"; "a term: the first tap previews, the second goes to its row"; "the pointer is heard before the trigger's own handlers: one that stops the pointerdown does not make a tap a click"; "focus reaching the trigger whose card a tap showed leaves the next tap a click"; "a first tap never reaches the page around the root" |
+| L2-T17-M180 | a tap lasts FRESH_MS | `src/enhance/cards.ts` | `const tapping = (): boolean => lastPointer !== 'mouse' && env.now() - lastDown < FRESH_MS;` → `const tapping = (): boolean => lastPointer !== 'mouse';` | `test/enhance-cards.test.ts` (`rc=1`, red): 2 failed \| 89 passed (91). "a focus long after the touch is no tap: its click goes"; "a click within FRESH_MS of a touch is the touch's, whatever it names; later, its own word wins" |
+| L2-T17-M181 | a mouse's pointerdown starts no tap | `src/enhance/cards.ts` | `const tapping = (): boolean => lastPointer !== 'mouse' && env.now() - lastDown < FRESH_MS;` → `const tapping = (): boolean => env.now() - lastDown < FRESH_MS;` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a mouse click goes at once; a click that names touch after a mouse's pointerdown is read by its own word" |
+| L2-T17-M182 | past a tap, the click's own word is read | `src/enhance/cards.ts` | `const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;` → `const type = tapping() ? lastPointer : lastPointer;` | `test/enhance-cards.test.ts` (`rc=1`, red): 2 failed \| 89 passed (91). "a mouse click goes at once; a click that names touch after a mouse's pointerdown is read by its own word"; "a click within FRESH_MS of a touch is the touch's, whatever it names; later, its own word wins" |
+| L2-T17-M183 | past a tap, a click that names none is read by the last pointerdown | `src/enhance/cards.ts` | `const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;` → `const type = tapping() ? lastPointer : typeof own === 'string' ? own : lastPointer;` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a pointer's click that names no pointer, long after its pointerdown, is read by that pointerdown" |
+| L2-T17-M184 | a key's click (detail 0) goes | `src/enhance/cards.ts` | `      if (e.detail === 0) return; // a key's click (or a script's): it goes ⏎ ` → (deleted) | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a key's click (detail 0) goes at once, however lately a touch came down" |
+| L2-T17-M185 | a press on the card keeps it when the focus leaves for nothing | `src/enhance/cards.ts` | `    if (to === null && pressedCard) return; // a press on the card's text, which takes no focus ⏎ ` → (deleted) | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a press on the card's text keeps it, though the focus leaves for nothing; the press is forgotten once it hides" |
+| L2-T17-M186 | a pointerdown on the card is a press on the card | `src/enhance/cards.ts` | `      pressedCard = inCard(elementOf(event.target)); ⏎ ` → (deleted) | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a press on the card's text keeps it, though the focus leaves for nothing; the press is forgotten once it hides" |
+| L2-T17-M187 | a pointerdown elsewhere is no press on the card | `src/enhance/cards.ts` | `      pressedCard = inCard(elementOf(event.target)); ⏎ ` → `      pressedCard = true; ⏎ ` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a press on the card's text keeps it, though the focus leaves for nothing; the press is forgotten once it hides" |
+| L2-T17-M188 | the press is forgotten once the card hides | `src/enhance/cards.ts` | `      shown = null; ⏎       pressedCard = false; ⏎ ` → `      shown = null; ⏎ ` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a press on the card's text keeps it, though the focus leaves for nothing; the press is forgotten once it hides" |
+| L2-T17-M189 | the focus back on the trigger shown calls off a pending hide | `src/enhance/cards.ts` | `      hideTimer = stop(hideTimer); // the focus came back within the delay ⏎ ` → (deleted) | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "the focus back on the trigger shown within the delay keeps its card" |
+| L2-T17-M190 | focus on the trigger shown neither shows again nor marks a tap | `src/enhance/cards.ts` | `      hideTimer = stop(hideTimer); // the focus came back within the delay ⏎       return; ⏎ ` → `      hideTimer = stop(hideTimer); // the focus came back within the delay ⏎ ` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "focus reaching the trigger whose card a tap showed leaves the next tap a click" |
+| L2-T17-M191 | a block that shows no card leaves the key and the focus alone | `src/enhance/cards.ts` | `      if (!showFor(block)) return; // a block that shows no card leaves the key and the focus alone ⏎ ` → `      showFor(block); ⏎ ` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "Enter or Space on a block that shows no card leaves the key and the focus alone, whatever card is open" |
+| L2-T17-M192 | a block's key goes no further once its card shows | `src/enhance/cards.ts` | `      e.preventDefault(); ⏎       const all = stops();` → `      const all = stops();` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "Enter or Space on a block shows its card and moves into it" |
+| L2-T17-M193 | every copied element is chrome | `src/enhance/cards.ts` | `    el.setAttribute('data-docreader-chrome', ''); ⏎ ` → (deleted) | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a clone drops ids, form controls and render()'s line marks, turns links of the layout into text, and is chrome" |
+| L2-T17-M194 | the max-height is at most the room on the card's side (Chromium) | `src/enhance/cards.ts` | `Math.min(natural, down ? below : above)` → `natural` | `test/browser/cards.test.ts` (`rc=1`, red): 1 failed \| 5 passed \| 6 skipped (12). "the max-height caps a card taller than the room on its side: it ends ROOM above the window's bottom, less GAP" |
+| L2-T17-M195 | the max-height is at most the natural height (Chromium) | `src/enhance/cards.ts` | `Math.min(natural, down ? below : above)` → `(down ? below : above)` | `test/browser/cards.test.ts` (`rc=1`, red): 1 failed \| 5 passed \| 6 skipped (12). "below the trigger when the card fits there, its left from the trigger's, never over it" |
+| L2-T17-M196 | the literal mark is CHROME_ATTR's value: a drift goes red | `src/enhance/cards.ts` | `    el.setAttribute('data-docreader-chrome', ''); ⏎ ` → `    el.setAttribute('data-docreader-chromed', ''); ⏎ ` | `test/enhance-cards.test.ts` (`rc=1`, red): 1 failed \| 90 passed (91). "a clone drops ids, form controls and render()'s line marks, turns links of the layout into text, and is chrome" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T17-M179",
+    "guard": "a tap's click is the tap's pointer's, whatever it names (WebKit's 'mouse')",
+    "file": "src/enhance/cards.ts",
+    "old": "const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "new": "const type = typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M180",
+    "guard": "a tap lasts FRESH_MS",
+    "file": "src/enhance/cards.ts",
+    "old": "const tapping = (): boolean => lastPointer !== 'mouse' && env.now() - lastDown < FRESH_MS;",
+    "new": "const tapping = (): boolean => lastPointer !== 'mouse';",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M181",
+    "guard": "a mouse's pointerdown starts no tap",
+    "file": "src/enhance/cards.ts",
+    "old": "const tapping = (): boolean => lastPointer !== 'mouse' && env.now() - lastDown < FRESH_MS;",
+    "new": "const tapping = (): boolean => env.now() - lastDown < FRESH_MS;",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M182",
+    "guard": "past a tap, the click's own word is read",
+    "file": "src/enhance/cards.ts",
+    "old": "const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "new": "const type = tapping() ? lastPointer : lastPointer;",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M183",
+    "guard": "past a tap, a click that names none is read by the last pointerdown",
+    "file": "src/enhance/cards.ts",
+    "old": "const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "new": "const type = tapping() ? lastPointer : typeof own === 'string' ? own : lastPointer;",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M184",
+    "guard": "a key's click (detail 0) goes",
+    "file": "src/enhance/cards.ts",
+    "old": "      if (e.detail === 0) return; // a key's click (or a script's): it goes\n",
+    "new": "",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M185",
+    "guard": "a press on the card keeps it when the focus leaves for nothing",
+    "file": "src/enhance/cards.ts",
+    "old": "    if (to === null && pressedCard) return; // a press on the card's text, which takes no focus\n",
+    "new": "",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M186",
+    "guard": "a pointerdown on the card is a press on the card",
+    "file": "src/enhance/cards.ts",
+    "old": "      pressedCard = inCard(elementOf(event.target));\n",
+    "new": "",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M187",
+    "guard": "a pointerdown elsewhere is no press on the card",
+    "file": "src/enhance/cards.ts",
+    "old": "      pressedCard = inCard(elementOf(event.target));\n",
+    "new": "      pressedCard = true;\n",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M188",
+    "guard": "the press is forgotten once the card hides",
+    "file": "src/enhance/cards.ts",
+    "old": "      shown = null;\n      pressedCard = false;\n",
+    "new": "      shown = null;\n",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M189",
+    "guard": "the focus back on the trigger shown calls off a pending hide",
+    "file": "src/enhance/cards.ts",
+    "old": "      hideTimer = stop(hideTimer); // the focus came back within the delay\n",
+    "new": "",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M190",
+    "guard": "focus on the trigger shown neither shows again nor marks a tap",
+    "file": "src/enhance/cards.ts",
+    "old": "      hideTimer = stop(hideTimer); // the focus came back within the delay\n      return;\n",
+    "new": "      hideTimer = stop(hideTimer); // the focus came back within the delay\n",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M191",
+    "guard": "a block that shows no card leaves the key and the focus alone",
+    "file": "src/enhance/cards.ts",
+    "old": "      if (!showFor(block)) return; // a block that shows no card leaves the key and the focus alone\n",
+    "new": "      showFor(block);\n",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M192",
+    "guard": "a block's key goes no further once its card shows",
+    "file": "src/enhance/cards.ts",
+    "old": "      e.preventDefault();\n      const all = stops();",
+    "new": "      const all = stops();",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M193",
+    "guard": "every copied element is chrome",
+    "file": "src/enhance/cards.ts",
+    "old": "    el.setAttribute('data-docreader-chrome', '');\n",
+    "new": "",
+    "tests": "test/enhance-cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M194",
+    "guard": "the max-height is at most the room on the card's side (Chromium)",
+    "file": "src/enhance/cards.ts",
+    "old": "Math.min(natural, down ? below : above)",
+    "new": "natural",
+    "tests": "test/browser/cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M195",
+    "guard": "the max-height is at most the natural height (Chromium)",
+    "file": "src/enhance/cards.ts",
+    "old": "Math.min(natural, down ? below : above)",
+    "new": "(down ? below : above)",
+    "tests": "test/browser/cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M196",
+    "guard": "the literal mark is CHROME_ATTR's value: a drift goes red",
+    "file": "src/enhance/cards.ts",
+    "old": "    el.setAttribute('data-docreader-chrome', '');\n",
+    "new": "    el.setAttribute('data-docreader-chromed', '');\n",
+    "tests": "test/enhance-cards.test.ts"
   }
 ]
 ```
