@@ -736,6 +736,18 @@ describe('glossary: what makes a glossary, and its terms (the reference layout, 
     expect(Array.from(root.querySelectorAll('a.term')).map((a) => a.getAttribute('href'))).toEqual(['#in-short', '#agreed', '#words-used-here']);
   });
 
+  it('a table nested in a list item finds its section above the list; a heading id is escaped in the href', async () => {
+    const root = mount(['# Nested', '', '## Words used here', '', '- The words:', '', '  | Part | Use |', '  |---|---|', '  | Lantern | A light |', '', '## 1. Use', '', 'A lantern.', ''].join('\n'));
+    await enhance(root);
+    expect(ctxOf(root).terms.all().map((t) => [t.name, t.section])).toEqual([['Lantern', 'Words used here']]);
+    expect(find(root, 'a.term').getAttribute('href')).toBe('#words-used-here');
+    const hand = mountHtml(
+      '<h1>Hand-written</h1><h2 id="words used">Words used here</h2><div class="table-wrapper"><table><thead><tr><th>Part</th><th>Use</th></tr></thead><tbody><tr><td>Beacon</td><td>A signal</td></tr></tbody></table></div><h2 id="next">Next</h2><p>A beacon.</p>',
+    );
+    await enhance(hand);
+    expect(find(hand, 'a.term').getAttribute('href')).toBe('#words%20used');
+  });
+
   it('a numbered or lettered heading counts by its words, and a glossary under an h3 by the h3', async () => {
     const root = mount(
       [
@@ -854,6 +866,13 @@ describe('glossary: the first mention of each term in each section', () => {
     expect(a.firstChild?.nodeType).toBe(3);
     expect(squash(p.textContent)).toBe('A fold hides a section. Folds come back. The read mark notes what was read, and read marks add up.');
     expect(ctxOf(root).terms.get(a.getAttribute('data-term') ?? '')?.name).toBe('Fold');
+  });
+
+  it('the search goes on after the whole of a mention it leaves, so a shorter term inside it is not linked there', async () => {
+    const root = mount(['# Resume', '', '## Glossary', '', '| Term | Meaning |', '|---|---|', '| Read mark | A mark |', '| Mark | Another |', '', '## 1. Use', '', 'A read mark, then a read mark again, and a mark.', ''].join('\n'));
+    await enhance(root);
+    expect(linked(root, 'term')).toEqual(['p:read mark', 'p:mark']);
+    expect(find(root, 'a.term:last-of-type').previousSibling?.textContent).toBe(', then a read mark again, and a ');
   });
 
   it('plurals in s and es; a whole word on both sides; white space runs inside a name; any case unless exact', async () => {
@@ -1029,8 +1048,12 @@ describe('glossary: the first mention of each term in each section', () => {
     expect(Array.from(root.querySelectorAll('a.term')).map((a) => a.getAttribute('href'))).toEqual(['#1-where-it-is-defined', '#1-where-it-is-defined']);
   });
 
-  it('a term with no heading before its target has the empty fragment for its href', async () => {
+  it('a term with no heading before its target, in the root, has the empty fragment for its href', async () => {
     const root = mount(['A lamp first, before any heading.', '', '# Title', '', 'The lamp again.', ''].join('\n'));
+    const outside = document.createElement('h2');
+    outside.id = 'outside';
+    outside.textContent = 'A heading outside the root';
+    root.before(outside);
     seed((ctx) => {
       const p = para(ctx.root, 'A lamp first');
       ctx.terms.define({ name: 'Lamp', exact: false, section: '', target: p, def: { qual: '', cell: p, row: p } });
@@ -1160,6 +1183,32 @@ describe('the term matcher (glossary.ts)', () => {
     }
     expect(found).toBeGreaterThan(1000);
   });
+
+  it('reads every code unit as the language\'s pattern does: white space, the edges of a word, and case', () => {
+    const one = (keys: readonly string[], text: string): ReturnType<ReturnType<typeof termMatcher>> => {
+      const re = referencePattern(keys);
+      const m = re.exec(text);
+      return m === null ? null : { start: m.index, keyEnd: m.index + (m[1] ?? '').length, end: m.index + m[0].length };
+    };
+    const space = termMatcher(['a b']);
+    const edge = termMatcher(['ab']);
+    const bad: string[] = [];
+    for (let c = 0; c <= 0xffff; c += 1) {
+      const ch = String.fromCharCode(c);
+      const hex = c.toString(16);
+      if (JSON.stringify(space(`a${ch}b`, 0)) !== JSON.stringify(one(['a b'], `a${ch}b`))) bad.push(`space ${hex}`);
+      if (JSON.stringify(edge(`${ch}ab`, 0)) !== JSON.stringify(one(['ab'], `${ch}ab`))) bad.push(`before ${hex}`);
+      if (JSON.stringify(edge(`ab${ch}`, 0)) !== JSON.stringify(one(['ab'], `ab${ch}`))) bad.push(`after ${hex}`);
+      const key = ch.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (key === '') continue;
+      const find = termMatcher([key]);
+      // The character, its cases, and the first unit of its upper case (a letter whose upper case is two units).
+      for (const text of [ch, ch.toUpperCase(), ch.toLowerCase(), ch.toUpperCase()[0] ?? '']) {
+        if (JSON.stringify(find(text, 0)) !== JSON.stringify(one([key], text))) bad.push(`case ${hex} in ${JSON.stringify(text)}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  }, 120_000);
 
   it('a longer term wins at the same place, and a shorter one is tried when the longer one\'s end is inside a word', () => {
     const find = termMatcher(['read', 'read mark']);

@@ -107,12 +107,15 @@ function canon(c: number): number {
 const S = 83;
 const E = 69;
 
-/** The end of a mention whose term ends at `at`: with "s", with "es", or bare; then no `[\w-]` may follow. -1: none. */
+/**
+ * The end of a mention whose term ends at `at`: with "s", with "es", or bare; then no `[\w-]` may follow. -1: none.
+ * Past the end of the text charCodeAt answers NaN, which is no letter and no edge of the trie: so the text's two ends
+ * need no test of their own, here or in the walk.
+ */
 function mentionEnd(text: string, at: number): number {
-  const n = text.length;
-  const free = (i: number): boolean => i >= n || !isWordOrDash(text.charCodeAt(i));
-  if (at < n && canon(text.charCodeAt(at)) === S && free(at + 1)) return at + 1;
-  if (at + 1 < n && canon(text.charCodeAt(at)) === E && canon(text.charCodeAt(at + 1)) === S && free(at + 2)) return at + 2;
+  const free = (i: number): boolean => !isWordOrDash(text.charCodeAt(i));
+  if (canon(text.charCodeAt(at)) === S && free(at + 1)) return at + 1;
+  if (canon(text.charCodeAt(at)) === E && canon(text.charCodeAt(at + 1)) === S && free(at + 2)) return at + 2;
   return free(at) ? at : -1;
 }
 
@@ -138,16 +141,16 @@ export function termMatcher(keys: readonly string[]): (text: string, from: numbe
   return (text, from) => {
     const n = text.length;
     for (let p = from; p < n; p += 1) {
-      if (p > 0 && isWordOrDash(text.charCodeAt(p - 1))) continue;
+      if (isWordOrDash(text.charCodeAt(p - 1))) continue;
       // Every end of a term along the one path the text takes from p; the deepest is the longest term.
       const ends: number[] = [];
       let node: TrieNode | undefined = top;
-      for (let j = p; j < n && node !== undefined; ) {
+      for (let j = p; node !== undefined; ) {
         const c = text.charCodeAt(j);
         if (isSpace(c)) {
           node = node.next.get(SPACE);
           j += 1;
-          while (j < n && isSpace(text.charCodeAt(j))) j += 1;
+          while (isSpace(text.charCodeAt(j))) j += 1;
         } else {
           node = node.next.get(canon(c));
           j += 1;
@@ -179,10 +182,8 @@ function sectionOf(root: Element, node: Element): Element | null {
   for (let n: Element | null = node; n !== null && n !== root; n = n.parentElement) {
     for (let p = n.previousElementSibling; p !== null; p = p.previousElementSibling) {
       if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;
-      if (p.classList.contains('short') || p.classList.contains('callout')) {
-        const h = p.querySelector('h2, h3');
-        if (h !== null) return h;
-      }
+      // The layout's In short and Where things stand boxes each hold the heading they start with.
+      if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');
     }
   }
   return null;
