@@ -440,8 +440,8 @@ function sectionsOf(ctx: FeatureContext, stops: readonly (readonly Element[])[])
   for (const p of stops) {
     const first = p[0] as Element;
     while (h + 1 < heads.length && (heads[h + 1] === first || before(heads[h + 1] as Element, first))) h += 1;
-    const sec = heads[h];
-    if (sec !== undefined && out[out.length - 1] !== sec) out.push(sec);
+    const sec = heads[h]; // undefined for a place before every section: it names none
+    if (sec !== undefined && !out.includes(sec)) out.push(sec);
   }
   return out;
 }
@@ -464,10 +464,9 @@ function show(ctx: FeatureContext, st: State, set: ChangeSet, how: ShowHow): num
     st.stepper.box.hidden = false;
   }
   updateCount(st);
-  if (previous !== null) previous();
-  if (!ctx.live()) return stops.length;
+  if (previous !== null) previous(); // a destroy there: the event emits nothing, and the check after it stops the step
   ctx.events.emit('changes', { sections: sectionsOf(ctx, stops) });
-  if (!ctx.live()) return stops.length;
+  if (!ctx.live()) return stops.length; // a listener, or the onHide before it, may destroy
   if (how.jump !== false) step(ctx, st, 1);
   return stops.length;
 }
@@ -489,11 +488,10 @@ function fetchSet(ctx: FeatureContext, st: State, base: string): Promise<ChangeS
  */
 export async function showChanges(ctx: FeatureContext, base: string, how: ShowHow): Promise<ShowOutcome> {
   const st = states?.get(ctx);
-  if (!ctx.live()) return { skipped: 'gone' };
   if (st === undefined || !isSha(base) || how === null || how === undefined || typeof how.what !== 'string') return { skipped: 'unavailable' };
   const measure = how.measure === true;
   const ticket = measure ? st.asked : (st.asked += 1);
-  const set = await fetchSet(ctx, st, base.toLowerCase());
+  const set = await fetchSet(ctx, st, base.toLowerCase()); // once not live, the host is not called and this is null
   if (!ctx.live()) return { skipped: 'gone' };
   if (set === null) return { skipped: 'unavailable' };
   if (measure) return { places: placesOf(st.lines, set).stops.length };

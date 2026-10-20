@@ -274,8 +274,9 @@ describe('the review strip', () => {
     };
     // A heading with no id is passed over.
     expect(await name(['# A', '', '## 1. Earlier', '', 'Text.', '', '## ???', '', ...idTable, ...tail])).toBe('2 earlier rows');
-    // A level-3 heading counts; a task heading by its whole name (its aria-label), number and all.
-    expect(await name(['# A', '', '## One', '', '### Task 1: Pick', '', ...idTable, ...tail])).toBe('2 task 1: pick rows');
+    // A level-3 heading counts; a task heading by its whole name (its aria-label), number and all, not by its text,
+    // which the plans' badge now holds with its step count.
+    expect(await name(['# A', '', '## One', '', '### Task 1: Pick', '', '- [ ] **Step 1: One**', '- [ ] **Step 2: Two**', '', ...idTable, ...tail])).toBe('2 task 1: pick rows');
     // In a details: up to the details, then its earlier siblings.
     expect(await name(['# A', '', '## Group', '', '<details>', '<summary>More</summary>', '', ...idTable, '</details>', '', ...tail])).toBe('2 group rows');
     // After a box: the box's heading.
@@ -496,7 +497,7 @@ describe('what changed: the places', () => {
   it('one hunk across two table rows is one place; nested hits keep the innermost', async () => {
     const root = mount();
     const rows: unknown[] = [];
-    const { options } = withChanges((sha: string) => rows[Number(sha === BASE ? 0 : 1)]);
+    const { options } = withChanges((sha: string) => rows[sha === BASE ? 0 : sha === '0abcdef' ? 1 : 2]);
     await enhance(root, options);
     const ctx = ctxOf(root);
     const d2 = find(root, 'tr', 'D2');
@@ -506,6 +507,9 @@ describe('what changed: the places', () => {
     rows.push({ changed: [[lines(d2)[0], lines(d3)[0]]] });
     expect(await showChanges(ctx, BASE, { what: 'Rows', jump: false })).toEqual({ places: 1 });
     expect(marked(root, 'chg')).toEqual(['tr:D2 Second Pendin', 'tr:D3 Third Agreed']);
+    // A range whose first block is in a place already and whose second is in none: it joins that place.
+    rows.push({ changed: [lines(d2), [lines(d2)[0], lines(d3)[0]]] });
+    expect(await showChanges(ctx, '0abcdef', { what: 'Joined', jump: false })).toEqual({ places: 1 });
     // The nested item only: not its list, nor the item and list that hold it.
     rows.push({ changed: [[lines(nested)[0], lines(nested)[0]]] });
     expect(await showChanges(ctx, 'fedcba9', { what: 'Nested', jump: false })).toEqual({ places: 1 });
@@ -676,6 +680,11 @@ describe('what changed: the stepper and the keys', () => {
     now += 100;
     click(prev as HTMLButtonElement);
     expect(count()).toBe('2 of 3');
+    // Not recent, the last place (top 200) within a screen of the line: on from it to the third, where from the
+    // reader's position the first place below the line would be the second again.
+    now += 5000;
+    key(h1, 'n');
+    expect(count()).toBe('3 of 3');
   });
 
   it('from where the reader is: p before the first place below the line, and past every place n wraps to the first', async () => {
@@ -763,11 +772,11 @@ describe('what changed: the stepper and the keys', () => {
 
   it('the reading line is the bar\'s bottom (never above the window\'s top) plus 60 px, or 60 px with the bar hidden', async () => {
     const root = mount();
-    const els = [find(root, 'p', 'Intro'), find(root, 'p', 'Closing')];
+    const els = [find(root, 'p', 'Intro'), find(root, 'p', 'Closing'), find(root, 'p', 'Last words')];
     const { options } = withChanges({ changed: els.map((e) => lines(e)) });
     await enhance(root, options);
     const ctx = ctxOf(root);
-    const tops = [130, 400];
+    const tops = [-300, 100, 400];
     els.forEach((e, i) => vi.spyOn(e, 'getBoundingClientRect').mockImplementation(() => ({ top: tops[i] as number }) as DOMRect));
     let bottom = 100;
     vi.spyOn(ctx.slots?.bar as HTMLElement, 'getBoundingClientRect').mockImplementation(() => ({ bottom }) as DOMRect);
@@ -776,12 +785,12 @@ describe('what changed: the stepper and the keys', () => {
       key(root.querySelector('h1') as HTMLElement, 'n');
       return stepper(root)?.querySelector('.cn')?.textContent ?? '';
     };
-    expect(await first()).toBe('2 of 2'); // the line at 160: 130 is above it
+    expect(await first()).toBe('3 of 3'); // the line at 160: 100 is above it
     bottom = -500;
-    expect(await first()).toBe('1 of 2'); // the line at 60
+    expect(await first()).toBe('2 of 3'); // the line at 60, not at -440 (where -300 would be below it)
     bottom = 100;
     root.classList.add('bar-hidden');
-    expect(await first()).toBe('1 of 2');
+    expect(await first()).toBe('2 of 3'); // the line at 60
   });
 
   it('a Hide clicked with nothing shown emits nothing; an onHide that destroys stops the show that replaced it', async () => {
