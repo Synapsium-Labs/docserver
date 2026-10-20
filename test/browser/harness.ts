@@ -12,13 +12,15 @@
 // Which browsers run: DOCREADER_BROWSERS, a comma list of chromium and webkit; unset, both. With no selection a
 // browser that cannot start is a red naming the install command, never a skip. With a selection, the browser left
 // out is reported as excluded: its tests show as skipped under a title that names the setting, and a line on stderr
-// says so.
+// says so. Each selected browser's block launches its browser in a beforeAll hook, so a slow start counts against
+// the layout project's hook timeout, not against the block's first test.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium, webkit, type Browser, type LaunchOptions, type Page } from 'playwright-core';
-import { describe } from 'vitest';
+import { beforeAll, describe } from 'vitest';
+import { INSTALL } from '../../scripts/visual/compare.mjs';
 import { render } from '../../src/render/index.js';
 import type { EnhanceOutcome, HarnessApi } from './page/api.js';
 
@@ -28,8 +30,8 @@ export const BROWSERS: readonly BrowserName[] = ['chromium', 'webkit'];
 /** The only origin a test page loads from. */
 export const ORIGIN = 'https://docreader.test';
 
-/** The one-time setup that installs the pinned browsers and their system libraries. */
-export const INSTALL = 'npx playwright-core install --with-deps chromium webkit';
+/** The one-time setup that installs the pinned browsers and their system libraries (one constant, the compare script's). */
+export { INSTALL };
 
 /** WebKit's proxy: a loopback port nothing listens on, so every request WebKit sends past the route fails there. */
 export const CLOSED_PORT = 2;
@@ -70,11 +72,20 @@ export function excludedTitle(name: BrowserName, selection: Selection): string {
   return `${name}: excluded by DOCREADER_BROWSERS=${String(selection.setting)}`;
 }
 
-/** One describe block per browser: a selected one runs, an excluded one is skipped under a title that says why. */
+/**
+ * One describe block per browser: a selected one launches its browser in a beforeAll hook and runs; an excluded one
+ * is skipped under a title that says why.
+ */
 export function describeBrowsers(fn: (name: BrowserName) => void, selection: Selection = SELECTION): void {
   for (const name of BROWSERS) {
-    if (selection.run.includes(name)) describe(name, () => fn(name));
-    else describe.skip(excludedTitle(name, selection), () => fn(name));
+    if (selection.run.includes(name)) {
+      describe(name, () => {
+        beforeAll(async () => {
+          await browserFor(name);
+        });
+        fn(name);
+      });
+    } else describe.skip(excludedTitle(name, selection), () => fn(name));
   }
 }
 
@@ -110,6 +121,11 @@ export function browserFor(name: BrowserName): Promise<Browser> {
     launched.set(name, b);
   }
   return b;
+}
+
+/** True once browserFor has launched (or begun to launch) the browser of this name. */
+export function isLaunched(name: BrowserName): boolean {
+  return launched.has(name);
 }
 
 /** Close every browser browserFor launched; call it from afterAll. */

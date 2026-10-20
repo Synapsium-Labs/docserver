@@ -4,7 +4,8 @@
 // the packed tarball's, then the real-browser layout tests. The two middle ones build (esbuild, tsc, npm pack) and
 // run the corpus, whose verdicts bound each render's time, so each runs alone rather than beside the other timed
 // corpus runs. The layout tests (test/browser/, LD2) drive Chromium and WebKit, so they run last, by themselves,
-// with a longer hook timeout for launching the browsers.
+// with a longer hook timeout: each selected browser's block launches its browser in a beforeAll hook
+// (test/browser/harness.ts, describeBrowsers), so a slow start is bounded there and not by the first test.
 import { defineConfig } from 'vitest/config';
 
 const BROWSER = 'test/browser-parity.test.ts';

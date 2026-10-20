@@ -1,8 +1,10 @@
 // The real-browser harness (test/browser/harness.ts; docserver L2, Task 6). Pinned: the browser selection and how an
 // excluded browser is reported; that a browser that cannot start names the install command; that the test process
-// opens no socket (the browser is driven over a pipe); that a page loads from its own origin only, enhanced, with
-// the fonts, under either policy and with no violation; that a routed request to another origin is aborted and
-// counted, and one let past the route fails to resolve; and what each policy refuses.
+// opens no socket (the browser is driven over a pipe); that each selected browser starts in its block's hook; that a
+// page loads from its own origin only, enhanced, with the fonts, under either policy and with no violation; that an
+// unserved path is counted as missing (a browser's own favicon request aside); that a routed request to another
+// origin is aborted and counted; that one let past the route reaches no host, by name or by address (a listener on
+// this machine sees no connection, where a browser without the wall connects to it); and what each policy refuses.
 import dgram from 'node:dgram';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
@@ -17,6 +19,7 @@ import {
   closeBrowsers,
   describeBrowsers,
   excludedTitle,
+  isLaunched,
   launch,
   launchOptions,
   openDoc,
@@ -102,6 +105,10 @@ describe('launching', () => {
 });
 
 describeBrowsers((browser) => {
+  it('the browser was started in the block\'s hook, before its first test', () => {
+    expect(isLaunched(browser)).toBe(true);
+  });
+
   it('opens a page from its own origin, enhanced, with the fonts, nothing missing, aborted or refused', async () => {
     const doc = await openDoc(DOC, {}, { browser });
     try {
@@ -133,16 +140,41 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('a request let past the route fails: the browser itself reaches no host', async () => {
-    const doc = await openDoc(DOC, {}, { browser, unrouted: ['unrouted.localhost'] });
+  it('an unserved path on the page\'s origin is counted as missing; a favicon request is not', async () => {
+    const links = '<link rel="stylesheet" href="/favicon.ico"><link rel="stylesheet" href="/nope.css">';
+    const doc = await openDoc(DOC, {}, { browser, html: (h) => `${links}${h}` });
     try {
-      const failed = await doc.page.goto(`http://unrouted.localhost:${String(CLOSED_PORT)}/`).then(() => 'loaded', (e: unknown) => String(e));
-      expect(failed).not.toBe('loaded');
-      // Chromium's resolver maps every name to "not found"; WebKit's request dies at the closed proxy port.
-      if (browser === 'chromium') expect(failed).toContain('net::ERR_NAME_NOT_RESOLVED');
+      expect([...doc.missing].sort()).toEqual(['/nope.css']);
       expect(doc.aborted).toEqual([]);
     } finally {
       await doc.close();
+    }
+  });
+
+  it('a request let past the route reaches no host: neither a name nor an address on this machine', async () => {
+    // A listener on loopback: a browser without the wall connects to it by name (unrouted.localhost resolves to
+    // loopback) and by address. With the wall, Chromium resolves nothing and WebKit's proxy is a closed port.
+    const connections: string[] = [];
+    const listener = net.createServer((socket) => {
+      connections.push(String(socket.remotePort));
+      socket.destroy();
+    });
+    await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve));
+    const port = String((listener.address() as net.AddressInfo).port);
+    const doc = await openDoc(DOC, {}, { browser, unrouted: ['unrouted.localhost', '127.0.0.1'] });
+    try {
+      const results: string[] = [];
+      for (const url of [`http://unrouted.localhost:${port}/`, `http://127.0.0.1:${port}/`]) {
+        results.push(await doc.page.goto(url).then(() => 'loaded', (e: unknown) => String(e)));
+      }
+      expect(results.filter((r) => r === 'loaded')).toEqual([]);
+      expect(connections).toEqual([]);
+      // Chromium's resolver maps every name, and every address, to "not found".
+      if (browser === 'chromium') for (const r of results) expect(r).toContain('net::ERR_NAME_NOT_RESOLVED');
+      expect(doc.aborted).toEqual([]);
+    } finally {
+      await doc.close();
+      await new Promise<void>((resolve) => listener.close(() => resolve()));
     }
   });
 

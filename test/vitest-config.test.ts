@@ -2,7 +2,8 @@
 // files that build (the browser bundle, the packed tarball) and run the corpus again must not share the machine
 // with the other timed corpus runs: vitest.config.ts runs every other file first, then each of the two alone.
 // L2 Task 6 adds a fourth group, `layout`: the real-browser tests under test/browser/, kept out of `unit` and run
-// last, with a hook timeout long enough to launch the browsers.
+// last, with a hook timeout long enough to launch the browsers: each selected browser's block launches its browser
+// in a beforeAll hook (test/browser/harness.ts, describeBrowsers).
 import { describe, expect, it } from 'vitest';
 import config from '../vitest.config.js';
 
@@ -30,7 +31,7 @@ describe('vitest.config.ts', () => {
     ]);
   });
 
-  it('the layout project, last, waits up to 60 s in a hook (launching a browser); the others keep the default', () => {
+  it('the layout project, last, waits up to 60 s in a hook (each browser block launches its browser in beforeAll); the others keep the default', () => {
     expect(projects.map((p) => p.test?.hookTimeout)).toEqual([undefined, undefined, undefined, 60_000]);
     const orders = projects.map((p) => Number(p.test?.sequence?.groupOrder));
     expect(Math.max(...orders)).toBe(projects.find((p) => p.test?.name === 'layout')?.test?.sequence?.groupOrder);
