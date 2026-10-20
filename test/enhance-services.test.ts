@@ -60,8 +60,8 @@ const DOC = [
   '',
   '| ID | What | Status |',
   '|---|---|---|',
-  '| R1 | First | Agreed |',
-  '| R2 | Second | Pending |',
+  '| One | First | Agreed |',
+  '| Two | Second | Pending |',
   '',
   '```js',
   'const a = 1;',
@@ -299,7 +299,8 @@ describe('registries: terms, blocks, figures, the plan and the page', () => {
   it('the plan: empty until published, published once', async () => {
     const root = mount();
     await enhance(root);
-    const { plan } = ctxOf(root);
+    // A slot of its own: the instance's own is published during the build once plans.ts is filled (Task 11).
+    const plan = createPlan();
     expect([plan.tasks, plan.steps, plan.yours, plan.outlineable, plan.published]).toEqual([[], [], 0, false, false]);
     const h = child(root, 'h2', '3-plan');
     plan.publish({ tasks: [h], steps: [], yours: 2, outlineable: true });
