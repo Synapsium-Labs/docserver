@@ -25,9 +25,13 @@
 //                       reader's place wraps it in position.keep);
 //   sectionOf(node)     the heading of the folding section whose blocks hold `node`, or null;
 //   join(node, member)  make `node` (a root child the feature inserted) a block of `member`'s section: hidden while it
-//                       is folded, and opening it from find-in-page; false when `member` is in no folding section.
+//                       is folded, and opening it from find-in-page; false when `member` is in no folding section, or
+//                       `node` is joined already. Throws for a `node` that is not a child of the root or not chrome (a
+//                       block of the document, a section's heading among them, is never a feature's to join), so a
+//                       fold never writes hidden outside the root.
 // The API exists from the start (the lifecycle makes it with createFolds); it answers empty until buildFolds has run.
-import { chrome } from './journal.js';
+import { headingText } from './headctl.js';
+import { CHROME_ATTR, chrome } from './journal.js';
 import { formatMinutes, sectionMinutes } from './reading.js';
 import type { FeatureContext } from './types.js';
 
@@ -83,16 +87,8 @@ interface Section {
   readonly hid: Set<Element>;
 }
 
-/** The heading's text, chrome left out: each child's text trimmed, joined by spaces. */
-function headingText(h: Element): string {
-  const parts: string[] = [];
-  for (const n of Array.from(h.childNodes)) {
-    if (n.nodeType === 1 && (n as Element).hasAttribute('data-docreader-chrome')) continue;
-    const t = (n.textContent ?? '').trim();
-    if (t !== '') parts.push(t);
-  }
-  return parts.join(' ').replace(/\s+/g, ' ');
-}
+/** Every chrome node is left out of a section's name. */
+const isChrome = (el: Element): boolean => el.hasAttribute(CHROME_ATTR);
 
 export function buildFolds(ctx: FeatureContext): void {
   const { root, journal, state } = ctx;
@@ -171,7 +167,7 @@ export function buildFolds(ctx: FeatureContext): void {
       members.push(n);
     }
     if (members.length === 0) continue;
-    const bare = headingText(h).replace(/^[A-Z]?\d+[a-z]?\.\s+/, '');
+    const bare = headingText(h, isChrome).replace(/^[A-Z]?\d+[a-z]?\.\s+/, '');
     const minutes = formatMinutes(sectionMinutes(h, members));
     const btn = chrome(doc, 'button', {
       className: 'h-fold',
@@ -229,6 +225,9 @@ export function buildFolds(ctx: FeatureContext): void {
       setAll,
       sectionOf: (node: Node) => holding(node)?.heading ?? null,
       join: (node: Element, member: Element) => {
+        if (node.parentNode !== root || !node.hasAttribute(CHROME_ATTR)) {
+          throw new Error('docreader: folds.join takes a node the feature put in the root, as a child of it');
+        }
         const s = sectionOfMember.get(member);
         if (s === undefined || sectionOfMember.has(node)) return false;
         s.members.push(node);

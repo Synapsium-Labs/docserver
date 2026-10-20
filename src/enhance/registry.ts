@@ -8,8 +8,12 @@
 //            element of the root that is not chrome (rows and rules carry no id: the index is how a link finds them).
 //   terms    the glossary's terms (glossary.ts defines them): `define(t)` makes an entry for a new name and adds a
 //            definition to an existing one (matched case-insensitively), `get(name)`, `all()` in definition order.
-//   blocks   every table (`div.table-wrapper` with its table) and code block (`div.codehilite` outside a figure) of the
-//            document, in document order, collected before any feature builds. An entry's flags are written by one
+//            Defining is linear in the glossary's rows: a definition appends, and `all()` and an entry's `defs` answer
+//            a frozen copy made once per change, when first asked (a document of tens of thousands of rows must not
+//            stall the synchronous startup).
+//   blocks   every table (`div.table-wrapper` with its table) and code block (`div.codehilite` outside a figure of the
+//            document; a figure around the root is the host's, not the document's) of the document, in document order,
+//            collected before any feature builds. An entry's flags are written by one
 //            feature each and read by the rest: `isIndex` (ids.ts), `glossary` (glossary.ts), `filter` (tables.ts),
 //            `tech` (attention.ts).
 //   figures  the numbered figures (figures.ts adds them): `add(e)` (one entry per figure element), `of(el)`, `all()` in
@@ -91,7 +95,7 @@ export interface TermEntry {
   readonly section: string;
   /** Where a link to it goes: its first row. */
   readonly target: Element;
-  /** Its definitions, in the order they were defined (frozen; a later definition replaces the list). */
+  /** Its definitions, in the order they were defined (a frozen copy; a later definition makes a new one). */
   readonly defs: readonly TermDef[];
 }
 
@@ -309,7 +313,9 @@ export function termKey(name: string): string {
 /** The glossary's terms of one instance. */
 export function createTerms(root: Element): Terms {
   const byKey = new Map<string, { readonly entry: TermEntry; readonly add: (d: TermDef) => void }>();
-  let list: readonly TermEntry[] = Object.freeze([]);
+  const list: TermEntry[] = [];
+  /** The frozen copy all() answers, until the next new term. */
+  let listCopy: readonly TermEntry[] | null = null;
   return Object.freeze({
     define(t: TermInit): TermEntry {
       if (typeof t !== 'object' || t === null) throw new Error('docreader: terms.define takes a term');
@@ -327,7 +333,9 @@ export function createTerms(root: Element): Terms {
         held.add(d);
         return held.entry;
       }
-      let defs: readonly TermDef[] = Object.freeze([d]);
+      const defs: TermDef[] = [d];
+      /** The frozen copy `defs` answers, until the next definition. */
+      let defsCopy: readonly TermDef[] | null = null;
       const entry: TermEntry = Object.freeze({
         name: squash(name),
         key,
@@ -335,24 +343,34 @@ export function createTerms(root: Element): Terms {
         section,
         target,
         get defs(): readonly TermDef[] {
-          return defs;
+          return (defsCopy ??= Object.freeze([...defs]));
         },
       });
       byKey.set(key, {
         entry,
         add: (x: TermDef) => {
-          defs = Object.freeze([...defs, x]);
+          defs.push(x);
+          defsCopy = null;
         },
       });
-      list = Object.freeze([...list, entry]);
+      list.push(entry);
+      listCopy = null;
       return entry;
     },
     get: (name: string): TermEntry | undefined => byKey.get(termKey(name))?.entry,
-    all: (): readonly TermEntry[] => list,
+    all: (): readonly TermEntry[] => (listCopy ??= Object.freeze([...list])),
   });
 }
 
 const txt = (n: Node): string => squash(n.textContent ?? '');
+
+/** Whether a figure of the document holds `el`: its ancestors up to the root, never past it. */
+function inFigure(el: Element, root: Element): boolean {
+  for (let n = el.parentElement; n !== null && n !== root; n = n.parentElement) {
+    if (n.localName === 'figure') return true;
+  }
+  return false;
+}
 
 /**
  * The document's tables and code blocks, in document order: each `div.table-wrapper` holding a table, and each
@@ -376,7 +394,7 @@ export function collectBlocks(root: Element): readonly Block[] {
         tech: false,
         filter: null,
       });
-    } else if (el.closest('figure') === null) {
+    } else if (!inFigure(el, root)) {
       out.push({ kind: 'code', el, pre: el.querySelector('pre'), tech: false });
     }
   }

@@ -92,8 +92,8 @@ function hashId(href: string): string {
   }
 }
 
-/** True for an element that takes focus without a tabindex of the library's. */
-function focusable(el: Element): boolean {
+/** True for an element that takes focus without a tabindex of the library's (the skip link uses it too, bar.ts). */
+export function focusable(el: Element): boolean {
   return el.matches('a[href], button, input, select, textarea, [tabindex]');
 }
 

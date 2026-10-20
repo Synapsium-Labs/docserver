@@ -9,8 +9,9 @@
 //                              slot per heading. `h` is a heading (h1 to h6) inside the root. Everything goes through
 //                              the journal, so destroy removes it; nothing is written once the instance is not live.
 //   The first call for a heading also names it: a heading with neither aria-label nor aria-labelledby gets an
-//   aria-label of its own text, read before the controls exist (each child's text trimmed, joined by spaces, a chrome
-//   button left out: the plan's Outline button sits in a task heading before its controls), so its accessible name is
+//   aria-label of its own text, read before the controls exist (its children's text as written, a chrome button left
+//   out: the plan's Outline button sits in a task heading before its controls; then each run of white space made one
+//   space, and the ends trimmed, so inline markup before a comma keeps no space before it), so its accessible name is
 //   its title and never a control's label. (The reference wrapped the title in a span with a made-up
 //   id and pointed aria-labelledby at it; a label needs no id that could collide with the document's.)
 // The controls of a heading are kept in a WeakMap, never in an expando on the element.
@@ -30,16 +31,21 @@ export interface HeadCtlArgs {
   readonly journal: Journal;
 }
 
-/** A heading's text: each child's text trimmed, joined by spaces; a chrome button (a control) left out. */
-function headingText(h: Element): string {
-  const parts: string[] = [];
+/**
+ * A heading's text: its children's text as written, each child for which `leaveOut` answers true left out; then each
+ * run of white space made one space, and the ends trimmed. (folds.ts names its sections with it, leaving out all chrome.)
+ */
+export function headingText(h: Element, leaveOut: (el: Element) => boolean): string {
+  let text = '';
   for (const n of Array.from(h.childNodes)) {
-    if (n.nodeType === 1 && (n as Element).localName === 'button' && (n as Element).hasAttribute(CHROME_ATTR)) continue;
-    const t = (n.textContent ?? '').trim();
-    if (t !== '') parts.push(t);
+    if (n.nodeType === 1 && leaveOut(n as Element)) continue;
+    text += n.textContent ?? '';
   }
-  return parts.join(' ').replace(/\s+/g, ' ');
+  return text.replace(/\s+/g, ' ').trim();
 }
+
+/** A chrome button: a control, never part of a heading's name. */
+const isControl = (el: Element): boolean => el.localName === 'button' && el.hasAttribute(CHROME_ATTR);
 
 /** The heading controls of one instance. */
 export function createHeadCtl(args: HeadCtlArgs): HeadCtl {
@@ -54,7 +60,7 @@ export function createHeadCtl(args: HeadCtlArgs): HeadCtl {
     let rec = held.get(h);
     if (rec === undefined) {
       const ctl = chrome(root.ownerDocument, 'span', { className: 'h-ctl' });
-      if (!h.hasAttribute('aria-label') && !h.hasAttribute('aria-labelledby')) journal.setAttribute(h, 'aria-label', headingText(h));
+      if (!h.hasAttribute('aria-label') && !h.hasAttribute('aria-labelledby')) journal.setAttribute(h, 'aria-label', headingText(h, isControl));
       journal.insert(ctl, h, null);
       rec = { ctl, bySlot: new Map() };
       held.set(h, rec);

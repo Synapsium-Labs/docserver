@@ -19,7 +19,7 @@ import type { Env } from '../src/enhance/env.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import { BAR_HOLD_MS, type Position } from '../src/enhance/nav.js';
 import { OVERLAY_ORDER, type OverlayKind } from '../src/enhance/overlays.js';
-import { createEvents, createPage, createPlan, EVENT_NAMES, termKey, type IndexEntry, type RelayoutReason } from '../src/enhance/registry.js';
+import { createEvents, createPage, createPlan, createTerms, EVENT_NAMES, termKey, type IndexEntry, type RelayoutReason } from '../src/enhance/registry.js';
 import { createRelayout, FONTS_WAIT_MS, RESIZE_DEBOUNCE_MS } from '../src/enhance/relayout.js';
 import { docKey } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
@@ -942,12 +942,22 @@ describe('relayout', () => {
   });
 
   it('the fonts wait is bounded, and a wait that runs out asks for no relayout', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
     const timeouts = vi.spyOn(window, 'setTimeout');
     Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => new Promise(() => undefined) } });
     const root = mount();
+    const runs: RelayoutReason[][] = [];
+    probe((ctx) => {
+      ctx.onRelayout((r) => runs.push([...r]));
+    });
     await enhance(root);
     expect(timeouts.mock.calls.some(([, ms]) => ms === FONTS_WAIT_MS)).toBe(true);
     expect(FONTS_WAIT_MS).toBe(10_000);
+    await vi.advanceTimersByTimeAsync(FONTS_WAIT_MS - 100);
+    expect(runs).toEqual([['start']]);
+    await vi.advanceTimersByTimeAsync(1_000); // the wait ran out
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(runs).toEqual([['start']]);
   });
 
   it('nothing runs after destroy, and onRelayout after destroy hears nothing', async () => {
@@ -1002,15 +1012,15 @@ describe('headCtl: one .h-ctl per heading, slots in fixed order', () => {
     probe((ctx) => {
       const h3 = find(ctx.root, 'h3');
       const doc = ctx.root.ownerDocument;
-      ctx.journal.insert(chrome(doc, 'span', { className: 'task-id', text: 'Task 1' }), h3, h3.firstChild);
+      ctx.journal.insert(chrome(doc, 'span', { className: 'task-id', text: 'Task 1: ' }), h3, h3.firstChild);
       ctx.journal.insert(chrome(doc, 'button', { className: 'task-open', text: 'Show all' }), h3, null);
       const own = doc.createElement('button');
       own.textContent = 'own';
-      h3.append(own); // not chrome: the heading's own (a probe's stand-in)
+      h3.append(' ', own); // not chrome: the heading's own (a probe's stand-in)
       ctx.headCtl(h3, 'mark', chrome(doc, 'button', { className: 'h-mark', text: 'Mark read' }));
     });
     await enhance(root);
-    expect(find(root, 'h3').getAttribute('aria-label')).toBe('Task 1 Agreed own');
+    expect(find(root, 'h3').getAttribute('aria-label')).toBe('Task 1: Agreed own');
   });
 
   it('a heading that already has a label keeps it; destroy removes every control and the label', async () => {
@@ -1079,16 +1089,18 @@ describe('slots: the bar\'s skeleton', () => {
     expect(Array.from(find(root, '.bar-tools').children).map((c) => c.textContent)).toEqual([...TOOL_ORDER]);
   });
 
-  it('the skip link focuses the root (a journaled tabindex) and makes no hash', async () => {
+  it('the skip link focuses the document\'s first node past the skeleton (a journaled tabindex), never the root, and makes no hash', async () => {
     const onHash = vi.fn();
     const root = mount();
     await enhance(root, { onHash });
+    const h1 = child(root, 'h1', 'example-spec');
     expect(click(find(root, '.skip-link')).prevented).toBe(true);
-    expect(document.activeElement).toBe(root);
-    expect(root.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(h1);
+    expect(h1.getAttribute('tabindex')).toBe('-1');
+    expect(root.hasAttribute('tabindex')).toBe(false);
     expect(onHash).not.toHaveBeenCalled();
     await destroyEnhancement(root);
-    expect(root.hasAttribute('tabindex')).toBe(false);
+    expect(h1.hasAttribute('tabindex')).toBe(false);
   });
 });
 
@@ -1137,7 +1149,9 @@ describe('folds: the members API', () => {
     ctx.folds.setFold(child(root, 'h2', '2-design'), true);
     bar.dispatchEvent(new Event('beforematch'));
     expect(ctx.folds.isFolded(child(root, 'h2', '2-design'))).toBe(false);
-    expect(ctx.folds.join(chrome(document, 'div'), child(root, 'h1', 'example-spec'))).toBe(false);
+    const loose = chrome(document, 'div');
+    ctx.journal.insert(loose, root, null);
+    expect(ctx.folds.join(loose, child(root, 'h1', 'example-spec'))).toBe(false);
   });
 
   it('without folds the API answers empty and does nothing', async () => {
@@ -1618,9 +1632,9 @@ describe('relayout, reveal, headCtl and the bar: the rest of their guards', () =
     expect(() => ctxOf(root).headCtl(find(root, 'p'), 'mark', chrome(document, 'button'))).toThrow(/heading/);
   });
 
-  it('the skip link keeps a tabindex the root already has; no feature\'s build sees the skeleton', async () => {
+  it('the skip link keeps a tabindex the first node already has; no feature\'s build sees the skeleton', async () => {
     const root = mount();
-    root.setAttribute('tabindex', '0');
+    child(root, 'h1', 'example-spec').setAttribute('tabindex', '0');
     let seen: string[] = [];
     probe((ctx) => {
       seen = Array.from(ctx.root.children)
@@ -1632,8 +1646,8 @@ describe('relayout, reveal, headCtl and the bar: the rest of their guards', () =
     expect(seen.filter((c) => ['skip-link', 'topbar', 'doc-progress'].includes(c))).toEqual([]);
     expect(root.firstElementChild?.className).toBe('skip-link');
     click(find(root, '.skip-link'));
-    expect(root.getAttribute('tabindex')).toBe('0');
-    expect(document.activeElement).toBe(root);
+    expect(child(root, 'h1', 'example-spec').getAttribute('tabindex')).toBe('0');
+    expect(document.activeElement).toBe(child(root, 'h1', 'example-spec'));
   });
 });
 
@@ -1699,6 +1713,163 @@ describe('assets/reader.css: the markers later tasks insert at', () => {
       expect(css.split(marker).length - 1, marker).toBe(1);
     }
   });
+});
+
+describe('cancels, labels, refusals and sizes: the review round', () => {
+  it('a relayout listener\'s cancel, called twice, removes only its own listener', async () => {
+    const root = mount();
+    await enhance(root);
+    await frames();
+    const ctx = ctxOf(root);
+    const heard: string[] = [];
+    const a = ctx.onRelayout(() => heard.push('a'));
+    ctx.onRelayout(() => heard.push('b'));
+    a();
+    a();
+    ctx.relayout('content');
+    await frames();
+    expect(heard).toEqual(['b']);
+  });
+
+  it('a revealer\'s cancel, called twice, removes only its own revealer', async () => {
+    const root = mount();
+    await enhance(root);
+    const ctx = ctxOf(root);
+    const heard: string[] = [];
+    const a = ctx.onReveal(() => heard.push('a'));
+    ctx.onReveal(() => heard.push('b'));
+    a();
+    a();
+    ctx.reveal(find(root, '.codehilite'));
+    expect(heard).toEqual(['b']);
+  });
+
+  it('an event listener\'s cancel, called twice, removes only its own listener', async () => {
+    const root = mount();
+    await enhance(root);
+    const ctx = ctxOf(root);
+    const heard: string[] = [];
+    const a = ctx.events.on('changes', () => heard.push('a'));
+    ctx.events.on('changes', () => heard.push('b'));
+    a();
+    a();
+    ctx.events.emit('changes', { sections: [] });
+    expect(heard).toEqual(['b']);
+  });
+
+  it('a key binding\'s old cancel leaves the binding made after it', async () => {
+    const root = mount();
+    await enhance(root);
+    const { keys } = ctxOf(root);
+    const first = keys.bind({ key: 'x', label: 'first', run: () => undefined });
+    first();
+    keys.bind({ key: 'x', label: 'second', run: () => undefined });
+    first();
+    expect(keys.bindings().filter((b) => b.key === 'x').map((b) => b.label)).toEqual(['second']);
+  });
+
+  it('an overlay\'s old cancel leaves the overlay registered after it', async () => {
+    const root = mount();
+    await enhance(root);
+    const { overlays } = ctxOf(root);
+    const first = overlays.register('jump', { isOpen: () => true, close: () => undefined });
+    first();
+    overlays.register('jump', { isOpen: () => true, close: () => undefined });
+    first();
+    expect(overlays.top()).toBe('jump');
+  });
+
+  it('ctx.setPrefs does nothing once the instance is not live: no state, attribute, write or event', async () => {
+    const set = vi.fn();
+    const root = mount();
+    await enhance(root, { storageKey: 'k', storage: { set } });
+    const ctx = ctxOf(root);
+    const seen: unknown[] = [];
+    ctx.events.on('prefs', (p) => seen.push(p));
+    const before = { ...ctx.state.prefs };
+    await destroyEnhancement(root);
+    const attrs = Array.from(root.attributes).map((a) => `${a.name}=${a.value}`);
+    ctx.setPrefs({ width: 'wide', lens: 'product' });
+    expect(ctx.state.prefs).toEqual(before);
+    expect(Array.from(root.attributes).map((a) => `${a.name}=${a.value}`)).toEqual(attrs);
+    expect(set).not.toHaveBeenCalled();
+    expect(seen).toEqual([]);
+  });
+
+  it('a heading\'s label keeps its inline text as written: no space before punctuation, none for a text-less child', async () => {
+    const root = mount(['# Labels', '', '## Run `npm ci`, then **go**.', '', 'Text.', '', '## Title ![x](a.png)', '', 'More.', '', '## Third', '', 'End.', ''].join('\n'));
+    await enhance(root);
+    const [run, title] = Array.from(root.children).filter((c) => c.localName === 'h2');
+    expect(run?.getAttribute('aria-label')).toBe('Run npm ci, then go.');
+    expect(run?.querySelector('.h-fold')?.getAttribute('aria-label')).toBe('Fold or unfold: Run npm ci, then go.');
+    expect(title?.getAttribute('aria-label')).toBe('Title');
+    expect(title?.querySelector('.h-fold')?.getAttribute('aria-label')).toBe('Fold or unfold: Title');
+  });
+
+  it('folds.join takes only a node the feature put in the root: one outside it, nested, or of the document is refused', async () => {
+    const root = mount();
+    await enhance(root, { storageKey: 'k', storage: { set: vi.fn() } });
+    const ctx = ctxOf(root);
+    const code = find(root, '.codehilite');
+    const outside = chrome(document, 'div');
+    document.body.append(outside);
+    expect(() => ctx.folds.join(outside, code)).toThrow(/join/);
+    const nested = chrome(document, 'div');
+    ctx.journal.insert(nested, code, null);
+    expect(() => ctx.folds.join(nested, code)).toThrow(/join/);
+    const heading = child(root, 'h2', '3-plan');
+    expect(() => ctx.folds.join(heading, code)).toThrow(/join/);
+    ctx.folds.setFold(child(root, 'h2', '2-design'), true);
+    expect([outside.hasAttribute('hidden'), nested.hasAttribute('hidden'), heading.hasAttribute('hidden')]).toEqual([false, false, false]);
+    expect(ctx.folds.sectionOf(heading)).toBeNull();
+  });
+
+  it('blocks: a root inside a host\'s figure keeps its code blocks', async () => {
+    const root = mount();
+    const figure = document.createElement('figure');
+    document.body.append(figure);
+    figure.append(root);
+    await enhance(root);
+    expect(ctxOf(root).blocks.map((b) => b.kind)).toEqual(['table', 'code']);
+  });
+
+  it('terms: defining is linear; twice the terms, or twice one term\'s definitions, takes at most 3 times as long', async () => {
+    const root = mount();
+    await enhance(root);
+    const cell = find(root, 'td');
+    const row = cell.closest('tr') as Element;
+    const time = (n: number, same: boolean): number => {
+      const terms = createTerms(root);
+      const start = performance.now();
+      for (let i = 0; i < n; i += 1) {
+        terms.define({ name: same ? 'term' : `t${String(i)}`, exact: false, section: 'S', target: cell, def: { qual: '', cell, row } });
+      }
+      const ms = performance.now() - start;
+      expect(same ? terms.get('term')?.defs.length : terms.all().length).toBe(n);
+      return ms;
+    };
+    // The best of five runs, so a pause of the collector or a busy machine does not decide it. Copying the list on each
+    // definition, as before, makes twice the terms take four to five times as long here.
+    const best = (n: number, same: boolean): number => Math.min(...Array.from({ length: 5 }, () => time(n, same)));
+    for (const same of [false, true]) {
+      best(2_000, same); // warm up
+      const once = best(10_000, same);
+      const twice = best(20_000, same);
+      expect(twice / once, same ? 'one term, its definitions' : 'distinct terms').toBeLessThanOrEqual(3);
+    }
+    const terms = createTerms(root);
+    terms.define({ name: 'a', exact: false, section: 'S', target: cell, def: { qual: '', cell, row } });
+    const all = terms.all();
+    expect(Object.isFrozen(all)).toBe(true);
+    expect(terms.all()).toBe(all); // the same copy until the next definition
+    terms.define({ name: 'a', exact: false, section: 'S', target: cell, def: { qual: 'q', cell, row } });
+    terms.define({ name: 'b', exact: false, section: 'S', target: cell, def: { qual: '', cell, row } });
+    expect(all.map((t) => t.name)).toEqual(['a']); // an earlier answer does not change
+    expect(terms.all().map((t) => t.name)).toEqual(['a', 'b']);
+    const defs = terms.get('a')?.defs;
+    expect(Object.isFrozen(defs)).toBe(true);
+    expect(defs?.map((d) => d.qual)).toEqual(['', 'q']);
+  }, 120_000);
 });
 
 describe('env.fonts: a face is loaded only when its load answers a loaded face (LD5)', () => {

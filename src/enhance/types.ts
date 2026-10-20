@@ -251,7 +251,10 @@ export interface FeatureContext {
   readonly text: TextTools;
 
   // ── The shared services (docserver L2, Task 7b; LD1): made before the first feature builds. Each module's header is
-  //    its contract; a feature reads another's work here, never from that feature's module.
+  //    its contract; a feature reads another's work here, never from that feature's module, with two exceptions the
+  //    plan names: changes.ts exports showChanges (Task 20, for Task 22) and cards.ts exports cards.show (Task 17, for
+  //    Task 23). Each is an export of its module that takes the context and finds its own instance's state through a
+  //    WeakMap keyed by the context, so it never reaches another root's.
   /** Every defined ID (registry.ts; LD6): the first definition wins; all() in document order. */
   readonly index: IdIndex;
   /** The glossary's terms (registry.ts; defined by glossary.ts). */

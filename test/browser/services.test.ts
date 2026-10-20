@@ -3,8 +3,9 @@
 // startup's own relayout ('start') runs on the fallback faces, and a second one ('fonts') runs once both faces have
 // loaded, and no more. The same holds when the reader's stylesheet itself arrives after enhance(): a face no
 // stylesheet declares yet is not a loaded face. Whether a face loaded is read from the font set's own faces (their
-// status), never from check(), which answers true for a family nothing declares. What jsdom cannot show: the
-// browser's own font loading and its frames.
+// status), never from check(), which answers true for a family nothing declares. And the skip link skips the bar: the
+// next Tab after it goes into the text. What jsdom cannot show: the browser's own font loading, its frames and its
+// focus order.
 //
 // The public entry and the lifecycle's test hook (contextOf) are bundled here on their own and evaluated in the page
 // after it loaded, as the seams' browser case does; the page's own script is not used to enhance.
@@ -136,4 +137,39 @@ describeBrowsers((browser) => {
     }
   });
 
+  it('the skip link skips the bar: the next Tab after it goes into the text, past every tool', async () => {
+    const doc = await openDoc(DOC, {}, { browser, csp: 'strict', enhance: false });
+    try {
+      await doc.page.evaluate(script);
+      await doc.page.evaluate(async () => {
+        const w = window as unknown as Win;
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        await w.__services.enhance(root);
+        const tool = document.createElement('button');
+        tool.className = 'jump-btn';
+        tool.textContent = 'Jump';
+        tool.setAttribute('data-docreader-chrome', '');
+        w.__services.contextOf(root)?.slots?.tool('jump', tool);
+      });
+      const where = (): Promise<{ cls: string; inBar: boolean; afterTitle: boolean }> =>
+        doc.page.evaluate(() => {
+          const a = document.activeElement as Element;
+          const h1 = document.querySelector('main[data-harness-root] > h1') as Element;
+          return {
+            cls: `${a.localName}.${a.className}`,
+            inBar: a.closest('.topbar') !== null || a.classList.contains('skip-link'),
+            afterTitle: a === h1 || (h1.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+          };
+        });
+      await doc.page.keyboard.press('Tab');
+      expect((await where()).cls).toBe('a.skip-link');
+      await doc.page.keyboard.press('Enter');
+      expect(await where()).toEqual({ cls: expect.stringMatching(/^h1\./) as unknown, inBar: false, afterTitle: true });
+      await doc.page.keyboard.press('Tab');
+      const next = await where();
+      expect([next.inBar, next.afterTitle]).toEqual([false, true]);
+    } finally {
+      await doc.close();
+    }
+  });
 });
