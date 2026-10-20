@@ -389,7 +389,7 @@ export function build(ctx: FeatureContext): void {
 /** The second phase (LD5): load Mermaid through the host, then draw every figure, near ones first. */
 export async function after(ctx: FeatureContext): Promise<void> {
   const settings = ctx.options.mermaid;
-  if (settings === null || !ctx.host.present.has('mermaid') || !ctx.live()) return;
+  if (settings === null || !ctx.host.present.has('mermaid')) return;
   const figs = drawable(ctx);
   if (figs.length === 0) return;
   ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)

@@ -29,6 +29,33 @@ import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import { render } from '../src/render/index.js';
 
+const hooks = vi.hoisted(() => ({
+  /** Each position.keep() while `watch` is on: how many figures were drawn or failed before and after it ran. */
+  kept: [] as [number, number][],
+  watch: false,
+}));
+
+vi.mock('../src/enhance/nav.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/enhance/nav.js')>();
+  const done = (): number => document.querySelectorAll('figure.drawn, figure.draw-failed').length;
+  return {
+    ...real,
+    createPosition: (env: Parameters<typeof real.createPosition>[0]) => {
+      const p = real.createPosition(env);
+      return Object.freeze({
+        ...p,
+        keep: <T,>(fn: () => T): T => {
+          if (!hooks.watch) return p.keep(fn);
+          const was = done();
+          const out = p.keep(fn);
+          hooks.kept.push([was, done()]);
+          return out;
+        },
+      });
+    },
+  };
+});
+
 const ROOT = path.join(import.meta.dirname, '..');
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const GATE = 'data-docreader-mermaid';
@@ -60,6 +87,8 @@ function mount(md: string = DOC): HTMLElement {
 }
 
 afterEach(async () => {
+  hooks.watch = false;
+  hooks.kept.length = 0;
   for (const root of mounted.splice(0)) await destroyEnhancement(root).catch(() => undefined);
   document.body.replaceChildren();
 });
@@ -328,6 +357,28 @@ describe('diagrams: drawing (a fake Mermaid)', () => {
     expect(root.innerHTML).toBe(before);
     expect(root.hasAttribute(GATE)).toBe(false);
     expect(root.hasAttribute(STATE)).toBe(false);
+  });
+
+  it('marks each figure inside position.keep, so the reader keeps their place, and asks for a relayout for its content', async () => {
+    const root = mount(['# D', '', fence('flowchart LR\n  one --> A'), fence('flowchart LR\n  two --> B')].join('\n'));
+    const fake = fakeMermaid((text) => (text.includes('two') ? 'empty' : 'svg'));
+    hooks.watch = true;
+    await enhance(root, drawWith({ default: fake.api }));
+    const ctx = contextOf(root);
+    if (ctx === undefined) throw new Error('no context');
+    const reasons: string[] = [];
+    ctx.events.on('relayout', (e) => {
+      reasons.push(...e.reasons);
+    });
+    await settledState(root, 'partial');
+    // Each figure's mark, the drawn one's and the failed one's, is made inside a keep (relayout runs in its own).
+    expect(hooks.kept.filter(([was, now]) => was !== now)).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
+    await vi.waitFor(() => {
+      expect(reasons).toContain('content');
+    });
   });
 
   it('names a drawing by its caption, else by its own title, else by the first line of its source', async () => {
