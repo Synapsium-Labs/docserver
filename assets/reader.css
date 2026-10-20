@@ -549,6 +549,7 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .xcard .xc-go { font-weight: 600; font-size: 13px; }
 /* ─── figures: plates with book captions ─────────────────────────────────── */
 [data-docreader-root] figure.mermaid-figure { position: relative; background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; margin-top: 2.4em !important; margin-bottom: 2.6em !important; overflow: visible !important; }
+/* ─── marker: the drawn figure's rules (the plate, and the source while a diagram is drawn) start below ─── */
 [data-docreader-root] figure.mermaid-figure pre.mermaid { background: var(--plate) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 34px 24px 26px !important; margin: 0 !important; overflow-x: auto; font-family: var(--sans); font-size: 13px !important; color: var(--text-muted); }
 /* the source under a diagram that is about to be drawn; only where the Mermaid feature marked the root (see the header) */
 [data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed]) { color: transparent !important; min-height: 180px; user-select: none; }
@@ -690,6 +691,7 @@
 [data-docreader-root] .bar-tools .chg-nav button { padding: 2px 7px; height: 26px; color: var(--chg); }
 [data-docreader-root] .bar-tools .chg-nav button.ic { font-size: 16px; line-height: 1; }
 [data-docreader-root] .bar-tools .chg-nav button.hide { color: var(--text-muted); }
+/* ─── marker: the bar's placement in the root (sticky, with its .scrolled and .bar-hidden states) goes below ─── */
 /* ─── running head and bar tools ─────────────────────────────────────────── */
 [data-docreader-root] .running-head { flex: 1; min-width: 0; text-align: center; font-family: var(--prose); font-style: italic; font-size: 14.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity .25s; }
 [data-docreader-root]:not(i).scrolled .running-head { opacity: 1; }
@@ -717,6 +719,7 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ─── contents and index panels ──────────────────────────────────────────── */
 /* the rail's placement (fixed or sticky, its width --toc-w, when it shows) is the host layout's, so only its inner type is set here */
+/* ─── marker: the contents rail's placement in the root (a sticky column on a wide screen, a drawer below) goes below ─── */
 [data-docreader-root] .doc-toc { padding: 4px 14px 0 20px; font-family: var(--sans); font-size: 13.5px; line-height: 1.35; display: flex; flex-direction: column; }
 [data-docreader-root] .toc-tabs { display: flex; gap: 2px; margin: 0 0 10px 4px; flex: none; }
 [data-docreader-root] .toc-tabs button { font: inherit; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .12em; color: var(--text-faint); background: none; border: 0; border-bottom: 1.5px solid transparent; padding: 4px 6px 5px; cursor: pointer; }

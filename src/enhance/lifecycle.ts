@@ -34,6 +34,16 @@
 // createHost alone, so a feature's context carries the options without them and reaches the host only through
 // `ctx.host`.
 //
+// The shared services (Task 7b; LD1), made before the first feature builds, in this order: the registries (index,
+// terms, blocks, figures, plan, page; registry.ts) and events; the position seam (nav.ts); reveal (reveal.ts);
+// overlays (overlays.ts); the keyboard layer (keys.ts, which joins its document's one keydown listener); navigation
+// (nav.ts: it reads the document's ids now, before any chrome exists, and listens for clicks on the root); relayout
+// (relayout.ts: the resize listener and the fonts wait start here); heading controls (headctl.ts); the bar's
+// skeleton (bar.ts, only with chrome.bar), whose tray features fill during their build, put in the root once every
+// feature is built; and the folds' API (folds.ts). Then, once every feature is built, the first relayout ('start') is
+// asked for. Prefs changes, from setEnhancementPrefs or a feature's ctx.setPrefs, go through one path: the state,
+// the root's attributes, the 'prefs' event, and a relayout ('prefs' for the width or face, 'lens' for the lens).
+//
 // The seams every feature builds with (Task 7a): `env` (the root's window, env.ts), `sections`, `vocab` (vocab.ts),
 // `chromeId` and `text` (text.ts). Chrome ids are per instance: `docreader.<n>.<name>`, where n counts the instances
 // of the document, so two instances never issue the same id. The dots keep them out of render()'s id alphabet
@@ -45,12 +55,21 @@
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
 // when the outermost operation unwinds. The promise settles after the teardown; every call for that root returns
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
+import { createBar } from './bar.js';
 import { createEnv } from './env.js';
 import { features, type Feature } from './features.js';
+import { createFolds } from './folds.js';
+import { createHeadCtl } from './headctl.js';
 import { createHost } from './host.js';
 import { createJournal, type Journal, type JournalControl } from './journal.js';
+import { createKeys } from './keys.js';
+import { createNav, createPosition } from './nav.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
+import { createOverlays } from './overlays.js';
 import { sectionMinutes } from './reading.js';
+import { collectBlocks, createEvents, createFigures, createIndex, createPage, createPlan, createTerms } from './registry.js';
+import { createRelayout } from './relayout.js';
+import { createReveal } from './reveal.js';
 import { applyPrefs, createReaderState, type ReaderState } from './state.js';
 import { hash, textTools } from './text.js';
 import { EnhanceError, type EnhanceOptions, type FeatureContext, type Prefs, type ResolvedInfo, type SectionUnit } from './types.js';
@@ -334,20 +353,57 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   // The host's functions stay out of the context: features call them through `host` alone.
   const { callbacks, ...options } = opts;
   const vocab = createVocab(options);
+  const info = resolveInfo(root, opts.info);
+  const host = createHost(callbacks, live, operateHere);
+  const env = createEnv(root, journal, live, operateHere);
+  // The shared services (see the header), before the first feature builds.
+  const events = createEvents(live);
+  const index = createIndex(root);
+  const position = createPosition(env);
+  const revealer = createReveal({ root, journal, events, live });
+  const overlays = createOverlays(live);
+  const keys = createKeys({ root, journal, overlays, keyboard: options.keyboard, live, operate: operateHere });
+  const nav = createNav({ root, journal, host, env, index, reveal: revealer.reveal, position, live });
+  const relayout = createRelayout({ env, events, position, live });
+  const bar = options.chrome.bar ? createBar({ root, journal, isDocument: info.isDocument }) : null;
   const ctx: FeatureContext = {
     root,
     journal,
     state,
-    info: resolveInfo(root, opts.info),
+    info,
     options,
-    host: createHost(callbacks, live, operateHere),
+    host,
     live,
     operate: operateHere,
-    env: createEnv(root, journal, live, operateHere),
+    env,
     sections,
     vocab,
     chromeId: chromeIdsOf(inst, journal, live),
     text: textTools(vocab),
+    index,
+    terms: createTerms(root),
+    blocks: collectBlocks(root),
+    figures: createFigures(root),
+    plan: createPlan(),
+    page: createPage(),
+    events,
+    reveal: revealer.reveal,
+    onReveal: revealer.onReveal,
+    overlays,
+    keys,
+    nav,
+    position,
+    relayout: relayout.relayout,
+    onRelayout: relayout.onRelayout,
+    headCtl: createHeadCtl({ root, journal }),
+    slots: bar?.slots ?? null,
+    folds: createFolds(),
+    setPrefs: (change) => {
+      const checked = normalizePrefs(change);
+      operate(inst, () => {
+        changePrefs(inst, checked);
+      });
+    },
   };
   inst.ctx = ctx;
   applyPrefs(journal, root, state.prefs);
@@ -357,6 +413,30 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     f.build(ctx);
     if (!live()) return;
   }
+  // Once every feature is built: the bar's skeleton goes in, and the first measure is asked for.
+  bar?.attach();
+  ctx.relayout('start');
+}
+
+/**
+ * Change the prefs of an instance whose state exists: the state (written behind; the host's set() may run, and may
+ * destroy), then, still live, the root's attributes; then, when they changed and the context exists, the 'prefs' event
+ * and a relayout for what moves the layout. Runs inside an operation of the instance.
+ */
+function changePrefs(inst: Instance, change: Partial<Prefs>): void {
+  const state = inst.state;
+  if (state === null) return;
+  const generation = inst.generation;
+  const was = state.prefs;
+  const changed = state.setPrefs(change); // may call the host's set()
+  if (inst.generation !== generation || !isLive(inst)) return;
+  applyPrefs(inst.control.journal, inst.root, state.prefs);
+  const ctx = inst.ctx;
+  if (!changed || ctx === null) return;
+  const now = state.prefs;
+  ctx.events.emit('prefs', Object.freeze({ ...now }));
+  if (now.width !== was.width || now.font !== was.font) ctx.relayout('prefs');
+  if (now.lens !== was.lens) ctx.relayout('lens');
 }
 
 /**
@@ -528,9 +608,6 @@ export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): v
       inst.pendingPrefs = { ...inst.pendingPrefs, ...change };
       return;
     }
-    const generation = inst.generation;
-    state.setPrefs(change); // may call the host's set()
-    if (inst.generation !== generation || !isLive(inst)) return;
-    applyPrefs(inst.control.journal, root, state.prefs);
+    changePrefs(inst, change);
   });
 }
