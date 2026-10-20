@@ -7,12 +7,12 @@
 // xcard, toc-contents), prototype keys (__proto__, constructor, toString) or the root's mark. The hostile case
 // core/clobbering pins its snapshot, folds stored by those ids included; and the same document with every such id
 // renamed must give the same snapshot, so no lookup of the layout depends on what an id is called.
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc, type OpenHow } from './harness.js';
-import { compareOrWrite, loadLayoutCases, parseCaseFile, type LayoutCase } from './layout-cases.js';
+import { compareOrWrite, holdSnapshot, loadLayoutCases, parseCaseFile, type LayoutCase } from './layout-cases.js';
 
 const UPDATE = process.env['UPDATE_LAYOUT'] === '1';
 const CASES = loadLayoutCases();
@@ -70,6 +70,12 @@ describe('the Level 2 cases', () => {
       expect(compareOrWrite('one\n', file, false)).toBe('same');
       expect(compareOrWrite('two\n', file, false)).toBe('differs');
       expect(readFileSync(file, 'utf8')).toBe('one\n');
+      // The runner's hold: equal passes, a moved snapshot fails, a missing file fails, and nothing is written.
+      expect(() => holdSnapshot('x/a', 'one\n', file, false)).not.toThrow();
+      expect(() => holdSnapshot('x/a', 'two\n', file, false)).toThrow('x/a: the snapshot moved');
+      rmSync(file);
+      expect(() => holdSnapshot('x/a', 'one\n', file, false)).toThrow('x/a: no expected file; write it with UPDATE_LAYOUT=1');
+      expect(existsSync(file)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -83,9 +89,7 @@ describeBrowsers((browser) => {
       try {
         const snap = await doc.snapshot(c.scope);
         expect([await doc.violations(), doc.aborted, doc.missing]).toEqual([[], [], []]);
-        const verdict = compareOrWrite(snap, c.expected, UPDATE);
-        if (verdict === 'missing') expect.fail(`${c.id}: no expected file; write it with UPDATE_LAYOUT=1`);
-        if (verdict === 'differs') expect(snap).toBe(readFileSync(c.expected, 'utf8'));
+        holdSnapshot(c.id, snap, c.expected, UPDATE);
       } finally {
         await doc.close();
       }

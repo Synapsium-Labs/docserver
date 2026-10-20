@@ -82,11 +82,12 @@ function walkChildren(parent: Node, inScope: boolean, scope: Scope, isSource: (t
     const el = n as Element;
     const chrome = el.hasAttribute(CHROME_ATTR);
     const byClass = scope.classes.some((c) => el.classList.contains(c));
-    const byAttr = !chrome && scope.attrs.some((a) => el.hasAttribute(a));
+    // Chrome comes in by its class (or an ancestor's) only; an attribute never brings it in.
     if (chrome && !inScope && !byClass) {
       walkChildren(el, false, scope, isSource, into); // transparent
       continue;
     }
+    const byAttr = scope.attrs.some((a) => el.hasAttribute(a));
     const subtree = inScope || byClass;
     const children: Out[] = [];
     walkChildren(el, subtree, scope, isSource, children);

@@ -13,6 +13,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expect } from 'vitest';
 import { SCOPE_ENTRY } from './page/snapshot.js';
 
 export const LAYOUT_DIR = fileURLToPath(new URL('../../conformance/layout/', import.meta.url));
@@ -111,4 +112,14 @@ export function compareOrWrite(actual: string, expected: string, update: boolean
     return 'written';
   }
   return have === null ? 'missing' : 'differs';
+}
+
+/**
+ * Hold a case's snapshot to its expected file: equal passes; with `update` a missing or different file is written;
+ * otherwise a missing file throws, and a different one fails with the difference shown.
+ */
+export function holdSnapshot(id: string, actual: string, expected: string, update: boolean): void {
+  const verdict = compareOrWrite(actual, expected, update);
+  if (verdict === 'missing') throw new Error(`${id}: no expected file; write it with UPDATE_LAYOUT=1`);
+  if (verdict === 'differs') expect(actual, `${id}: the snapshot moved`).toBe(readFileSync(expected, 'utf8'));
 }
