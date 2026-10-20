@@ -19,7 +19,7 @@
 //                        through goTo with push true, when byId finds one; otherwise, or with a modifier key, it is
 //                        left to the browser;
 //                      - any other link, when the host gave onLink (`host.present`): the default is prevented and the
-//                        host gets the href as written, and newTab true for a click with Ctrl, Cmd or Shift (C47);
+//                        host gets the href as written, and newTab true for a click with Ctrl, Cmd or Shift;
 //                        without onLink the browser follows it.
 //                      A click whose default is already prevented (a feature's own handler on the link, which runs
 //                      first) is left alone, so a feature closes its own overlay or routes its own links there.
