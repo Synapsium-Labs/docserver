@@ -171,7 +171,9 @@ function scrub(box: Element): void {
   for (const el of Array.from(box.querySelectorAll('*'))) {
     el.removeAttribute('id');
     el.removeAttribute('data-line');
-    el.setAttribute(CHROME_ATTR, '');
+    // CHROME_ATTR's value, as a literal: the CSP wall allows a name in a variable only in journal.ts. The content
+    // case reads CHROME_ATTR, so the two cannot drift apart unseen.
+    el.setAttribute('data-docreader-chrome', '');
   }
 }
 
