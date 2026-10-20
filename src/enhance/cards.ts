@@ -10,8 +10,8 @@
 //
 // The card. One per instance: a chrome `div.xcard` (role dialog, a chrome id from ctx.chromeId), made and put at the
 // end of the root the first time a card shows (the reference put it at the end of the page; inside the root its fixed
-// position is the viewport's unless an ancestor has a transform, a filter or a containment, which makes that ancestor
-// its frame). Its overlay is registered then too, and the card follows the scroll only while it shows: an instance
+// position is the viewport's unless an ancestor has a transform, a filter, a perspective or a containment, which makes
+// that ancestor its frame). Its overlay is registered then too, and the card follows the scroll only while it shows: an instance
 // whose reader never asks for a card issues no id, registers no overlay and hears no scroll. Its content is made anew
 // for each trigger; the reference stylesheet's rules for `.xcard` lay it out. Showing it for a
 // trigger sets the trigger's aria-expanded to "true" and its aria-controls to the card's id, and the card's aria-label to
@@ -57,8 +57,8 @@
 //     and Tab on its last hides it and puts the focus back on the trigger, from where the browser moves on;
 //   - Escape in the card hides it and puts the focus back on the trigger; Escape elsewhere reaches the card through
 //     the keyboard layer (the overlay `card`, last in the Escape order, and no dialog: overlays.any() leaves it out),
-//     which hides it and puts the focus back on the trigger when it was on the trigger or in the card. Focus put back
-//     on a trigger never shows its card again;
+//     whose close hides it and puts the focus back on the trigger when it was in the card. Focus put back on a trigger
+//     never shows its card again;
 //   - a pointer down anywhere in the page but the card and this root's triggers hides it, and so does going anywhere
 //     (every nav.goTo reveals its target: the 'reveal' event); a click on a link in the card to a place in the page
 //     hides it once the click is done;
@@ -71,9 +71,10 @@
 // kept EDGE from each side of the window; its top GAP below the trigger, or GAP above it.
 //
 // show(ctx, trigger): show the card of `trigger` for the instance of `ctx` (its state is kept in a WeakMap keyed by the
-// context, C49), inside an operation; for the trigger already shown it places the card again (a block that moved). It
-// answers true when the card shows for that trigger; false for a trigger outside the root, one that names nothing,
-// and once the instance is not live.
+// context, C49), inside an operation; for the trigger already shown it places the card again (a block that moved), and
+// it calls off a pending hide. It answers true when the card shows for that trigger; false for a trigger outside the
+// root, one that names nothing or sits in `.rv-hide`, one out of the window (the card hides at once), a context no
+// instance made, and once the instance is not live.
 //
 // Standard files, slug `cards`: test/enhance-cards.test.ts, test/browser/cards.test.ts and conformance/layout/cards/.
 // Registered in features.ts, whose header says where in the build order and why.

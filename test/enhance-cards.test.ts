@@ -577,6 +577,9 @@ describe('hover, with a mouse', () => {
     pointer(d1, 'pointerout', { relatedTarget: d1.parentElement });
     vi.advanceTimersByTime(HIDE_DELAY_MS / 2);
     pointer(d1, 'pointerover');
+    // past the hide's delay, and before a new show's could end: the card never closed
+    vi.advanceTimersByTime(HIDE_DELAY_MS);
+    expect([isOpen(root), d1.getAttribute('aria-expanded')]).toEqual([true, 'true']);
     vi.advanceTimersByTime(HIDE_DELAY_MS * 4);
     expect(isOpen(root)).toBe(true);
     const card = theCard(root);
@@ -1222,7 +1225,8 @@ describe('diagram blocks and show(ctx, trigger) (Task 23)', () => {
     const content = card.querySelector('.xc-head');
     boxAt(block, { top: 300, left: 200 });
     expect(show(ctx, block)).toBe(true);
-    expect([px(card, 'top'), card.querySelector('.xc-head')]).toEqual([320 + GAP, content]);
+    expect(px(card, 'top')).toBe(320 + GAP);
+    expect(card.querySelector('.xc-head')).toBe(content); // the same node: placed again, not made again
     expect(show(ctx, link(root, 'term', 'fold'))).toBe(true);
     expect(card.getAttribute('aria-label')).toBe('Definition: Fold');
     // unknown names, a plain element, an element outside the root
