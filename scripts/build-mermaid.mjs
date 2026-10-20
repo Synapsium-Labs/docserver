@@ -192,7 +192,7 @@ export function noticesSection(packages) {
 export function readNoticesSection(text) {
   const begin = text.indexOf(NOTICES_BEGIN);
   const end = text.indexOf(NOTICES_END);
-  if (begin < 0 || end < begin) return null;
+  if (begin < 0 || end < 0) return null;
   return text.slice(begin, end + NOTICES_END.length);
 }
 

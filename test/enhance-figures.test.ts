@@ -175,6 +175,13 @@ describe('captions', () => {
     expect([nodes(scriptCap), nodes(emCap)]).toEqual(before);
   });
 
+  it('leaves a caption alone when its number has no dot after it', async () => {
+    const root = mountFigure([document.createTextNode('Figure 7 has no dot.')]);
+    await enhance(root);
+    expect(parts(captionOf(figures(root)[0] as Element))).toEqual(['"Figure 7 has no dot."']);
+    expect(ctxOf(root).figures.all()[0]).toMatchObject({ no: '1', caption: 'Figure 7 has no dot.' });
+  });
+
   it('leaves a caption alone when its number is longer than 32 characters', async () => {
     const long = '9'.repeat(33);
     const root = mount(fig(`*Figure ${long}. Too long a number.*`));

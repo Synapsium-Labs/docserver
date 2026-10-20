@@ -138,10 +138,11 @@ describe('THIRD-PARTY-NOTICES', () => {
   });
 
   it('the section is replaced in place, or appended after a heading when the file has none', () => {
-    const section = `${NOTICES_BEGIN}\nnew\n${NOTICES_END}`;
+    const section = `${NOTICES_BEGIN}\nnew, with $& and $1 kept as written\n${NOTICES_END}`;
     expect(withNoticesSection(`head\n\n${NOTICES_BEGIN}\nold $& text\n${NOTICES_END}\ntail\n`, section)).toBe(`head\n\n${section}\ntail\n`);
     expect(withNoticesSection('head\n\n', section)).toBe(`head\n\nMermaid (assets/mermaid/mermaid.mjs)\n------------------------------------\n${section}\n`);
     expect(readNoticesSection('no markers')).toBe(null);
+    expect(readNoticesSection(`${NOTICES_BEGIN}\nno end marker\n`)).toBe(null);
   });
 
   it('a package with no LICENSE file stops the build, naming it', () => {
