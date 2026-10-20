@@ -1188,3 +1188,29 @@ Guards added for the review's findings: a canvas width that is not finite counts
   }
 ]
 ```
+
+## The coordinator's commit at rebase: a filtered card hides (L2-T10-M132)
+
+On a phone, a table of three or more columns stacks into cards, and the stylesheet's `.stack tr { display: block }`
+beat the browser's own rule for `hidden`, so the filter counted and marked rows that still showed (the review's open
+defect). `assets/reader.css` is not this task's file, so the coordinator added `.stack tr[hidden] { display: none; }`
+in the phone block at rebase (C54). The browser case that pinned the defect now expects each hidden row to take no box.
+Measured 2026-10-20 on `l2-t10-blocks`, rebased onto `main`, with the change uncommitted, by `mutate.mjs` on a throwaway
+copy in Chromium; the checkout's status was the same before and after.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T10-M132 | on a phone, a stacked table's filtered row takes no box (a card's display: block yields to hidden) | `assets/reader.css` | the rule `.stack tr[hidden] { display: none; }` deleted | `test/browser/blocks.test.ts` (Chromium): 1 failed \| 23 skipped (24). "on a phone the filter of a table that stacks into cards counts, marks and hides the rows" |
+
+```json
+[
+  {
+    "id": "L2-T10-M132",
+    "guard": "on a phone, a stacked table's filtered row takes no box (a card's display: block yields to hidden)",
+    "file": "assets/reader.css",
+    "old": "  [data-docreader-root] .stack tr[hidden] { display: none; }\n",
+    "new": "",
+    "tests": "--project layout test/browser/blocks.test.ts -t \"stacks into cards\""
+  }
+]
+```

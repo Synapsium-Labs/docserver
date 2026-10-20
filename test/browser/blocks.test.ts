@@ -400,7 +400,7 @@ describeBrowsers((browser) => {
   // list), which this task does not own. This case pins today's behaviour: the count and the `hidden` attributes are
   // right, and the hidden rows still lay out. Once the fix lands the last expectation turns red, and flips to the
   // desktop case's [1, 0, 0, …].
-  it('on a phone the filter of a table that stacks into cards counts and marks the rows, which still show (open: the stylesheet)', async () => {
+  it('on a phone the filter of a table that stacks into cards counts, marks and hides the rows', async () => {
     const rows = Array.from({ length: 14 }, (_, i) => `| Row ${String(i + 1)} | Item ${String(i + 1)} | note |`);
     const md = ['# Filter', '', '| Row | Item | Note |', '|---|---|---|', ...rows, ''].join('\n');
     const doc = await openAt(browser, md, 390);
@@ -418,7 +418,7 @@ describeBrowsers((browser) => {
       expect(got.stack).toBe(true);
       expect(got.count).toBe('6 of 14');
       expect(got.hidden).toEqual([false, true, true, true, true, true, true, true, true, false, false, false, false, false]);
-      expect(got.boxes).toEqual(Array.from({ length: 14 }, () => 1)); // the open defect: hidden rows still lay out
+      expect(got.boxes).toEqual(got.hidden.map((h) => (h ? 0 : 1))); // a card's display: block yields to hidden (C54)
     } finally {
       await doc.close();
     }

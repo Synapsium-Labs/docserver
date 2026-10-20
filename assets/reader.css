@@ -843,6 +843,8 @@
   [data-docreader-root] .stack tr,
   [data-docreader-root] .stack td { display: block; width: 100%; }
   [data-docreader-root] .stack thead { display: none; }
+  /* a card's display: block would show a row the table's filter hides */
+  [data-docreader-root] .stack tr[hidden] { display: none; }
   [data-docreader-root] .stack tr { border: 1px solid var(--border); border-radius: 5px; padding: .6em .85em .5em; margin: 0 0 .65em; background: var(--bg); }
   [data-docreader-root] .stack tr.group { border: 0; padding: .6em 0 .2em; margin-bottom: .3em; background: none; }
   [data-docreader-root] .stack tr.group td { padding: 0 !important; border: 0 !important; }
