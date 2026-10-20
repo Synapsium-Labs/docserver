@@ -1,0 +1,58 @@
+h1
+  "Figure captions"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+p
+  "Each figure below ends in a caption of a"…
+h2
+  "Shapes"
+figure
+  pre
+    "flowchart LR A --> B"
+  figcaption
+    span .fig-no chrome
+      "Figure 1."
+    span .cap-text chrome
+      "A caption with its number and its text."
+figure
+  pre
+    "flowchart LR C --> D"
+  figcaption
+    span .fig-no chrome
+      "Figure 2."
+    span .cap-text chrome
+      "No space after the number."
+figure
+  pre
+    "flowchart LR E --> F"
+  figcaption
+    span .fig-no chrome
+      "Figure 3."
+    span .cap-text chrome
+figure
+  pre
+    "flowchart LR G --> H"
+  figcaption
+    span .fig-no chrome
+      "Figure 4."
+    span .cap-text chrome
+      "A caption with"
+      strong
+        "bold"
+      "words and"
+      code
+        "code"
+      "."
+figure
+  pre
+    "flowchart LR I --> J"
+p
+  "No caption follows this figure."
+figure
+  pre
+    "flowchart LR K --> L"
+  figcaption
+    "Figure ٦. A number in another script sta"…
