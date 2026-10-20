@@ -1563,3 +1563,56 @@ box, head, heading, Close, list, every row's term, key and label, the colour key
   [data-docreader-root][data-docreader-root][data-docreader-root] .ckey { padding: 0; margin: 0; }
   [data-docreader-root][data-docreader-root][data-docreader-root] .ckey li { margin: 0; }
   ```
+
+## The coordinator's commit at rebase: the dialogs' resets (L2-T16-M156 to L2-T16-M159)
+
+The visual check measured four differences that come from the stylesheet: the reading column's prose rules reach the
+dialogs, which live in the root, where the reference kept its dialogs outside its column. `assets/reader.css` is not
+this task's file, so the coordinator added the four measured resets at rebase (C54), beside the dialogs' own rules,
+with a browser case that reads each computed value. Measured 2026-10-20 on `l2-t16-jump`, rebased onto `main`, with
+the change uncommitted, by `mutate.mjs` on throwaway copies in Chromium; the checkout's status was the same before and
+after.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T16-M156 | the jump's rows keep the reference's row spacing, not the column's | `assets/reader.css` | the rule `.jump li { margin-bottom: .3em; }` deleted | `test/browser/jump.test.ts` (Chromium): 1 failed \| 13 skipped (14). "the reading column's prose rules stop at the dialogs: the jump's rows, the sheet's headings and the colour key" |
+| L2-T16-M157 | the sheet's headings take neither the column's position nor its line height | `assets/reader.css` | the rule `.keys h2 { position: static; line-height: 1.3; }` deleted | `test/browser/jump.test.ts` (Chromium): 1 failed \| 13 skipped (14). "the reading column's prose rules stop at the dialogs: the jump's rows, the sheet's headings and the colour key" |
+| L2-T16-M158 | the colour key takes no list padding or margin | `assets/reader.css` | the rule `.ckey { padding: 0; margin: 0; }` deleted | `test/browser/jump.test.ts` (Chromium): 1 failed \| 13 skipped (14). "the reading column's prose rules stop at the dialogs: the jump's rows, the sheet's headings and the colour key" |
+| L2-T16-M159 | the colour key's items take no list-item margin | `assets/reader.css` | the rule `.ckey li { margin: 0; }` deleted | `test/browser/jump.test.ts` (Chromium): 1 failed \| 13 skipped (14). "the reading column's prose rules stop at the dialogs: the jump's rows, the sheet's headings and the colour key" |
+
+```json
+[
+  {
+    "id": "L2-T16-M156",
+    "guard": "the jump's rows keep the reference's row spacing, not the column's",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root][data-docreader-root][data-docreader-root] .jump li { margin-bottom: .3em; }\n",
+    "new": "",
+    "tests": "--project layout test/browser/jump.test.ts -t \"prose rules stop\""
+  },
+  {
+    "id": "L2-T16-M157",
+    "guard": "the sheet's headings take neither the column's position nor its line height",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root][data-docreader-root][data-docreader-root] .keys h2 { position: static; line-height: 1.3; }\n",
+    "new": "",
+    "tests": "--project layout test/browser/jump.test.ts -t \"prose rules stop\""
+  },
+  {
+    "id": "L2-T16-M158",
+    "guard": "the colour key takes no list padding or margin",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root][data-docreader-root][data-docreader-root] .ckey { padding: 0; margin: 0; }\n",
+    "new": "",
+    "tests": "--project layout test/browser/jump.test.ts -t \"prose rules stop\""
+  },
+  {
+    "id": "L2-T16-M159",
+    "guard": "the colour key's items take no list-item margin",
+    "file": "assets/reader.css",
+    "old": "[data-docreader-root][data-docreader-root][data-docreader-root] .ckey li { margin: 0; }\n",
+    "new": "",
+    "tests": "--project layout test/browser/jump.test.ts -t \"prose rules stop\""
+  }
+]
+```

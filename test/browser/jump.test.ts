@@ -21,6 +21,42 @@ const focused = (page: Page): Promise<string> =>
   });
 
 describeBrowsers((browser) => {
+  it('the reading column\'s prose rules stop at the dialogs: the jump\'s rows, the sheet\'s headings and the colour key', async () => {
+    // Measured against the reference, which kept these dialogs outside its column (the four resets in reader.css).
+    const doc = await openDoc(headings(8), {}, { browser });
+    try {
+      const { page } = doc;
+      await page.keyboard.press('/');
+      await page.waitForSelector('.jump.open li');
+      const row = await page.evaluate(() => {
+        const li = document.querySelector('.jump li') as HTMLElement;
+        const cs = getComputedStyle(li);
+        return Number.parseFloat(cs.marginBottom) / Number.parseFloat(cs.fontSize);
+      });
+      expect(row).toBeCloseTo(0.3, 2);
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('?');
+      await page.waitForSelector('.keys.open');
+      const sheet = await page.evaluate(() => {
+        const h = document.querySelector('.keys h2') as HTMLElement;
+        const hs = getComputedStyle(h);
+        const key = document.querySelector('.keys .ckey') as HTMLElement;
+        const ks = getComputedStyle(key);
+        const item = key.querySelector('li') as HTMLElement;
+        const is = getComputedStyle(item);
+        return {
+          position: hs.position,
+          lineHeight: Math.round((Number.parseFloat(hs.lineHeight) / Number.parseFloat(hs.fontSize)) * 100) / 100,
+          key: [ks.paddingTop, ks.paddingLeft, ks.marginTop, ks.marginBottom],
+          item: [is.marginTop, is.marginBottom],
+        };
+      });
+      expect(sheet).toEqual({ position: 'static', lineHeight: 1.3, key: ['0px', '0px', '0px', '0px'], item: ['0px', '0px'] });
+    } finally {
+      await doc.close();
+    }
+  });
+
   it('the keys sheet keeps the focus on its control: Tab and Shift+Tab never leave the box', async () => {
     const doc = await openDoc(headings(8), {}, { browser });
     try {
