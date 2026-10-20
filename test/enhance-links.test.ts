@@ -390,6 +390,43 @@ describe('xrefs: the first mention of a defined ID in each block (the reference 
     expect(squash(para(root, 'Inside').textContent)).toBe('Inside, R2.');
   });
 
+  it('the eyebrow holds no mention when the title, and so the eyebrow, sits in a block (a quote or a list item)', async () => {
+    for (const lead of ['> ', '- ']) {
+      const root = mount(
+        [
+          `${lead}# Quoted title`,
+          '',
+          '## 1. Table',
+          '',
+          '| ID | What |',
+          '|---|---|',
+          '| R2 | The one defined ID |',
+          '',
+          '## Glossary',
+          '',
+          '| Term | Meaning |',
+          '|---|---|',
+          '| Lantern | A light |',
+          '',
+          '## 2. Text',
+          '',
+          'Then R2 and a lantern.',
+          '',
+        ].join('\n'),
+      );
+      seedIdRows();
+      await enhance(root, { info: { frontList: [{ key: 'type', list: false, vals: ['R2'] }, { key: 'area', list: false, vals: ['Lantern'] }] } });
+      const eyebrow = find(root, '.eyebrow');
+      expect(eyebrow.parentElement?.localName, lead).toBe(lead === '> ' ? 'blockquote' : 'li');
+      expect(squash(eyebrow.textContent), lead).toBe('R2Lantern');
+      expect(eyebrow.querySelector('a'), lead).toBeNull();
+      expect(linked(root, 'xref'), lead).toEqual(['p:R2']);
+      expect(linked(root, 'term'), lead).toEqual(['p:lantern']);
+      await destroyEnhancement(root);
+      hooks.seeds.length = 0;
+    }
+  });
+
   it('skips the layout\'s own parts: the byline, the hidden meta line and front-matter strip, the facts panel, a rule head, a step number, a button', async () => {
     const root = mount(
       [
@@ -758,6 +795,20 @@ describe('glossary: what makes a glossary, and its terms (the reference layout, 
     expect(linked(root, 'term')).toEqual(['p:beacon']);
   });
 
+  it('in hand-written html, a term cell is read as its words: white space at its ends and line breaks inside count as one space', async () => {
+    const root = mountHtml(
+      '<h1>Hand-written</h1><h2 id="glossary">Glossary</h2><div class="table-wrapper"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>' +
+        '<tr><td>\n  Codes\n</td><td>Not a term</td></tr><tr><td>Read\n  mark (marker)</td><td>A mark</td></tr></tbody></table></div>' +
+        '<h2 id="use">Use</h2><p>Codes, a read mark and a marker.</p>',
+    );
+    await enhance(root);
+    expect(ctxOf(root).terms.all().map((t) => [t.name, t.exact])).toEqual([
+      ['Read mark', false],
+      ['marker', false],
+    ]);
+    expect(linked(root, 'term')).toEqual(['p:read mark', 'p:marker']);
+  });
+
   it('a numbered or lettered heading counts by its words, and a glossary under an h3 by the h3', async () => {
     const root = mount(
       [
@@ -876,6 +927,65 @@ describe('glossary: the first mention of each term in each section', () => {
     expect(a.firstChild?.nodeType).toBe(3);
     expect(squash(p.textContent)).toBe('A fold hides a section. Folds come back. The read mark notes what was read, and read marks add up.');
     expect(ctxOf(root).terms.get(a.getAttribute('data-term') ?? '')?.name).toBe('Fold');
+  });
+
+  it('a mention before the In short box is in a section of its own: the box starts the next one', async () => {
+    const root = mount(
+      [
+        '# Before the box',
+        '',
+        'A lantern, named before the box.',
+        '',
+        '## In short',
+        '',
+        'A lantern again, inside the box.',
+        '',
+        '## Glossary',
+        '',
+        '| Term | Meaning |',
+        '|---|---|',
+        '| Lantern | A light |',
+        '',
+      ].join('\n'),
+    );
+    await enhance(root);
+    expect(find(root, '.short').querySelectorAll('a.term')).toHaveLength(1);
+    expect(linked(root, 'term')).toEqual(['p:lantern', 'p:lantern']);
+  });
+
+  it('the first mention is the first in document order: across the texts of one block, and across the items of one list', async () => {
+    const root = mount(
+      [
+        '# Order',
+        '',
+        '| ID | What |',
+        '|---|---|',
+        '| R1 | Defined |',
+        '',
+        '## Glossary',
+        '',
+        '| Term | Meaning |',
+        '|---|---|',
+        '| Lantern | A light |',
+        '| Wick | A thread |',
+        '',
+        '## 1. Text',
+        '',
+        'R1 first, a lantern *then* R1 again and a lantern again.',
+        '',
+        '- A wick in the first item.',
+        '- A wick in the second item.',
+        '',
+      ].join('\n'),
+    );
+    seedIdRows();
+    await enhance(root);
+    const p = para(root, 'R1 first');
+    expect(p.firstChild).toBe(find(p, 'a.xref'));
+    expect(find(p, 'a.term').nextSibling?.textContent).toBe(' ');
+    expect(find(p, 'a.term').previousSibling?.textContent).toBe(' first, a ');
+    expect(linked(root, 'term')).toEqual(['p:lantern', 'li:wick']);
+    expect(para(root, 'A wick in the first', 'li').querySelector('a.term')).not.toBeNull();
   });
 
   it('the search goes on after the whole of a mention it leaves, so a shorter term inside it is not linked there', async () => {
@@ -1239,6 +1349,13 @@ const BUDGET_MS = 20_000;
 const ROUNDS = 3;
 
 /**
+ * No round starts once the rounds have taken this long, in ms, so a matcher whose cost grows with the number of terms
+ * is judged on the rounds it finished (one at least) rather than outrunning the test's own timeout. Three honest
+ * rounds take a fraction of it.
+ */
+const ROUNDS_MS = 240_000;
+
+/**
  * A full garbage collection, when the runtime will give one: the garbage of parsing a large document then lands
  * before the timed window, not in it. (Node gives `gc` to a context once the flag is set.)
  */
@@ -1294,7 +1411,8 @@ describe('RF3: the large plan', () => {
     const two: number[] = [];
     let counts1 = { xrefs: 0, terms: 0 };
     let counts2 = { xrefs: 0, terms: 0 };
-    for (let round = 0; round < ROUNDS; round += 1) {
+    const start = performance.now();
+    for (let round = 0; round < ROUNDS && (round === 0 || performance.now() - start < ROUNDS_MS); round += 1) {
       const a = await timeLinks(1);
       one.push(a.ms);
       counts1 = a;

@@ -10,8 +10,9 @@
 //
 // What it reads (mentions.ts): every text in a block (a paragraph, list item, table cell, description or quote) of
 // the root, in document order, outside the document's code, keyboard keys, links, headings, table heads, figures and
-// code blocks, and outside the layout's buttons, a rule's head, a step's number, the byline, the facts panel and what
-// the layout hid. In each text, the vocabulary's ID scan finds the mentions, as whole words. A mention links when:
+// code blocks, and outside the layout's buttons, the eyebrow, a rule's head, a step's number, the byline, the facts
+// panel and what the layout hid. In each text, the vocabulary's ID scan finds the mentions, as whole words. A mention
+// links when:
 //   - the index defines that ID;
 //   - it is the first linked mention of that ID in its block (a later one in the same block stays text);
 //   - it is not inside the ID's own target (a row does not link to itself);

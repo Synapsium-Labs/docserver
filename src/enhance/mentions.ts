@@ -9,10 +9,11 @@
 //                             so nothing around the root (a host's list item or figure) makes a text a mention or
 //                             hides one.
 //   skipsMarkup(el, page)     what both features leave alone: the document's code, keyboard keys, links, headings,
-//                             table heads, figures and code blocks; the layout's buttons, a rule's head (Task 9) and
-//                             a step's number (Task 11); the byline and the facts panel (ctx.page); and what the layout
-//                             hid (a `hidden` attribute other than `until-found`, which a fold sets on what the reader
-//                             can still find): the reference removed those parts, where this layout keeps them hidden.
+//                             table heads, figures and code blocks; the layout's buttons, the eyebrow (in a block when
+//                             the title is, in a quote or a list item), a rule's head (Task 9) and a step's number
+//                             (Task 11); the byline and the facts panel (ctx.page); and what the layout hid (a `hidden`
+//                             attribute other than `until-found`, which a fold sets on what the reader can still
+//                             find): the reference removed those parts, where this layout keeps them hidden.
 //   topElements(root)         the root's child elements, in order, read by walking its siblings: a live `children`
 //                             collection can cost a walk from its start per item, which grows with the square of a long
 //                             document's top-level blocks.
@@ -42,7 +43,7 @@ const SKIP_TAGS: readonly string[] = ['a', 'code', 'pre', 'kbd', 'h1', 'h2', 'h3
 export function skipsMarkup(el: Element, page: Pick<PageInfo, 'byline' | 'facts'>): boolean {
   if (SKIP_TAGS.includes(el.localName)) return true;
   if (el === page.byline || el === page.facts.panel) return true;
-  if (el.classList.contains('rule-head') || el.classList.contains('step-no')) return true;
+  if (el.classList.contains('eyebrow') || el.classList.contains('rule-head') || el.classList.contains('step-no')) return true;
   const hidden = el.getAttribute('hidden');
   return hidden !== null && hidden !== 'until-found';
 }
