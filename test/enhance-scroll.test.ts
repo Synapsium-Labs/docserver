@@ -83,11 +83,12 @@ const PLAN = [
 
 const mounted: HTMLElement[] = [];
 
-function mount(md = DOC): HTMLElement {
+function mount(md = DOC, parent: HTMLElement = document.body): HTMLElement {
   const parsed = new DOMParser().parseFromString(`<!doctype html><body>${render(md).html}`, 'text/html');
   const root = document.createElement('main');
   root.append(...Array.from(parsed.body.childNodes).map((n) => document.importNode(n, true)));
-  document.body.append(root);
+  if (parent !== document.body) document.body.append(parent);
+  parent.append(root);
   mounted.push(root);
   return root;
 }
@@ -96,8 +97,25 @@ function mount(md = DOC): HTMLElement {
 const rects = new Map<Element, { top: number; height?: number }>();
 /** Where an element with no stub sits: far below any window, so nothing is above the reading line by default. */
 const FAR = 100_000;
-/** How many times a rect was read. */
+/** How many times a rect was read (getBoundingClientRect or getClientRects). */
 let reads = 0;
+/** How many times each element's rect was read. */
+const readsOf = new Map<Element, number>();
+/** Elements laid out with no box (display: none, as the outline mode hides a task's part): see `boxed`. */
+const noBox = new Set<Element>();
+
+/**
+ * Whether an element has a layout box, as a browser would say: not in `noBox`, and neither it nor any ancestor carries
+ * a `hidden` that removes the box (`hidden="until-found"` keeps one: content-visibility, not display).
+ */
+function boxed(el: Element): boolean {
+  for (let n: Element | null = el; n !== null; n = n.parentElement) {
+    if (noBox.has(n)) return false;
+    const h = n.getAttribute('hidden');
+    if (h !== null && h !== 'until-found') return false;
+  }
+  return true;
+}
 
 /** The window's height and scroll position, as env reads them. */
 function setWindow(h: number, y: number): void {
@@ -112,11 +130,21 @@ beforeEach(() => {
   reads = 0;
   phone = false;
   setWindow(768, 0);
-  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+  readsOf.clear();
+  const rectOf = (el: Element): DOMRect => {
     reads += 1;
-    const r = rects.get(this) ?? { top: FAR };
+    readsOf.set(el, (readsOf.get(el) ?? 0) + 1);
+    // An element with no box reads all zeros, wherever it would be.
+    const r = boxed(el) ? (rects.get(el) ?? { top: FAR }) : { top: 0, height: 0 };
     const height = r.height ?? 20;
     return { top: r.top, bottom: r.top + height, height, left: 0, right: 0, width: 0, x: 0, y: r.top, toJSON: () => ({}) } as DOMRect;
+  };
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    return rectOf(this);
+  });
+  vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+    const r = rectOf(this);
+    return (boxed(this) ? [r] : []) as unknown as DOMRectList;
   });
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -130,6 +158,7 @@ afterEach(async () => {
   hooks.probes.length = 0;
   hooks.beforeScroll.length = 0;
   rects.clear();
+  noBox.clear();
   delete (window as { matchMedia?: unknown }).matchMedia;
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -198,13 +227,16 @@ function head(root: HTMLElement): string {
   return `${b?.textContent ?? ''}|${Array.from(running.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('')}`;
 }
 
-/** Publish the plan before the scroll feature builds, unless the plan feature already did (a stand-in for it). */
-function planProbe(): void {
+/**
+ * Publish the plan before the scroll feature builds, unless the plan feature already did (a stand-in for it). Its task
+ * headings are the `levels` headings that open "Task n:" (h2 too, as the plan feature takes them).
+ */
+function planProbe(levels = 'h3'): void {
   hooks.beforeScroll.push({
     name: 'plan-probe',
     build: (ctx: FeatureContext) => {
       if (ctx.plan.published) return;
-      const tasks = Array.from(ctx.root.querySelectorAll('h3')).filter((h) => /^Task \d+:/.test(h.textContent ?? '')) as HTMLElement[];
+      const tasks = Array.from(ctx.root.querySelectorAll(levels)).filter((h) => /^Task \d+:/.test(h.textContent ?? '')) as HTMLElement[];
       const steps = Array.from(ctx.root.querySelectorAll('li.task-list-item')) as HTMLElement[];
       ctx.plan.publish({ tasks, steps, yours: 0, outlineable: steps.length >= 20 });
     },
@@ -288,6 +320,102 @@ describe('the reading line and the spy event', () => {
     await frames();
     await scrollTo(1250, place); // task 2 at 150 (hidden), task 1 at -250
     expect(log.at(-1)).toEqual({ section: '2-tasks', unit: 'task-1-first-part' });
+  });
+
+  it('on a plan whose tasks are h2 headings, each is one unit: no frame reads a heading twice in one search', async () => {
+    planProbe('h2, h3');
+    const md = [
+      '# A plan',
+      '',
+      ...[1, 2].flatMap((t) => [`## Task ${String(t)}: Part ${String(t)}`, '', ...Array.from({ length: 10 }, (_, i) => `- [ ] **Step ${String(i + 1)}:** Do ${String(i + 1)}.`), '']),
+      '## Notes',
+      '',
+      'After the tasks.',
+      '',
+    ].join('\n');
+    const root = mount(md);
+    await enhance(root);
+    const ctx = ctxOf(root);
+    expect([ctx.plan.outlineable, ctx.plan.tasks.map((h) => h.id), ctx.sections.map((s) => s.heading.id)]).toEqual([
+      true,
+      ['task-1-part-1', 'task-2-part-2'],
+      ['task-1-part-1', 'task-2-part-2', 'notes'],
+    ]);
+    await frames();
+    const log = spyLog(root);
+    const place = placer(root, { 'task-1-part-1': 600, 'task-2-part-2': 1000, notes: 1400 });
+    // Nothing above the line: each search reads its way down to the first heading, so a heading listed twice in one
+    // list would be read twice by that search (three times in the frame, with the sections' search).
+    readsOf.clear();
+    await scrollTo(100, place);
+    const most = Math.max(...['task-1-part-1', 'task-2-part-2', 'notes'].map((id) => readsOf.get(heading(root, id)) ?? 0));
+    expect(most).toBeGreaterThan(0);
+    expect(most).toBeLessThanOrEqual(2);
+    await scrollTo(800, place); // task 1 at -200, task 2 at 200
+    expect(log.at(-1)).toEqual({ section: 'task-2-part-2', unit: 'task-2-part-2' });
+  });
+
+  it('a unit with no box (a task\'s part the outline mode leaves out) is left out of the search once relayout ran', async () => {
+    planProbe();
+    const root = mount(PLAN);
+    await enhance(root);
+    await frames();
+    const log = spyLog(root);
+    const place = placer(root, { 'in-short': 300, '1-scope': 600, '2-tasks': 900, 'task-1-first-part': 1000, 'task-2-second-part': 1400, '3-notes': 1800 });
+    noBox.add(heading(root, 'task-2-second-part')); // its rect reads 0 at every scroll position
+    ctxOf(root).relayout('outline');
+    await frames();
+    await scrollTo(400, place); // 1-scope at 200, task 1 at 600: the unit is 1-scope, not the task with no box
+    expect(log.at(-1)).toEqual({ section: '1-scope', unit: '1-scope' });
+    await scrollTo(800, place); // task 1 at 200
+    expect(log.at(-1)).toEqual({ section: '2-tasks', unit: 'task-1-first-part' });
+  });
+
+  it('a host\'s hidden attribute above the root is no fold: its units are searched once the host shows it', async () => {
+    planProbe();
+    const panel = document.createElement('div');
+    panel.setAttribute('hidden', 'until-found'); // the host's: the root keeps its box, as a browser's would
+    const root = mount(PLAN, panel);
+    await enhance(root);
+    await frames();
+    const log = spyLog(root);
+    panel.removeAttribute('hidden'); // shown: no relayout follows
+    await scrollTo(800, placer(root, { 'in-short': 300, '1-scope': 600, '2-tasks': 900, 'task-1-first-part': 1000, 'task-2-second-part': 1400, '3-notes': 1800 }));
+    expect(log.at(-1)).toEqual({ section: '2-tasks', unit: 'task-1-first-part' });
+  });
+
+  it('a root with no box when relayout ran (in a host\'s hidden panel) finds its units at the first frame it has one', async () => {
+    planProbe();
+    const panel = document.createElement('div');
+    panel.setAttribute('hidden', ''); // the host's hidden panel: nothing in it has a box
+    const root = mount(PLAN, panel);
+    await enhance(root);
+    await frames(); // relayout('start'), with no box
+    const log = spyLog(root);
+    const place = placer(root, { 'in-short': 300, '1-scope': 600, '2-tasks': 900, 'task-1-first-part': 1000, 'task-2-second-part': 1400, '3-notes': 1800 });
+    await scrollTo(800, place); // still hidden: no box, so no unit
+    reads = 0;
+    readsOf.clear();
+    await scrollTo(810, place);
+    const hiddenReads = reads;
+    // While it waits, a frame reads the root's box only: no unit's, as making the list again would.
+    const unitReads = ['task-1-first-part', 'task-2-second-part'].map((id) => readsOf.get(heading(root, id)) ?? 0);
+    panel.removeAttribute('hidden'); // shown: no relayout follows
+    await scrollTo(800, place);
+    expect(log.at(-1)).toEqual({ section: '2-tasks', unit: 'task-1-first-part' });
+    expect(hiddenReads).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(10)) + 4); // the wait for a box costs one read a frame
+    expect(unitReads).toEqual([0, 0]);
+  });
+
+  it('a host\'s class "short" on the root makes no section "In short": the units and the running head are as without it', async () => {
+    const root = mount();
+    root.classList.add('short');
+    await enhance(root);
+    await frames();
+    const log = spyLog(root);
+    await scrollTo(600, placer(root, { 'in-short': 400, '1-context': 800, '2-design': 1200, 'open-questions': 1600 }));
+    expect(log.at(-1)).toEqual({ section: '1-context', unit: '1-context' });
+    expect(head(root)).toBe('§ 1|Context');
   });
 
   it('on a plan too short for the outline mode, the tasks are no units: the section that holds them is', async () => {
@@ -471,7 +599,17 @@ describe('the root classes and the progress line', () => {
     expect(progress.style.width).toBe('30.85%');
     await scrollTo(3000, at(-1000, 3768)); // the root starts 2000 px down the page
     expect(progress.style.width).toBe('33.333%');
+    await scrollTo(4000, at(-4000, 4768)); // the end: the root's bottom at the window's
+    expect(progress.style.width).toBe('100%');
+    await scrollTo(4500, at(-4500, 4768)); // past it, the root's bottom still in the window
+    expect(progress.style.width).toBe('100%');
+    // The root wholly above the window (the host's page goes on below it): no line, so a root further down the page,
+    // whose line is at the same place, is the one seen.
+    await scrollTo(4768, at(-4768, 4768));
+    expect(progress.style.width).toBe('0%');
     await scrollTo(9000, at(-9000, 4768));
+    expect(progress.style.width).toBe('0%');
+    await scrollTo(4767, at(-4767, 4768));
     expect(progress.style.width).toBe('100%');
     await scrollTo(0, at(300, 4768)); // the root below the window's top
     expect(progress.style.width).toBe('0%');
@@ -788,6 +926,19 @@ describe('RF3: rect reads per frame', () => {
     expect(worst).toBeLessThanOrEqual(bound);
     // Without tasks the unit is the section, so a frame searches one list: the root, the title, and that search.
     expect(worst).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
+  });
+
+  it('without tasks a relayout\'s frame stays within the bound too: no unit\'s box is read for a search that never runs', async () => {
+    const n = 1000;
+    const { root, place } = many(n);
+    await enhance(root);
+    await frames();
+    place(12_345);
+    reads = 0;
+    ctxOf(root).relayout('content');
+    await frames();
+    expect(reads).toBeGreaterThan(0);
+    expect(reads).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
   });
 
   it('on a plan, both searches together stay within the bound', async () => {
