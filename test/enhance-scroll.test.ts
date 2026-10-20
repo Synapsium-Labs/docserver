@@ -342,6 +342,12 @@ describe('the reading line and the spy event', () => {
   });
 
   it('spy events come without the bar too (chrome.bar false), and no bar rect is read', async () => {
+    const errors: unknown[] = [];
+    const onError = (e: ErrorEvent): void => {
+      errors.push(e.error);
+      e.preventDefault();
+    };
+    window.addEventListener('error', onError);
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
     await frames();
@@ -358,6 +364,8 @@ describe('the reading line and the spy event', () => {
     expect(log).toEqual([{ section: '1-context', unit: '1-context' }]);
     expect(seen.includes(root) || seen.includes(h1)).toBe(false);
     expect(root.classList.contains('scrolled')).toBe(false);
+    window.removeEventListener('error', onError);
+    expect(errors).toEqual([]); // no frame reached for a bar it does not have
   });
 
   it('nothing after destroy: a scroll then sends no event', async () => {
@@ -717,6 +725,17 @@ describe('each frame writes only what changed, and a burst of scroll events is o
     });
     await scrollTo(1000, place);
     expect(writes).toEqual({ style: 0, cls: 0, head: 0 });
+    vi.mocked(DOMTokenList.prototype.toggle).mockRestore();
+    phone = false; // a wider window: the bar shows, once
+    await scrollTo(1000, place);
+    expect([root.classList.contains('bar-hidden'), writes]).toEqual([false, { style: 0, cls: 0, head: 0 }]);
+    let toggles = 0;
+    vi.spyOn(DOMTokenList.prototype, 'toggle').mockImplementation(function (this: DOMTokenList) {
+      toggles += 1;
+      return true;
+    });
+    await scrollTo(1000, place); // and not again
+    expect(toggles).toBe(0);
   });
 
   it('a burst of scroll events asks for one frame', async () => {
