@@ -1,4 +1,4 @@
-// Code blocks: Copy buttons and widths (the reference layout, section 9; docserver L2, Task 10). The blocks are
+// Code blocks: Copy buttons and widths (the reference layout, section 9; docserver L2 Task 10). The blocks are
 // ctx.blocks' code blocks (registry.ts): each `div.codehilite` of the document outside a figure, in document order.
 //
 // Copy, built in build(), only when the host gave `copy` (host.present): a `button.code-copy` ("Copy", labelled "Copy

@@ -1,5 +1,5 @@
 // Tables: bullet cells, the filter and the measured widths (the reference layout, section 8, before its status marks;
-// docserver L2, Task 10). The tables are ctx.blocks' (registry.ts): each `div.table-wrapper` with its table, in
+// docserver L2 Task 10). The tables are ctx.blocks' (registry.ts): each `div.table-wrapper` with its table, in
 // document order.
 //
 // Built in build(), before the status marks (status.ts, the next step):
