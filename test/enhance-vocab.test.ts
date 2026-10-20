@@ -993,6 +993,14 @@ describe('the item link goes through onLink, in a new tab', () => {
     expect(onLink.mock.calls[1]).toEqual([LINK('AB-1'), { newTab: true }]);
   });
 
+  it('a plain click on the arrow inside the link is the link\'s: newTab true', async () => {
+    const onLink = vi.fn();
+    const root = mount(ITEM_DOC);
+    await enhance(root, { itemLink: LINK, onLink, vocabulary: { itemFields: ['Tracker'] } });
+    const e = click((root.querySelector('a.item-link') as Element).lastElementChild as Element);
+    expect([e.defaultPrevented, onLink.mock.calls]).toEqual([true, [[LINK('AB-12'), { newTab: true }]]]);
+  });
+
   it('a click whose target is the link\'s own text node goes to onLink too', async () => {
     const onLink = vi.fn();
     const root = mount(ITEM_DOC);
