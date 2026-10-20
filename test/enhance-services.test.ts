@@ -19,7 +19,7 @@ import type { Env } from '../src/enhance/env.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import { BAR_HOLD_MS, type Position } from '../src/enhance/nav.js';
 import { OVERLAY_ORDER, type OverlayKind } from '../src/enhance/overlays.js';
-import { createEvents, createPage, createPlan, createTerms, EVENT_NAMES, termKey, type IndexEntry, type RelayoutReason } from '../src/enhance/registry.js';
+import { createEvents, createFigures, createIndex, createPage, createPlan, createTerms, EVENT_NAMES, termKey, type IndexEntry, type RelayoutReason } from '../src/enhance/registry.js';
 import { createRelayout, FONTS_WAIT_MS, RESIZE_DEBOUNCE_MS } from '../src/enhance/relayout.js';
 import { docKey } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
@@ -186,7 +186,8 @@ describe('registries: the ID index (LD6, RF1)', () => {
   it('the first definition of an ID wins; all() is in document order, whatever the definition order', async () => {
     const root = mount();
     await enhance(root);
-    const { index } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const index = createIndex(root);
     const second = rowEntry(root, 'R2', 1);
     const first = rowEntry(root, 'R1', 0);
     expect(index.define(second)).toBe(true);
@@ -202,7 +203,8 @@ describe('registries: the ID index (LD6, RF1)', () => {
   it('ids such as __proto__, constructor and toString are ordinary keys, and no prototype changes', async () => {
     const root = mount();
     await enhance(root);
-    const { index } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const index = createIndex(root);
     expect(index.get('__proto__')).toBeUndefined();
     expect(index.get('constructor')).toBeUndefined();
     expect(index.get('hasOwnProperty')).toBeUndefined();
@@ -218,7 +220,8 @@ describe('registries: the ID index (LD6, RF1)', () => {
   it('refuses a malformed entry: an id, a kind, a status, a target that is chrome, the root or outside it, heads', async () => {
     const root = mount();
     await enhance(root);
-    const { index } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const index = createIndex(root);
     const ok = rowEntry(root, 'R1', 0);
     const chromeEl = find(root, `[${CHROME_ATTR}]`);
     const outside = document.createElement('p');
@@ -246,7 +249,8 @@ describe('registries: terms, blocks, figures, the plan and the page', () => {
   it('terms: a new name makes an entry; the same name again, in any case, adds a definition; __proto__ is a key', async () => {
     const root = mount();
     await enhance(root);
-    const { terms } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const terms = createTerms(root);
     const [r0, r1] = Array.from(root.querySelectorAll('tbody tr'));
     const def = (row: Element) => ({ qual: '', cell: row.lastElementChild as Element, row });
     const a = terms.define({ name: 'Read  mark', exact: false, section: 'Words used here', target: r0 as Element, def: def(r0 as Element) });
@@ -286,7 +290,8 @@ describe('registries: terms, blocks, figures, the plan and the page', () => {
   it('figures: one entry per figure element, in document order', async () => {
     const root = mount(`${DOC}\n\`\`\`mermaid\ngraph LR; C-->D\n\`\`\`\n\n*Figure 2. Another.*\n`);
     await enhance(root);
-    const { figures } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const figures = createFigures(root);
     const [f1, f2] = Array.from(root.querySelectorAll('figure')) as HTMLElement[];
     expect(figures.add({ no: '2', caption: 'Another.', figure: f2 as HTMLElement })).toBe(true);
     expect(figures.add({ no: '1', caption: 'A diagram.', figure: f1 as HTMLElement })).toBe(true);
@@ -1257,7 +1262,8 @@ describe('registries: refusals, copies and caches', () => {
   it('index: of() keeps the first entry of a target and finds an entry by its row; all() sees a later definition', async () => {
     const root = mount();
     await enhance(root);
-    const { index } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const index = createIndex(root);
     const rows = Array.from(root.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
     expect(index.define(rowEntry(root, 'R1', 0))).toBe(true);
     expect(index.all().map((e) => e.id)).toEqual(['R1']);
@@ -1273,7 +1279,8 @@ describe('registries: refusals, copies and caches', () => {
   it('terms: refuses a missing term, a name too long or blank, exact and section of the wrong type, a target outside, a missing definition', async () => {
     const root = mount();
     await enhance(root);
-    const { terms } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const terms = createTerms(root);
     const row = root.querySelector('tbody tr') as Element;
     const ok = { name: 'Read mark', exact: false, section: '', target: row, def: { qual: '', cell: row.lastElementChild as Element, row } };
     const outside = document.createElement('tr');
@@ -1308,7 +1315,8 @@ describe('registries: refusals, copies and caches', () => {
   it('figures: refuses a missing entry, a caption that is not text and a figure outside the root; all() sees a later add', async () => {
     const root = mount();
     await enhance(root);
-    const { figures } = ctxOf(root);
+    // A registry of its own over the enhanced root: the instance's is filled by the features as they build.
+    const figures = createFigures(root);
     const figure = find(root, 'figure');
     expect(() => figures.add(null as never)).toThrow(/figures\.add/);
     expect(() => figures.add({ no: '1', caption: 2, figure } as never)).toThrow(/figure entry/);

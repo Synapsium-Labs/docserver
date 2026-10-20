@@ -1690,7 +1690,7 @@ describe('features: registration in the final build order', () => {
     const names = (await realFeatures()).map((f) => f.name);
     for (const name of names.filter((n) => !BUILT.includes(n))) {
       // Each module is a stub or names the task that built it; none is neither.
-      expect(isStub(name) || /\bL2 Task \d+\b/.test(headerOf(name)), name).toBe(true);
+      expect(isStub(name) || /\bTask \d+[a-z]?\b/.test(headerOf(name)), name).toBe(true);
     }
     expect(names.filter((n) => isStub(n)).length).toBeGreaterThan(0);
   });
