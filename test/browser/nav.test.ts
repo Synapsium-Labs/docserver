@@ -190,6 +190,19 @@ describeBrowsers((browser) => {
       await frames(doc.page);
       expect(Math.abs((await topOf(doc.page, { line: from.line })) - from.offset)).toBeLessThanOrEqual(2);
       expect(Math.abs((await doc.page.evaluate(() => window.scrollY)) - (from.y + 500))).toBeLessThanOrEqual(2);
+      // The block hidden since (a host's style; no hidden attribute): it has no box, so back to the scroll position.
+      await doc.page.evaluate(
+        ({ f, line }) => {
+          const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+          const block = Array.from(root.querySelectorAll('[data-line]')).find((e) => e.getAttribute('data-line') === line) as HTMLElement;
+          block.style.display = 'none';
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          (window as unknown as Win).__nav.goToHash(root, null, f);
+        },
+        { f: entry.from, line: from.line },
+      );
+      await frames(doc.page);
+      expect(Math.abs((await doc.page.evaluate(() => window.scrollY)) - from.y)).toBeLessThanOrEqual(2);
     } finally {
       await doc.close();
     }
@@ -232,6 +245,33 @@ describeBrowsers((browser) => {
       await grow(doc.page, 4, 300);
       await frames(doc.page);
       expect(Math.abs((await topOf(doc.page, { id: 'section-16' })) - (margin + 300))).toBeLessThanOrEqual(1);
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('a second jump to a target still flashing starts its flash again', async () => {
+    const doc = await openDoc(DOC, {}, { browser, csp: 'strict', enhance: false });
+    try {
+      await enhanceIn(doc.page);
+      const times = await doc.page.evaluate(async () => {
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const link = root.querySelector('a[href="#section-2"]') as HTMLElement;
+        const h = Array.from(root.querySelectorAll('h2')).find((x) => x.id === 'section-2') as Element;
+        const now = (): number[] => h.getAnimations().map((a) => Number(a.currentTime));
+        link.click();
+        await new Promise((r) => setTimeout(r, 1000));
+        const before = now();
+        link.click();
+        await new Promise<void>((r) => {
+          requestAnimationFrame(() => r());
+        });
+        return [before, now()];
+      });
+      expect(times[0]?.length).toBe(1);
+      expect(times[0]?.[0]).toBeGreaterThan(700);
+      expect(times[1]?.length).toBe(1);
+      expect(times[1]?.[0]).toBeLessThan(400);
     } finally {
       await doc.close();
     }

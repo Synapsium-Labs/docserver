@@ -46,11 +46,9 @@ const NUMBER = /^[A-Z]?\d+[a-z]?\.\s+/;
 /** A chrome button: a control, never part of a heading's name (headctl.ts). */
 const isControl = (el: Element): boolean => el.localName === 'button' && el.hasAttribute(CHROME_ATTR);
 
-/** True when `el` sits in the "In short" box, which takes no section link. */
+/** True when `el` sits in the "In short" box (editorial.ts's chrome), which takes no section link. */
 function inShort(root: Element, el: Element): boolean {
-  for (let n = el.parentElement; n !== null && n !== root; n = n.parentElement) {
-    if (n.hasAttribute(CHROME_ATTR) && n.classList.contains('short')) return true;
-  }
+  for (let n = el.parentElement; n !== null && n !== root; n = n.parentElement) if (n.classList.contains('short')) return true;
   return false;
 }
 
@@ -63,6 +61,8 @@ export function build(ctx: FeatureContext): void {
   // ── the section link
   for (const h of Array.from(root.querySelectorAll('h2[id], h3[id]')) as HTMLElement[]) {
     if (nav.byId(h.id) !== h || inShort(root, h)) continue;
+    // Its name as the heading's own label has it (editorial.ts's or headCtl's, read before any control was added),
+    // else as its text reads now, before this first control; less a leading section number.
     const title = (h.getAttribute('aria-label') ?? headingText(h, isControl)).replace(NUMBER, '');
     const link = chrome(doc, 'a', {
       className: 'h-anchor',
@@ -84,10 +84,7 @@ export function build(ctx: FeatureContext): void {
     if (heard) return spied;
     const line = Math.max(150, env.viewport().h * 0.3);
     let at: HTMLElement | null = null;
-    for (const h of heads) {
-      if (h.getBoundingClientRect().top < line) at = h;
-      else break;
-    }
+    for (const h of heads) if (h.getBoundingClientRect().top < line) at = h;
     return at;
   };
   const some = (): boolean => heads.length > 0;
@@ -138,7 +135,6 @@ export function build(ctx: FeatureContext): void {
       place.restore(stored);
     });
   }
-  if (!ctx.live()) return;
 
   // ── writing the position
   if (posKey === null) return;
@@ -158,9 +154,5 @@ export function build(ctx: FeatureContext): void {
       save();
     }, SAVE_MS);
   });
-  env.onPageHide(() => {
-    waiting?.();
-    waiting = null;
-    save();
-  });
+  env.onPageHide(save); // a wait still pending then finds the same place, and writes nothing
 }

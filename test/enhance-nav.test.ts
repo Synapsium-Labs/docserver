@@ -420,6 +420,18 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     expect(s.scrolled.at(-1)).toEqual([7000 - 48 - ID_GAP, 'auto']);
   });
 
+  it('the [id] margin is read off the first heading, past an anchor that comes before it', async () => {
+    const s = stage();
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(((target: Element) => ({
+      getPropertyValue: (prop: string) => (prop === 'scroll-margin-top' ? (/^H[1-6]$/.test(target.tagName) ? '62px' : '0px') : ''),
+    })) as never);
+    const root = mount('<!-- id:top -->\n\n# T\n\n| ID | What |\n|---|---|\n| R1 | One |\n');
+    s.tops.set(row(root, 'R1'), 3000);
+    defineRow('R1');
+    await enhance(root, { initialHash: 'R1' });
+    expect(s.scrolled).toEqual([[3000 - 48 - HEAD_GAP, 'auto']]);
+  });
+
   it('with no heading to read the bar from, a margin is --bar-h in px, else no bar', async () => {
     const s = stage();
     let bar = '52px';
@@ -433,6 +445,23 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     bar = 'calc(10px + 1em)';
     goToHash(root, 'R1');
     expect(s.scrolled.at(-1)).toEqual([3000 - HEAD_GAP, 'auto']);
+  });
+
+  it('a revealer that destroys the instance while it lands stops it: no pin, and enhance() rejects', async () => {
+    const s = stage();
+    hooks.before.push({
+      name: 'destroying',
+      build: (ctx: FeatureContext) => {
+        ctx.onReveal(() => {
+          void destroyEnhancement(ctx.root);
+        });
+      },
+    } satisfies Feature);
+    const add = vi.spyOn(document, 'addEventListener');
+    const root = mount();
+    await expect(enhance(root, { initialHash: 'details' })).rejects.toMatchObject({ code: 'aborted' });
+    expect(s.intoView).toEqual([]);
+    expect(add.mock.calls.filter(([type]) => type === 'wheel')).toEqual([]);
   });
 
   it('initialHash wins over a stored position; without it the stored position is restored and pinned', async () => {
@@ -511,6 +540,7 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
       { ...good, y: -1 },
       { ...good, y: TOKEN.coord + 1 },
       { ...good, y: Number.POSITIVE_INFINITY },
+      { ...good, y: '100' },
     ];
     for (const v of bad) {
       const root = mount();
@@ -521,7 +551,7 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     for (const v of [good, { ...good, line: null }, { ...good, line: 'R2' }, { ...good, line: 'já-2' }, { ...good, offset: -TOKEN.coord, y: TOKEN.coord }]) {
       expect(checkAnchor(v), JSON.stringify(v)).toEqual(v);
     }
-    expect([parseToken(tokenOf(good)), parseToken('{'), parseToken(7), parseToken(` ${JSON.stringify(good)}`.padEnd(TOKEN.from + 1))]).toEqual([good, null, null, null]);
+    expect([parseToken(tokenOf(good)), parseToken('{'), parseToken(null), parseToken(` ${JSON.stringify(good)}`.padEnd(TOKEN.from + 1))]).toEqual([good, null, null, null]);
     expect(parseToken(JSON.stringify(good).padEnd(TOKEN.from))).toEqual(good);
   });
 });
@@ -682,6 +712,32 @@ describe('position.keep', () => {
     s.points.length = 0;
     anchor();
     expect(s.points[0]).toEqual([110, 12]);
+    s.boxes.set(find(root, 'h2'), [-500, 600]); // clamped to the viewport, 4 px in
+    s.points.length = 0;
+    anchor();
+    expect(s.points[0]).toEqual([4, 12]);
+    s.boxes.set(find(root, 'h2'), [2000, 900]);
+    s.points.length = 0;
+    anchor();
+    expect(s.points[0]).toEqual([window.innerWidth - 4, 12]);
+  });
+
+  it('the column is looked for in the document\'s first 16 blocks only; past them the root stands for it', async () => {
+    const s = stage();
+    const md = ['# T', '', ...Array.from({ length: 20 }, (_, i) => [`Paragraph ${String(i + 1)}.`, '']).flat()].join('\n');
+    const root = mount(md);
+    await enhance(root);
+    const blocks = Array.from(root.querySelectorAll('[data-line]'));
+    for (const b of blocks) s.boxes.set(b, [0, 0]);
+    s.boxes.set(blocks[16] as Element, [500, 300]); // the 17th
+    s.boxes.set(root, [30, 600]);
+    s.y = 100;
+    placeOf(ctxOf(root).position).anchor();
+    expect(s.points[0]).toEqual([230, 12]);
+    s.boxes.set(blocks[15] as Element, [500, 300]); // the 16th
+    s.points.length = 0;
+    placeOf(ctxOf(root).position).anchor();
+    expect(s.points[0]).toEqual([600, 12]);
   });
 
   it('for SMOOTH_MS after a smooth jump began, keep restores no place (it would stop the jump); a pin ends that wait', async () => {
@@ -712,6 +768,36 @@ describe('position.keep', () => {
     goToHash(root, null);
     position.keep(() => undefined);
     expect(s.points.length).toBe(0); // at the top: nothing to anchor
+  });
+
+  it('a footnote reference\'s id holds a colon: the paragraph around it is the anchor', async () => {
+    const s = stage();
+    const root = mount('# T\n\nA[^1] and again[^1].\n\n[^1]: Note.\n');
+    await enhance(root);
+    const refs = Array.from(root.querySelectorAll('sup a'));
+    const para = refs[1]?.closest('p') as HTMLElement;
+    expect(refs.map((a) => a.id)).toEqual(['fnref1', 'fnref1:1']);
+    s.tops.set(para, 300);
+    s.y = 280;
+    s.hit = refs[1] as Element;
+    expect(placeOf(ctxOf(root).position).anchor()).toEqual({ line: para.getAttribute('data-line'), offset: 20, y: 280 });
+    s.hit = refs[0] as Element;
+    s.tops.set(refs[0] as Element, 310);
+    expect(placeOf(ctxOf(root).position).anchor()).toEqual({ line: 'fnref1', offset: 30, y: 280 });
+  });
+
+  it('a block that left the root since is no place to restore: back to the scroll position', async () => {
+    const s = stage();
+    const root = mount();
+    await enhance(root);
+    const para = blockAfter(root, '3-plan');
+    s.tops.set(para, 2000);
+    const { restore } = placeOf(ctxOf(root).position);
+    restore({ line: para.getAttribute('data-line'), offset: 30, y: 1500 });
+    expect(s.scrolled.at(-1)).toEqual([1970, 'auto']);
+    para.remove();
+    restore({ line: para.getAttribute('data-line'), offset: 30, y: 1500 });
+    expect(s.scrolled.at(-1)).toEqual([1500, 'auto']);
   });
 
   it('a chrome element and an element the document did not have are no anchors; the block holding them is', async () => {
@@ -806,6 +892,40 @@ describe('the pin', () => {
     } finally {
       delete (window as unknown as { matchMedia?: unknown }).matchMedia;
     }
+  });
+
+  it('a pinned target that left the root is not scrolled to; a pin after destroy listens for nothing', async () => {
+    const s = stage();
+    defineRow('R2');
+    const root = mount();
+    const r2 = row(root, 'R2');
+    s.tops.set(r2, 4000);
+    await enhance(root, { initialHash: 'R2' });
+    expect(s.scrolled).toHaveLength(1);
+    r2.remove();
+    ctxOf(root).position.keep(() => undefined);
+    expect(s.scrolled).toHaveLength(1);
+    const place = placeOf(ctxOf(root).position);
+    await destroyEnhancement(root);
+    const add = vi.spyOn(document, 'addEventListener');
+    place.pin(() => undefined);
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it('a new pin cancels the old one\'s timer: it holds its own PIN_MS', async () => {
+    const s = stage();
+    const t = timers();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const root = mount();
+    await enhance(root, { initialHash: '1-scope' });
+    expect(t.delays().filter((ms) => ms === PIN_MS)).toHaveLength(1);
+    now.mockReturnValue(1_005_000);
+    goToHash(root, '3-plan');
+    expect(t.delays().filter((ms) => ms === PIN_MS)).toHaveLength(1);
+    t.run(FLASH_MS);
+    ctxOf(root).position.keep(() => undefined);
+    expect(s.intoView.at(-1)?.[0]).toBe(el(root, 'h2', '3-plan'));
+    expect(s.points).toEqual([]); // with a pin, keep reads no place
   });
 
   it('a pin whose scroll throws ends there, and the throw goes no further', async () => {
@@ -929,6 +1049,30 @@ describe('goToHash (LD7)', () => {
     expect(onHash).not.toHaveBeenCalled();
   });
 
+  it('it holds the bar; null ends a pin; a revealer that destroys the instance stops it', async () => {
+    const s = stage();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const root = mount();
+    await enhance(root, { initialHash: '3-plan' });
+    const { position, onReveal } = ctxOf(root);
+    goToHash(root, null, tokenOf({ line: null, offset: 0, y: 10 }));
+    expect(position.barHeld()).toBe(true);
+    now.mockReturnValue(1_000_000 + 5000);
+    goToHash(root, '2-design');
+    expect(position.barHeld()).toBe(true);
+    goToHash(root, null);
+    s.intoView.length = 0;
+    s.y = 0;
+    position.keep(() => undefined);
+    expect(s.intoView).toEqual([]);
+    onReveal(() => {
+      void destroyEnhancement(root);
+    });
+    goToHash(root, 'details');
+    expect(s.intoView).toEqual([]);
+    expect(el(root, 'h3', 'details').classList.contains('flash')).toBe(false);
+  });
+
   it('a root not enhanced, still starting or destroyed: nothing', async () => {
     const s = stage();
     const root = mount();
@@ -1011,6 +1155,17 @@ describe('j and k', () => {
     expect(s.intoView.at(-1)?.[0]).toBe(h['in-short']);
     events.emit('spy', { section: null, unit: null });
     expect(key(h['1-scope'] as HTMLElement, 'k').defaultPrevented).toBe(false);
+  });
+
+  it('the reading line is 30% down the viewport, but never above 150 px', async () => {
+    const s = stage();
+    const root = mount();
+    await enhance(root);
+    const h = sections(root, s);
+    s.h = 300; // 30% would be 90 px
+    s.y = 280; // Scope is 120 px down
+    key(h['1-scope'] as HTMLElement, 'j');
+    expect(s.intoView.at(-1)?.[0]).toBe(h['2-design']);
   });
 
   it('a document with no sections lists neither key', async () => {

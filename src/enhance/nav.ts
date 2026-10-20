@@ -99,11 +99,11 @@ export const TOKEN = { line: 1024, from: 4096, coord: 10_000_000 } as const;
 /** How many of the document's first blocks the reading column is looked for in (a hidden meta line or front matter comes first). */
 const COLUMN_SCAN = 16;
 
-/** A block's source lines, as render() writes data-line. */
-const LINE = /^\d{1,9}(?:-\d{1,9})?$/;
-
-/** An id a token may name: render()'s heading and anchor alphabet, so never a selector character. */
-const ID_SHAPE = /^[\p{L}\p{N}_-]+$/u;
+/**
+ * What a token's `line` may hold: a block's data-line (`12-14`) or an id in render()'s heading and anchor alphabet,
+ * letters, digits, `_` and `-`, so never a selector character.
+ */
+const LINE_OR_ID = /^[\p{L}\p{N}_-]+$/u;
 
 /** The reader's place: a block's data-line or id, its top in the viewport, and the scroll position. */
 export interface Anchor {
@@ -114,13 +114,12 @@ export interface Anchor {
 
 /** A stored position or a token's parse, checked (see the header): the anchor, or null for anything else. */
 export function checkAnchor(v: unknown): Anchor | null {
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
-  const r = v as Record<string, unknown>;
-  if (!Object.hasOwn(r, 'line') || !Object.hasOwn(r, 'offset') || !Object.hasOwn(r, 'y')) return null;
-  const { line, offset, y } = r;
-  if (line !== null && !(typeof line === 'string' && line.length <= TOKEN.line && (LINE.test(line) || ID_SHAPE.test(line)))) return null;
-  if (typeof offset !== 'number' || !Number.isFinite(offset) || Math.abs(offset) > TOKEN.coord) return null;
-  if (typeof y !== 'number' || !Number.isFinite(y) || y < 0 || y > TOKEN.coord) return null;
+  if (v === null || typeof v !== 'object') return null;
+  const { line, offset, y } = v as Record<string, unknown>;
+  if (line !== null && !(typeof line === 'string' && line.length <= TOKEN.line && LINE_OR_ID.test(line))) return null;
+  // NaN and the infinities fail each bound
+  if (typeof offset !== 'number' || !(Math.abs(offset) <= TOKEN.coord)) return null;
+  if (typeof y !== 'number' || !(y >= 0 && y <= TOKEN.coord)) return null;
   return Object.freeze({ line, offset, y });
 }
 
@@ -129,9 +128,9 @@ export function tokenOf(a: Anchor | null): string | null {
   return a === null ? null : JSON.stringify({ line: a.line, offset: a.offset, y: a.y });
 }
 
-/** A token's anchor: null for anything that is not a token this library writes. */
-export function parseToken(text: unknown): Anchor | null {
-  if (typeof text !== 'string' || text.length > TOKEN.from) return null;
+/** A token's anchor: null for no token, and for anything that is not a token this library writes. */
+export function parseToken(text: string | null): Anchor | null {
+  if (text === null || text.length > TOKEN.from) return null;
   try {
     return checkAnchor(JSON.parse(text));
   } catch {
@@ -212,9 +211,8 @@ export function focusable(el: Element): boolean {
   return el.matches('a[href], button, input, select, textarea, [tabindex]');
 }
 
-/** A computed length in px (`12px`, `-3.5px`, `0`), or null for anything else. */
+/** A computed length in px (`12px`, `-3.5px`), or null for anything else. */
 function px(value: string): number | null {
-  if (value === '0') return 0;
   const m = /^(-?\d+(?:\.\d+)?)px$/.exec(value);
   return m === null ? null : Number(m[1]);
 }
@@ -227,9 +225,9 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
   const ids = new Map<string, Element>();
   const lines = new Map<string, Element>();
   for (const el of Array.from(root.querySelectorAll('[id], [data-line]'))) {
-    if (el.hasAttribute('id') && !ids.has(el.id)) ids.set(el.id, el);
+    if (!ids.has(el.id)) ids.set(el.id, el);
     const line = el.getAttribute('data-line');
-    if (line !== null && LINE.test(line) && !lines.has(line)) lines.set(line, el);
+    if (line !== null) lines.set(line, el); // a block inside one of the same lines (a quote's paragraph) wins
   }
 
   const byId = (id: string): Element | null => {
@@ -252,7 +250,7 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
   };
 
   const barBottom = (): number => {
-    if (bar === null || !root.contains(bar) || root.classList.contains('bar-hidden')) return 0;
+    if (bar === null || root.classList.contains('bar-hidden')) return 0;
     return Math.max(0, bar.getBoundingClientRect().bottom);
   };
 
@@ -262,8 +260,8 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
     /** The `[id]` margin, as the stylesheet resolves it on the document's first heading. */
     let idMargin: number | null = null;
     for (const [, h] of ids) {
-      if (!/^h[1-6]$/.test(h.localName) || !root.contains(h)) continue;
-      idMargin = px(env.computed(h, 'scroll-margin-top'));
+      if (!/^h[1-6]$/.test(h.localName)) continue;
+      idMargin = px(env.computed(h, 'scroll-margin-top')); // '' (no answer) for a heading no longer in the root
       break;
     }
     const barH = idMargin === null ? (px(env.computed(root, '--bar-h')) ?? 0) : Math.max(0, idMargin - ID_GAP);
@@ -272,7 +270,7 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
   };
 
   const reach = (el: Element, smooth: boolean): void => {
-    if (!live() || !root.contains(el)) return;
+    if (!root.contains(el)) return; // it left the root since (a pin held on it)
     const target = el as HTMLElement;
     if (el.hasAttribute('id')) {
       // The stylesheet's [id] margin applies; a browser without scrollIntoView skips it.
@@ -289,7 +287,7 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
       const line = n.getAttribute('data-line');
       if (line !== null && lines.get(line) === n) return { el: n, line };
       const id = docId(n);
-      if (id !== null && id.length <= TOKEN.line && ID_SHAPE.test(id)) return { el: n, line: id };
+      if (id !== null && LINE_OR_ID.test(id)) return { el: n, line: id }; // never a footnote reference's `fnref1:1`
     }
     return null;
   };
@@ -305,7 +303,6 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
     for (const [, b] of lines) {
       if (seen >= COLUMN_SCAN) break;
       seen += 1;
-      if (!root.contains(b)) continue;
       const box = b.getBoundingClientRect();
       if (box.width > 0) {
         r = box;
@@ -335,7 +332,7 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
 
   /** The block an anchor names: by its line, else by an id (the document's, or a defined ID). */
   const blockOf = (line: string): Element | null => {
-    const el = LINE.test(line) ? lines.get(line) : undefined;
+    const el = lines.get(line);
     if (el !== undefined && root.contains(el)) return el;
     return byId(line);
   };
@@ -358,10 +355,8 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
   };
   journal.defer(release);
   const hold = (): void => {
-    const apply = pinned;
-    if (apply === null || !live()) return;
     try {
-      apply();
+      pinned?.();
     } catch {
       release();
     }
@@ -399,7 +394,7 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
     } finally {
       keeping -= 1;
       if (pinned !== null) hold();
-      else if (at !== null && live()) restore(at);
+      else if (at !== null) restore(at); // env.scrollTo does nothing once not live
     }
   };
 
@@ -452,7 +447,6 @@ export function createNavigation(args: NavArgs): { readonly nav: Nav; readonly p
   };
 
   const goToHash = (id: string | null, from: string | null): void => {
-    if (!live()) return;
     const back = parseToken(from);
     if (back !== null) {
       holdBar();
