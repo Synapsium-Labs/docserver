@@ -5,7 +5,14 @@ Each guard of Task 13, deleted or changed once, with the tests that go red: the 
 its term matcher (`src/enhance/glossary.ts`), RF3's bound, and three rows held by the Level 2 cases. Measured 2026-10-20
 on branch `l2-t13-links` at commit `6e632a2`, every row, L2-T13-M1 to L2-T13-M152. All 152 are red (`rc=1`). Two later
 commits add a case and change RF3's rounds, and change no code (`df5e0ff`, `3eb6060`); L2-T13-M149, whose case the
-second changes, was measured again on `3eb6060`, and its row gives that run.
+second changes, was measured again on `3eb6060`.
+
+**The review's fixes** (commits `814b39d` to `27c8dba`) changed code: the term matcher stops at a run of white space no
+term goes on through, and a table's section is found by one finder that remembers each element's answer. They add
+twelve rows, L2-T13-M153 to L2-T13-M164, in a section of their own at the end. The eight rows whose `old` the finder
+changed (L2-T13-M85 to L2-T13-M91, L2-T13-M94) were ported to it, same guard, same mutation, and measured again; so was
+L2-T13-M149, whose case now judges the median of seven paired rounds. Those 21 rows were measured on `27c8dba`, and
+their rows give those runs. All 164 rows are red (`rc=1`).
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8), with the changes Task 7b's rows file records: a 512 MiB output
 buffer, a run that ends with no exit status counted as no verdict (KILLED), and the `Errors`, `Unhandled Rejection` and
@@ -39,7 +46,9 @@ Notes on the measurement.
 - **What is not a guard here, and has no row.** Three pieces of code change no outcome when removed, so no case could
   redden them; each is named here instead.
   - `glossary.ts` keeps each glossary's heading for its rows' links (`hrefs.set(row, href)`): without it the heading is
-    found again from the row, with the same answer, at a cost that grows with the square of one glossary's rows.
+    found again from the row, with the same answer. (Before the section finder remembered its answers, this cost grew
+    with the square of one glossary's rows; the finder now reads each element once either way, and its own memory has
+    rows, L2-T13-M160 and L2-T13-M161.)
   - `xrefs.ts` and `glossary.ts` return early when nothing is defined; each early return has a row all the same
     (L2-T13-M36, L2-T13-M95), measured by a case that counts the work done: the ID scans the vocabulary hands out, and
     the attributes the glossary reads.
@@ -56,14 +65,21 @@ Notes on the measurement.
   well as with the text, as the reference's pattern of every term would. On `3eb6060` it finished two rounds before the
   cap stopped it: the large plan took 19.4 and 56.8 s, and the plan twice as large 116.4 and 130.5 s, 6.0 times as long
   (bound 2.5). On `6e632a2` the same row took 19.9 and 37.4 s, then 114.4 and 138.6 s, 5.7 times. Both runs are red by
-  the ratio; the large plan's best stayed just inside the 20 s budget. The bound is measured in jsdom as the best of
-  five rounds, each timed window starting after a full garbage collection, and the large plan is mounted through
-  `innerHTML` (jsdom keeps each document a `DOMParser` makes alive, about 65 MB per parse here, which slows every later
-  round). The code as committed, measured once on `3eb6060` in a throwaway copy whose case printed its numbers, under a
-  load average of about 130: the large plan's best 2.72 s (the budget is 20 s), and the plan twice as large 2.36 times
-  as long (the bound is 2.5), with 18,828 cross-references and 17,638 term links, then 37,524 and 35,133. Other runs on
-  this box measured 1.96 to 2.38 times; the time grows with the document in both features (the cross-references about
-  1.9 times, the glossary's links 2.0 to 2.2 times), and the rest is jsdom and the box.
+  the ratio; the large plan's best stayed just inside the 20 s budget. On `27c8dba`, with the case judging the median
+  of paired rounds, it took 22.0 and 52.2 s, then 125.5 and 151.1 s (pairs 5.71 and 2.90, median 4.31) at a load
+  average of about 21 to 28: red by the budget first, and by the ratio as well.
+  The bound is measured in jsdom over seven rounds, each the large plan then the plan twice as large, timed back to
+  back, each timed window starting after a full garbage collection; the ratio judged is the median of the seven pairs'
+  ratios, and the budget holds the large plan's best. The large plan is mounted through `innerHTML` (jsdom keeps each
+  document a `DOMParser` makes alive, about 65 MB per parse here, which slows every later round). The case first took
+  the best of each scale over five rounds; the review measured that at 2.58 on honest code at a load average near 50
+  (a lucky last round at one scale against a plateau at the other), where the same run's pairs measured 2.05 to 2.16,
+  then 2.59. On `27c8dba`, in a throwaway copy whose case printed its numbers, four honest runs at a load average of 20
+  to 28 measured medians of 2.11, 2.23, 2.22 and 2.15 (single pairs 1.66 to 2.66, so the median of seven fails only
+  when four pairs cross the bound), the large plan's best 2.67 to 3.07 s (the budget is 20 s), with 18,828
+  cross-references and 17,638 term links, then 37,524 and 35,133. The process's CPU time is steadier but measured 2.58
+  and 2.64: V8's parallel collector does more work on the larger heap, off the main thread, so CPU time is not the
+  reader's time; the case keeps the wall clock.
 - **The matcher's oracle.** The cases hold the matcher to the reference's own pattern (built in the test, as the
   reference builds it) on 4,000 random sets of keys and texts and on every code unit. The long s is left out of the
   random alphabet: the language's rule keeps it apart from "s", as V8 does for one letter, but V8 folds the two together
@@ -603,13 +619,13 @@ What a glossary is, its section and the heading's words, each row's names, and w
 | L2-T13-M82 | a cell's exact names are defined last first, as the reference does | `src/enhance/glossary.ts` | `for (const x of parts) names.unshift({ name: x, exact: true });` → `for (const x of parts) names.push({ name: x, exact: true });` | `test/enhance-links.test.ts` (all but RF3): 2 failed \| 47 passed \| 1 skipped (50). "defines one term per name: "A (alias)" adds the alias; "A (for x)" and "A (the)" qualify; "A, B and C" are exact names"; "a cell of several names keeps each name exact; a part of four words or more keeps the cell one name" |
 | L2-T13-M83 | a heading's words leave out its section number | `src/enhance/glossary.ts` | `  return headingText(h, isButton).replace(SEC_NO, '');` → `  return headingText(h, isButton);` | `test/enhance-links.test.ts` (all but RF3): 12 failed \| 37 passed \| 1 skipped (50). "xrefs and the glossary find the root's blocks by walking its children, never through its live children list"; "a table under "Words used here" is a glossary: glossary on its wrapper, termcell on each first cell, its block flagged"; "defines one term per name: "A (alias)" adds the alias; "A (for x)" and "A (the)" qualify; "A, B and C" are exact names"; "a two-column table headed like Term \| Meaning is a glossary anywhere; three columns, or other heads elsewhere, are not"; "with no term, the glossary reads no text" and 7 more |
 | L2-T13-M84 | a heading's words leave out the layout's buttons | `src/enhance/glossary.ts` | `const isButton = (el: Element): boolean => el.localName === 'button' && el.hasAttribute(CHROME_ATTR)…` → `const isButton = (el: Element): boolean => false;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a section's words leave out a button the layout put in its heading" |
-| L2-T13-M85 | a section heading has an id | `src/enhance/glossary.ts` | `      if ((p.localName === 'h2' \|\| p.localName === 'h3') && p.id !== '') return p;` → `      if (p.localName === 'h2' \|\| p.localName === 'h3') return p;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id" |
-| L2-T13-M86 | an h2 is a section heading | `src/enhance/glossary.ts` | `      if ((p.localName === 'h2' \|\| p.localName === 'h3') && p.id !== '') return p;` → `      if (p.localName === 'h3' && p.id !== '') return p;` | `test/enhance-links.test.ts` (all but RF3): 16 failed \| 33 passed \| 1 skipped (50). "xrefs and the glossary find the root's blocks by walking its children, never through its live children list"; "a table under "Words used here" is a glossary: glossary on its wrapper, termcell on each first cell, its block flagged"; "defines one term per name: "A (alias)" adds the alias; "A (for x)" and "A (the)" qualify; "A, B and C" are exact names"; "a two-column table headed like Term \| Meaning is a glossary anywhere; three columns, or other heads elsewhere, are not"; "with no term, the glossary reads no text" and 11 more |
-| L2-T13-M87 | an h3 is a section heading | `src/enhance/glossary.ts` | `      if ((p.localName === 'h2' \|\| p.localName === 'h3') && p.id !== '') return p;` → `      if (p.localName === 'h2' && p.id !== '') return p;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a numbered or lettered heading counts by its words, and a glossary under an h3 by the h3" |
-| L2-T13-M88 | an In short box's heading is a section | `src/enhance/glossary.ts` | `      if (p.classList.contains('short') \|\| p.classList.contains('callout')) return p.querySelector('…` → `      if (p.classList.contains('callout')) return p.querySelector('h2, h3');` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id" |
-| L2-T13-M89 | a Where things stand box's heading is a section | `src/enhance/glossary.ts` | `      if (p.classList.contains('short') \|\| p.classList.contains('callout')) return p.querySelector('…` → `      if (p.classList.contains('short')) return p.querySelector('h2, h3');` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id" |
-| L2-T13-M90 | a nested table's section is found above it | `src/enhance/glossary.ts` | `  for (let n: Element \| null = node; n !== null && n !== root; n = n.parentElement) {` → `  for (let n: Element \| null = node; n === node; n = null) {` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a table nested in a list item finds its section above the list; a heading id is escaped in the href" |
-| L2-T13-M91 | the section is looked for inside the root only | `src/enhance/glossary.ts` | `  for (let n: Element \| null = node; n !== null && n !== root; n = n.parentElement) {` → `  for (let n: Element \| null = node; n !== null; n = n.parentElement) {` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a term with no heading before its target, in the root, has the empty fragment for its href" |
+| L2-T13-M85 | a section heading has an id | `src/enhance/glossary.ts` | `  if ((p.localName === 'h2' \|\| p.localName === 'h3') && p.id !== '') return p;` → `  if (p.localName === 'h2' \|\| p.localName === 'h3') return p;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id" |
+| L2-T13-M86 | an h2 is a section heading | `src/enhance/glossary.ts` | `  if ((p.localName === 'h2' \|\| p.localName === 'h3') && p.id !== '') return p;` → `  if (p.localName === 'h3' && p.id !== '') return p;` | `test/enhance-links.test.ts` (all but RF3): 17 failed \| 37 passed \| 1 skipped (55). "xrefs and the glossary find the root's blocks by walking its children, never through its live children list"; "a table under "Words used here" is a glossary: glossary on its wrapper, termcell on each first cell, its block flagged"; "defines one term per name: "A (alias)" adds the alias; "A (for x)" and "A (the)" qualify; "A, B and C" are exact names"; "a two-column table headed like Term \| Meaning is a glossary anywhere; three columns, or other heads elsewhere, are not"; "with no term, the glossary reads no text" and 12 more |
+| L2-T13-M87 | an h3 is a section heading | `src/enhance/glossary.ts` | `  if ((p.localName === 'h2' \|\| p.localName === 'h3') && p.id !== '') return p;` → `  if (p.localName === 'h2' && p.id !== '') return p;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a numbered or lettered heading counts by its words, and a glossary under an h3 by the h3" |
+| L2-T13-M88 | an In short box's heading is a section | `src/enhance/glossary.ts` | `  if (p.classList.contains('short') \|\| p.classList.contains('callout')) return p.querySelector('h2, …` → `  if (p.classList.contains('callout')) return p.querySelector('h2, h3');` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id" |
+| L2-T13-M89 | a Where things stand box's heading is a section | `src/enhance/glossary.ts` | `  if (p.classList.contains('short') \|\| p.classList.contains('callout')) return p.querySelector('h2, …` → `  if (p.classList.contains('short')) return p.querySelector('h2, h3');` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id" |
+| L2-T13-M90 | a nested table's section is found above it | `src/enhance/glossary.ts` | `        n = n.parentElement;` → `        n = null;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a table nested in a list item finds its section above the list; a heading id is escaped in the href" |
+| L2-T13-M91 | the section is looked for inside the root only | `src/enhance/glossary.ts` | `    for (let n: Element \| null = node; n !== null && n !== root; ) {` → `    for (let n: Element \| null = node; n !== null; ) {` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a term with no heading before its target, in the root, has the empty fragment for its href" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -875,56 +891,56 @@ What a glossary is, its section and the heading's words, each row's names, and w
     "id": "L2-T13-M85",
     "guard": "a section heading has an id",
     "file": "src/enhance/glossary.ts",
-    "old": "      if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;",
-    "new": "      if (p.localName === 'h2' || p.localName === 'h3') return p;",
+    "old": "  if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;",
+    "new": "  if (p.localName === 'h2' || p.localName === 'h3') return p;",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
   {
     "id": "L2-T13-M86",
     "guard": "an h2 is a section heading",
     "file": "src/enhance/glossary.ts",
-    "old": "      if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;",
-    "new": "      if (p.localName === 'h3' && p.id !== '') return p;",
+    "old": "  if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;",
+    "new": "  if (p.localName === 'h3' && p.id !== '') return p;",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
   {
     "id": "L2-T13-M87",
     "guard": "an h3 is a section heading",
     "file": "src/enhance/glossary.ts",
-    "old": "      if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;",
-    "new": "      if (p.localName === 'h2' && p.id !== '') return p;",
+    "old": "  if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;",
+    "new": "  if (p.localName === 'h2' && p.id !== '') return p;",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
   {
     "id": "L2-T13-M88",
     "guard": "an In short box's heading is a section",
     "file": "src/enhance/glossary.ts",
-    "old": "      if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');",
-    "new": "      if (p.classList.contains('callout')) return p.querySelector('h2, h3');",
+    "old": "  if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');",
+    "new": "  if (p.classList.contains('callout')) return p.querySelector('h2, h3');",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
   {
     "id": "L2-T13-M89",
     "guard": "a Where things stand box's heading is a section",
     "file": "src/enhance/glossary.ts",
-    "old": "      if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');",
-    "new": "      if (p.classList.contains('short')) return p.querySelector('h2, h3');",
+    "old": "  if (p.classList.contains('short') || p.classList.contains('callout')) return p.querySelector('h2, h3');",
+    "new": "  if (p.classList.contains('short')) return p.querySelector('h2, h3');",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
   {
     "id": "L2-T13-M90",
     "guard": "a nested table's section is found above it",
     "file": "src/enhance/glossary.ts",
-    "old": "  for (let n: Element | null = node; n !== null && n !== root; n = n.parentElement) {",
-    "new": "  for (let n: Element | null = node; n === node; n = null) {",
+    "old": "        n = n.parentElement;",
+    "new": "        n = null;",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
   {
     "id": "L2-T13-M91",
     "guard": "the section is looked for inside the root only",
     "file": "src/enhance/glossary.ts",
-    "old": "  for (let n: Element | null = node; n !== null && n !== root; n = n.parentElement) {",
-    "new": "  for (let n: Element | null = node; n !== null; n = n.parentElement) {",
+    "old": "    for (let n: Element | null = node; n !== null && n !== root; ) {",
+    "new": "    for (let n: Element | null = node; n !== null; ) {",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   }
 ]
@@ -938,7 +954,7 @@ The first mention per section, the search, the link and its href, and the click 
 |---|---|---|---|---|
 | L2-T13-M92 | a term link's href is its section heading's id, escaped | `src/enhance/glossary.ts` | `  const hrefOf = (h: Element \| null): string => `#${encodeURIComponent(h?.id ?? '')}`;` → `  const hrefOf = (h: Element \| null): string => `#${h?.id ?? ''}`;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "a table nested in a list item finds its section above the list; a heading id is escaped in the href" |
 | L2-T13-M93 | a term link's href names its section heading | `src/enhance/glossary.ts` | `  const hrefOf = (h: Element \| null): string => `#${encodeURIComponent(h?.id ?? '')}`;` → `  const hrefOf = (h: Element \| null): string => '#';` | `test/enhance-links.test.ts` (all but RF3): 4 failed \| 45 passed \| 1 skipped (50). "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id"; "a table nested in a list item finds its section above the list; a heading id is escaped in the href"; "a term link is chrome around the source text: a.term, data-term, aria-haspopup="dialog", aria-expanded="false", href to the glossary's heading"; "terms defined before the glossary builds (seeded) are linked too, their href the heading before their target" |
-| L2-T13-M94 | a seeded term's href is found from its target | `src/enhance/glossary.ts` | `    if (href === undefined) hrefs.set(entry.target, (href = hrefOf(sectionOf(root, entry.target))));` → `    href ??= '#';` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "terms defined before the glossary builds (seeded) are linked too, their href the heading before their target" |
+| L2-T13-M94 | a seeded term's href is found from its target | `src/enhance/glossary.ts` | `    if (href === undefined) hrefs.set(entry.target, (href = hrefOf(sectionOf(entry.target))));` → `    href ??= '#';` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "terms defined before the glossary builds (seeded) are linked too, their href the heading before their target" |
 | L2-T13-M95 | with no term, no text is read | `src/enhance/glossary.ts` | `  if (all.length === 0) return; ⏎ ` → (deleted) | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 48 passed \| 1 skipped (50). "with no term, the glossary reads no text" |
 | L2-T13-M96 | the glossaries hold no mention | `src/enhance/glossary.ts` | `skipsMarkup(el, page) \|\| el.classList.contains('glossary');` → `skipsMarkup(el, page);` | `test/enhance-links.test.ts` (all but RF3): 17 failed \| 32 passed \| 1 skipped (50). "the eyebrow holds no mention when the title, and so the eyebrow, sits in a block (a quote or a list item)"; "a comment node in a block is passed over, and the text around it is read"; "a two-column table headed like Term \| Meaning is a glossary anywhere; three columns, or other heads elsewhere, are not"; "a table's section: the first heading of an In short or Where things stand box before it, and never a heading without an id"; "in hand-written html, a glossary row with one cell names no term" and 12 more |
 | L2-T13-M97 | an h2 starts a new section | `src/enhance/glossary.ts` | `    if (top.localName === 'h2' \|\| top.classList.contains('short')) used = new Set();` → `    if (top.classList.contains('short')) used = new Set();` | `test/enhance-links.test.ts` (all but RF3): 8 failed \| 41 passed \| 1 skipped (50). "links the first mention per section; an h2 starts a new one, and so does the In short box"; "a term link is chrome around the source text: a.term, data-term, aria-haspopup="dialog", aria-expanded="false", href to the glossary's heading"; "plurals in s and es; a whole word on both sides; white space runs inside a name; any case unless exact"; "skips a rule head, a step number and a button, and hidden text"; "terms defined before the glossary builds (seeded) are linked too, their href the heading before their target" and 3 more |
@@ -986,7 +1002,7 @@ The first mention per section, the search, the link and its href, and the click 
     "id": "L2-T13-M94",
     "guard": "a seeded term's href is found from its target",
     "file": "src/enhance/glossary.ts",
-    "old": "    if (href === undefined) hrefs.set(entry.target, (href = hrefOf(sectionOf(root, entry.target))));",
+    "old": "    if (href === undefined) hrefs.set(entry.target, (href = hrefOf(sectionOf(entry.target))));",
     "new": "    href ??= '#';",
     "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   },
@@ -1477,7 +1493,7 @@ The large plan's bound, with the matcher rebuilt for every text (its cost then g
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
-| L2-T13-M149 | the matcher is built once, so a text's cost does not grow with the number of terms (RF3) | `src/enhance/glossary.ts` | `        const s: string = rest.data;` → `        const s: string = rest.data; ⏎         const find = termMatcher(all.map((t) => t.key));` | `test/enhance-links.test.ts` (RF3 only): 1 failed \| 50 skipped (51). "xrefs and the glossary stay within their budget on the large plan, and a plan twice as large takes at most 2.5 times as long" |
+| L2-T13-M149 | the matcher is built once, so a text's cost does not grow with the number of terms (RF3) | `src/enhance/glossary.ts` | `        const s: string = rest.data;` → `        const s: string = rest.data; ⏎         const find = termMatcher(all.map((t) => t.key));` | `test/enhance-links.test.ts` (RF3 only): 1 failed \| 54 skipped (55). "xrefs and the glossary stay within their budget on the large plan, and a plan twice as large takes at most 2.5 times as long". Red by the budget: the large plan 21,987 and 52,166 ms, then 125,521 and 151,107 ms; pairs 5.71 and 2.90 (median 4.31), two rounds before the cap. |
 | L2-T13-M150 | a plural in es (Level 2: links/plurals) | `src/enhance/glossary.ts` | `  if (canon(text.charCodeAt(at)) === E && canon(text.charCodeAt(at + 1)) === S && free(at + 2)) retu…` → (deleted) | `test/browser/layout-corpus.test.ts`: 1 failed \| 15 passed \| 11 skipped (27). "links/plurals" |
 | L2-T13-M151 | an h2 starts a new section (Level 2: links/first-mention) | `src/enhance/glossary.ts` | `    if (top.localName === 'h2' \|\| top.classList.contains('short')) used = new Set();` → `    if (top.classList.contains('short')) used = new Set();` | `test/browser/layout-corpus.test.ts`: 2 failed \| 14 passed \| 11 skipped (27). "links/first-mention"; "links/plurals" |
 | L2-T13-M152 | a word edge: an underscore is part of a word (Level 2: links/plurals) | `src/enhance/glossary.ts` | `  return (c >= 48 && c <= 57) \|\| (c >= 65 && c <= 90) \|\| (c >= 97 && c <= 122) \|\| c === 95 \|\| c === …` → `  return (c >= 48 && c <= 57) \|\| (c >= 65 && c <= 90) \|\| (c >= 97 && c <= 122) \|\| c === 45;` | `test/browser/layout-corpus.test.ts`: 1 failed \| 15 passed \| 11 skipped (27). "links/plurals" |
@@ -1517,6 +1533,128 @@ The large plan's bound, with the matcher rebuilt for every text (its cost then g
     "old": "  return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c === 45;",
     "new": "  return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 45;",
     "tests": "test/browser/layout-corpus.test.ts"
+  }
+]
+```
+
+## The review's fixes (L2-T13-M153 to L2-T13-M164)
+
+Rows the review found missing: the journal's split, wrap, class and listener (the guard "destroy restores every text node", and a detached link's own click), the two linear-cost fixes and the finder's remembered answer, the seams test's pinned exports of a filled module, and the id nav tells the host for a target with a document id of its own (a row on `nav.ts`, Task 7b's file, measured in a throwaway copy only, to show the new case bites).
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T13-M153 | the term link's click listener goes through the journal, so destroy removes it | `src/enhance/glossary.ts` | `    journal.listen(a, 'click', (event) => {` → `    a.addEventListener('click', (event) => {` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "after destroy a click does nothing: the link's own listener is gone with it" |
+| L2-T13-M154 | the split before a mention goes through the journal, so destroy joins the text again | `src/enhance/mentions.ts` | `  const mid = at > 0 ? journal.split(text, at) : text;` → `  const mid = at > 0 ? text.splitText(at) : text;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "destroy restores every text node, byte for byte" |
+| L2-T13-M155 | the split after a mention goes through the journal, so destroy joins the text again | `src/enhance/mentions.ts` | `  const after = length < mid.data.length ? journal.split(mid, length) : null;` → `  const after = length < mid.data.length ? mid.splitText(length) : null;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "destroy restores every text node, byte for byte" |
+| L2-T13-M156 | the link wraps the mention through the journal, so destroy unwraps it | `src/enhance/mentions.ts` | `  journal.wrap([mid], link);` → `  mid.parentNode?.insertBefore(link, mid); ⏎   link.appendChild(mid);` | `test/enhance-links.test.ts` (all but RF3): 2 failed \| 52 passed \| 1 skipped (55). "after destroy a click does nothing: the link's own listener is gone with it"; "destroy restores every text node, byte for byte" |
+| L2-T13-M157 | the glossary class goes on through the journal, so destroy takes it off | `src/enhance/glossary.ts` | `    journal.toggleClass(b.el, 'glossary', true);` → `    b.el.classList.add('glossary');` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "destroy restores every text node, byte for byte" |
+| L2-T13-M158 | the termcell class goes on through the journal, so destroy takes it off | `src/enhance/glossary.ts` | `      journal.toggleClass(cell, 'termcell', true);` → `      cell.classList.add('termcell');` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "destroy restores every text node, byte for byte" |
+| L2-T13-M159 | the matcher stops at a run of white space no term goes on through, before skipping it | `src/enhance/glossary.ts` | `          if (node === undefined) break; ⏎ ` → (deleted) | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a run of white space is read a bounded number of times: the cost grows with the text, never with its square" |
+| L2-T13-M160 | the section finder remembers each element it passed, so each element is read once | `src/enhance/glossary.ts` | `    for (const n of passed) known.set(n, found); ⏎ ` → (deleted) | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "each table's section is found in one pass: the siblings read grow with the number of tables, never its square" |
+| L2-T13-M161 | an element the finder already passed answers its remembered heading | `src/enhance/glossary.ts` | `        found = known.get(n) ?? null;` → `        found = null;` | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "tables under one heading share its answer: a second table in a glossary section is a glossary too, its href that heading" |
+| L2-T13-M162 | a filled module's exports are pinned: a new export in the glossary is red | `src/enhance/glossary.ts` | `function sectionAt(p: Element)` → `export function sectionAt(p: Element)` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "every module of src/enhance that exports build is registered, under its file name, and every stub exports build (and after when it waits on the host)" |
+| L2-T13-M163 | a filled module's exports are pinned: a new export in xrefs is red | `src/enhance/xrefs.ts` | `export const QUAL_WINDOW = 24;` → `export const QUAL_WINDOW = 24; ⏎ export const QUAL_EXTRA = 0;` | `test/enhance-seams.test.ts`: 1 failed \| 95 passed (96). "every module of src/enhance that exports build is registered, under its file name, and every stub exports build (and after when it waits on the host)" |
+| L2-T13-M164 | a cross-reference to a target with its own document id tells the host that id (nav's idOf, LD7) | `src/enhance/nav.ts` | `    if (el.id !== '' && ids.get(el.id) === el) return el.id; ⏎ ` → (deleted) | `test/enhance-links.test.ts` (all but RF3): 1 failed \| 53 passed \| 1 skipped (55). "a click on a cross-reference to a target with its own document id tells the host that id, as nav names it" |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T13-M153",
+    "guard": "the term link's click listener goes through the journal, so destroy removes it",
+    "file": "src/enhance/glossary.ts",
+    "old": "    journal.listen(a, 'click', (event) => {",
+    "new": "    a.addEventListener('click', (event) => {",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M154",
+    "guard": "the split before a mention goes through the journal, so destroy joins the text again",
+    "file": "src/enhance/mentions.ts",
+    "old": "  const mid = at > 0 ? journal.split(text, at) : text;",
+    "new": "  const mid = at > 0 ? text.splitText(at) : text;",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M155",
+    "guard": "the split after a mention goes through the journal, so destroy joins the text again",
+    "file": "src/enhance/mentions.ts",
+    "old": "  const after = length < mid.data.length ? journal.split(mid, length) : null;",
+    "new": "  const after = length < mid.data.length ? mid.splitText(length) : null;",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M156",
+    "guard": "the link wraps the mention through the journal, so destroy unwraps it",
+    "file": "src/enhance/mentions.ts",
+    "old": "  journal.wrap([mid], link);",
+    "new": "  mid.parentNode?.insertBefore(link, mid);\n  link.appendChild(mid);",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M157",
+    "guard": "the glossary class goes on through the journal, so destroy takes it off",
+    "file": "src/enhance/glossary.ts",
+    "old": "    journal.toggleClass(b.el, 'glossary', true);",
+    "new": "    b.el.classList.add('glossary');",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M158",
+    "guard": "the termcell class goes on through the journal, so destroy takes it off",
+    "file": "src/enhance/glossary.ts",
+    "old": "      journal.toggleClass(cell, 'termcell', true);",
+    "new": "      cell.classList.add('termcell');",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M159",
+    "guard": "the matcher stops at a run of white space no term goes on through, before skipping it",
+    "file": "src/enhance/glossary.ts",
+    "old": "          if (node === undefined) break;\n",
+    "new": "",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M160",
+    "guard": "the section finder remembers each element it passed, so each element is read once",
+    "file": "src/enhance/glossary.ts",
+    "old": "    for (const n of passed) known.set(n, found);\n",
+    "new": "",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M161",
+    "guard": "an element the finder already passed answers its remembered heading",
+    "file": "src/enhance/glossary.ts",
+    "old": "        found = known.get(n) ?? null;",
+    "new": "        found = null;",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
+  },
+  {
+    "id": "L2-T13-M162",
+    "guard": "a filled module's exports are pinned: a new export in the glossary is red",
+    "file": "src/enhance/glossary.ts",
+    "old": "function sectionAt(p: Element)",
+    "new": "export function sectionAt(p: Element)",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T13-M163",
+    "guard": "a filled module's exports are pinned: a new export in xrefs is red",
+    "file": "src/enhance/xrefs.ts",
+    "old": "export const QUAL_WINDOW = 24;",
+    "new": "export const QUAL_WINDOW = 24;\nexport const QUAL_EXTRA = 0;",
+    "tests": "test/enhance-seams.test.ts"
+  },
+  {
+    "id": "L2-T13-M164",
+    "guard": "a cross-reference to a target with its own document id tells the host that id (nav's idOf, LD7)",
+    "file": "src/enhance/nav.ts",
+    "old": "    if (el.id !== '' && ids.get(el.id) === el) return el.id;\n",
+    "new": "",
+    "tests": "test/enhance-links.test.ts -t '^(?!RF3)'"
   }
 ]
 ```
