@@ -53,9 +53,8 @@
 //
 // goToHash(root, id, from?): the host's history moved to an entry of this document (LD7). For an active instance on
 // `root`, one operation runs nav.goToHash: back to the place `from` names when it is a token this library gave (onHash's
-// `from`), else to the element `id` names, else, for a null or empty id, to the top. An id that is neither a string
-// nor null, and a call for a root not enhanced or still starting, do nothing; a `from` that is not a string is no
-// token.
+// `from`), else to the element `id` names, else, for a null or empty id, to the top. An id that names nothing, and a
+// call for a root not enhanced or still starting, do nothing; a `from` that is not a string is no token.
 //
 // destroyEnhancement(root): marks the instance destroying and bumps its generation first, so no further write
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
@@ -610,12 +609,10 @@ export function destroyEnhancement(root: HTMLElement): Promise<void> {
  * top. Calls no onHash. Does nothing for a root that is not enhanced, or still starting; see the header of this file.
  */
 export function goToHash(root: HTMLElement, id: string | null, from?: string | null): void {
-  if (!isElement(root)) return;
-  if (id !== null && typeof id !== 'string') return;
   const inst = findByRoot(root);
   const ctx = inst?.ctx ?? null;
   if (inst === undefined || inst.phase !== 'active' || ctx === null) return;
-  const token = typeof from === 'string' ? from : null;
+  const token = typeof from === 'string' ? from : null; // anything else is no token
   operate(inst, () => {
     ctx.nav.goToHash(id, token);
   });
