@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C48)
+### Coordinator rulings for L2 (C40-C49)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -183,6 +183,29 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   - **WebKit's first CI run** (Task 6) failed one case only: WebKit had not started the serif face's load when the page settled. The case now asks for the face before reading the loaded faces. Every other WebKit case passed, including the network wall's.
 
   Why: each follows the code the review measured. Cost if wrong: a later task re-orders a step or renames a list in its own PR.
+- **C49 (2026-10-20, coordinator, from L2 Task 7b's review): the shared services as built.**
+  - **Renames the walls forced:** `overlays.register(kind, { isOpen, close })` replaces the plan's `open`, and `page.facts.block(node)` replaces `body(node)`. `overlays.any()` leaves out the card, as the reference's dialog check did; code that needs the card too reads `top() !== null`.
+  - **Additions the later tasks consume:**
+    - `headCtl(h, slot, control)` takes the control, returns the `.h-ctl`, and names the heading.
+    - `ctx.page` and `ctx.plan` are slots, each published once.
+    - `slots.tool(kind, node)` keeps the tray in a fixed order: changes, outline, jump, settings, contents.
+    - `ctx.setPrefs(change)` shares `setEnhancementPrefs`'s path, so Task 19 needs no lifecycle edit.
+    - `ctx.folds` offers `headings`, `isFolded`, `setFold`, `setAll`, `sectionOf` and `join`. `setAll` leaves `position.keep` to its caller.
+    - In keys: `listed`, the `Mod+k` chord, and a `run()` that returns false leaves the default alone.
+    - Two more relayout reasons: `start` and `content`.
+    - The event payloads: `spy {section, unit}`, `marks {units}`, `changes {sections}`, `relayout {reasons}`, `reveal {target}`, and `prefs` as a frozen copy. An emitter that needs another field makes an additive change through Task 7b's files.
+  - **`nav.byId` reads the document's ids once, at startup**, so chrome ids and ids that Mermaid adds are never answers. An id the host adds after `enhance()` is not found.
+  - **The skip link goes to the document's first non-chrome node, not to the root.** The plan says it focuses the root. Under LD10 the bar is inside the root, so focusing the root sent the next Tab back through the bar.
+  - **Two module exports are allowed between features.** Each takes the context and keeps its state in a `WeakMap` keyed by it: `showChanges` (Task 20, for Task 22) and `cards.show` (Task 17, for Task 23). Every other cross-feature read goes through the context.
+  - **The writers-list exception stands:** the review's fonts fix changed `src/enhance/env.ts` and one mock in `test/enhance-seams.test.ts`, which are Task 7a's files. Only `env.ts` may reach `document.fonts`. A face now counts only when the font set holds it with status `loaded`. When a stylesheet has not declared it yet, the wait listens for the next `loadingdone` within the same 10-second bound.
+  - **Mutation rows:** a row whose guard was removed because no case could redden it is reported, not dropped (M119, M230). A row that goes red only through vitest's unhandled-error check counts as red when the rows file says so (M269, M270, M277). This holds for every later task.
+  - **Status words come from the pill.** The index entry stays `{ id, kind, title, status, group, target, row, heads }` as the plan fixed it. Tasks 17-19 read a status's words from its pill on the target (Task 9), not from the entry.
+  - **Carried to Task 12:** label `nav.topbar` or change its role; until tools arrive it is an empty landmark. When Tasks 12 and 18 insert at their `reader.css` markers, they also update the file header's "Left out" list.
+  - **Carried to Task 14:**
+    - `position.keep`'s anchor and restore, goTo's `from` token, the flash, the pin, and scroll margins for targets with no id.
+    - Whether a hash link this root cannot resolve is still left to the browser (the reference's behaviour today), which can scroll to another root's element and adds a history entry without `onHash`. Task 14's PR says which it chose.
+
+  Why: each follows the code the review measured, and nine tasks build from it in parallel. Cost if wrong: a later task's brief names the old shape and its implementer follows the code instead.
 
 ## Carried constraints (reviewers get these)
 
