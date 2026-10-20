@@ -156,7 +156,7 @@ const BULLETS = [
   '| Three | <br>after a break<br><br>and two<br> |',
   '| Four | - dash<br>-5 degrees<br>•tight |',
   '| Five | no break here |',
-  '| Six | first<br>`code alone` |',
+  '| Six | first<br>![](dot.png) |',
   '| Seven | · middle dot<br>▪ square<br>•\ttab |',
   '',
 ].join('\n');
@@ -188,8 +188,8 @@ describe('bullet cells', () => {
     const [first, second] = all(cells[2] as Element, '.cell-line');
     expect(kids(first as Element)).toEqual(['span.cell-br[hidden]*', '"\\nafter a break"', 'span.cell-br[hidden]*', '"\\n"', 'span.cell-br[hidden]*']);
     expect(kids(second as Element)).toEqual(['"\\nand two"', 'span.cell-br[hidden]*', '"\\n"']);
-    // A run that holds an element, and only white space besides, is a line.
-    expect(all(cells[5] as Element, '.cell-line').map((l) => kids(l))).toEqual([['"first"', 'span.cell-br[hidden]*'], ['"\\n"', 'code']]);
+    // A run that holds an element with no text, and only white space besides, is a line.
+    expect(all(cells[5] as Element, '.cell-line').map((l) => kids(l))).toEqual([['"first"', 'span.cell-br[hidden]*'], ['"\\n"', 'img']]);
   });
 
   it('a bullet is one of • · ▪ - with white space after it: "-5" and "•tight" keep their text', async () => {
@@ -312,11 +312,11 @@ describe('the filter', () => {
     await enhance(root);
     const input = one(root, '.tbl-tools input') as HTMLInputElement;
     const rows = rowsOf(root);
-    rows[2]?.setAttribute('hidden', 'until-found');
+    rows[2]?.setAttribute('hidden', '');
     type(input, 'Item 2');
     rows[5]?.setAttribute('hidden', 'until-found'); // a row it hid, which the host hides its own way since
     type(input, '');
-    expect(rows.map((r) => r.getAttribute('hidden'))).toEqual([null, null, 'until-found', null, null, 'until-found', null, null, null, null, null, null]);
+    expect(rows.map((r) => r.getAttribute('hidden'))).toEqual([null, null, '', null, null, 'until-found', null, null, null, null, null, null]);
   });
 
   it('revealing an element of a row it hides clears it; one of a row it shows (or showed again) changes nothing', async () => {

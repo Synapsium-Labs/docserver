@@ -170,12 +170,10 @@ export function build(ctx: FeatureContext): void {
   /** Each row a filter hid, and that filter's clear. */
   const hiddenBy = new Map<Element, () => void>();
   for (const t of tables) if (t.rows.length >= FILTER_MIN_ROWS) addFilter(ctx, t, hiddenBy);
-  if (tables.some((t) => t.filter !== null)) {
-    ctx.onReveal((el) => {
-      const tr = el.closest('tr');
-      if (tr !== null) hiddenBy.get(tr)?.();
-    });
-  }
+  ctx.onReveal((el) => {
+    const tr = el.closest('tr');
+    if (tr !== null) hiddenBy.get(tr)?.();
+  });
   ctx.onRelayout(() => {
     measure(ctx, tables);
   });
