@@ -7,6 +7,8 @@ name: ci
 # (HEAD^ only for a push that has no previous tip); by hand, origin/main.
 # The token is read-only; a later job that needs more asks for it in its own diff. The checkout keeps no
 # credentials in the workspace (the ratchet needs history, not a token), so no later step can push with one.
+# The layout tests (test/browser/) run in real browsers: the pinned playwright-core installs its Chromium and
+# WebKit builds and their system libraries first, and both run (DOCREADER_BROWSERS is never set here).
 on:
   push:
     branches: [main]
@@ -39,6 +41,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npx playwright-core install --with-deps chromium webkit
       - run: npm run typecheck
       - run: ./node_modules/.bin/vitest run
       - run: npm run build

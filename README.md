@@ -226,6 +226,7 @@ npm run build                     # dist/ from src/
 ```
 
 - Run the local `vitest` binary, never a bare `npx vitest`, which can resolve a different global copy.
+- The layout tests (`test/browser/`) run last, in real Chromium and WebKit: install them once with `npx playwright-core install --with-deps chromium webkit` (the system libraries need root); a browser that cannot start fails them, and `DOCREADER_BROWSERS=chromium` runs one browser and reports the other as excluded.
 - Tests never reach a network: `test/setup/no-network.ts` makes `fetch` and every socket connect throw, and the packing test runs npm offline.
 - CI (`.github/workflows/ci.yml`) runs those four steps on Node 22 and 24, on pull requests and on `main`, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry (with `--before` set 14 days back, so its transitive dependencies obey the age rule too) typechecks a strict consumer of the three code entries, imports `./enhance` in Node, resolves the stylesheet and the font licence through `./assets/*`, checks that deep imports are refused, and runs the corpus through the package's public entries.
 - A new or bumped dependency is an exact version at least 14 days old. Add it with

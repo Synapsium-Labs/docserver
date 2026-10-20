@@ -3,7 +3,8 @@
 // names, `test (22)` and `test (24)`, so the name template and the matrix are pinned together. Task 12 appended
 // the verdict ratchet (against the pull request's base branch, the push's previous tip, or origin/main by hand)
 // and the packed-consumer smoke (npm pack, then scripts/consumer-smoke.mjs on the tarball npm names from
-// package.json).
+// package.json). L2 Task 6 installs the pinned browsers, with their system libraries, before the tests, so the
+// layout project runs in Chromium and WebKit; CI never narrows that with DOCREADER_BROWSERS.
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
@@ -76,9 +77,10 @@ describe('ci.yml: the test job', () => {
     ]);
   });
 
-  it('installs from the lock, typechecks, tests, builds, runs the ratchet, then packs and smokes the tarball', () => {
+  it('installs from the lock and the browsers, typechecks, tests, builds, runs the ratchet, then packs and smokes the tarball', () => {
     expect(steps.filter((s) => s.run !== undefined).map((s) => s.run)).toEqual([
       'npm ci --no-audit --no-fund',
+      'npx playwright-core install --with-deps chromium webkit',
       'npm run typecheck',
       './node_modules/.bin/vitest run',
       'npm run build',
@@ -100,8 +102,10 @@ describe('ci.yml: the test job', () => {
     expect(steps.filter((s) => s.env !== undefined)).toHaveLength(1);
   });
 
-  it('never runs a bare npx vitest and never sets UPDATE_EXPECTED', () => {
+  it('never runs a bare npx vitest, never sets UPDATE_EXPECTED or UPDATE_LAYOUT, and never narrows the browsers', () => {
     expect(TEXT).not.toMatch(/npx\s+vitest/);
     expect(TEXT).not.toMatch(/UPDATE_EXPECTED/);
+    expect(TEXT).not.toMatch(/UPDATE_LAYOUT/);
+    expect(TEXT.replace(/^\s*#.*$/gm, '')).not.toMatch(/DOCREADER_BROWSERS/);
   });
 });
