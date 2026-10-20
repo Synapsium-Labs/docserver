@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C50)
+### Coordinator rulings for L2 (C40-C51)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -207,6 +207,7 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
 
   Why: each follows the code the review measured, and nine tasks build from it in parallel. Cost if wrong: a later task's brief names the old shape and its implementer follows the code instead.
 - **C50 (2026-10-20, operator and coordinator): the coordinator merges L2 without waiting, and Question 1 takes its default.** The operator, 2026-10-20: "GO AHEAD as I said DO NOT wait for me unless you truly need me". So #13 and each stacked task merge once their review and CI are done (C4), in the task table's order. Each is squash-merged as L1 was, and the next PR is rebased onto `main` and retargeted. Question 1 takes the plan's default (LD4, LD10): `./enhance` takes adapters only. The URL options (`mermaidUrl`, `resolveLink`, `changesUrl`, `bar` and an issue-tracker base) become a small helper in L3's `./host`, or recipes in the README. Tools in a host's own bar wait for an additive option. Once #13 has merged, later rulings land through a ledger PR of their own. Cost if wrong: a viewer that wants the URL options before L3 writes a few lines of adapter code.
+- **C51 (2026-10-20, coordinator): WebKit runs on the build box after all, in the Playwright image; C45 is narrowed.** The browser tests run in WebKit in the official Playwright image of the pinned version, `mcr.microsoft.com/playwright:v1.63.0-noble`: `docker run --rm --network none`, as the box's own user, on a copy of the tree. No root is needed and no system package is installed. So a task runs its browser cases in both browsers before it hands off; CI stays the arbiter. Task 7b's first WebKit run in CI failed one case, and the image reproduced it at once. WebKit fires the font set's `loading` event for the faces of a stylesheet added after `enhance()`, but never `loadingdone`, so the fonts wait now asks again at `loading` too. Cost if wrong: a 2 GB image on the box, and a WebKit difference that the image's build does not share with CI's.
 
 ## Carried constraints (reviewers get these)
 
