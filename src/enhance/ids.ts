@@ -99,23 +99,49 @@ function defineSections(ctx: FeatureContext): void {
   }
 }
 
-/** The heading a table is grouped under (see the header), or null. */
-function groupOf(table: Element, root: Element): Element | null {
-  for (let n: Element | null = table; n !== null && n !== root; n = n.parentElement) {
-    for (let p = n.previousElementSibling; p !== null; p = p.previousElementSibling) {
-      if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') return p;
+/**
+ * The heading a table is grouped under (see the header), or null: what one walk back finds from an element, through
+ * its earlier siblings and then its ancestors'. A walk from an element is the walk from its earlier sibling once that
+ * sibling is no heading and no box, so each answer is kept for every element the walk passed, and a later table's
+ * walk stops at the first of them: the step costs the root's elements once, not once per table.
+ */
+function grouper(root: Element): (table: Element) => Element | null {
+  const known = new Map<Element, Element | null>();
+  return (table) => {
+    const passed: Element[] = [];
+    let found: Element | null = null;
+    for (let n: Element | null = table; n !== null && n !== root; ) {
+      if (known.has(n)) {
+        found = known.get(n) as Element | null;
+        break;
+      }
+      passed.push(n);
+      const p: Element | null = n.previousElementSibling;
+      if (p === null) {
+        n = n.parentElement;
+        continue;
+      }
+      if ((p.localName === 'h2' || p.localName === 'h3') && p.id !== '') {
+        found = p;
+        break;
+      }
       if (p.classList.contains('short') || p.classList.contains('callout')) {
         const h = p.querySelector('h2, h3');
-        if (h !== null) return h;
+        if (h !== null) {
+          found = h;
+          break;
+        }
       }
+      n = p;
     }
-  }
-  return null;
+    for (const e of passed) known.set(e, found);
+    return found;
+  };
 }
 
 /** The colour role of the row's last chrome pill, or null. */
 function statusOf(row: Element): StatusRole | null {
-  const pills = row.querySelectorAll('.pill[data-docreader-chrome]');
+  const pills = Array.from(row.querySelectorAll('.pill')).filter((e) => e.hasAttribute(CHROME_ATTR));
   const last = pills[pills.length - 1];
   return last === undefined ? null : (ROLES.find((r) => last.classList.contains(r)) ?? null);
 }
@@ -124,6 +150,7 @@ function statusOf(row: Element): StatusRole | null {
 function defineRows(ctx: FeatureContext): void {
   const { journal, vocab, index } = ctx;
   const idAt = (t: string | null): string | null => (t === null ? null : (vocab.id.exec(t)?.[1] ?? null));
+  const groupOf = grouper(ctx.root);
   for (const block of ctx.blocks) {
     if (block.kind !== 'table') continue;
     const rows = block.rows;
@@ -135,7 +162,7 @@ function defineRows(ctx: FeatureContext): void {
     const exact = firsts.map((t) => (t !== null && t.length <= EXACT_MAX && idAt(t) === t ? t : null));
     const isIndex = rows.length >= INDEX_ROWS && opening.filter((x) => x !== null).length >= rows.length * INDEX_SHARE;
     block.isIndex = isIndex;
-    const g = groupOf(block.el, ctx.root);
+    const g = groupOf(block.el);
     const group = g === null ? 'Index' : bare(g);
     const titleCol = block.heads.findIndex((h, i) => i > 0 && vocab.titleHeader.test(h));
     rows.forEach((r, i) => {

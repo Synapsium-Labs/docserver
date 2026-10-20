@@ -171,7 +171,8 @@ describe('rule paragraphs (rules.ts; the reference layout, section 3)', () => {
           { code: ['"AB-THREE"'] },
           { 'span.pill.ok{chrome}': ['"agreed"'] },
           { 'span.pill.info{chrome}': ['"after review"'] },
-          { 'span[hidden]{chrome}': ['" — "', 'em', '" ("', '"). "'] },
+          { 'span[hidden]{chrome}': ['" — "', 'em', '" ("'] },
+          { 'span[hidden]{chrome}': ['"). "'] }, // apart from its opening bracket, so a host's normalize() cannot join them
         ],
       },
       '"The second and third rules share a paragraph. They go on."',
@@ -235,6 +236,15 @@ describe('rule paragraphs (rules.ts; the reference layout, section 3)', () => {
     const md = ['# T', '', '`AB-1` — _agreed_. **Title:** body **more.**', ''].join('\n');
     const root = await enhanced(md, { rules: true });
     expect(ctxOf(root).index.get('AB-1')?.title).toBe('Title');
+  });
+
+  it('the bold title is a child of the paragraph: a bold inside the status em, or inside a link, is not the title', async () => {
+    const md = ['# T', '', '`AB-1` — _agreed **now**_. Body text. More.', '', '`AB-2` — See [**the link**](#x). More.', ''].join('\n');
+    const root = await enhanced(md, { rules: true });
+    const { index } = ctxOf(root);
+    expect(squash(para(root, 'AB-1').querySelector('.pill')?.textContent)).toBe('agreed now');
+    expect(index.get('AB-1')?.title).toBe('Body text');
+    expect(index.get('AB-2')?.title).toBe('See the link');
   });
 
   it('rules: true alone recognises the default shape: two or more capitals, then dashed parts of capitals or digits', async () => {
@@ -364,6 +374,18 @@ describe('rule paragraphs (rules.ts; the reference layout, section 3)', () => {
       expect(a.node).toBe(before[i]?.node);
       expect(a.data).toBe(before[i]?.data);
     });
+  });
+
+  it('a host that normalizes the root while enhanced gets the text back in order: no two parts of one text sit side by side', async () => {
+    const md = ['# T', '', '`AB-1` — _agreed_ (pending). Body text.', '', '`AB-2` and `AB-3` — _done_: Two.', '', '`AB-4` — _done_ (a note) Three.', ''].join('\n');
+    const root = mount(md);
+    const text = root.textContent;
+    await enhance(root, optionsOf(md, { rules: true }));
+    expect(root.querySelectorAll('.pill.info')).toHaveLength(2);
+    root.normalize(); // as a find-in-page highlighter does after it unmarks
+    await destroyEnhancement(root);
+    expect(root.textContent).toBe(text);
+    expect(para(root, 'AB-1').textContent).toBe('AB-1 — agreed (pending). Body text.');
   });
 });
 
@@ -517,6 +539,18 @@ describe('the rules index (rules.ts; the reference layout, section 4)', () => {
       seen.push(`${String(n)} ${wide ? 'wide' : 'narrow'}: ${String(await open(n, wide))}`);
     }
     expect(seen).toEqual(['1 narrow: true', '6 narrow: true', '7 narrow: false', '7 wide: true', '24 wide: true', '25 wide: false', '24 narrow: false']);
+  });
+
+  it('a rule ID over 200 code units is listed by its ID alone: no link, no pill, and its status is not counted', async () => {
+    const long = `AB-${'C'.repeat(210)}`;
+    const md = ['---', `rules: [AB-1, ${long}]`, '---', '', '# T', '', '`AB-1` — _done_. One.', '', `\`${long}\` — _done_. Long.`, ''].join('\n');
+    const root = await enhanced(md, { rules: true });
+    expect(summary(root)).toBe('Rules index · 2 rules · 1 done');
+    expect(Array.from(root.querySelectorAll('.doc-facts ol > li')).map(shape)).toEqual([
+      { 'li{chrome}': [{ 'a.rlink{chrome}': [{ 'span.rid{chrome}': ['"AB-1"'] }, { 'span.rtitle{chrome}': ['"One"'] }] }, { 'span.pill.ok{chrome}': ['"done"'] }] },
+      { 'li{chrome}': [{ 'div{chrome}': [{ 'span.rid{chrome}': [JSON.stringify(long)] }] }, 'span{chrome}'] },
+    ]);
+    expect(ctxOf(root).index.get(long)).toBeUndefined(); // nothing could link to it: no entry, and no id written
   });
 
   it('a document with no rule keys keeps the panel closed and as it was', async () => {
@@ -717,6 +751,33 @@ describe('ID rows (ids.ts; the reference layout, section 8)', () => {
     const { index } = ctxOf(root);
     expect(['S1', 'N1', 'H1', 'K1'].map((id) => index.get(id)?.group)).toEqual(['In short', 'Numbered things', 'Numbered things', 'Numbered things']);
   });
+
+  it('the group: a Where things stand box before the table counts by its heading', async () => {
+    const md = ['# T', '', '## Where things stand', '', '### Agreed', '', '- One.', '', '---', '', '| ID | What |', '|---|---|', '| W1 | after the box |', '| W2 | after the box |', ''].join('\n');
+    const root = await enhanced(md);
+    const table = root.querySelector('table') as Element;
+    expect(root.querySelector('.callout')?.compareDocumentPosition(table)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(ctxOf(root).index.get('W1')?.group).toBe('Agreed');
+  });
+
+  it('the group is found in linear time: four times the tables under one heading reads at most six times the siblings', async () => {
+    const doc = (n: number): string =>
+      ['# T', '', '## Under one heading', '', ...Array.from({ length: n }, (_, i) => `Paragraph ${String(i)}.\n\n| ID | What |\n|---|---|\n| X${String(i)} | one |\n`)].join('\n');
+    const reads = async (n: number): Promise<number> => {
+      const md = doc(n);
+      const root = mount(md);
+      const spy = vi.spyOn(Element.prototype, 'previousElementSibling', 'get');
+      await enhance(root, optionsOf(md));
+      const count = spy.mock.calls.length;
+      spy.mockRestore();
+      expect(ctxOf(root).index.get(`X${String(n - 1)}`)?.group).toBe('Under one heading');
+      return count;
+    };
+    const one = await reads(200);
+    const four = await reads(800);
+    // Walking back from each table to the heading, as before, reads about sixteen times as many (quadratic).
+    expect(four / one).toBeLessThanOrEqual(6);
+  }, 120_000);
 
   it('the status is the role of the row\'s last chrome pill; an element of the document classed pill is not one', async () => {
     const md = ['# T', '', '| ID | Status | Verdict |', '|---|---|---|', '| R1 | Agreed | Rejected |', '| R2 | Agreed | x |', '| R3 | x | y |', ''].join('\n');

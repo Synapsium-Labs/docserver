@@ -59,7 +59,7 @@ describeBrowsers((browser) => {
       expect(seen).toEqual({
         display: 'flex',
         shown: ['code: AB-1', 'code: AB-2', 'span.pill.ok: agreed', 'span.pill.info: after review'],
-        hidden: [0, 0],
+        hidden: [0, 0, 0], // the joins, the dash with what follows, and a note's closing bracket on its own
         text: expect.stringMatching(/^AB-1 ?AB-2 ?AGREED ?AFTER REVIEW$/) as unknown as string,
       });
     } finally {

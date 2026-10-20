@@ -109,7 +109,9 @@ p .rule
     span chrome hidden=""
       "—"
       em
-      "()."
+      "("
+    span chrome hidden=""
+      ")."
   "The second and third rules share a parag"…
 p .rule
   span .rule-head chrome

@@ -17,14 +17,19 @@
 // move into a new `span.rule-head`, its first child, which also holds:
 //   - the status as `span.pill.<role>`, the em's own nodes moved into it, so the pill carries the status words (the
 //     words a preview or an attention mark reads: a rule's status pill is the first `.pill` of its `.rule-head`; a
-//     note's pill, `span.pill.info`, comes after it);
+//     note's pill, `span.pill.info`, comes after it). Those nodes are the document's, as written: an inline element
+//     in the em (a code, a bold) is in the pill too, and so is a line break, so a reader of the words squashes white
+//     space, as the rules index does for its own copy (where the reference made the pill of the em's text alone);
 //   - what the reference removed, split off and moved into hidden chrome spans (`hidden`), never edited: each join
 //     between two codes, and the dash with what follows it up to the body (the em, left empty, its brackets and its
-//     full stop or colon).
+//     full stop or colon); the text after a note, its closing bracket, has a hidden span of its own.
 // The text is never rewritten: a text node is only split (journal.split) and moved, so destroy joins it again, byte
-// for byte. Each ID is defined once, the first definition winning (rules are built before ID rows, so a rule's ID
-// is the rule): `{ kind: 'rule', title (clipped to 110), status: the pill's role or null, group: 'Rules', target: the
-// paragraph }`. An ID longer than the index takes (200 code units) is left out of the index and of the rules index.
+// for byte. No two parts split from one text are left side by side in chrome, so a host that normalizes the root
+// while it is enhanced cannot join them out of order. Each ID is defined once, the first definition winning (rules
+// are built before ID rows, so a rule's ID is the rule): `{ kind: 'rule', title (clipped to 110), status: the pill's
+// role or null, group: 'Rules', target: the paragraph }`. An ID longer than the index takes (200 code units) is not
+// defined, so nothing can link to it: the rules index lists it by its ID alone, with no link and no pill, and does
+// not count its status.
 //
 // Section 4, the rules index: a list key of the front matter (info.frontList) whose every value is a rule ID is a rule
 // key ("rules: [AB-1, AB-2]", "refines: [AB-3]"). Each is taken out of the facts panel and shown first: in the
@@ -35,9 +40,9 @@
 // span when it has none); a value with no rule paragraph shows its ID in a `div`, with no link. A rule key that an
 // earlier list key of the same name, not a rule key, would hide is left in the panel. The panel opens with 1 to 6
 // rules, or with up to 24 on a viewport 700 px wide or more (env.matches('(min-width: 700px)'), the reference's
-// innerWidth). The plugin's document kind: a document whose front matter has a rule key is a rules document, which
-// the review strip (Task 20) reads from the same front matter; the reference's other, product-specific kinds are not
-// ported.
+// innerWidth). Document kinds are not built here: no kind is computed or published, and the review strip (Task 20),
+// which the reference placed by its document kind, derives what it needs from the options and the front matter. The
+// reference's product-specific kinds are not ported.
 //
 // Standard files, slug `ids`: test/enhance-ids.test.ts, test/browser/ids.test.ts and conformance/layout/ids/.
 // Registered in features.ts, whose header says where in the build order and why.
@@ -153,8 +158,11 @@ function buildRule(ctx: FeatureContext, p: HTMLElement, rules: Map<string, Rule>
       journal.move(note, info, null);
     }
   }
-  // The dash, the em (now empty) and its brackets and full stop: adjacent now, hidden together.
-  journal.wrap(siblingRun(dash, null), hiddenSpan(doc));
+  // The dash, the em (now empty) and its brackets and full stop: adjacent now, hidden. With a note, the text before it
+  // and the text after it were one text, so each has its own span (a host's normalize() would join two neighbours).
+  const close = note === null ? null : siblingRun(last, null);
+  journal.wrap(siblingRun(dash, note === null ? null : last), hiddenSpan(doc));
+  if (close !== null) journal.wrap(close, hiddenSpan(doc));
   journal.toggleClass(p, 'rule', true);
 
   const strong = Array.from(p.children).find((c) => c.localName === 'strong');

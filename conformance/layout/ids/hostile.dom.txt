@@ -91,7 +91,9 @@ p .rule
     span chrome hidden=""
       "—"
       em
-      "()."
+      "("
+    span chrome hidden=""
+      ")."
   "Body."
 p .rule
   span .rule-head chrome
