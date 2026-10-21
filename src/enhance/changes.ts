@@ -472,7 +472,7 @@ function show(ctx: FeatureContext, st: State, set: ChangeSet, how: ShowHow): num
     ...places.removed.map((i) => [els[i] as Element, 'chg-del'] as const),
   ];
   for (const [el, cls] of marks) ctx.journal.toggleClass(el, cls, true);
-  st.shown = { stops, marks, onHide: typeof how.onHide === 'function' ? how.onHide : null, i: -1, at: 0 };
+  st.shown = { stops, marks, onHide: how.onHide ?? null, i: -1, at: 0 }; // one that is no function throws, caught
   if (st.stepper !== null) {
     const what = clip(how.what, WHAT_MAX);
     st.stepper.what.textContent = what === '' ? 'Changes' : what;

@@ -1142,7 +1142,8 @@ describe('what changed: another feature\'s throw, and a failed call', () => {
       info: { sha: SHA },
       changes: (sha: string) => {
         calls.push(sha);
-        return sha === BASE ? new Promise((r) => held.push(r)) : Promise.resolve({ changed: [[7, 7]] });
+        // BASE's first two calls are held; any later call answers at once.
+        return sha === BASE && held.length < 2 ? new Promise((r) => held.push(r)) : Promise.resolve({ changed: [[7, 7]] });
       },
     });
     const ctx = ctxOf(root);
