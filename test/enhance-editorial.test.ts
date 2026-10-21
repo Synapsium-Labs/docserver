@@ -200,7 +200,9 @@ describe('facts panel', () => {
     const root = mount(DOC);
     const strip = child(root, 'dl', 'doc-meta') as HTMLElement;
     await enhance(root, infoOf(DOC));
-    const facts = child(root, 'dl', 'byline').nextElementSibling as HTMLDetailsElement;
+    // The review strip (Task 20) sits between the byline and the facts panel, as in the reference.
+    let facts = child(root, 'dl', 'byline').nextElementSibling as HTMLDetailsElement;
+    while (facts.classList.contains('review-strip')) facts = facts.nextElementSibling as HTMLDetailsElement;
     expect(facts.nextElementSibling?.className).toBe('short');
     expect([facts.localName, facts.className, facts.open, facts.hasAttribute(CHROME_ATTR)]).toEqual(['details', 'doc-facts', false, true]);
     expect(text(facts.querySelector('summary'))).toBe('2 rules · 2 tags');

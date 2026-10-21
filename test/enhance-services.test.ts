@@ -35,8 +35,9 @@ vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const features = (): Feature[] => {
     // Without the quick jump and the keys sheet (Task 16): they bind "/", "?" and the chord and register the 'jump'
     // and 'keys' overlays and the bar's jump tool, which these cases bind and register themselves, as stand-ins. And
-    // without the reading position (Task 14), whose j, k and anchor slot these cases' samples take.
-    const list = real.features().filter((f) => f.name !== 'jump' && f.name !== 'keysheet' && f.name !== 'position');
+    // without the reading position (Task 14), whose j, k and anchor slot these cases' samples take, and the review
+    // strip (Task 20), whose w these cases' key samples take.
+    const list = real.features().filter((f) => !['jump', 'keysheet', 'position', 'strip'].includes(f.name));
     const at = list.findIndex((f) => f.name === 'folds');
     return [...list.slice(0, at), ...(hooks.beforeFolds as Feature[]), ...list.slice(at), ...(hooks.probes as Feature[])];
   };
