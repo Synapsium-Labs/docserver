@@ -223,6 +223,19 @@ describe('the review strip', () => {
     expect(plain.querySelector('.rs-wait')).toBeNull();
   });
 
+  it('w is bound with waiting items where no strip is placed: on a root that is no document', async () => {
+    const root = mount(['## Where things stand', '', '### Waiting on you', '', '- Decide.', ''].join('\n'));
+    const onHash = vi.fn();
+    await enhance(root, { onHash });
+    const ctx = ctxOf(root);
+    expect(ctx.info.isDocument).toBe(false);
+    expect(root.querySelector('.review-strip')).toBeNull();
+    expect(ctx.keys.bindings().find((b) => b.key === 'w')).toEqual({ key: 'w', label: 'What is waiting on you' });
+    expect(key(root.querySelector('li') as HTMLElement, 'w').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(root.querySelector('#waiting-on-you'));
+    expect(onHash).toHaveBeenCalledWith('waiting-on-you', { push: true, from: null });
+  });
+
   it('the decisions: the largest index table with a status column; a tie goes to the first (pinned); group rows are not counted', async () => {
     const table = (h: string, ids: string[], group = false): string[] => [
       `## ${h}`,
@@ -483,13 +496,48 @@ describe('what changed: the host\'s change set (RF4)', () => {
     expect(performance.now() - t1).toBeLessThan(5000);
   });
 
-  it('a range past the last line marks nothing; one around the whole document marks its innermost blocks as one place', async () => {
+  it('a range past the last line marks nothing, and a step over no places does nothing', async () => {
     const { root, ctx, out } = await shown({ changed: [[90_000, 1e12]], removedAfter: [-5] });
     expect(out).toEqual({ places: 0 });
     expect(marked(root, 'chg')).toEqual([]);
     expect(marked(root, 'chg-del')).toEqual([]);
-    const out2 = await showChanges(ctx, '7654321', { what: 'All' });
-    void out2;
+    // Shown again with its step: there is no place to go to.
+    expect(await showChanges(ctx, '7654321', { what: 'All' })).toEqual({ places: 0 });
+    expect(stepper(root)?.querySelector('.cn')?.textContent).toBe('0 changes');
+    expect(root.querySelector('.flash')).toBeNull();
+  });
+
+  it('one range around the whole document marks its innermost blocks, as one place', async () => {
+    const root = mount();
+    const last = Math.max(...Array.from(root.querySelectorAll('[data-line]')).map((e) => Number(/(\d+)$/.exec(e.getAttribute('data-line') ?? '')?.[1] ?? 0)));
+    const { options } = withChanges({ changed: [[1, last]] });
+    await enhance(root, options);
+    expect(await showChanges(ctxOf(root), BASE, { what: 'All', jump: false })).toEqual({ places: 1 });
+    expect(stepper(root)?.querySelector('.cn')?.textContent).toBe('1 change');
+    // The innermost: the rows and not their table, the items and not their list, "item b" not (it holds "nested c").
+    expect(marked(root, 'chg')).toEqual([
+      'h1:Changes sample',
+      'dl:Date2026-10-20St',
+      'h2:1. DecisionsFold',
+      'p:Intro paragraph.',
+      'tr:ID What Status',
+      'tr:D1 First Agreed',
+      'tr:D2 Second Pendin',
+      'tr:D3 Third Agreed',
+      'tr:D4 Fourth In rev',
+      'li:item a',
+      'li:nested c',
+      'h2:2. LaterFold',
+      'p:Closing paragrap',
+      'h2:Where things sta',
+      'h3:Agreed',
+      'li:One thing.',
+      'h3:Waiting on you',
+      'li:Pick a name for ',
+      'li:Review the secon',
+      'h2:3. EndFold',
+      'p:Last words.',
+    ]);
   });
 });
 
@@ -1007,6 +1055,107 @@ describe('what changed: showChanges and the event', () => {
     await flush();
     expect(root.querySelector('.flash')).toBeNull();
     expect(root.querySelector('.chg')).toBeNull();
+  });
+});
+
+describe('what changed: another feature\'s throw, and a failed call', () => {
+  it('a listener\'s throw is caught: the show answers its places, emits to every listener and steps; Hide still calls onHide', async () => {
+    const root = mount();
+    const intro = find(root, 'p', 'Intro');
+    const { options } = withChanges({ changed: [lines(intro)] });
+    await enhance(root, options);
+    const ctx = ctxOf(root);
+    const heard: number[] = [];
+    ctx.events.on('changes', () => {
+      throw new Error('a listener');
+    });
+    ctx.events.on('changes', (p) => heard.push(p.sections.length));
+    const onHide = vi.fn();
+    expect(await showChanges(ctx, BASE, { what: 'x', onHide })).toEqual({ places: 1 });
+    expect(heard).toEqual([1]);
+    expect(stepper(root)?.querySelector('.cn')?.textContent).toBe('1 of 1');
+    expect(intro.classList.contains('flash')).toBe(true);
+    click(stepper(root)?.querySelector('button.hide') as HTMLElement);
+    expect(heard).toEqual([1, 0]);
+    expect(onHide).toHaveBeenCalledTimes(1);
+    expect(marked(root, 'chg')).toEqual([]);
+  });
+
+  it('a throw of the onHide a show replaces is caught: the new set is marked and its event emitted', async () => {
+    const root = mount();
+    const intro = find(root, 'p', 'Intro');
+    const later = find(root, 'p', 'Closing');
+    const { options } = withChanges((sha: string) => ({ changed: [lines(sha === BASE ? intro : later)] }));
+    await enhance(root, options);
+    const ctx = ctxOf(root);
+    const heard: number[] = [];
+    ctx.events.on('changes', (p) => heard.push(p.sections.length));
+    const bad = (): void => {
+      throw new Error('an onHide');
+    };
+    expect(await showChanges(ctx, BASE, { what: 'x', jump: false, onHide: bad })).toEqual({ places: 1 });
+    expect(await showChanges(ctx, 'fedcba9', { what: 'y', onHide: bad })).toEqual({ places: 1 });
+    expect(marked(root, 'chg')).toEqual(['p:Closing paragrap']);
+    expect(heard).toEqual([1, 1]);
+    expect(stepper(root)?.querySelector('.cn')?.textContent).toBe('1 of 1'); // and it stepped
+    // Hide: the event is emitted before the onHide that throws.
+    click(stepper(root)?.querySelector('button.hide') as HTMLElement);
+    expect(heard).toEqual([1, 1, 0]);
+  });
+
+  it('a throw reached by the step (a listener of reveal) is caught: the show answers its places', async () => {
+    const root = mount();
+    const { options } = withChanges({ changed: [[7, 7]] });
+    await enhance(root, options);
+    const ctx = ctxOf(root);
+    ctx.events.on('reveal', () => {
+      throw new Error('a reveal listener');
+    });
+    expect(await showChanges(ctx, BASE, { what: 'x' })).toEqual({ places: 1 });
+    expect(marked(root, 'chg')).toEqual(['p:Intro paragraph.']);
+  });
+
+  it('a failed call, or a reply that is no change set, is not kept: the next show of that base asks again', async () => {
+    const root = mount();
+    let n = 0;
+    await enhance(root, {
+      info: { sha: SHA },
+      changes: () => {
+        n += 1;
+        if (n === 1) return Promise.reject(new Error('a network blip'));
+        return Promise.resolve(n === 2 ? { nope: true } : { changed: [[7, 7]] });
+      },
+    });
+    const ctx = ctxOf(root);
+    expect(await showChanges(ctx, BASE, { what: 'x', jump: false })).toEqual({ skipped: 'unavailable' });
+    expect(await showChanges(ctx, BASE, { what: 'x', jump: false })).toEqual({ skipped: 'unavailable' });
+    expect(await showChanges(ctx, BASE, { what: 'x', jump: false })).toEqual({ places: 1 });
+    expect(await showChanges(ctx, BASE, { what: 'x', jump: false })).toEqual({ places: 1 });
+    expect(n).toBe(3); // the reply that read as a change set is kept
+  });
+
+  it('a failed call settling late drops only its own entry: a newer call for that base, made once it was bounded out, is kept', async () => {
+    const root = mount();
+    const calls: string[] = [];
+    const held: ((v: unknown) => void)[] = [];
+    await enhance(root, {
+      info: { sha: SHA },
+      changes: (sha: string) => {
+        calls.push(sha);
+        return sha === BASE ? new Promise((r) => held.push(r)) : Promise.resolve({ changed: [[7, 7]] });
+      },
+    });
+    const ctx = ctxOf(root);
+    const first = showChanges(ctx, BASE, { what: 'x', measure: true });
+    for (let i = 0; i < CACHE_MAX; i += 1) await showChanges(ctx, `b${String(i).padStart(6, '0')}`, { what: 'x', measure: true }); // BASE bounded out
+    const second = showChanges(ctx, BASE, { what: 'x', measure: true });
+    expect(calls.filter((c) => c === BASE)).toHaveLength(2);
+    held[0]?.({ nope: true });
+    expect(await first).toEqual({ skipped: 'unavailable' });
+    held[1]?.({ changed: [[7, 7]] });
+    expect(await second).toEqual({ places: 1 });
+    expect(await showChanges(ctx, BASE, { what: 'x', measure: true })).toEqual({ places: 1 });
+    expect(calls.filter((c) => c === BASE)).toHaveLength(2);
   });
 });
 

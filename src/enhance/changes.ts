@@ -34,8 +34,9 @@
 // only to a block an earlier walk of that range reached.
 //
 // showChanges(ctx, base, how) is the one export another feature uses (C49; Task 22's menu, notice and day view): it
-// asks the host for the set since `base` (one call per base per instance, kept: at most CACHE_MAX bases), checks
-// live() after the reply, and then, inside an operation:
+// asks the host for the set since `base` (one call per base per instance, its reply kept, at most CACHE_MAX bases; a
+// failed call, or a reply that is no change set, is not kept, so the next show of that base asks again; the reference
+// kept a failure), checks live() after the reply, and then, inside an operation:
 //   - with `how.measure`, marks nothing and answers how many places the set has (the notice's count);
 //   - otherwise hides what is shown (calling its onHide), marks the blocks (journal.toggleClass, so destroy clears
 //     them), shows the stepper, emits 'changes' with the level-2 sections (ctx.sections) that hold each place's first
@@ -43,7 +44,9 @@
 //     arrives after a later show was asked for marks nothing ('superseded').
 // It answers `{ places }`, or `{ skipped }` with why nothing was shown: 'unavailable' (no comparison: no `changes`,
 // a draft, no sha, a base that is not a sha, a failed call or a reply that is no change set), 'superseded', or 'gone'
-// (the instance is not live). It never throws or rejects.
+// (the instance is not live). It never throws or rejects: a throw of another feature's code it calls (the onHide of the
+// show it replaces, a listener of 'changes', a revealer or a listener of 'reveal' that the step reaches) is caught
+// there, and what the show owes after it runs all the same (the event is emitted, the step taken).
 //
 // The stepper, in the bar's tray (slots.tool('changes'), with `chrome.bar` only): `div.chg-nav[role=group]`, hidden
 // until a set is shown, holding `span.what` (how.what, clipped), `span.cn` ("3 changes", then "2 of 3"; aria-live),
@@ -60,9 +63,9 @@
 //     28% of the window's height, which needs the window's scroll position: here every jump lands alike.) Then it
 //     flashes each block of the place (the class `flash`, journaled, removed after FLASH_MS; a new flash of a block
 //     restarts it).
-// Hide (the button) clears every mark, hides the stepper, calls the onHide of what was shown, and emits 'changes' with
-// no sections. after(ctx), the second phase (LD5): a version with info.only is the day view, the changes since `only`
-// marked: shown at once (no step), under the label ONLY_WHAT.
+// Hide (the button) clears every mark, hides the stepper, emits 'changes' with no sections, and calls the onHide of
+// what was shown, each throw of those caught as above (a Hide clicked raises none). after(ctx), the second phase (LD5): for a document, a version
+// with info.only is the day view, the changes since `only` marked: shown at once (no step), under the label ONLY_WHAT.
 //
 // Ambient APIs replaced: fetch of a changes URL → host.changes; the step's scroll → nav.goTo; innerHeight and the
 // clock → env; setTimeout → env.timeout; body classes → none (the stepper's own `hidden`); the session's kept
@@ -424,12 +427,24 @@ function clear(ctx: FeatureContext, st: State): (() => void) | null {
   return s.onHide;
 }
 
+/**
+ * Call another feature's code (an onHide, the event's listeners, a step that reveals): a throw there is caught, so what
+ * this feature owes after it still runs, and showChanges never rejects (the lifecycle's rule for an `after`).
+ */
+function attempt(fn: () => void): void {
+  try {
+    fn();
+  } catch {
+    // the other feature's fault: nothing of this one's waits on it
+  }
+}
+
 /** Hide what is shown (the stepper's Hide): every mark goes, and 'changes' is emitted with no sections. */
 function hide(ctx: FeatureContext, st: State): void {
   if (st.shown === null) return;
   const onHide = clear(ctx, st);
-  ctx.events.emit('changes', { sections: [] });
-  if (onHide !== null && ctx.live()) onHide();
+  attempt(() => ctx.events.emit('changes', { sections: [] }));
+  if (onHide !== null && ctx.live()) attempt(onHide);
 }
 
 /** The level-2 sections (ctx.sections) holding each place's first block, in order, each once. */
@@ -464,21 +479,26 @@ function show(ctx: FeatureContext, st: State, set: ChangeSet, how: ShowHow): num
     st.stepper.box.hidden = false;
   }
   updateCount(st);
-  if (previous !== null) previous(); // a destroy there: the event emits nothing, and the check after it stops the step
-  ctx.events.emit('changes', { sections: sectionsOf(ctx, stops) });
+  if (previous !== null) attempt(previous); // a destroy there: the event emits nothing, and the check after it stops the step
+  attempt(() => ctx.events.emit('changes', { sections: sectionsOf(ctx, stops) }));
   if (!ctx.live()) return stops.length; // a listener, or the onHide before it, may destroy
-  if (how.jump !== false) step(ctx, st, 1);
+  if (how.jump !== false) attempt(() => step(ctx, st, 1));
   return stops.length;
 }
 
-/** The host's set since `base`, once per base per instance (see the header). */
+/** The host's set since `base`, once per base per instance while its reply is kept (see the header). */
 function fetchSet(ctx: FeatureContext, st: State, base: string): Promise<ChangeSet | null> {
-  let p = st.cache.get(base);
-  if (p === undefined) {
-    p = ctx.host.changes(base).then(readChangeSet);
-    if (st.cache.size >= CACHE_MAX) st.cache.delete(st.cache.keys().next().value as string);
-    st.cache.set(base, p);
-  }
+  const kept = st.cache.get(base);
+  if (kept !== undefined) return kept;
+  const p: Promise<ChangeSet | null> = ctx.host.changes(base).then((reply) => {
+    const set = readChangeSet(reply);
+    // A failed call, or a reply that is no change set, is not kept: the next show of this base asks again. Only this
+    // call's own entry goes (a newer call for the base, made once this one was bounded out, stays).
+    if (set === null && st.cache.get(base) === p) st.cache.delete(base);
+    return set;
+  });
+  if (st.cache.size >= CACHE_MAX) st.cache.delete(st.cache.keys().next().value as string);
+  st.cache.set(base, p);
   return p;
 }
 

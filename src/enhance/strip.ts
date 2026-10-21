@@ -10,8 +10,10 @@
 //   - with waiting items (the first "Waiting" box of "Where things stand"): `div.rs-wait`, a `p.rs-label` ("Waiting on
 //     you · N", after a `span.dot`) and an `ol` with one `li` per item, each a link (`a`) holding the item's text,
 //     white space as one space, clipped to WAIT_CLIP (text.ts's clip). A click on it (the main button, no modifier) goes
-//     to the item through nav.goTo, a new entry in the host's history; its href names the box's heading (`#<id>`), so
-//     a link opened elsewhere lands on the box;
+//     to the item through nav.goTo, asking for a new entry; but the item has no id and defines no ID, so goTo tells the
+//     host nothing and no entry is made: Back does not return to where the reader was. (The reference's `waiting-N` ids
+//     made one; a history entry for a target with no id is carried to Task 24, C53.) Its href names the box's heading
+//     (`#<id>`), so a link opened elsewhere lands on the box;
 //   - `p.rs-facts`, always (the stylesheet hides it empty), its facts joined by a `span.sep` ("·", aria-hidden):
 //       the decisions: of the tables that are indexes of definitions (ids.ts) and have a header holding the decisions
 //       word, the one with the most body rows, the first of a tie. Its fact (`span.fact`) is a link to its group's

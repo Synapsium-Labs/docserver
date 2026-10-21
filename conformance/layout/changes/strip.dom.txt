@@ -6,22 +6,7 @@ p
   "· · Status: ·"
   strong
     "Owner:"
-dl .byline chrome
-  div chrome
-    dt chrome
-      "Date"
-    dd chrome
-      "2026-10-20"
-  div chrome
-    dt chrome
-      "Status"
-    dd chrome
-      "Draft"
-  div chrome
-    dt chrome
-      "Owner"
-    dd chrome
-      "project-a team"
+"2026-10-20Draft project-a team"
 section .review-strip chrome aria-label="Review"
   div .rs-wait chrome
     p .rs-label chrome

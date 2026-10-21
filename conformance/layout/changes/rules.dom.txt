@@ -17,36 +17,6 @@ section .review-strip chrome aria-label="Review"
         "1 pending"
       span .cnt.no chrome
         "1 rejected"
-details .doc-facts chrome
-  summary chrome
-    span .fs-k chrome
-      "Rules index · 2 rules"
-    span .sep chrome aria-hidden="true"
-      "·"
-    span .cnt.ok chrome
-      "1 agreed"
-    span .sep chrome aria-hidden="true"
-      "·"
-    span .cnt.wait chrome
-      "1 pending"
-  div .facts-body chrome
-    ol chrome
-      li chrome
-        a .rlink chrome
-          span .rid chrome
-            "AB-ONE"
-          span .rtitle chrome
-            "Read once"
-        span .ok.pill chrome
-          "Agreed"
-      li chrome
-        a .rlink chrome
-          span .rid chrome
-            "AB-TWO"
-          span .rtitle chrome
-            "Write Markdown"
-        span .pill.wait chrome
-          "Pending"
 p
   code
     "AB-ONE"

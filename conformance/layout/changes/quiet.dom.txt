@@ -4,17 +4,7 @@ p
   strong
     "Note"
   "· · Status:"
-dl .byline chrome
-  div chrome
-    dt chrome
-      "Date"
-    dd chrome
-      "2026-10-20"
-  div chrome
-    dt chrome
-      "Status"
-    dd chrome
-      "Draft"
+"2026-10-20Draft"
 h2
   "One"
 p
