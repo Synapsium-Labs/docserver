@@ -43,7 +43,9 @@ afterAll(closeBrowsers);
 
 describeBrowsers((browser) => {
   it('setStyle applies under the strict policy, important included, where a style attribute is refused; undo leaves no attribute', async () => {
-    const doc = await openDoc(DOC, {}, { browser, csp: 'strict' });
+    // Without the bar: the scroll feature (Task 12) measures --bar-h on the root at its own frames, and its write
+    // would race this case's.
+    const doc = await openDoc(DOC, { chrome: { bar: false } }, { browser, csp: 'strict' });
     try {
       await doc.page.evaluate(script);
       const got = await doc.page.evaluate(async () => {
