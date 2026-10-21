@@ -160,9 +160,9 @@ h3 .task aria-label="Task task-open: A heading named like the"…
   ": A heading named like the chrome"
   button .task-open chrome aria-expanded="false"
     "Show all"
-h3
+h3 aria-label="Task 9: an anchor before the word"
   "Task 9: an anchor before the word"
-h3
+h3 aria-label="Task 10: in bold"
   strong
     "Task 10:"
   "in bold"

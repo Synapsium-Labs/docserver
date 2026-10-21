@@ -46,6 +46,8 @@ p
 h2 aria-label="1. Context"
   "1. Context"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Context"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Context"
       "Fold"
 button .fold-note chrome aria-label="Unfold: Context" hidden=""
@@ -73,6 +75,8 @@ blockquote
 h2 .folded aria-label="2. Design"
   "2. Design"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Design"
+      "#"
     button .h-fold chrome aria-expanded="false" aria-label="Fold or unfold: Design"
       "Unfold"
 button .fold-note chrome aria-label="Unfold: Design"
@@ -174,6 +178,8 @@ div hidden="until-found"
 h2 aria-label="3. Decisions"
   "3. Decisions"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Decisions"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Decisions"
       "Fold"
 button .fold-note chrome aria-label="Unfold: Decisions" hidden=""
@@ -235,6 +241,8 @@ div
 h2 aria-label="4. Open questions"
   "4. Open questions"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Open questions"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Open questions"
       "Fold"
 button .fold-note chrome aria-label="Unfold: Open questions" hidden=""
@@ -252,6 +260,8 @@ ol
 h2 aria-label="Where things stand"
   "Where things stand"
   span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Where things stand"
+      "#"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Where things stand"
       "Fold"
 button .fold-note chrome aria-label="Unfold: Where things stand" hidden=""
@@ -261,6 +271,9 @@ button .fold-note chrome aria-label="Unfold: Where things stand" hidden=""
     "Show"
 h3
   "Agreed"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Agreed"
+      "#"
 ul
   li
     "R1: the title block comes first."
@@ -268,6 +281,9 @@ ul
     "D1: the warm palette stays."
 h3
   "Waiting on you"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Waiting on you"
+      "#"
 ul
   li
     "D2: whether sections fold by default."
@@ -275,6 +291,9 @@ ul
     "Q1: the fold memory question in section "…
 h3
   "Later"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Later"
+      "#"
 ul
   li
     "D3: a rules index."

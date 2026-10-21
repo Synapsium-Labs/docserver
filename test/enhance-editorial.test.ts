@@ -236,7 +236,8 @@ describe('boxes', () => {
     const root = mount(DOC);
     await enhance(root, infoOf(DOC));
     const callouts = Array.from(root.querySelectorAll('div.callout'));
-    expect(callouts.map((c) => [c.className, c.firstElementChild?.textContent])).toEqual([
+    // the heading's own text, before the controls the layout puts after it (its section link, Task 14)
+    expect(callouts.map((c) => [c.className, c.firstElementChild?.firstChild?.textContent])).toEqual([
       ['callout agreed', 'Agreed'],
       ['callout waiting', 'Waiting on you'],
       ['callout later', 'Later'],

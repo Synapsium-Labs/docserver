@@ -877,7 +877,7 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
     await enhance(root, { storage, storageKey: 'k' });
     const ctx = ctxOf(root);
     expect([ctx.state.readPos('p'), ctx.state.readUi('sidetab')]).toEqual([undefined, undefined]);
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds')]);
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]); // the reading position's own key (Task 14)
   });
 
   it('writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back', async () => {
