@@ -127,13 +127,31 @@ interface Fake {
 /** The first word of a diagram's second line: the name each fixture gives its first node. */
 const wordOf = (text: string): string => /\n\s*(\S+)/.exec(text)?.[1] ?? text;
 
-/** Put Mermaid's tooltip in the body, as its flowchart drawing does: the first `.mermaidTooltip` of the document, else a new one. */
-function mermaidTooltip(): void {
-  if (document.querySelector('.mermaidTooltip') !== null) return;
-  const tip = document.createElement('div');
-  tip.className = 'mermaidTooltip';
-  tip.style.opacity = '0';
-  document.body.append(tip);
+/**
+ * As Mermaid's flowchart drawing does: take the document's first `.mermaidTooltip`, else put a new one in the body, and
+ * bind the drawing's node to show it on mouseover (marking the node `hover`) and close it on mouseout.
+ */
+function mermaidTooltip(svg: SVGSVGElement, text: string): void {
+  let tip = document.querySelector<HTMLElement>('.mermaidTooltip');
+  if (tip === null) {
+    tip = document.createElement('div');
+    tip.className = 'mermaidTooltip';
+    tip.style.opacity = '0';
+    document.body.append(tip);
+  }
+  const shown = tip;
+  const node = document.createElementNS(SVG_NS, 'g');
+  node.setAttribute('class', 'node');
+  node.addEventListener('mouseover', () => {
+    shown.style.opacity = '0.9';
+    shown.textContent = `Tip of ${wordOf(text)}`;
+    node.classList.add('hover');
+  });
+  node.addEventListener('mouseout', () => {
+    shown.style.opacity = '0';
+    node.classList.remove('hover');
+  });
+  svg.append(node);
 }
 
 function fakeMermaid(
@@ -172,7 +190,7 @@ function fakeMermaid(
           if (how === 'error') svg.setAttribute('aria-roledescription', 'error');
           decorate(svg, text);
           node.append(svg);
-          if (tooltip) mermaidTooltip();
+          if (tooltip) mermaidTooltip(svg, text);
         };
         if (!fake.hold) {
           finish();
@@ -880,7 +898,7 @@ describe('diagrams: Mermaid\'s tooltip, which its drawings put in the body, outs
     expect(Array.from(document.body.childNodes)).toEqual(body);
   });
 
-  it('one shown when its root goes, while another root still draws with it, is closed and emptied', async () => {
+  it('one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid\'s own mouseout', async () => {
     const a = mount();
     const b = mount(['# B', '', fence('flowchart LR\n  bee --> X')].join('\n'));
     const fake = fakeMermaid(undefined, undefined, true);
@@ -889,12 +907,19 @@ describe('diagrams: Mermaid\'s tooltip, which its drawings put in the body, outs
     await settledState(a, 'drawn');
     await settledState(b, 'drawn');
     const tip = tooltips()[0] as HTMLElement;
-    // As Mermaid shows it over a hovered node of a's.
-    tip.style.opacity = '0.9';
-    tip.textContent = 'A tip';
+    // The pointer is over a's third figure's node: Mermaid shows the tooltip there.
+    a.querySelectorAll('figure g.node')[2]?.dispatchEvent(new Event('mouseover'));
+    expect([tip.style.opacity, tip.textContent]).toEqual(['0.9', 'Tip of three']);
     await destroyEnhancement(a);
     expect(tip.isConnected).toBe(true);
-    expect([tip.style.opacity, tip.textContent]).toEqual(['0', '']);
+    expect(tip.style.opacity).toBe('0');
+    // Shown over b's node, it is b's: a root that goes leaves it alone.
+    b.querySelector('figure g.node')?.dispatchEvent(new Event('mouseover'));
+    const c = mount(['# C', '', fence('flowchart LR\n  sea --> X')].join('\n'));
+    await enhance(c, drawWith({ default: fake.api }, 'tagC'));
+    await settledState(c, 'drawn');
+    await destroyEnhancement(c);
+    expect([tip.isConnected, tip.style.opacity, tip.textContent]).toEqual([true, '0.9', 'Tip of bee']);
   });
 
   it('one the page already had is never removed nor changed', async () => {

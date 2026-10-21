@@ -10,7 +10,8 @@
 //   the fallback where it applies, with its note; a style element inside a label is dropped wherever it sits, so a
 //   paragraph outside the drawing keeps its colour.
 // - Mermaid's tooltip, which its flowchart puts in the body, goes with the reader: a node hovered as the reader is
-//   destroyed leaves the body as it was.
+//   destroyed leaves the body as it was; with a second root still drawing with it, it is closed instead, by the
+//   mouseout Mermaid closes it on.
 // - The figure rules: under the gate, the source is a transparent placeholder on the plate while its figure is drawn,
 //   then hidden; the drawing is laid out but unseen while Mermaid draws into it; a drawn figure shows no source plate
 //   and a failed one no blank plate, its note in their place; without Mermaid the source is text on its plate. Two of
@@ -364,6 +365,59 @@ describeBrowsers((browser) => {
       await doc.page.evaluate(() => (window as unknown as { __docreaderHarness: { destroy(): Promise<void> } }).__docreaderHarness.destroy());
       await frames(doc.page);
       expect(await body()).toEqual(before);
+      expect(await doc.page.evaluate(() => document.querySelectorAll('.mermaidTooltip').length)).toBe(0);
+      expect(await doc.violations()).toEqual([]);
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('Mermaid\'s tooltip shown over a node of a root that goes, while another root draws with it, is closed by Mermaid\'s own mouseout', async () => {
+    const md = ['# A tip', '', '```mermaid', 'flowchart LR', '  A[Hover me] --> B[Stop]', '  click A href "https://example.com/" "A tip"', '```', '', '*Figure 1. A node with a tip.*', ''].join('\n');
+    const doc = await openDoc(md, {}, { browser, csp: 'reader', enhance: false, mermaid: true });
+    try {
+      const body = (): Promise<string[]> => doc.page.evaluate(() => Array.from(document.body.children).map((c) => `${c.localName}.${c.className}`));
+      const before = await body();
+      await doc.page.evaluate(script);
+      // A second root, a copy of the first, after it; both drawn with the package's Mermaid file, one module.
+      await doc.page.evaluate(
+        `(async () => {
+          const one = document.querySelector('main[data-harness-root]');
+          const two = one.cloneNode(true);
+          two.removeAttribute('data-harness-root');
+          two.setAttribute('data-second-root', '');
+          one.after(two);
+          const load = () => import(${JSON.stringify(MERMAID_PATH)});
+          await window.__dg.enhance(one, { mermaid: { load } });
+          await window.__dg.enhance(two, { mermaid: { load } });
+          const drawn = (r) => r.getAttribute('data-docreader-diagrams') === 'drawn';
+          while (!drawn(one) || !drawn(two)) await new Promise((r) => setTimeout(r, 20));
+        })()`,
+      );
+      await doc.page.locator('main[data-harness-root] figure g.node', { hasText: 'Hover me' }).hover();
+      const shown = (): Promise<{ count: number; opacity: number }> =>
+        doc.page.evaluate(() => {
+          const tips = Array.from(document.querySelectorAll('body > div.mermaidTooltip'));
+          return { count: tips.length, opacity: tips[0] === undefined ? -1 : Number(getComputedStyle(tips[0]).opacity) };
+        });
+      await doc.page.waitForFunction(() => {
+        const tip = document.querySelector('body > div.mermaidTooltip');
+        return tip !== null && Number(getComputedStyle(tip).opacity) > 0.5;
+      });
+      await doc.page.evaluate(() =>
+        (window as unknown as { __dg: { destroyEnhancement(r: HTMLElement): Promise<void> } }).__dg.destroyEnhancement(document.querySelector('main[data-harness-root]') as HTMLElement),
+      );
+      // Mermaid fades it out over half a second.
+      await doc.page.waitForFunction(() => {
+        const tip = document.querySelector('body > div.mermaidTooltip');
+        return tip !== null && Number(getComputedStyle(tip).opacity) === 0;
+      });
+      expect(await shown()).toEqual({ count: 1, opacity: 0 });
+      // The second root still draws with it; once it goes too, the body is as it was, but for the second root itself.
+      await doc.page.evaluate(() =>
+        (window as unknown as { __dg: { destroyEnhancement(r: HTMLElement): Promise<void> } }).__dg.destroyEnhancement(document.querySelector('main[data-second-root]') as HTMLElement),
+      );
+      expect((await body()).filter((c) => c !== 'main.')).toEqual(before.filter((c) => c !== 'main.'));
       expect(await doc.page.evaluate(() => document.querySelectorAll('.mermaidTooltip').length)).toBe(0);
       expect(await doc.violations()).toEqual([]);
     } finally {

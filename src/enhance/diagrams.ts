@@ -57,8 +57,9 @@
 // put a tooltip, `div.mermaidTooltip`, in the document's body the first time (it reuses the document's first
 // `.mermaidTooltip` after), and show it over a hovered node that has a tooltip. One a library call made is tracked
 // per document with the live instances that drew while it stood (Tip): the last one's teardown removes it, and each
-// earlier one's closes and empties it (a tooltip shown over that root's node would stay shown); one a call made after
-// its instance was destroyed goes at once. A tooltip the page already had is the page's: never changed.
+// earlier one's sends a node of its own that Mermaid shows the tooltip over the mouseout Mermaid closes it on (the
+// node goes, so none would come); one a call made after its instance was destroyed goes at once. A tooltip the page
+// already had is the page's: never changed.
 //
 // Standard files, slug `diagrams`: test/enhance-diagrams.test.ts, test/browser/diagrams.test.ts,
 // conformance/layout/diagrams/ and scripts/demo/samples/diagrams.md. The figure rules are assets/reader.css's.
@@ -231,20 +232,26 @@ function tooltipIn(doc: Document): Element | null {
   return doc.querySelector('.mermaidTooltip');
 }
 
-/** One instance's teardown: it no longer draws with `tip`; remove it once no live instance does, else close it. */
-function releaseTip(tip: Tip, ctx: FeatureContext): void {
+/**
+ * One drawing's teardown, before the drawing goes: its instance no longer draws with `tip`, which goes once no live
+ * instance does. While another still does, a tooltip shown over a node of this drawing would stay shown once the node
+ * is gone, as no mouseout comes: Mermaid marks that node `hover`, and is sent the mouseout it closes the tooltip on.
+ */
+function releaseTip(tip: Tip, ctx: FeatureContext, drawing: Element): void {
   tip.users.delete(ctx);
   if (tip.users.size === 0) {
     tip.el.remove();
     return;
   }
-  // Shown over a node of this root, it would stay shown once that node is gone (no mouseout comes): close it.
-  (tip.el as Element & ElementCSSInlineStyle).style.opacity = '0';
-  tip.el.replaceChildren();
+  for (const node of drawing.querySelectorAll('g.hover')) {
+    const out = drawing.ownerDocument.createEvent('Event');
+    out.initEvent('mouseout', false, false);
+    node.dispatchEvent(out);
+  }
 }
 
-/** After a call: note a tooltip the call made, and that this instance draws with the library's. */
-function noteTip(ctx: FeatureContext, doc: Document, had: Element | null): void {
+/** After a call: note a tooltip the call made, and that this instance and its drawing draw with the library's. */
+function noteTip(ctx: FeatureContext, doc: Document, had: Element | null, drawing: Element): void {
   const now = tooltipIn(doc);
   if (now === null) return;
   tips ??= new WeakMap();
@@ -256,14 +263,14 @@ function noteTip(ctx: FeatureContext, doc: Document, had: Element | null): void 
   }
   if (!ctx.live()) {
     // The call ran on after a destroy: a tooltip it made has no instance left to go with.
-    if (tip.users.size === 0) releaseTip(tip, ctx);
+    if (tip.users.size === 0) releaseTip(tip, ctx, drawing);
     return;
   }
   const held = tip;
   ctx.operate(() => {
     held.users.add(ctx);
     ctx.journal.defer(() => {
-      releaseTip(held, ctx);
+      releaseTip(held, ctx, drawing);
     });
   });
 }
@@ -449,7 +456,7 @@ async function call(ctx: FeatureContext, api: MermaidApi, config: () => Record<s
   } catch {
     // a rejection: the drawing is checked by the caller
   }
-  noteTip(ctx, doc, had);
+  noteTip(ctx, doc, had, drawing);
   return drawing;
 }
 
