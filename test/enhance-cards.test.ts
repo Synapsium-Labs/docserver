@@ -480,11 +480,18 @@ describe('ARIA, and the card in the root', () => {
     const ctx = ctxOf(root);
     const scrolls = (): number => adds.mock.calls.filter((c) => c[0] === 'scroll').length - removes.mock.calls.filter((c) => c[0] === 'scroll').length;
     expect([cardOf(root), chromeIdsIssued(document) - ids, scrolls()]).toEqual([null, 0, 0]);
-    // the overlay 'card' is free: registering it here does not throw (and the stand-in is taken back at once)
+    // The overlay is free until the first show; take the stand-in back before measuring card's one registration.
     ctx.overlays.register('card', { isOpen: () => false, close: () => undefined })();
+    // The service is frozen, so replace only this context's service reference with a delegating object for the spy.
+    const overlays = { ...ctx.overlays };
+    Object.defineProperty(ctx, 'overlays', { value: overlays });
+    const registrations = vi.spyOn(ctx.overlays, 'register');
     focus(link(root, 'xref', 'D1'));
+    const [kind, handler] = registrations.mock.calls[0] ?? [];
+    expect(registrations).toHaveBeenCalledTimes(1);
+    expect(kind).toBe('card');
+    expect(handler?.isOpen()).toBe(true);
     expect([chromeIdsIssued(document) - ids, scrolls()]).toEqual([1, 1]);
-    expect(() => ctx.overlays.register('card', { isOpen: () => false, close: () => undefined })).toThrow(/once/);
     // hidden: no scroll is heard; shown again: one
     key(link(root, 'xref', 'D1'), 'Escape');
     expect(scrolls()).toBe(0);
@@ -493,6 +500,8 @@ describe('ARIA, and the card in the root', () => {
     expect(styles).not.toHaveBeenCalled();
     focus(link(root, 'xref', 'D2'));
     focus(link(root, 'term', 'fold'));
+    expect(registrations).toHaveBeenCalledTimes(1);
+    expect(registrations).toHaveBeenLastCalledWith('card', handler);
     expect([scrolls(), chromeIdsIssued(document) - ids, root.querySelectorAll('.xcard').length]).toEqual([1, 1, 1]);
     await destroyEnhancement(root);
     expect([cardOf(root), chromeIdsIssued(document) - ids, scrolls()]).toEqual([null, 0, 0]);

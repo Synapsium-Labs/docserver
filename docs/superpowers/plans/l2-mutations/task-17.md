@@ -1984,9 +1984,9 @@ Measured 2026-10-21 in throwaway copies with the offline Playwright image, one r
 ]
 ```
 
-## Integration fixture correction (L2-T17-M199 to L2-T17-M205)
+## Integration fixture correction (L2-T17-M199 to L2-T17-M206)
 
-The integration test starts every enhancement feature, so `jump`, `keysheet`, and `scroll` legitimately allocate chrome IDs and a scroll listener before cards builds. The lazy-card accounting case now uses a false-by-default hoisted fixture flag to pass through the real feature list except those three features, and resets it after each case. This isolates only the card's own lazy allocations without subtracting an ambient baseline. Measured 2026-10-21 in throwaway copies using the targeted case: the control is green (`rc=0`); all seven changes below are red (`rc=1`).
+The integration test starts every enhancement feature, so `jump`, `keysheet`, and `scroll` legitimately allocate chrome IDs and a scroll listener before cards builds. The lazy-card accounting case now uses a false-by-default hoisted fixture flag to pass through the real feature list except those three features, and resets it after each case. This isolates only the card's own lazy allocations without subtracting an ambient baseline. It replaces the frozen overlay service only on that test context with a delegating object, then spies on `register` after the stand-in probe and before first show. The captured first handler is the one and only registration across first show, hide, D2, and term changes. Measured 2026-10-21 in throwaway copies using the targeted case: the control is green (`rc=0`); all eight changes below are red (`rc=1`).
 
 | Row | Guard | File | Change | Result |
 |---|---|---|---|---|
@@ -1995,8 +1995,9 @@ The integration test starts every enhancement feature, so `jump`, `keysheet`, an
 | L2-T17-M201 | the card overlay registers only on first show | `src/enhance/cards.ts` | register the overlay during build | red: replacement registration throws |
 | L2-T17-M202 | the card scroll listener starts only on first show | `src/enhance/cards.ts` | register a scroll listener during build | red: initial listeners are nonzero |
 | L2-T17-M203 | hiding stops the card scroll listener | `src/enhance/cards.ts` | retain the listener when hiding | red: hidden listener remains |
-| L2-T17-M204 | reopening reuses one card and overlay | `src/enhance/cards.ts` | replace the card on each show | red: cards/IDs multiply and overlay re-registers |
+| L2-T17-M204 | reopening reuses one card and ID | `src/enhance/cards.ts` | replace the card on each show | red: cards/IDs multiply |
 | L2-T17-M205 | switching triggers reuses one scroll listener | `src/enhance/cards.ts` | replace the listener on each show | red: listener count becomes two |
+| L2-T17-M206 | reopening and changing triggers retains the first overlay registration | `src/enhance/cards.ts` | re-register the existing card's overlay before a later show | red: 1 failed / 90 passed; the registration spy measures three calls while card, ID, and scroll-listener counts remain unchanged |
 
 The final destroy assertion proves the card, its ID, and its scroll listener all return to zero. All other cases use the full real feature list.
 
@@ -2046,7 +2047,7 @@ The final destroy assertion proves the card, its ID, and its scroll listener all
   },
   {
     "id": "L2-T17-M204",
-    "guard": "reopening reuses one card and overlay",
+    "guard": "reopening reuses one card and ID",
     "file": "src/enhance/cards.ts",
     "old": "      card ??= makeCard();",
     "new": "      card = makeCard();",
@@ -2058,6 +2059,14 @@ The final destroy assertion proves the card, its ID, and its scroll listener all
     "file": "src/enhance/cards.ts",
     "old": "      following ??= env.onScroll(() => {",
     "new": "      following = env.onScroll(() => {",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M206",
+    "guard": "reopening and changing triggers retains the first overlay registration",
+    "file": "src/enhance/cards.ts",
+    "old": "      card ??= makeCard();",
+    "new": "      card ??= makeCard();\n      if (card.parentNode !== null) ctx.overlays.register('card', { isOpen: () => shown !== null, close: () => undefined });",
     "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
   }
 ]
