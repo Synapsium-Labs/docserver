@@ -224,11 +224,15 @@ function violationsIn(sf: ts.SourceFile, checker: ts.TypeChecker): string[] {
     const { line, character } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
     out.push(`${line + 1}:${character + 1} ${what}`);
   };
-  /** True when `name` is one Env declares and `value`'s type is env.ts's Env: the seam that wraps the window. */
+  /**
+   * True when `name` is one Env declares and `value`'s type is env.ts's Env: the seam that wraps the window; or one
+   * Viewport declares on env.ts's Viewport, the frozen answer of `env.viewport()` (its `scrollY`, Task 14).
+   */
   const onEnv = (value: ts.Node, name: string): boolean => {
     const type = checker.getTypeAtLocation(value);
     const sym = type.aliasSymbol ?? type.getSymbol();
-    if (sym?.getName() !== 'Env' || !(sym.declarations ?? []).some((d) => rel(d.getSourceFile().fileName) === 'src/enhance/env.ts')) return false;
+    const seam = sym?.getName();
+    if ((seam !== 'Env' && seam !== 'Viewport') || !(sym?.declarations ?? []).some((d) => rel(d.getSourceFile().fileName) === 'src/enhance/env.ts')) return false;
     return checker.getPropertiesOfType(type).some((p) => p.getName() === name);
   };
   const visit = (node: ts.Node): void => {
@@ -397,7 +401,7 @@ describe('enhance walls: import inertness', () => {
     for (const s of spies) s.mockRestore();
     expect(calls).toEqual([0, 0, 0, 0]);
     expect(Reflect.ownKeys(globalThis).filter((k) => !names.has(k))).toEqual([]);
-    expect(Object.keys(mod).sort()).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'setEnhancementPrefs']);
+    expect(Object.keys(mod).sort()).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'setEnhancementPrefs']);
   });
 
   it('no source file runs code at its top level', () => {
@@ -444,6 +448,8 @@ describe('enhance walls: CSP, purity and id lookups', () => {
       // after every line above, so their positions stay: the Env's type, which lets `env` and `ctx.env` through
       "import type { Env } from './env.js'; import type { FeatureContext } from './types.js';",
       'declare const ctx: FeatureContext; declare const env: Env;',
+      // the Viewport's own names on env.viewport()'s answer (Task 14), and nothing else on it
+      'ctx.env.viewport().scrollY; const { scrollY: y, w } = env.viewport(); const vp = env.viewport(); vp.scrollY; vp.innerHeight;',
     ].join('\n');
     expect(violations('probe.ts', probe)).toEqual([
       '1:30 .defaultView',
@@ -465,6 +471,7 @@ describe('enhance walls: CSP, purity and id lookups', () => {
       '6:42 .requestIdleCallback',
       '6:68 .getComputedStyle',
       "6:92 ['matchMedia']",
+      '9:113 .innerHeight',
     ]);
   });
 
@@ -650,7 +657,7 @@ describe('README: ./enhance', () => {
     const README = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
     const mod = (await import('../src/enhance/index.js')) as Record<string, unknown>;
     const names = Object.keys(mod);
-    expect(names.length).toBe(4);
+    expect(names.length).toBe(5);
     expect(names.filter((n) => !README.includes(`\`${n}\``) && !README.includes(`\`${n}(`))).toEqual([]);
   });
 });

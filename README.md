@@ -142,13 +142,15 @@ One root has one owner: calling `enhance` again on an enhanced root with the sam
 
 **`setEnhancementPrefs(root, prefs)`** changes the prefs of an enhanced root at once and writes them behind. A bad value throws `'invalid-options'`; a root that is not enhanced is left alone. A change made while `enhance` is still starting (waiting for an earlier destroy of the same root, say) is kept and applied as soon as it builds.
 
+**`goToHash(root, id, from?)`** is `onHash`'s other half: when the host's own history moves to an entry of this document (its `popstate`), it passes that entry's id (`null` for none) and the `from` token it was handed when the reader left that entry, and the reader goes back to that place when the token has the shape the reader writes (checked like a stored position, whoever made it), else to `id` when it names something in the document (an id that names nothing does nothing), else, for `null`, to the top, calling no `onHash`; it does nothing for a root that is not enhanced or still starting.
+
 **Storage keys.** The reader's state lives under its own keys, and only those are read from `snapshot`:
 
 | Key | Holds |
 |---|---|
 | `docreader:prefs` | The prefs, reader-wide: a JSON object such as `{"theme":"dark","width":"wide","lens":"product"}`. Fields this version does not know are kept when it is written back. |
 | `docreader:doc:<storageKey>:folds` | The folded sections of one document: a JSON array of heading ids. |
-| `docreader:pos:<posKey>` | Reserved for the reading position of one document. This version neither reads nor writes it. |
+| `docreader:pos:<posKey>` | The reading position of one document: a JSON object such as `{"line":"12-14","offset":40,"y":900}` (the block at the reading line, by its source lines or its id, its top in the window, and the scroll position), read during startup and written once scrolling stops and when the page is hidden; `initialHash` wins over it. A host that wants the position kept per tab routes these keys to its session storage. With two roots in one window, a root the reader is not in keeps no place. |
 | `docreader:ui` | Reserved for the reader's interface memory, reader-wide. This version neither reads nor writes it. |
 
 A stored value that is not valid JSON, or not of its shape, is ignored. Writes go behind the local change: the reader changes at once, then calls `set`. Calls for one key are serialized per storage object, across every root given that object (two roots on one page, or a root enhanced again after a destroy), so a newer value never lands before an older one; while a call is pending only the newest waiting value is sent, and a `set` that calls back into the reader (to re-apply the host's own settings, say) queues that change behind its own call. The prefs object is written as this root's snapshot of it with its own changes, merged under a newer value another root queued on that storage object when the snapshot cannot hold that value (queued after the snapshot was read, or still in flight then), so one root never drops a field another wrote, nor writes back a value the host's store has since replaced. Pass the same storage object to every `enhance` that shares a store: two objects are two queues. A `set` that throws or rejects is ignored and changes nothing locally.

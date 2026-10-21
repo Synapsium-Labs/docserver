@@ -8,7 +8,7 @@
 // project, so every import resolves by package name through the tarball's own exports map, never through this
 // checkout. The check imports `@synapsium-labs/docserver/render` and `/conformance`, confirms the entry
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, imports
-// `/enhance` in Node (it is import-inert) and checks its four exports, resolves the stylesheet, the font licence and
+// `/enhance` in Node (it is import-inert) and checks its five exports, resolves the stylesheet, the font licence and
 // the Mermaid file through `./assets/*` and imports the Mermaid file there (its one export, the default, is Mermaid's
 // API, with `startOnLoad` false, so the file is import-inert), refuses a deep import of the enhance build, and runs
 // runCorpus(render, { scanRefs }).
@@ -104,7 +104,7 @@ try {
 }
 
 const enhanceApi = Object.keys(await import('${PACKAGE}/enhance')).sort().join(', ');
-if (enhanceApi === 'EnhanceError, destroyEnhancement, enhance, setEnhancementPrefs') {
+if (enhanceApi === 'EnhanceError, destroyEnhancement, enhance, goToHash, setEnhancementPrefs') {
   say(\`${PACKAGE}/enhance imports in Node and exports exactly \${enhanceApi}\`);
 } else {
   ok = false;

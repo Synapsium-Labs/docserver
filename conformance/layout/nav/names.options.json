@@ -1,0 +1,7 @@
+{
+  "options": {
+    "initialHash": "__proto__"
+  },
+  "scope": ["h-anchor", "h-ctl", "flash", "[tabindex]"],
+  "hostile": true
+}

@@ -23,7 +23,8 @@ const hooks = vi.hoisted(() => ({ seeds: [] as unknown[], late: [] as unknown[] 
 
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
-  const left = ['rules', 'ids', 'plans', 'figures'];
+  // The reading position (Task 14) binds j and k, which these cases bind themselves as a later feature's keys.
+  const left = ['rules', 'ids', 'plans', 'figures', 'position'];
   const features = (): Feature[] => {
     const list = real.features().filter((f) => !left.includes(f.name));
     const at = list.findIndex((f) => f.name === 'jump');
