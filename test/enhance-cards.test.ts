@@ -15,6 +15,15 @@ import { chromeIdsIssued, contextOf } from '../src/enhance/lifecycle.js';
 import type { FeatureContext } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
 
+const fixture = vi.hoisted(() => ({ cardOnlyEffects: false }));
+vi.mock('../src/enhance/features.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/enhance/features.js')>();
+  return {
+    ...real,
+    features: () => real.features().filter((f) => !fixture.cardOnlyEffects || !['jump', 'keysheet', 'scroll'].includes(f.name)),
+  };
+});
+
 const DOC = [
   '# Card sample',
   '',
@@ -84,6 +93,7 @@ afterEach(async () => {
   for (const root of mounted.splice(0)) await destroyEnhancement(root).catch(() => undefined);
   document.body.replaceChildren();
   vi.restoreAllMocks();
+  fixture.cardOnlyEffects = false;
 });
 
 function ctxOf(root: HTMLElement): FeatureContext {
@@ -462,6 +472,7 @@ describe('ARIA, and the card in the root', () => {
   });
 
   it('until a card first shows, the instance makes no card, issues no id, registers no overlay and hears no scroll', async () => {
+    fixture.cardOnlyEffects = true;
     const adds = vi.spyOn(window, 'addEventListener');
     const removes = vi.spyOn(window, 'removeEventListener');
     const ids = chromeIdsIssued(document);
@@ -483,6 +494,8 @@ describe('ARIA, and the card in the root', () => {
     focus(link(root, 'xref', 'D2'));
     focus(link(root, 'term', 'fold'));
     expect([scrolls(), chromeIdsIssued(document) - ids, root.querySelectorAll('.xcard').length]).toEqual([1, 1, 1]);
+    await destroyEnhancement(root);
+    expect([cardOf(root), chromeIdsIssued(document) - ids, scrolls()]).toEqual([null, 0, 0]);
   });
 
   it('destroy removes the card and puts the triggers back as they were', async () => {
