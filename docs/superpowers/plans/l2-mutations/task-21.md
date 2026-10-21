@@ -1,9 +1,9 @@
 # L2 Task 21: mutation rows (diagrams: drawing)
 
 Each guard of Task 21, deleted or changed once, with the tests that go red: the drawing in the second phase and its
-configuration (`src/enhance/diagrams.ts`), and the figure rules (`assets/reader.css`). 127 rows, L2-T21-M1 to
-L2-T21-M127: 113 red (`rc=1`) and 14 green, each green row reported below with why (C49, C52). Six control runs,
-L2-T21-C1 to L2-T21-C6, all green. L2-T21-M96 to L2-T21-M127 and L2-T21-C4 to L2-T21-C6 are the review's fix round
+configuration (`src/enhance/diagrams.ts`), and the figure rules (`assets/reader.css`). 128 rows, L2-T21-M1 to
+L2-T21-M128: 114 red (`rc=1`) and 14 green, each green row reported below with why (C49, C52). Six control runs,
+L2-T21-C1 to L2-T21-C6, all green. L2-T21-M96 to L2-T21-M128 and L2-T21-C4 to L2-T21-C6 are the review's fix round
 (the last two sections before the visual check).
 
 **Where they were measured.** The jsdom rows, L2-T21-M1 to L2-T21-M79, and the control L2-T21-C1, at commit
@@ -1011,52 +1011,54 @@ Each test command of the rows, run once in an unmutated copy the same way (a row
   }
 ]
 ```
-## Fix round 1: the review's findings (L2-T21-M96 to L2-T21-M127)
+## Fix round 1: the review's findings (L2-T21-M96 to L2-T21-M128)
 
 The review found Mermaid's tooltip left in the body after a destroy, a pass that a source moved out of its figure
 could stop, no initialize between a stock Mermaid's arrival and a window load event, a run still called after an
 initialize that destroyed the instance, and guards with no case: a label's later style element, the placeholder
 rule's chrome exclusion, the front-matter skip and the first line's clip. Each fix or new case is measured here.
 
-**Where they were measured.** At commit `43f28c2` on branch `l2-t21-diagrams`, one row at a time, by the same method,
+**Where they were measured.** At commit `bdd3503` on branch `l2-t21-diagrams`, one row at a time, by the same method,
 with `DOCREADER_BROWSERS=chromium`; `git status --porcelain` and the hash of `git diff` were the same before and after
-(both empty). The jsdom file has 43 cases there, the browser file 13 per browser, and the Level 2 corpus 32 in
+(both empty). The jsdom file has 43 cases there, the browser file 14 per browser, and the Level 2 corpus 32 in
 Chromium (the new hostile case `diagrams/label-style` among them). The browser cases, unmutated, are green in WebKit
 too (the Playwright image, C51). No row is WebKit-only.
 
 Notes on this round.
 - **Rows measured again.** The fixes rewrote the lines of L2-T21-M61, L2-T21-M65, L2-T21-M66, L2-T21-M70 and
-  L2-T21-M72, whose `old` text no longer occurs; each is measured again at `43f28c2` as L2-T21-M112, L2-T21-M111,
+  L2-T21-M72, whose `old` text no longer occurs; each is measured again at `bdd3503` as L2-T21-M112, L2-T21-M111,
   L2-T21-M113, L2-T21-M114 and L2-T21-M115. L2-T21-M55's line was rewritten too, and is measured again as L2-T21-M121.
   Every other earlier row's `old` text still occurs once.
 - **Three rows are green**, as C52 rules: L2-T21-M107 and L2-T21-M114 (operations) and L2-T21-M115 (the live() check
   before a queued call). L2-T21-M118 is red through vitest's unhandled-error check (C49).
+- **The shared tooltip is closed by Mermaid, not by a style write.** An inline style write is the journal's alone
+  (LD11, the walls), so a drawing's teardown sends the node Mermaid marks `hover` in it the mouseout Mermaid closes the
+  tooltip on (L2-T21-M98, L2-T21-M99, L2-T21-M128), and only while another instance still draws with it.
 - **Checks left out (C49):** a try around the initialize made on arrival (the queue's own chain absorbs its
   rejection); a try around each figure's finish (once the moved source is handled, no case can make a finish throw);
-  a check that keeps a shared tooltip open while another root's node is hovered (jsdom has no hover, and the harness
-  has one root); and a cleanup of the per-document entry once its tooltip is removed (the next call that makes one
-  replaces the entry).
+  and a cleanup of the per-document entry once its tooltip is removed (the next call that makes one replaces the
+  entry).
 
 | Row | Guard | File | Change | Red (tests in the named file) |
 |---|---|---|---|---|
 | L2-T21-M96 | the library's tooltip goes with the last instance that drew with it | `src/enhance/diagrams.ts` | `    tip.el.remove(); ⏎     return;` → `    return;` | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one a call made after its instance was destroyed goes at once" |
-| L2-T21-M97 | the tooltip stays while another instance draws with it | `src/enhance/diagrams.ts` | `  if (tip.users.size === 0) {` → `  if (tip.users.size >= 0) {` | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown when its root goes, while another root still draws with it, is closed and emptied" |
-| L2-T21-M98 | a shared tooltip is closed at an instance's teardown | `src/enhance/diagrams.ts` | `  (tip.el as Element & ElementCSSInlineStyle).style.opacity = '0'; ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one shown when its root goes, while another root still draws with it, is closed and emptied" |
-| L2-T21-M99 | a shared tooltip is emptied at an instance's teardown | `src/enhance/diagrams.ts` | `  tip.el.replaceChildren(); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one shown when its root goes, while another root still draws with it, is closed and emptied" |
+| L2-T21-M97 | the tooltip stays while another instance draws with it | `src/enhance/diagrams.ts` | `  if (tip.users.size === 0) {` → `  if (tip.users.size >= 0) {` | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout" |
+| L2-T21-M98 | a shared tooltip shown over this drawing's node is sent Mermaid's mouseout | `src/enhance/diagrams.ts` | `  for (const node of drawing.querySelectorAll('g.hover')) { ⏎     const out = drawing.ownerDocument.createEvent('Event'); ⏎     ou…` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout" |
+| L2-T21-M99 | only a node Mermaid shows the tooltip over is sent the mouseout | `src/enhance/diagrams.ts` | `drawing.querySelectorAll('g.hover')` → `drawing.querySelectorAll('g.node')` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout" |
 | L2-T21-M100 | a tooltip that stood before the call is not the library's | `src/enhance/diagrams.ts` | `    if (had !== null) return; // the page's own, or one that stood before: not the library's ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one the page already had is never removed nor changed" |
 | L2-T21-M101 | the tooltip is looked for before each call | `src/enhance/diagrams.ts` | `      had = tooltipIn(doc); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one the page already had is never removed nor changed" |
-| L2-T21-M102 | a later call finds the library's own tooltip | `src/enhance/diagrams.ts` | `  if (tip?.el !== now) {` → `  if (true) {` | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown when its root goes, while another root still draws with it, is closed and emptied" |
-| L2-T21-M103 | a tooltip a call made after a destroy goes at once | `src/enhance/diagrams.ts` | `    if (tip.users.size === 0) releaseTip(tip, ctx); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one a call made after its instance was destroyed goes at once" |
-| L2-T21-M104 | an instance that drew with the tooltip registers its teardown | `src/enhance/diagrams.ts` | `    ctx.journal.defer(() => { ⏎       releaseTip(held, ctx); ⏎     }); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown when its root goes, while another root still draws with it, is closed and emptied" |
-| L2-T21-M105 | an instance that drew with the tooltip is one of its users | `src/enhance/diagrams.ts` | `    held.users.add(ctx); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown when its root goes, while another root still draws with it, is closed and emptied" |
-| L2-T21-M106 | the tooltip is noted after each call | `src/enhance/diagrams.ts` | `  noteTip(ctx, doc, had); ⏎   return drawing; ⏎ }` → `  return drawing; ⏎ }` | `test/enhance-diagrams.test.ts`: 3 failed \| 40 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown when its root goes, while another root still draws with it, is closed and emptied"; "one a call made after its instance was destroyed goes at once" |
-| L2-T21-M107 | the tooltip's user is registered inside an operation | `src/enhance/diagrams.ts` | `  ctx.operate(() => { ⏎     held.users.add(ctx); ⏎     ctx.journal.defer(() => { ⏎       releaseTip(held, ctx); ⏎     }); ⏎   });` → `  ((): void => { ⏎     held.users.add(ctx); ⏎     ctx.journal.defer(() => { ⏎       releaseTip(held, ctx); ⏎     }); ⏎   })();` | green, reported (C52): the registration runs only after live() was checked on the call's return, and the journal's defer refuses once the instance is not live. |
+| L2-T21-M102 | a later call finds the library's own tooltip | `src/enhance/diagrams.ts` | `  if (tip?.el !== now) {` → `  if (true) {` | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout" |
+| L2-T21-M103 | a tooltip a call made after a destroy goes at once | `src/enhance/diagrams.ts` | `    if (tip.users.size === 0) releaseTip(tip, ctx, drawing); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one a call made after its instance was destroyed goes at once" |
+| L2-T21-M104 | an instance that drew with the tooltip registers its teardown | `src/enhance/diagrams.ts` | `    ctx.journal.defer(() => { ⏎       releaseTip(held, ctx, drawing); ⏎     }); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout" |
+| L2-T21-M105 | an instance that drew with the tooltip is one of its users | `src/enhance/diagrams.ts` | `    held.users.add(ctx); ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 2 failed \| 41 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout" |
+| L2-T21-M106 | the tooltip is noted after each call | `src/enhance/diagrams.ts` | `  noteTip(ctx, doc, had, drawing); ⏎   return drawing; ⏎ }` → `  return drawing; ⏎ }` | `test/enhance-diagrams.test.ts`: 3 failed \| 40 passed (43). "goes with the last instance that drew while it stood: the body is as it was"; "one shown over a node of a root that goes, while another root still draws with it, is closed by Mermaid's own mouseout"; "one a call made after its instance was destroyed goes at once" |
+| L2-T21-M107 | the tooltip's user is registered inside an operation | `src/enhance/diagrams.ts` | `  ctx.operate(() => { ⏎     held.users.add(ctx); ⏎     ctx.journal.defer(() => { ⏎       releaseTip(held, ctx, drawing); ⏎     });…` → `  ((): void => { ⏎     held.users.add(ctx); ⏎     ctx.journal.defer(() => { ⏎       releaseTip(held, ctx, drawing); ⏎     }); ⏎   …` | green, reported (C52): the registration runs only after live() was checked on the call's return, and the journal's defer refuses once the instance is not live. |
 | L2-T21-M108 | live() before a call's tooltip is registered | `src/enhance/diagrams.ts` | `  if (!ctx.live()) { ⏎     // The call ran on after a destroy` → `  if (false) { ⏎     // The call ran on after a destroy` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "one a call made after its instance was destroyed goes at once" |
 | L2-T21-M109 | a source moved out of its figure: its chrome goes in the figure | `src/enhance/diagrams.ts` | `  if (f.source.parentNode !== f.entry.figure) return f.entry.figure.firstChild; ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "a source the host moved out of its figure: the note or the drawing goes first in the figure, and the pass goes on" |
 | L2-T21-M110 | a source moved out of its figure: its chrome goes first | `src/enhance/diagrams.ts` | `return f.entry.figure.firstChild;` → `return null;` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "a source the host moved out of its figure: the note or the drawing goes first in the figure, and the pass goes on" |
 | L2-T21-M111 | the drawing goes in right after the source (L2-T21-M65 again) | `src/enhance/diagrams.ts` | `  return after ? f.source.nextSibling : f.source;` → `  return after ? f.source : f.source;` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "draws into a chrome pre.mermaid beside the source, which is never written into, then marks the figure drawn and names the drawing" |
 | L2-T21-M112 | the note goes before the source (L2-T21-M61 again) | `src/enhance/diagrams.ts` | `  return after ? f.source.nextSibling : f.source;` → `  return after ? f.source.nextSibling : null;` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "a figure Mermaid could not draw falls back: draw-failed, and a note holding its source in a details" |
-| L2-T21-M113 | the drawing holds the source's text (L2-T21-M66 again) | `src/enhance/diagrams.ts` | `chrome(doc, 'pre', { className: 'mermaid', text: f.text })` → `chrome(doc, 'pre', { className: 'mermaid', text: '' })` | `test/enhance-diagrams.test.ts`: 16 failed \| 27 passed (43). "initialises before each run, with the reader's configuration: strict, dagre, the pinned limits, the warm theme, the secure keys and the host's"; "marks each figure inside position.keep, so the reader keeps their place, and asks for a relayout for its content"; "lets the page run a task between the near figures and the rest"; "names a drawing by its caption, else by its own title, else by the first line of its source"; "draws the figures near the viewport first, in document order, then the rest, nearest first"; and 11 more |
+| L2-T21-M113 | the drawing holds the source's text (L2-T21-M66 again) | `src/enhance/diagrams.ts` | `chrome(doc, 'pre', { className: 'mermaid', text: f.text })` → `chrome(doc, 'pre', { className: 'mermaid', text: '' })` | `test/enhance-diagrams.test.ts`: 17 failed \| 26 passed (43). "initialises before each run, with the reader's configuration: strict, dagre, the pinned limits, the warm theme, the secure keys and the host's"; "marks each figure inside position.keep, so the reader keeps their place, and asks for a relayout for its content"; "lets the page run a task between the near figures and the rest"; "names a drawing by its caption, else by its own title, else by the first line of its source"; "draws the figures near the viewport first, in document order, then the rest, nearest first"; and 12 more |
 | L2-T21-M114 | Mermaid is called inside an operation (L2-T21-M70 again) | `src/enhance/diagrams.ts` | `    running = ctx.operate(() => { ⏎       ctx.journal.insert(drawing, f.entry.figure, besideSource(f, true)); ⏎       had = toolti…` → `    running = ((): unknown => { ⏎       ctx.journal.insert(drawing, f.entry.figure, besideSource(f, true)); ⏎       had = tooltipI…` | green, reported (C52): as L2-T21-M70 at its commit; Mermaid is reached only once live() has been checked at the start of the queued call. |
 | L2-T21-M115 | live() before a queued call (L2-T21-M72 again) | `src/enhance/diagrams.ts` | `  if (!ctx.live()) return null; ⏎   const doc = ctx.root.ownerDocument;` → `  const doc = ctx.root.ownerDocument;` | green, reported (C52, LD5): as L2-T21-M72 at its commit; without it the call's operation refuses at once, so Mermaid is still never called. |
 | L2-T21-M116 | an initialize that destroyed the instance is not followed by its run | `src/enhance/diagrams.ts` | `      if (!ctx.live()) return undefined; // initialize destroyed the instance: its run is never called ⏎ ` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "an initialize that destroys the instance: the run it was made for is never called" |
@@ -1066,11 +1068,12 @@ Notes on this round.
 | L2-T21-M120 | the first line skips a leading front-matter block | `src/enhance/diagrams.ts` | `  const body = lines[0] === '---' ? lines.slice(lines.indexOf('---', 1) + 1) : lines;` → `  const body = lines;` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "a drawing named by its source skips a leading front-matter block whole, not only its fences" |
 | L2-T21-M121 | the first line skips comments (L2-T21-M55 again) | `src/enhance/diagrams.ts` | ` && !l.startsWith('%%')` → (deleted) | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "names a drawing by its caption, else by its own title, else by the first line of its source" |
 | L2-T21-M122 | the first line is clipped to 80 characters | `src/enhance/diagrams.ts` | `const LABEL_LINE_MAX = 80;` → `const LABEL_LINE_MAX = 100_000;` | `test/enhance-diagrams.test.ts`: 1 failed \| 42 passed (43). "a drawing named by its source takes at most 80 characters of its first line" |
-| L2-T21-M123 | a label loses its style elements (in the browser) | `src/enhance/diagrams.ts` | `const LABEL_TAGS_REFUSED = ['style'] as const;` → `const LABEL_TAGS_REFUSED = [] as const;` | `test/browser/diagrams.test.ts`: 1 failed \| 12 passed \| 13 skipped (26). "a style element inside a label, after other markup, is dropped: a paragraph outside the drawing keeps its colour" |
+| L2-T21-M123 | a label loses its style elements (in the browser) | `src/enhance/diagrams.ts` | `const LABEL_TAGS_REFUSED = ['style'] as const;` → `const LABEL_TAGS_REFUSED = [] as const;` | `test/browser/diagrams.test.ts`: 1 failed \| 13 passed \| 14 skipped (28). "a style element inside a label, after other markup, is dropped: a paragraph outside the drawing keeps its colour" |
 | L2-T21-M124 | a label loses its style elements (the Level 2 snapshot) | `src/enhance/diagrams.ts` | `const LABEL_TAGS_REFUSED = ['style'] as const;` → `const LABEL_TAGS_REFUSED = [] as const;` | `test/browser/layout-corpus.test.ts`: 1 failed \| 31 passed \| 27 skipped (59). "diagrams/label-style" |
-| L2-T21-M125 | a label loses its style attributes (in the browser) | `src/enhance/diagrams.ts` | `const LABEL_ATTRS_REFUSED = ['style', 'class'] as const;` → `const LABEL_ATTRS_REFUSED = ['class'] as const;` | `test/browser/diagrams.test.ts`: 1 failed \| 12 passed \| 13 skipped (26). "an HTML label keeps its text and loses its handler, its script, its style element, its style and its class" |
-| L2-T21-M126 | the placeholder rule spares the drawing | `assets/reader.css` | `figure.mermaid-figure > pre.mermaid:not([data-docreader-chrome]) { color` → `figure.mermaid-figure > pre.mermaid { color` | `test/browser/diagrams.test.ts`: 1 failed \| 12 passed \| 13 skipped (26). "draws a flowchart and a sequence diagram: the drawing on the plate, named, the figure as wide as it, no source plate" |
-| L2-T21-M127 | the library's tooltip goes with the reader (in the browser) | `src/enhance/diagrams.ts` | `    tip.el.remove(); ⏎     return;` → `    return;` | `test/browser/diagrams.test.ts`: 1 failed \| 12 passed \| 13 skipped (26). "Mermaid's tooltip goes with the reader: a node hovered as the reader is destroyed leaves the body as it was" |
+| L2-T21-M125 | a label loses its style attributes (in the browser) | `src/enhance/diagrams.ts` | `const LABEL_ATTRS_REFUSED = ['style', 'class'] as const;` → `const LABEL_ATTRS_REFUSED = ['class'] as const;` | `test/browser/diagrams.test.ts`: 1 failed \| 13 passed \| 14 skipped (28). "an HTML label keeps its text and loses its handler, its script, its style element, its style and its class" |
+| L2-T21-M126 | the placeholder rule spares the drawing | `assets/reader.css` | `figure.mermaid-figure > pre.mermaid:not([data-docreader-chrome]) { color` → `figure.mermaid-figure > pre.mermaid { color` | `test/browser/diagrams.test.ts`: 1 failed \| 13 passed \| 14 skipped (28). "draws a flowchart and a sequence diagram: the drawing on the plate, named, the figure as wide as it, no source plate" |
+| L2-T21-M127 | the library's tooltip goes with the reader (in the browser) | `src/enhance/diagrams.ts` | `    tip.el.remove(); ⏎     return;` → `    return;` | `test/browser/diagrams.test.ts`: 2 failed \| 12 passed \| 14 skipped (28). "Mermaid's tooltip goes with the reader: a node hovered as the reader is destroyed leaves the body as it was"; "Mermaid's tooltip shown over a node of a root that goes, while another root draws with it, is closed by Mermaid's own mouseout" |
+| L2-T21-M128 | a shared tooltip is sent Mermaid's mouseout (in the browser) | `src/enhance/diagrams.ts` | `  for (const node of drawing.querySelectorAll('g.hover')) { ⏎     const out = drawing.ownerDocument.createEvent('Event'); ⏎     ou…` → (deleted) | `test/browser/diagrams.test.ts`: 1 failed \| 13 passed \| 14 skipped (28). "Mermaid's tooltip shown over a node of a root that goes, while another root draws with it, is closed by Mermaid's own mouseout" |
 
 ```json
 [
@@ -1092,18 +1095,18 @@ Notes on this round.
   },
   {
     "id": "L2-T21-M98",
-    "guard": "a shared tooltip is closed at an instance's teardown",
+    "guard": "a shared tooltip shown over this drawing's node is sent Mermaid's mouseout",
     "file": "src/enhance/diagrams.ts",
-    "old": "  (tip.el as Element & ElementCSSInlineStyle).style.opacity = '0';\n",
+    "old": "  for (const node of drawing.querySelectorAll('g.hover')) {\n    const out = drawing.ownerDocument.createEvent('Event');\n    out.initEvent('mouseout', false, false);\n    node.dispatchEvent(out);\n  }\n",
     "new": "",
     "tests": "test/enhance-diagrams.test.ts"
   },
   {
     "id": "L2-T21-M99",
-    "guard": "a shared tooltip is emptied at an instance's teardown",
+    "guard": "only a node Mermaid shows the tooltip over is sent the mouseout",
     "file": "src/enhance/diagrams.ts",
-    "old": "  tip.el.replaceChildren();\n",
-    "new": "",
+    "old": "drawing.querySelectorAll('g.hover')",
+    "new": "drawing.querySelectorAll('g.node')",
     "tests": "test/enhance-diagrams.test.ts"
   },
   {
@@ -1134,7 +1137,7 @@ Notes on this round.
     "id": "L2-T21-M103",
     "guard": "a tooltip a call made after a destroy goes at once",
     "file": "src/enhance/diagrams.ts",
-    "old": "    if (tip.users.size === 0) releaseTip(tip, ctx);\n",
+    "old": "    if (tip.users.size === 0) releaseTip(tip, ctx, drawing);\n",
     "new": "",
     "tests": "test/enhance-diagrams.test.ts"
   },
@@ -1142,7 +1145,7 @@ Notes on this round.
     "id": "L2-T21-M104",
     "guard": "an instance that drew with the tooltip registers its teardown",
     "file": "src/enhance/diagrams.ts",
-    "old": "    ctx.journal.defer(() => {\n      releaseTip(held, ctx);\n    });\n",
+    "old": "    ctx.journal.defer(() => {\n      releaseTip(held, ctx, drawing);\n    });\n",
     "new": "",
     "tests": "test/enhance-diagrams.test.ts"
   },
@@ -1158,7 +1161,7 @@ Notes on this round.
     "id": "L2-T21-M106",
     "guard": "the tooltip is noted after each call",
     "file": "src/enhance/diagrams.ts",
-    "old": "  noteTip(ctx, doc, had);\n  return drawing;\n}",
+    "old": "  noteTip(ctx, doc, had, drawing);\n  return drawing;\n}",
     "new": "  return drawing;\n}",
     "tests": "test/enhance-diagrams.test.ts"
   },
@@ -1166,8 +1169,8 @@ Notes on this round.
     "id": "L2-T21-M107",
     "guard": "the tooltip's user is registered inside an operation",
     "file": "src/enhance/diagrams.ts",
-    "old": "  ctx.operate(() => {\n    held.users.add(ctx);\n    ctx.journal.defer(() => {\n      releaseTip(held, ctx);\n    });\n  });",
-    "new": "  ((): void => {\n    held.users.add(ctx);\n    ctx.journal.defer(() => {\n      releaseTip(held, ctx);\n    });\n  })();",
+    "old": "  ctx.operate(() => {\n    held.users.add(ctx);\n    ctx.journal.defer(() => {\n      releaseTip(held, ctx, drawing);\n    });\n  });",
+    "new": "  ((): void => {\n    held.users.add(ctx);\n    ctx.journal.defer(() => {\n      releaseTip(held, ctx, drawing);\n    });\n  })();",
     "tests": "test/enhance-diagrams.test.ts"
   },
   {
@@ -1329,18 +1332,26 @@ Notes on this round.
     "old": "    tip.el.remove();\n    return;",
     "new": "    return;",
     "tests": "test/browser/diagrams.test.ts"
+  },
+  {
+    "id": "L2-T21-M128",
+    "guard": "a shared tooltip is sent Mermaid's mouseout (in the browser)",
+    "file": "src/enhance/diagrams.ts",
+    "old": "  for (const node of drawing.querySelectorAll('g.hover')) {\n    const out = drawing.ownerDocument.createEvent('Event');\n    out.initEvent('mouseout', false, false);\n    node.dispatchEvent(out);\n  }\n",
+    "new": "",
+    "tests": "test/browser/diagrams.test.ts"
   }
 ]
 ```
 
 ## Fix round 1: control runs (L2-T21-C4 to L2-T21-C6)
 
-Each test command of the round's rows, run once in an unmutated copy at `43f28c2`, the same way.
+Each test command of the round's rows, run once in an unmutated copy at `bdd3503`, the same way.
 
 | Row | Command | Result |
 |---|---|---|
 | L2-T21-C4 | `DOCREADER_BROWSERS=chromium ./node_modules/.bin/vitest run test/enhance-diagrams.test.ts` | NOT RED, 43 passed (43) |
-| L2-T21-C5 | `DOCREADER_BROWSERS=chromium ./node_modules/.bin/vitest run test/browser/diagrams.test.ts` | NOT RED, 13 passed \| 13 skipped (26) |
+| L2-T21-C5 | `DOCREADER_BROWSERS=chromium ./node_modules/.bin/vitest run test/browser/diagrams.test.ts` | NOT RED, 14 passed \| 14 skipped (28) |
 | L2-T21-C6 | `DOCREADER_BROWSERS=chromium ./node_modules/.bin/vitest run test/browser/layout-corpus.test.ts` | NOT RED, 32 passed \| 27 skipped (59) |
 
 ```json
