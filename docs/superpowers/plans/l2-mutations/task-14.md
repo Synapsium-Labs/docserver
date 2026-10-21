@@ -1672,6 +1672,55 @@ Rows the review's fix round added (L2-T14-M153 on): nothing is scrolled after a 
 ]
 ```
 
+## Bar and navigation integration: the measured table head (L2-T14-M160 to L2-T14-M161)
+
+The original browser case failed at the no-id row assertion, not at the initial heading landing. Its expected row
+margin hard-coded the stylesheet's 40 px fallback, although the first relayout had already published the physical
+table head's height. In an instrumented scratch copy, Chromium measured `offsetHeight = 36` (`35.609375` px by its
+rect), held `--bar-h = 48px` and the heading margin at `62px`, and put the row at `84.234375px`: within the existing
+1 px tolerance of `48 + 36`, not `48 + 40`. WebKit measured `offsetHeight = 35` (`35.109375` px by its rect) and put
+the row at `83.65625px`, within 1 px of `48 + 35`. Giving the row a temporary id and using native `scrollIntoView`
+in that scratch copy resolved margins of `84px` and `83px`, with tops of `84.234375px` and `82.65625px` respectively.
+
+The pin remained live through relayout, and its keep reapplied after the listeners measured the sizes. There was
+no changed-height bar write to race in this fixture: its measured row remained 48 px. **Production navigation,
+position, scrolling and relayout require no fix.** The browser case now derives its head room independently from
+the table head's physical `offsetHeight`, not navigation's `--thead-h` read, and keeps both the heading assertion
+and the row's 1 px tolerance. This is not a sequencing defect, so no new jsdom case is needed; the existing jsdom
+case already distinguishes a measured head from the fallback (L2-T14-M33).
+
+Both rows below were measured with Chromium, each in a throwaway copy. The checkout's `git status --porcelain`
+was identical before and after the run. These are additional browser witnesses for existing production guards,
+not changes to those guards.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T14-M160 | a no-id row clears its measured table head, not the fallback (browser integration) | `src/enhance/nav.ts` | `(px(env.computed(el, '--thead-h')) ?? HEAD_GAP)` → `HEAD_GAP` | `test/browser/nav.test.ts`, `initial hash`: 1 failed \| 11 skipped (12). `expected 4.234375 to be less than or equal to 1` |
+| L2-T14-M161 | relayout publishes the physical table head height for no-id row navigation (browser integration) | `src/enhance/tables.ts` | delete the `journal.setStyle(t.el, '--thead-h', ...)` write | `test/browser/nav.test.ts`, `initial hash`: 1 failed \| 11 skipped (12). `expected 4.234375 to be less than or equal to 1` |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T14-M160",
+    "guard": "a no-id row clears its measured table head, not the fallback (browser integration)",
+    "file": "src/enhance/nav.ts",
+    "old": "(px(env.computed(el, '--thead-h')) ?? HEAD_GAP)",
+    "new": "HEAD_GAP",
+    "tests": "--project layout test/browser/nav.test.ts -t \"initial hash\""
+  },
+  {
+    "id": "L2-T14-M161",
+    "guard": "relayout publishes the physical table head height for no-id row navigation (browser integration)",
+    "file": "src/enhance/tables.ts",
+    "old": "    journal.setStyle(t.el, '--thead-h', `${String(headH)}px`);\n",
+    "new": "",
+    "tests": "--project layout test/browser/nav.test.ts -t \"initial hash\""
+  }
+]
+```
+
 ## Rows of earlier tasks this task superseded
 
 The code these rows mutate was rewritten here, so their `old` text no longer occurs. Each guard stands, and its row on

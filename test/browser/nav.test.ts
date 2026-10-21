@@ -144,15 +144,20 @@ describeBrowsers((browser) => {
       expect(margin).toBeGreaterThan(14);
       expect(Math.abs((await topOf(doc.page, { id: 'section-14' })) - margin)).toBeLessThanOrEqual(1);
       expect(await doc.page.evaluate(() => window.scrollY)).toBeGreaterThan(2000);
-      await doc.page.evaluate(() => {
+      const headRoom = await doc.page.evaluate(() => {
         const w = window as unknown as Win;
         const root = document.querySelector('main[data-harness-root]') as HTMLElement;
         const row = Array.from(root.querySelectorAll('tbody tr')).find((r) => r.firstElementChild?.textContent === 'R5') as Element;
         w.__nav.contextOf(root)?.index.define({ id: 'R5', kind: 'row', title: 'R5', status: null, group: 'Section 3', target: row, row, heads: ['ID', 'What', 'Status'] });
         w.__nav.goToHash(root, 'R5');
+        const table = row.closest('table') as HTMLTableElement;
+        return (table.tHead as HTMLTableSectionElement).offsetHeight;
       });
       await frames(doc.page);
-      expect(Math.abs((await topOf(doc.page, { row: 'R5' })) - (margin - 14 + 40))).toBeLessThanOrEqual(1);
+      // Relayout measures the real head; 40px is only the stylesheet's fallback before that measure. Read the box,
+      // not --thead-h, so a missing measurement or a navigation that ignores it still fails this assertion.
+      expect(headRoom).toBeGreaterThan(0);
+      expect(Math.abs((await topOf(doc.page, { row: 'R5' })) - (margin - 14 + headRoom))).toBeLessThanOrEqual(1);
       expect(await doc.violations()).toEqual([]);
     } finally {
       await doc.close();
