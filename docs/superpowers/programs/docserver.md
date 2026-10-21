@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C53)
+### Coordinator rulings for L2 (C40-C54)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -242,6 +242,38 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   - **Shared CSP case:** Task 6's CSP case waits a fixed 50 ms for violation reports, and it flaked once in WebKit under load. It is made to wait for the reports themselves, in the next shared fix.
 
   Why: each follows what the reviews and the rebases measured. Cost if wrong: Task 21's drawings differ from the reference's until a host supplies ELK.
+- **C54 (2026-10-21, coordinator, from the reviews of L2 Tasks 10, 12, 14 and 16): the second group C merges.**
+  - **Parallel branches are tested together before they merge.** Tasks 16, 10 and 12 each passed alone. Merged together in a scratch branch, Task 12's tests failed seven times on the others' features. Each later group's branches are merged together in a scratch branch and run there before the first merges, and each squash then reproduces that tree.
+  - **Coordinator commits at rebase, each to another task's file:**
+    - On Task 16's branch:
+      - four resets in `assets/reader.css`, so the dialogs take none of the reading column's prose rules (L2-T16-M156 to M159);
+      - Task 9's two "no ids written" checks read only the document's own elements.
+    - On Task 10's branch: a stacked card's filtered row hides on a phone, `.stack tr[hidden] { display: none; }` (L2-T10-M132).
+    - On Task 12's branch:
+      - the seams test's window-listener case requires its own five listeners among those a destroy removes;
+      - Task 10's table measure reads nothing when there is no table (L2-T12-M92);
+      - its tests open the real quick jump and leave out the headings the reader made.
+  - **Shared tests: a test that pins the document reads only the document.** A check of the ids in the root, or of its headings, leaves out chrome: a dialog's heading, or an id from `chromeId`. A feature may extend two spots of the shared tests, and only these two:
+    - the startup reads the seams test expects (Task 14 added `posKeyOf`);
+    - the features the services mock leaves out, when a feature takes a key, an overlay or a slot that its stand-ins take (Task 16 left out the jump and the keys sheet; Task 14 left out the position feature).
+  - **A hash link this root cannot resolve, or one clicked with a modifier, goes to `onLink` when the host gave one, and to the browser otherwise** (Task 14). This settles C49's question.
+  - **The keys sheet's pairs are the contract:** `j k` reads "Next / previous section", and `n p` reads "Next / previous change". A task binds each key with its own label.
+  - **Carried to Task 18:**
+    - `keysheet.ts` gains a third module export, `showKeys(ctx)`, keyed by the context, for the rail's "Keys" link. The sheet is then built with `keyboard: false` too.
+    - `relayout.ts` observes the root's own size (`env.observeResize(root)`) and asks for `relayout('resize')`, so a root shown after being hidden is measured.
+    - `--rail-w` is a px length covering all the room the rail takes from the root's content box.
+    - The running head's room beside the rail, the bar's side margins, and the rail's sub-items within RF3's bound.
+  - **Carried to Task 22:** `ver-on` on the root for the day view, and its banner in `slots.bar`.
+  - **Carried to Task 24:**
+    - two roots' "Document tools" landmarks (whether each names its document);
+    - a jump that does not scroll leaving a hidden phone bar hidden;
+    - the demo passing a `copy`;
+    - the README text in the PRs of Tasks 10, 12, 14 and 16;
+    - the `onLink` row and the namespaced storage table;
+    - the jump's ID and figure rows in the parity pass.
+  - **Memory:** the build box killed a test worker for memory while group D was building. Verification runs use `--maxWorkers=2`, and a run that loses a worker is run again, never read as a pass.
+
+  Why: each follows what the reviews, the rebases and the combined run measured. Cost if wrong: a later feature that needs a third spot in the shared tests asks for a ruling first.
 
 ## Carried constraints (reviewers get these)
 
