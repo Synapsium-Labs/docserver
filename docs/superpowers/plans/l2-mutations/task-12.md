@@ -971,3 +971,35 @@ Measured with the rest, one row at a time.
   }
 ]
 ```
+
+## The coordinator's commit at rebase: on main with the blocks and the quick jump (L2-T12-M92)
+
+Rebased onto `main` with Tasks 10 and 16, three things moved, and the coordinator fixed each at rebase (C54):
+
+- **The RF3 bound.** Task 10's table measure read the root's box on every relayout, even in a document with no table.
+  That added one rect read to the spy's frame, past the no-task bound of ⌈log₂(n + 1)⌉ + 2. The measure now returns
+  before any read when there is no table (`src/enhance/tables.ts`, Task 10's file).
+- **The dialog case** registered a stand-in `jump` overlay, which the quick jump now owns. It opens the real quick jump
+  instead.
+- **The `ladder` helper** placed every `h2` and `h3` in the root, the keys sheet's own headings included. It now leaves
+  out the headings the reader made.
+
+Measured 2026-10-21 on `l2-t12-scroll`, rebased onto `main`, with the change uncommitted, by `mutate.mjs` on a throwaway
+copy; the checkout's status was the same before and after.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T12-M92 | a document with no table reads no rect for the tables' measure, so the spy's frame keeps its bound (Task 10's tables.ts) | `src/enhance/tables.ts` | `tables.length === 0 \|\|` removed from the measure's first check | `test/enhance-scroll.test.ts`: 1 failed \| 34 passed (35). "without tasks a relayout's frame stays within the bound too: no unit's box is read for a search that never runs" |
+
+```json
+[
+  {
+    "id": "L2-T12-M92",
+    "guard": "a document with no table reads no rect for the tables' measure, so the spy's frame keeps its bound (Task 10's tables.ts)",
+    "file": "src/enhance/tables.ts",
+    "old": "  if (tables.length === 0 || ctx.root.getClientRects().length === 0) return;",
+    "new": "  if (ctx.root.getClientRects().length === 0) return;",
+    "tests": "--project unit test/enhance-scroll.test.ts"
+  }
+]
+```
