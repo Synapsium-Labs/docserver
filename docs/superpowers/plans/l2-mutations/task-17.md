@@ -1951,3 +1951,127 @@ goes at once (its click has `detail` 0); a press on the card's text keeps it.
   }
 ]
 ```
+
+## Real touch follow-up (L2-T17-M197 to L2-T17-M198)
+
+Measured 2026-10-21 in throwaway copies with the offline Playwright image, one row at a time. The new browser case uses a real `locator.tap()` in a `hasTouch` context in both engines. The first tap opens the card and leaves the row unfocused; the second tap focuses the row. A new tap followed by Enter also focuses its row immediately. Row focus is navigation's observable effect: the host owns history, so the case deliberately does not treat a same-location click, hash, or host callback as proof of navigation.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T17-M197 | the browser harness carries hasTouch into the context | `test/browser/harness.ts` | `...(how.hasTouch === undefined ? {} : { hasTouch: how.hasTouch }),` -> deleted | Chromium and WebKit each: `rc=1`, 1 failed \| 6 passed \| 7 skipped. `locator.tap` says the page does not support tap without `hasTouch`. |
+| L2-T17-M198 | a fresh tap takes its last pointer even when WebKit calls its click a mouse | `src/enhance/cards.ts` | `const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;` -> `const type = typeof own === 'string' && own !== '' ? own : lastPointer;` | WebKit: `rc=1`, 1 failed \| 6 passed \| 7 skipped. The first real tap does not open its preview. |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T17-M197",
+    "guard": "the browser harness carries hasTouch into the context",
+    "file": "test/browser/harness.ts",
+    "old": "    ...(how.hasTouch === undefined ? {} : { hasTouch: how.hasTouch }),\n",
+    "new": "",
+    "tests": "test/browser/cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M198",
+    "guard": "a fresh tap takes its last pointer even when WebKit calls its click a mouse",
+    "file": "src/enhance/cards.ts",
+    "old": "const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "new": "const type = typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "tests": "test/browser/cards.test.ts"
+  }
+]
+```
+
+## Integration fixture correction (L2-T17-M199 to L2-T17-M206)
+
+The integration test starts every enhancement feature, so `jump`, `keysheet`, and `scroll` legitimately allocate chrome IDs and a scroll listener before cards builds. The lazy-card accounting case uses a false-by-default hoisted fixture flag to pass through the real feature list except those three features, and resets it after each case. This isolates only the card's own lazy allocations without subtracting an ambient baseline. It replaces the frozen overlay service only on that test context with a delegating object, then spies on `register` after the stand-in probe and before first show. The captured first handler is the one and only registration across first show, hide, D2, and term changes.
+
+The originally recorded M206 inserted another `register` call without first cancelling the existing registration. That is not a usable mutant: `createOverlays` rejects a second live `card` registration, producing its registry-once error and unhandled errors rather than the claimed one assertion failure. M206 below is instead an executable, self-contained source replacement: it keeps the first overlay handle and its `close` behavior, cancels that registration on each later show, and registers that same handle again. It therefore changes only registration reuse; card, chrome-ID, listener, and close behavior remain available to the case's assertions. The JSON `old` occurs once in `src/enhance/cards.ts`; applying its `new` to a fresh copy was the source for the fresh measurement.
+
+M199-M205 retain their 2026-10-21 targeted measurements; this correction does not claim to have re-run them. On 2026-10-21 at `ab02da6135428bb22c088e66e9221ec22b61b418`, a fresh unmutated control of all 91 `test/enhance-cards.test.ts` cases passed. In a separate throwaway copy, the exact M206 replacement below made that same full file fail exactly once: 1 failed, 90 passed (`rc=1`). The pre-follow-up test from `615ba7c` passed the mutant (1 passed, 90 skipped), proving it did not already detect registration reuse. A diagnostic expectation accepting three registrations also passed while retaining the card, ID, scroll-listener, and final-destroy assertions. No new eight-row batch is claimed.
+
+| Row | Guard | File | Change | Result |
+|---|---|---|---|---|
+| L2-T17-M199 | a card ID is issued only on first show | `src/enhance/cards.ts` | issue the card ID during build | historical targeted red: initial IDs are nonzero |
+| L2-T17-M200 | a detached card is made only on first show | `src/enhance/cards.ts` | make the card during build | historical targeted red: initial IDs are nonzero |
+| L2-T17-M201 | the card overlay registers only on first show | `src/enhance/cards.ts` | register the overlay during build | historical targeted red: replacement registration throws |
+| L2-T17-M202 | the card scroll listener starts only on first show | `src/enhance/cards.ts` | register a scroll listener during build | historical targeted red: initial listeners are nonzero |
+| L2-T17-M203 | hiding stops the card scroll listener | `src/enhance/cards.ts` | retain the listener when hiding | historical targeted red: hidden listener remains |
+| L2-T17-M204 | reopening reuses one card and ID | `src/enhance/cards.ts` | replace the card on each show | historical targeted red: cards/IDs multiply |
+| L2-T17-M205 | switching triggers reuses one scroll listener | `src/enhance/cards.ts` | replace the listener on each show | historical targeted red: listener count becomes two |
+| L2-T17-M206 | reopening and changing triggers retains one overlay registration | `src/enhance/cards.ts` | cancel and re-register the existing overlay handle before each later show | fresh full-file red: 1 failed / 90 passed; only the registration-count assertion reports three calls, while the retained card, ID, listener, and destroy assertions pass |
+
+The final destroy assertion proves the card, its ID, and its scroll listener all return to zero. All other cases use the full real feature list.
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T17-M199",
+    "guard": "a card ID is issued only on first show",
+    "file": "src/enhance/cards.ts",
+    "old": "  states ??= new WeakMap();",
+    "new": "  ctx.chromeId('card');\n  states ??= new WeakMap();",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M200",
+    "guard": "a detached card is made only on first show",
+    "file": "src/enhance/cards.ts",
+    "old": "  states ??= new WeakMap();",
+    "new": "  card = makeCard();\n  states ??= new WeakMap();",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M201",
+    "guard": "the card overlay registers only on first show",
+    "file": "src/enhance/cards.ts",
+    "old": "  states ??= new WeakMap();",
+    "new": "  ctx.overlays.register('card', { isOpen: () => false, close: () => undefined });\n  states ??= new WeakMap();",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M202",
+    "guard": "the card scroll listener starts only on first show",
+    "file": "src/enhance/cards.ts",
+    "old": "  states ??= new WeakMap();",
+    "new": "  env.onScroll(() => undefined);\n  states ??= new WeakMap();",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M203",
+    "guard": "hiding stops the card scroll listener",
+    "file": "src/enhance/cards.ts",
+    "old": "      following = stop(following);",
+    "new": "      // Mutation: retain listener.",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M204",
+    "guard": "reopening reuses one card and ID",
+    "file": "src/enhance/cards.ts",
+    "old": "      card ??= makeCard();",
+    "new": "      card = makeCard();",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M205",
+    "guard": "switching triggers reuses one scroll listener",
+    "file": "src/enhance/cards.ts",
+    "old": "      following ??= env.onScroll(() => {",
+    "new": "      following = env.onScroll(() => {",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  },
+  {
+    "id": "L2-T17-M206",
+    "guard": "reopening and changing triggers retains one overlay registration",
+    "file": "src/enhance/cards.ts",
+    "old": "    ctx.overlays.register('card', {\n      isOpen: () => shown !== null,\n      close: () => {\n        const a = shown;\n        const back = inCard(doc.activeElement);\n        hide(true);\n        if (a !== null && back) quietFocus(a);\n      },\n    });\n    return el;\n  };\n\n  const showFor = (a: Element): boolean => {\n    if (!root.contains(a)) return false;\n    const what = named(a);\n    if (what === null || a.closest('.rv-hide') !== null) return false;\n    hideTimer = stop(hideTimer);\n    if (a !== shown) {\n      card ??= makeCard();\n",
+    "new": "    const registered = el as HTMLElement & {\n      overlay?: { isOpen(): boolean; close(): void };\n      unregisterOverlay?: Cancel;\n    };\n    registered.overlay = {\n      isOpen: () => shown !== null,\n      close: () => {\n        const a = shown;\n        const back = inCard(doc.activeElement);\n        hide(true);\n        if (a !== null && back) quietFocus(a);\n      },\n    };\n    registered.unregisterOverlay = ctx.overlays.register('card', registered.overlay);\n    return registered;\n  };\n\n  const showFor = (a: Element): boolean => {\n    if (!root.contains(a)) return false;\n    const what = named(a);\n    if (what === null || a.closest('.rv-hide') !== null) return false;\n    hideTimer = stop(hideTimer);\n    if (a !== shown) {\n      card ??= makeCard();\n      const registered = card as HTMLElement & {\n        overlay?: { isOpen(): boolean; close(): void };\n        unregisterOverlay?: Cancel;\n      };\n      if (registered.parentNode !== null && registered.overlay !== undefined) {\n        registered.unregisterOverlay?.();\n        registered.unregisterOverlay = ctx.overlays.register('card', registered.overlay);\n      }\n",
+    "tests": "test/enhance-cards.test.ts -t 'until a card first shows'"
+  }
+]
+```
