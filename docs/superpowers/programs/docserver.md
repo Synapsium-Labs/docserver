@@ -2,7 +2,7 @@
 
 Spec: [Rich Docs reader and a shared renderer](https://github.com/Synapsium-Labs/ccrc-pwa/blob/main/docs/superpowers/specs/2026-10-12-rich-docs-reader-and-shared-renderer-design.md), §3 (the library) and §8 (sequencing). It was approved by the operator on 2026-10-12 (R-g).
 Plan: one plan per wave, under `docs/superpowers/plans/`.
-Coordinator: ccrc session `ccrc-pwa-calm-canyon`. It also coordinates ccrc's `native-docs-reader` programme, which is this library's first consumer.
+Coordinator: the library programme coordinator, also responsible for the first consumer's reader integration.
 
 ## Waves
 
@@ -135,7 +135,7 @@ Each ruling binds the L1 plan. The plan's header carries the full text; this lis
   - C38's case also pins the reference's `frontList` (test-only).
   - The R7 comment says the reference keeps the uncut key (wording).
 
-### Coordinator rulings for L2 (C40-C55)
+### Coordinator rulings for L2 (C40-C57)
 
 Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-20-docserver-l2-layout.md). The plan's own decisions, LD1-LD12, stand once #13 merges; changing one needs a C-ruling.
 
@@ -294,6 +294,20 @@ Each binds the L2 plan, [`2026-10-20-docserver-l2-layout.md`](../plans/2026-10-2
   - **Verification and execution limits.** Task 12's integrated tree completed 71 Chromium files (2,208 passed, 75 skipped) and 12 WebKit files (105 passed, 82 skipped). Task 14's original counts remain historical: its final integrated tree completed 73 Chromium files (2,269 passed, 84 skipped) and 13 WebKit files (114 passed, 91 skipped) with the standalone-bar correction present. Its earlier first WebKit run reproduced that old race; a repeated green run alone was not the fix. Task 14 merged as #35 after current-head Node 22 and 24 CI passed both browsers, typecheck, build, ratchet, packaging and consumer smoke. The post-merge ratchet root cause is established: #35's squash retained five Layout-moved IDs inside embedded history but omitted the final trailer block, so the git parser saw none; the PR's original commits had valid trailers. A future squash message must explicitly retain all required Layout-moved and golden trailers in its final block with attribution, and the actual git parser must be verified. This neither authorizes a main absorb nor weakens the ratchet. The targeted-cards correction committed `615ba7c` with 91 unit cases green; a fresh coordinator rerun also passed all 91 cases and typecheck. The resize same-width guard was independently verified. Task 18's captured services run initially had ten failures; excluding the real rail and marks features from probes that impersonate their seams left one historical CSS-marker assertion failing. The exact-once marker assertion and stronger plan-slot and observer guards remain under correction. Task 19's sole writer has targeted 7/7 and 101/101 evidence, but broader review and implementation remain incomplete. These narrow checks are not task completion, and full group D is not approved. Early Task 18/19 attempts exhausted context before editing; later attempts left partial code and targeted test evidence, not a completed implementation or review. Their continuation uses short, checkpointed implementation slices.
 
   Why: the measured integration failures and held-out reviews need explicit handoffs, not silent changes to another task's contract. Cost if wrong: the strip seam is one more context-keyed internal API, and strict label sanitation gives up some Mermaid label presentation.
+
+- **C56 (2026-10-21, coordinator): Task 18's narrow scroll-oracle correction is an explicit C54 shared-test exception, not Task 18 or group D acceptance.** Only a subsequent bounded correction may edit `test/enhance-scroll.test.ts` and `test/browser/scroll.test.ts`:
+  - The landmark probe that itself claims the Contents slot disables the rail; every RF3 and browser-integration case retains the real rail. The scroll assertion checks `scrolled`, `bar-hidden`, and the existing running head, rather than an entire class string that legitimately includes `has-toc`.
+  - The browser geometry oracle selects the semantic author `h1`, independently pins root padding to 52 px desktop and 28 px phone, and preserves the exact 49 px title displacement from a bar-disabled control and every sticky, pointer, and progress assertion. An editorial eyebrow means the title is not at raw padding; it authorizes no CSS correction.
+  - The unit `ceil(log2(n + 1)) + 2` and browser `2 * ceil(log2(n)) + 4` RF3 bounds remain unchanged; no visibility branch substitutes for desktop coverage. The production performance solution remains undecided, and this ruling authorizes no source change.
+  - Do not update historical evidence to call this current. Any further shared-test extension needs its own C54 exception.
+
+  Why: the preserved diagnosis isolates oracle and seam collisions without weakening the performance contract. Cost if wrong: a test-only repair could conceal a rail integration or RF3 regression.
+
+- **C57 (2026-10-21, coordinator): Task 19 may correct only the Product-lens path and table-code selectors in `assets/reader.css`.** The two rules still require a descendant `main.container`, although the enhanced element itself owns the reader and its lens class. Remove only that obsolete descendant requirement, retaining the root scope, screen media query and declarations. The specificity decreases only by the removed `main.container`; add no compensating selector. A dedicated `test/browser/settings-path.test.ts` owns the regression, leaving the ongoing settings tests and mutation journal to their current writer.
+  - Measure the original rule red and the source replacement green in Chromium and offline WebKit, at 1440 px and 390 px in light and dark. Verify path and table-code computed styles, unchanged Product-off styles, and isolation between independently enhanced sibling roots. Use the actual stylesheet, not an appended override.
+  - Preserve the warm palette, all other selectors, existing goldens and hostile verdicts. This grants no general stylesheet rewrite, shared-test extension, performance decision, or task acceptance. Record the exact selector reversal and its assertion failure outside the concurrently owned Task 19 journal for later reconciliation.
+
+  Why: independent file-only comparisons established that the reference quiets paths but an ordinary enhanced root cannot match the ported selector; the scratch override alone did not verify a source replacement. Cost if wrong: a selector correction could affect unrelated code or a sibling reader, so both negative controls are required.
 
 ## Carried constraints (reviewers get these)
 
