@@ -9,6 +9,10 @@
 // page's origin only: `strict` refuses inline styles (what the reader itself runs under) and `reader` allows them
 // (what Mermaid needs, §4.2).
 //
+// Diagrams (L2 Task 21): a page whose options hold `mermaid` is also served the package's Mermaid file at
+// MERMAID_PATH, where `npm run build:mermaid` puts it, built in memory once per process by scripts/build-mermaid.mjs
+// (CI runs the tests before it builds); the page script gives those options their load (page/bootstrap.ts).
+//
 // Which browsers run: DOCREADER_BROWSERS, a comma list of chromium and webkit; unset, both. With no selection a
 // browser that cannot start is a red naming the install command, never a skip. With a selection, the browser left
 // out is reported as excluded: its tests show as skipped under a title that names the setting, and a line on stderr
@@ -20,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium, webkit, type Browser, type LaunchOptions, type Page } from 'playwright-core';
 import { beforeAll, describe } from 'vitest';
+import { buildMermaid, OUT_FILE } from '../../scripts/build-mermaid.mjs';
 import { INSTALL } from '../../scripts/visual/compare.mjs';
 import { render } from '../../src/render/index.js';
 import type { EnhanceOutcome, HarnessApi } from './page/api.js';
@@ -173,6 +178,17 @@ function assetFiles(): Map<string, Served> {
   return out;
 }
 
+/** Where a test page imports the Mermaid file from: the package's own path (page/bootstrap.ts names it too). */
+export const MERMAID_PATH = `/${OUT_FILE}`;
+
+let mermaidBuilt: Promise<Uint8Array> | undefined;
+
+/** The Mermaid file, the bytes `npm run build:mermaid` writes, built in memory once per process. */
+export function mermaidFile(): Promise<Uint8Array> {
+  mermaidBuilt ??= buildMermaid().then((b) => b.contents);
+  return mermaidBuilt;
+}
+
 /** JSON for a data block, with the characters that could end or open a tag written as escapes. */
 function dataJson(value: unknown): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026');
@@ -211,6 +227,8 @@ export interface OpenHow {
   readonly unrouted?: readonly string[];
   /** Change the rendered html before it is served (a test's control page). */
   readonly html?: (html: string) => string;
+  /** Serve the Mermaid file at MERMAID_PATH; default: when the options hold `mermaid`. */
+  readonly mermaid?: boolean;
 }
 
 export interface OpenedDoc {
@@ -242,6 +260,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
   files.set('/', { body: pageHtml(html, opts), type: 'text/html; charset=utf-8' });
   files.set('/harness.js', { body: await pageScript(), type: 'text/javascript; charset=utf-8' });
   files.set('/page.css', { body: 'html, body { margin: 0; }\n', type: 'text/css' });
+  if (how.mermaid ?? Object.hasOwn(options, 'mermaid')) files.set(MERMAID_PATH, { body: Buffer.from(await mermaidFile()), type: 'text/javascript; charset=utf-8' });
 
   const browser = await browserFor(how.browser);
   const context = await browser.newContext({
