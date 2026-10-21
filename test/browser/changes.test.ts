@@ -92,6 +92,8 @@ function linesOf(page: Page, sel: string, text: string): Promise<[number, number
 }
 
 interface Landed {
+  /** The document scroll offset when the place was measured. */
+  readonly scrollY: number;
   /** The place's top, in the viewport. */
   readonly top: number;
   /** The bar's bottom in the viewport, never above its top. */
@@ -113,6 +115,7 @@ function landed(page: Page, text: string): Promise<Landed> {
     // A changed block flashes by the cell's keyframes (the stylesheet's `.chg.flash`), any other by the block's.
     const anim = el.getAnimations().find((a) => /^docreader-flash(?:-cell)?$/.test((a as CSSAnimation).animationName));
     return {
+      scrollY: window.scrollY,
       top: el.getBoundingClientRect().top,
       bar: Math.max(0, bar.getBoundingClientRect().bottom),
       height: window.innerHeight,
@@ -169,9 +172,28 @@ describeBrowsers((browser) => {
       const first = await landed(doc.page, 'A file the tool cannot read is listed');
       expectLanded(first, true);
       expect(first.count).toBe('1 of 2');
+      await doc.page.keyboard.press('Escape');
+      const away = await doc.page.evaluate(() => {
+        const target = Array.from(document.querySelectorAll('main[data-harness-root] p')).find((el) => el.textContent?.startsWith('A file the tool cannot read is listed')) as HTMLElement;
+        window.scrollTo(0, 700);
+        return { scrollY, top: target.getBoundingClientRect().top };
+      });
+      expect(away.scrollY).not.toBe(first.scrollY);
+      expect(Math.abs(away.top - first.top)).toBeGreaterThan(100);
+      await doc.page.evaluate(() => {
+        const target = Array.from(document.querySelectorAll('main[data-harness-root] p')).find((el) => el.textContent?.startsWith('A file the tool cannot read is listed')) as HTMLElement;
+        const original = target.scrollIntoView.bind(target);
+        (window as unknown as { __nativeCalls: number }).__nativeCalls = 0;
+        target.scrollIntoView = ((options?: ScrollIntoViewOptions) => {
+          (window as unknown as { __nativeCalls: number }).__nativeCalls += 1;
+          original(options);
+        }) as typeof target.scrollIntoView;
+      });
       await doc.page.evaluate(() => (window as unknown as { __changesHost: Host }).__changesHost.native('A file the tool cannot read is listed'));
+      expect(await doc.page.evaluate(() => (window as unknown as { __nativeCalls: number }).__nativeCalls)).toBe(1);
       const native = await landed(doc.page, 'A file the tool cannot read is listed');
       expectLanded(native, true);
+      expect(native.scrollY).not.toBe(away.scrollY);
       expect(Math.abs(native.top - first.top)).toBeLessThanOrEqual(1);
       await doc.page.keyboard.press('n');
       const second = await landed(doc.page, 'The walk reads each file');
