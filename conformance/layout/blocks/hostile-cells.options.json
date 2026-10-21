@@ -1,0 +1,5 @@
+{
+  "options": { "folds": false },
+  "scope": ["cell-line", "b", "cell-bullet", "cell-br"],
+  "hostile": true
+}
