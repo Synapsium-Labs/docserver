@@ -38,6 +38,12 @@ window.__changesHost = {
     const out = await showChanges(contextOf(root), next.base, how);
     return JSON.stringify(out);
   },
+  native(text) {
+    const target = Array.from(root.querySelectorAll('p')).find((el) => el.textContent?.startsWith(text));
+    if (!target) throw new Error('no target');
+    target.id = 'native-target';
+    contextOf(root).nav.goTo(target, { push: false, focus: false });
+  },
 };
 `;
 
@@ -59,6 +65,7 @@ function hostScript(): Promise<string> {
 interface Host {
   start(): Promise<void>;
   show(set: { base: string; changed: [number, number][] }, how: { what: string; jump?: boolean }): Promise<string>;
+  native(text: string): void;
 }
 
 /** Open the sample with this file's host, enhanced. */
@@ -90,6 +97,8 @@ interface Landed {
   /** The bar's bottom in the viewport, never above its top. */
   readonly bar: number;
   readonly height: number;
+  /** The landed change is physically reachable, rather than occluded by the bar. */
+  readonly hit: boolean;
   readonly flash: boolean;
   /** The flash animation's current time, or null with none running. */
   readonly time: number | null;
@@ -100,13 +109,14 @@ interface Landed {
 function landed(page: Page, text: string): Promise<Landed> {
   return page.evaluate((t) => {
     const el = Array.from(document.querySelectorAll('main[data-harness-root] p')).find((e) => (e.textContent ?? '').startsWith(t)) as HTMLElement;
-    const bar = document.querySelector('main[data-harness-root] .topbar') as HTMLElement;
+    const bar = document.querySelector('main[data-harness-root] .topbar-inner') as HTMLElement;
     // A changed block flashes by the cell's keyframes (the stylesheet's `.chg.flash`), any other by the block's.
     const anim = el.getAnimations().find((a) => /^docreader-flash(?:-cell)?$/.test((a as CSSAnimation).animationName));
     return {
       top: el.getBoundingClientRect().top,
       bar: Math.max(0, bar.getBoundingClientRect().bottom),
       height: window.innerHeight,
+      hit: document.elementFromPoint(el.getBoundingClientRect().left + 30, el.getBoundingClientRect().top + 3)?.closest('p.chg') === el,
       flash: el.classList.contains('flash'),
       time: anim === undefined || anim.currentTime === null ? null : Number(anim.currentTime),
       count: document.querySelector('main[data-harness-root] .chg-nav .cn')?.textContent ?? '',
@@ -140,6 +150,8 @@ const show = (page: Page, set: { base: string; changed: [number, number][] }): P
 function expectLanded(at: Landed, still = false): void {
   expect(at.top).toBeGreaterThanOrEqual(at.bar - 1);
   expect(at.top).toBeLessThan(at.bar + 100);
+  expect(Math.abs(at.top - (at.bar + 14))).toBeLessThanOrEqual(1);
+  expect(at.hit).toBe(true);
   expect(at.flash).toBe(true);
   if (still) expect(at.time).toBeNull();
   else expect(at.time).not.toBeNull();
@@ -157,6 +169,10 @@ describeBrowsers((browser) => {
       const first = await landed(doc.page, 'A file the tool cannot read is listed');
       expectLanded(first, true);
       expect(first.count).toBe('1 of 2');
+      await doc.page.evaluate(() => (window as unknown as { __changesHost: Host }).__changesHost.native('A file the tool cannot read is listed'));
+      const native = await landed(doc.page, 'A file the tool cannot read is listed');
+      expectLanded(native, true);
+      expect(Math.abs(native.top - first.top)).toBeLessThanOrEqual(1);
       await doc.page.keyboard.press('n');
       const second = await landed(doc.page, 'The walk reads each file');
       expectLanded(second, true);
@@ -173,7 +189,23 @@ describeBrowsers((browser) => {
       await doc.page.emulateMedia({ reducedMotion: 'no-preference' });
       const design = await linesOf(doc.page, 'p', 'The report is one Markdown file');
       expect(await show(doc.page, { base: '1234567', changed: [design] })).toBe('{"places":1}');
+      await doc.page.evaluate(() => window.scrollTo(0, 700));
+      await settled(doc.page);
+      const before = await doc.page.evaluate(() => {
+        const target = Array.from(document.querySelectorAll('main p')).find((el) => el.textContent?.startsWith('The report is one Markdown file')) as HTMLElement;
+        const original = window.scrollTo.bind(window);
+        (window as unknown as { __changeScrolls: ScrollToOptions[] }).__changeScrolls = [];
+        window.scrollTo = ((options: ScrollToOptions) => {
+          (window as unknown as { __changeScrolls: ScrollToOptions[] }).__changeScrolls.push(options);
+          original(options);
+        }) as typeof window.scrollTo;
+        return { scrollY, top: target.getBoundingClientRect().top, height: innerHeight };
+      });
+      expect(before.scrollY).toBe(700);
+      expect(Math.abs(before.top)).toBeLessThanOrEqual(before.height * 2);
+      expect(Math.abs(before.top + before.scrollY)).toBeGreaterThan(before.height * 2);
       await doc.page.keyboard.press('n');
+      expect(await doc.page.evaluate(() => (window as unknown as { __changeScrolls: ScrollToOptions[] }).__changeScrolls.some((call) => call.behavior === 'smooth'))).toBe(true);
       await settled(doc.page);
       const at = await landed(doc.page, 'The report is one Markdown file');
       expectLanded(at);

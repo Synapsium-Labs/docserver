@@ -4,8 +4,8 @@ Each guard of Task 20, deleted or inverted once, with the tests that go red: the
 the reference layout's section 16) and what changed (`src/enhance/changes.ts`, section 24): the host's change set
 (RF4), the blocks and the places, the stepper, the keys and Hide, and `showChanges` with the day view's `after()`.
 Measured again on branch `l2-t20-changes` after the review's fix round, on commit `a729da1`, every row that applies,
-L2-T20-M1 to L2-T20-M151. L2-T20-M150 was measured again on `1e77eec`, after its case was sharpened (below).
-148 rows apply to the code as it stands, and 145 of them are red (`rc=1`). L2-T20-M74, L2-T20-M102 and L2-T20-M125 are
+L2-T20-M1 to L2-T20-M152. L2-T20-M150 was measured again on `1e77eec`, after its case was sharpened (below).
+149 rows apply to the code as it stands, and 147 of them are red (`rc=1`). L2-T20-M74 and L2-T20-M102 are
 reported green, with the reason each is kept. L2-T20-M124, L2-T20-M127 and L2-T20-M131 are reported: their checks were
 removed when a measurement found them redundant (below), so they are in the tables and not in the JSON.
 
@@ -48,10 +48,9 @@ Notes on the measurement.
   - **Two checks were removed**, because a later check covered each. The rows are reported below, not dropped (C49):
     - L2-T20-M124, the live check after a replaced show's onHide;
     - L2-T20-M131, the live check before the host is asked.
-  - **Three are reported green and kept:**
+  - **Two are reported green and kept:**
     - L2-T20-M74, the walk's early stop, an RF4 efficiency bound that changes no result;
-    - L2-T20-M102, the live check after goTo, which calls the host's onHash (C52);
-    - L2-T20-M125, the live check after the event, whose listeners may reach the host.
+    - L2-T20-M102, the live check after goTo, which calls the host's onHash (C52).
 - L2-T20-M105, the flash's restart (a new animation), is seen only in a real browser. It was measured in Chromium here, and in WebKit in the Playwright image on a copy of the tree at `1e77eec`, where it is red too: "with motion, the step lands once the smooth scroll ends; a second flash of the place starts again" fails with "expected 419 to be less than 300".
 - Outside these rows, three cases in files this task may not edit are red on the branch:
   - in `test/enhance-services.test.ts`, its two key cases bind `w` themselves;
@@ -895,7 +894,7 @@ The stepper in the bar, `n` and `p`, a step's start, goTo and the flash, Hide, t
 | L2-T20-M122 | a show shows the stepper | `src/enhance/changes.ts` | `    st.stepper.box.hidden = false; ⏎ ` → (deleted) | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "the stepper sits in the bar's tray, hidden until a set is shown; then it names the comparison and counts the places" |
 | L2-T20-M123 | a show calls the onHide of the one it replaces | `src/enhance/changes.ts` | `  if (previous !== null) attempt(previous);` → `  void previous;` | `test/enhance-changes.test.ts`: 3 failed \| 46 passed (49). "a Hide clicked with nothing shown emits nothing; an onHide that destroys stops the show that replaced it"; "a show stops once destroyed by the onHide it calls, or by a listener of its event: no step, no scroll"; "a second show clears the first's marks and calls its onHide once" |
 | L2-T20-M124 | a show stops once its onHide destroyed | `src/enhance/changes.ts` | `  if (previous !== null) previous(); ⏎   if (!ctx.live()) return stops.length;` → `  if (previous !== null) previous();` | Reported (green, guard removed): green when first measured. Once the onHide it calls has destroyed the instance, the event emits nothing and the check right after the event stops the step, so this check was redundant. It was removed (a comment there says why); its case, "a show stops once destroyed by the onHide it calls, or by a listener of its event", still passes, and the check after the event (the next row) is kept. |
-| L2-T20-M125 | a show stops once a listener of its event, or its onHide, destroyed | `src/enhance/changes.ts` | `  if (!ctx.live()) return stops.length; // a listener, or the onHide before it, may destroy ⏎ ` → (deleted) | `test/enhance-changes.test.ts`: 49 passed (49). Reported (green, kept): a listener of the event, or the onHide before it, is another feature's code, which may call the host. Once destroyed, goTo returns at its own check and the journal refuses the flash, so no case can see the step that would follow. |
+| L2-T20-M125 | a show stops once a listener of its event, or its onHide, destroyed | `src/enhance/changes.ts` | `  if (!ctx.live()) return stops.length; // a listener, or the onHide before it, may destroy ⏎ ` → (deleted) | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "a show stops once destroyed by the onHide it calls, or by a listener of its event: no target read, step, or scroll". The case reads no target geometry after either destroy, before nav's separate guards can hide the erroneous step. |
 | L2-T20-M126 | a show steps by default | `src/enhance/changes.ts` | `  if (how.jump !== false) attempt(` → `  if (how.jump === true) attempt(` | `test/enhance-changes.test.ts`: 5 failed \| 44 passed (49). "a folded section's blocks are blocks: a step reveals them"; "a step goes through goTo (no new entry, no focus) and flashes each block of its place; the flash ends"; "a show stops once destroyed by the onHide it calls, or by a listener of its event: no step, no scroll"; "a listener's throw is caught: the show answers its places, emits to every listener and steps; Hide still calls onHide"; "a throw of the onHide a show replaces is caught: the new set is marked and its event emitted" |
 | L2-T20-M127 | an onHide that is not a function is not kept | `src/enhance/changes.ts` | `typeof how.onHide === 'function' ? how.onHide : null` → `how.onHide ?? null` | Reported (green, guard removed): red on the first measurement only through the unhandled-error check, when Hide called a non-function and the TypeError escaped its click. Fix round 1 catches every throw of an onHide (L2-T20-M145), so on `a729da1` this row read `49 passed (49)`, no error, and the check was removed in `1e77eec` (C49). The case still shows an onHide of 5 to Hide, and it passes. |
 
@@ -1392,7 +1391,7 @@ The export for Task 22: its refusals, the host call per base, measure, a later s
 ]
 ```
 
-## The review's fix round (L2-T20-M144 to L2-T20-M151)
+## The review's fix round (L2-T20-M144 to L2-T20-M152)
 
 Another feature's throw caught where `showChanges` and Hide call it, a failed call not kept, and `w` bound where no strip is placed.
 
@@ -1406,6 +1405,7 @@ Another feature's throw caught where `showChanges` and Hide call it, a failed ca
 | L2-T20-M149 | a failed call, or a reply that is no change set, is not kept | `src/enhance/changes.ts` | `    if (set === null && st.cache.get(base) === p) st.cache.delete(base); ⏎ ` → (deleted) | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "a failed call, or a reply that is no change set, is not kept: the next show of that base asks again" |
 | L2-T20-M150 | a failed call drops only its own entry | `src/enhance/changes.ts` | `if (set === null && st.cache.get(base) === p)` → `if (set === null)` | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "a failed call settling late drops only its own entry: a newer call for that base, made once it was bounded out, is kept" |
 | L2-T20-M151 | w is bound where no strip is placed | `src/enhance/strip.ts` | `    ctx.keys.bind({ key: 'w',` → `    if (ctx.info.isDocument \|\| isRulesDoc(ctx)) ctx.keys.bind({ key: 'w',` | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "w is bound with waiting items where no strip is placed: on a root that is no document" |
+| L2-T20-M152 | an in-range no-id step dispatches a smooth window scroll | `src/enhance/nav.ts` | `    jump(el, !(env.reducedMotion() \|\| far));` → `    jump(el, false);` | `test/browser/changes.test.ts`: 1 failed \| 1 passed \| 2 skipped (4). "with motion, the step lands once the smooth scroll ends; a second flash of the place starts again" |
 
 ### The rows, as `mutate.mjs` reads them
 
@@ -1474,6 +1474,14 @@ Another feature's throw caught where `showChanges` and Hide call it, a failed ca
     "old": "    ctx.keys.bind({ key: 'w',",
     "new": "    if (ctx.info.isDocument || isRulesDoc(ctx)) ctx.keys.bind({ key: 'w',",
     "tests": "test/enhance-changes.test.ts"
+  },
+  {
+    "id": "L2-T20-M152",
+    "guard": "an in-range no-id step dispatches a smooth window scroll",
+    "file": "src/enhance/nav.ts",
+    "old": "    jump(el, !(env.reducedMotion() || far));",
+    "new": "    jump(el, false);",
+    "tests": "test/browser/changes.test.ts"
   }
 ]
 ```
