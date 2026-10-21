@@ -1951,3 +1951,35 @@ goes at once (its click has `detail` 0); a press on the card's text keeps it.
   }
 ]
 ```
+
+## Real touch follow-up (L2-T17-M197 to L2-T17-M198)
+
+Measured 2026-10-21 in throwaway copies with the offline Playwright image, one row at a time. The new browser case uses a real `locator.tap()` in a `hasTouch` context in both engines. The first tap opens the card and leaves the row unfocused; the second tap focuses the row. A new tap followed by Enter also focuses its row immediately. Row focus is navigation's observable effect: the host owns history, so the case deliberately does not treat a same-location click, hash, or host callback as proof of navigation.
+
+| Row | Guard | File | Change | Red (tests in the named file) |
+|---|---|---|---|---|
+| L2-T17-M197 | the browser harness carries hasTouch into the context | `test/browser/harness.ts` | `...(how.hasTouch === undefined ? {} : { hasTouch: how.hasTouch }),` -> deleted | Chromium and WebKit each: `rc=1`, 1 failed \| 6 passed \| 7 skipped. `locator.tap` says the page does not support tap without `hasTouch`. |
+| L2-T17-M198 | a fresh tap takes its last pointer even when WebKit calls its click a mouse | `src/enhance/cards.ts` | `const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;` -> `const type = typeof own === 'string' && own !== '' ? own : lastPointer;` | WebKit: `rc=1`, 1 failed \| 6 passed \| 7 skipped. The first real tap does not open its preview. |
+
+### The rows, as `mutate.mjs` reads them
+
+```json
+[
+  {
+    "id": "L2-T17-M197",
+    "guard": "the browser harness carries hasTouch into the context",
+    "file": "test/browser/harness.ts",
+    "old": "    ...(how.hasTouch === undefined ? {} : { hasTouch: how.hasTouch }),\n",
+    "new": "",
+    "tests": "test/browser/cards.test.ts"
+  },
+  {
+    "id": "L2-T17-M198",
+    "guard": "a fresh tap takes its last pointer even when WebKit calls its click a mouse",
+    "file": "src/enhance/cards.ts",
+    "old": "const type = tapping() ? lastPointer : typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "new": "const type = typeof own === 'string' && own !== '' ? own : lastPointer;",
+    "tests": "test/browser/cards.test.ts"
+  }
+]
+```

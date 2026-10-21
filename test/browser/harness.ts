@@ -203,6 +203,8 @@ export interface OpenHow {
   readonly browser: BrowserName;
   /** Default 1440×1000. */
   readonly viewport?: { readonly width: number; readonly height: number };
+  /** Enable touch input in the browser context; default false. */
+  readonly hasTouch?: boolean;
   /** Default 'strict'. */
   readonly csp?: PolicyName;
   /** Call enhance() before returning; default true. */
@@ -247,6 +249,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
   const context = await browser.newContext({
     viewport: how.viewport ?? { width: 1440, height: 1000 },
     deviceScaleFactor: 1,
+    ...(how.hasTouch === undefined ? {} : { hasTouch: how.hasTouch }),
     colorScheme: 'light',
     serviceWorkers: 'block',
   });

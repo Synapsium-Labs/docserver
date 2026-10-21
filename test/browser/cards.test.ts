@@ -106,6 +106,16 @@ async function withDoc(browser: BrowserName, viewport: { width: number; height: 
   }
 }
 
+async function withTouchDoc(browser: BrowserName, fn: (doc: OpenedDoc) => Promise<void>): Promise<void> {
+  const doc = await openDoc(DOC, { folds: false }, { browser, hasTouch: true });
+  try {
+    await fn(doc);
+    expect(await doc.violations()).toEqual([]);
+  } finally {
+    await doc.close();
+  }
+}
+
 describeBrowsers((browser) => {
   it('below the trigger when the card fits there, its left from the trigger\'s, never over it', async () => {
     await withDoc(browser, { width: 1440, height: 1000 }, async (doc) => {
@@ -205,6 +215,28 @@ describeBrowsers((browser) => {
       await doc.page.waitForTimeout(600);
       expect((await seen(doc, 0)).open).toBe(false);
       expect(await a.getAttribute('aria-expanded')).toBe('false');
+    });
+  });
+
+  it('a real touch previews first and follows second; Enter after a touch preview follows', async () => {
+    await withTouchDoc(browser, async (doc) => {
+      const d1 = doc.page.locator('a.xref').filter({ hasText: 'D1' }).first();
+      const d1Row = doc.page.locator('tbody tr').nth(0);
+      await d1.tap();
+      expect((await seen(doc, 0)).open).toBe(true);
+      expect(await d1Row.evaluate((row) => row === document.activeElement)).toBe(false);
+      await d1.tap();
+      // The row gaining focus is navigation's observable effect; same-location clicks cannot prove that.
+      expect(await d1Row.evaluate((row) => row === document.activeElement)).toBe(true);
+
+      const d2 = doc.page.locator('a.xref').filter({ hasText: 'D2' }).first();
+      const d2Row = doc.page.locator('tbody tr').nth(1);
+      await d2.scrollIntoViewIfNeeded();
+      await d2.tap();
+      expect((await seen(doc, 1)).open).toBe(true);
+      expect(await d2Row.evaluate((row) => row === document.activeElement)).toBe(false);
+      await d2.press('Enter');
+      expect(await d2Row.evaluate((row) => row === document.activeElement)).toBe(true);
     });
   });
 });
