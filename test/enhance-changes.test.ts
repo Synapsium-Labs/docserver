@@ -121,7 +121,11 @@ function lines(el: Element): [number, number] {
   return [Number(m[1]), Number(m[2])];
 }
 
-const marked = (root: Element, cls: 'chg' | 'chg-del'): string[] => Array.from(root.querySelectorAll(`.${cls}`)).map((e) => `${e.localName}:${(e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 16)}`);
+const marked = (root: Element, cls: 'chg' | 'chg-del'): string[] => Array.from(root.querySelectorAll(`.${cls}`)).map((e) => {
+  const copy = e.cloneNode(true) as Element;
+  if (/^h[1-6]$/.test(e.localName)) for (const chrome of copy.querySelectorAll('.h-ctl')) chrome.remove();
+  return `${e.localName}:${(copy.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 16)}`;
+});
 
 const stepper = (root: Element): HTMLElement | null => root.querySelector('.chg-nav');
 
@@ -518,7 +522,7 @@ describe('what changed: the host\'s change set (RF4)', () => {
     expect(marked(root, 'chg')).toEqual([
       'h1:Changes sample',
       'dl:Date2026-10-20St',
-      'h2:1. DecisionsFold',
+      'h2:1. Decisions',
       'p:Intro paragraph.',
       'tr:ID What Status',
       'tr:D1 First Agreed',
@@ -527,7 +531,7 @@ describe('what changed: the host\'s change set (RF4)', () => {
       'tr:D4 Fourth In rev',
       'li:item a',
       'li:nested c',
-      'h2:2. LaterFold',
+      'h2:2. Later',
       'p:Closing paragrap',
       'h2:Where things sta',
       'h3:Agreed',
@@ -535,7 +539,7 @@ describe('what changed: the host\'s change set (RF4)', () => {
       'h3:Waiting on you',
       'li:Pick a name for ',
       'li:Review the secon',
-      'h2:3. EndFold',
+      'h2:3. End',
       'p:Last words.',
     ]);
   });
@@ -884,9 +888,10 @@ describe('what changed: the stepper and the keys', () => {
     expect(onHide).not.toHaveBeenCalled();
   });
 
-  it('a show stops once destroyed by the onHide it calls, or by a listener of its event: no step, no scroll', async () => {
-    const scrolled = vi.fn();
-    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrolled, configurable: true, writable: true });
+  it('a show stops once destroyed by the onHide it calls, or by a listener of its event: no target read, step, or scroll', async () => {
+    const scrolled = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    const nativeScrolled = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: nativeScrolled, configurable: true, writable: true });
     try {
       for (const by of ['onHide', 'listener'] as const) {
         const root = mount();
@@ -898,9 +903,16 @@ describe('what changed: the stepper and the keys', () => {
         };
         await showChanges(ctx, BASE, by === 'onHide' ? { what: 'x', jump: false, onHide: kill } : { what: 'x', jump: false });
         if (by === 'listener') ctx.events.on('changes', kill);
+        const source = find(root, 'p', 'Intro paragraph.');
+        const targetMeasured = vi.spyOn(source, 'getBoundingClientRect');
+        targetMeasured.mockClear();
         scrolled.mockClear();
+        nativeScrolled.mockClear();
         await showChanges(ctx, 'fedcba9', { what: 'y' });
+        expect(targetMeasured, by).not.toHaveBeenCalled();
         expect(scrolled, by).not.toHaveBeenCalled();
+        expect(nativeScrolled, by).not.toHaveBeenCalled();
+        expect(root.querySelector('.flash'), by).toBeNull();
         await flush();
       }
       // A control: with nothing destroying it, the same show steps, and goTo scrolls.
@@ -908,9 +920,13 @@ describe('what changed: the stepper and the keys', () => {
       const { options } = withChanges({ changed: [[7, 7]] });
       await enhance(root, options);
       scrolled.mockClear();
+      nativeScrolled.mockClear();
       await showChanges(ctxOf(root), BASE, { what: 'x' });
       expect(scrolled).toHaveBeenCalledTimes(1);
+      expect(nativeScrolled).not.toHaveBeenCalled();
+      expect(root.querySelector('p.chg.flash')?.textContent).toBe('Intro paragraph.');
     } finally {
+      scrolled.mockRestore();
       delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
     }
   });
