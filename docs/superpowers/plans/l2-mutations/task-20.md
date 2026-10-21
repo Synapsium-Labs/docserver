@@ -11,7 +11,8 @@ their count lines remain the evidence for that campaign; they were not rerun at 
 
 **Later integration corrections.** Commit `d25d1e85` separately measured and added L2-T20-M152, leaving 149
 applicable rows and 147 red in total: the historical 145 red, L2-T20-M125 corrected from green to red, and the fresh
-L2-T20-M152 red. This follow-up adds L2-T20-M153 below, so the journal now has 150 applicable rows and 148 red. It
+L2-T20-M152 red. The committed baseline for the next browser row first appears at `dab6bcd4da`; the current correction
+tightens that row's control without assigning a future revision. The journal has 150 applicable rows and 148 red. It
 measures only its browser control and deletion mutant; it does not claim a full-campaign rerun.
 
 **Method.** The L1 plan's `mutate.mjs` (Task 1, Step 8), with the three changes Task 7b's rows file records: a 512 MiB
@@ -19,10 +20,11 @@ output buffer, a run that ends with no exit status reported as KILLED and counte
 count line, `Unhandled Rejection` and `TypeError` lines kept in what it prints. Each row is applied to its own throwaway
 copy of the working tree (tracked and untracked files, never ignored ones, `node_modules` linked from the checkout),
 its test file runs there with the local `vitest`, and the copy is deleted. Each `old` occurs exactly once in its file.
-The rows ran one at a time, with `DOCREADER_BROWSERS=chromium` (C45); the one row whose tests are the browser file
-(L2-T20-M105) was measured in WebKit too, in the Playwright image (C51). The checkout was not edited while they ran:
-`git status --porcelain` (empty), the hash of `git diff` and `HEAD` read the same before the first row and after the
-last. The Red column gives the count line and the failing tests the run printed (at most five here).
+The historical browser row L2-T20-M105 was measured in Chromium and in the Playwright-image WebKit run (C51). Later,
+separately measured browser rows L2-T20-M152 and L2-T20-M153 have their own Chromium and WebKit evidence below. The
+checkout was not edited while rows ran: `git status --porcelain` (empty), the hash of `git diff` and `HEAD` read the
+same before the first row and after the last. The Red column gives the count line and the failing tests the run printed
+(at most five here).
 
 Notes on the measurement.
 - **The review's fix round** (`a729da1`, `1e77eec`):
@@ -1413,7 +1415,7 @@ on those rows is not backdated to the historical campaign.
 | L2-T20-M150 | a failed call drops only its own entry | `src/enhance/changes.ts` | `if (set === null && st.cache.get(base) === p)` → `if (set === null)` | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "a failed call settling late drops only its own entry: a newer call for that base, made once it was bounded out, is kept" |
 | L2-T20-M151 | w is bound where no strip is placed | `src/enhance/strip.ts` | `    ctx.keys.bind({ key: 'w',` → `    if (ctx.info.isDocument \|\| isRulesDoc(ctx)) ctx.keys.bind({ key: 'w',` | `test/enhance-changes.test.ts`: 1 failed \| 48 passed (49). "w is bound with waiting items where no strip is placed: on a root that is no document" |
 | L2-T20-M152 | an in-range no-id step dispatches a smooth window scroll | `src/enhance/nav.ts` | `    jump(el, !(env.reducedMotion() \|\| far));` → `    jump(el, false);` | Fresh at `d25d1e85`: `test/browser/changes.test.ts`: 1 failed \| 1 passed \| 2 skipped (4). "with motion, the step lands once the smooth scroll ends; a second flash of the place starts again" |
-| L2-T20-M153 | an in-range ID target dispatches its native scroll primitive after real displacement | `src/enhance/nav.ts` | `    if (typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });` → `    void target;` | Fresh follow-up at `d25d1e85`: Chromium and offline WebKit control each pass 2 tests; the deletion mutant fails Chromium at the primitive counter (`expected 0 to be 1`). The case escapes the pin, moves the viewport to 700 px and proves the target moved by more than 100 px before calling `native`; it then proves one `scrollIntoView` dispatch, the existing under-bar/hit/flash/tolerance landing, and final alignment within 1 px of the prior landing. |
+| L2-T20-M153 | an in-range ID target dispatches its native scroll primitive after real displacement | `src/enhance/nav.ts` | `    if (typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });` → `    void target;` | Baseline at `dab6bcd4da`; the current uncommitted correction captures the primitive counter in the same synchronous page evaluation as `native`, before a legitimate pinned-reach ResizeObserver can reapply. Fresh Chromium and offline WebKit controls each pass 2 tests; the deletion mutant fails both at the primitive counter (`expected 0 to be 1`). The case escapes the pin, moves the viewport to 700 px and proves the target moved by more than 100 px before calling `native`; it then proves one `scrollIntoView` dispatch, the existing under-bar/hit/flash/tolerance landing, and final alignment within 1 px of the prior landing. |
 
 ### The rows, as `mutate.mjs` reads them
 

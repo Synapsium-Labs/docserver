@@ -189,8 +189,12 @@ describeBrowsers((browser) => {
           original(options);
         }) as typeof target.scrollIntoView;
       });
-      await doc.page.evaluate(() => (window as unknown as { __changesHost: Host }).__changesHost.native('A file the tool cannot read is listed'));
-      expect(await doc.page.evaluate(() => (window as unknown as { __nativeCalls: number }).__nativeCalls)).toBe(1);
+      // Capture before a ResizeObserver can reapply the pinned reach after this native dispatch.
+      const nativeCalls = await doc.page.evaluate((text) => {
+        (window as unknown as { __changesHost: Host }).__changesHost.native(text);
+        return (window as unknown as { __nativeCalls: number }).__nativeCalls;
+      }, 'A file the tool cannot read is listed');
+      expect(nativeCalls).toBe(1);
       const native = await landed(doc.page, 'A file the tool cannot read is listed');
       expectLanded(native, true);
       expect(native.scrollY).not.toBe(away.scrollY);
