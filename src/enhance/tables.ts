@@ -147,7 +147,8 @@ function tableScrolls(fits: boolean, stack: boolean, phone: boolean): boolean {
 /** Measure every table again (see the header): reads first, then writes; nothing while the root has no layout box. */
 function measure(ctx: FeatureContext, tables: readonly TableBlock[]): void {
   const { journal } = ctx;
-  if (ctx.root.getClientRects().length === 0) return;
+  // A document with no table reads nothing: the root's box is read only when there is a table to measure.
+  if (tables.length === 0 || ctx.root.getClientRects().length === 0) return;
   for (const t of tables) if (t.el.classList.contains('fits')) journal.toggleClass(t.el, 'fits', false);
   const read = tables.map((t) => ({ fits: t.table.scrollWidth <= t.el.clientWidth + 1, headH: t.table.tHead?.offsetHeight ?? 0 }));
   const phone = ctx.env.viewport().w <= PHONE_MAX_W;
