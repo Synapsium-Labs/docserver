@@ -803,6 +803,11 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .keys dt { white-space: nowrap; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .keys dd { margin: 0; color: var(--text-muted); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .keys kbd { font-family: var(--sans); font-size: 12px; min-width: 1.6em; display: inline-block; text-align: center; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; color: var(--text); background: var(--surface); }
+/* the dialogs live in the root, so the reading column's prose rules reach them: these reset what the reference's dialogs, outside its column, never took */
+[data-docreader-root][data-docreader-root][data-docreader-root] .jump li { margin-bottom: .3em; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .keys h2 { position: static; line-height: 1.3; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .ckey { padding: 0; margin: 0; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .ckey li { margin: 0; }
 /* ─── phone ──────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
   [data-docreader-root][data-docreader-root] { --pad: 16px; }

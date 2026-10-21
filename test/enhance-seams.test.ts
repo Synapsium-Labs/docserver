@@ -1200,6 +1200,8 @@ describe('chromeId: per instance, unique in the document (RF2)', () => {
 
   it('an instance\'s ids are released when it is torn down, and none is issued after', async () => {
     const root = mount();
+    // Measured before the startup too: the features' own ids (the quick jump's, Task 16) are released with the rest.
+    const start = chromeIdsIssued(document);
     await enhance(root);
     const before = chromeIdsIssued(document);
     const ctx = ctxOf(root);
@@ -1207,9 +1209,9 @@ describe('chromeId: per instance, unique in the document (RF2)', () => {
     ctx.chromeId('keys');
     expect(chromeIdsIssued(document)).toBe(before + 2);
     await destroyEnhancement(root);
-    expect(chromeIdsIssued(document)).toBe(before);
+    expect(chromeIdsIssued(document)).toBe(start);
     expect(() => ctx.chromeId('late')).toThrow(/chromeId after a destroy/);
-    expect(chromeIdsIssued(document)).toBe(before);
+    expect(chromeIdsIssued(document)).toBe(start);
   });
 });
 

@@ -31,7 +31,9 @@ const hooks = vi.hoisted(() => ({ probes: [] as unknown[], beforeFolds: [] as un
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
   const features = (): Feature[] => {
-    const list = [...real.features()];
+    // Without the quick jump and the keys sheet (Task 16): they bind "/", "?" and the chord and register the 'jump'
+    // and 'keys' overlays and the bar's jump tool, which these cases bind and register themselves, as stand-ins.
+    const list = real.features().filter((f) => f.name !== 'jump' && f.name !== 'keysheet');
     const at = list.findIndex((f) => f.name === 'folds');
     return [...list.slice(0, at), ...(hooks.beforeFolds as Feature[]), ...list.slice(at), ...(hooks.probes as Feature[])];
   };

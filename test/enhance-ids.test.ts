@@ -192,7 +192,7 @@ describe('rule paragraphs (rules.ts; the reference layout, section 3)', () => {
     expect(index.get('AB-ONE')?.target).toBe(para(root, 'AB-ONE —')); // the first definition wins
     expect(index.get('GH-6')?.target).toBe(later);
     expect(index.get('GH-6')?.title).toBe('A later paragraph repeats an ID');
-    expect(Array.from(root.querySelectorAll('[id]')).map((e) => e.id)).toEqual(['example-rules', '1-rules']); // no ids written
+    expect(Array.from(root.querySelectorAll('[id]')).filter((e) => e.closest('[data-docreader-chrome]') === null).map((e) => e.id)).toEqual(['example-rules', '1-rules']); // no ids written on the document (chrome's own ids are C48's)
   });
 
   it('a join of ", and" also joins IDs; a word that is no join ends the list, and then the paragraph is no rule', async () => {
@@ -629,7 +629,7 @@ describe('ID rows (ids.ts; the reference layout, section 8)', () => {
     expect(index.get('D1')?.target).toBe(rows[2]);
     expect(index.get('D1')?.row).toBe(rows[2]);
     expect(plain(index.get('B1'))).toMatchObject({ id: 'B1', title: 'No heading before it', status: null, group: 'Index' });
-    expect(Array.from(root.querySelectorAll('[id]')).map((e) => e.id)).toEqual(['example-decisions', '1-decisions', 'accepted-ones', '2-mixed']); // no ids written
+    expect(Array.from(root.querySelectorAll('[id]')).filter((e) => e.closest('[data-docreader-chrome]') === null).map((e) => e.id)).toEqual(['example-decisions', '1-decisions', 'accepted-ones', '2-mixed']); // no ids written on the document (chrome's own ids are C48's)
   });
 
   it('outside an index, only a first cell that is exactly an ID of 10 characters or fewer defines its row', async () => {
