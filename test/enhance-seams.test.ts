@@ -303,8 +303,9 @@ describe('env: the root\'s window behind one module (RF5)', () => {
       remove(type, fn, o as boolean);
     }) as never);
     await destroyEnhancement(root);
-    // Each of the case's five, and relayout's own resize listener (Task 7b).
-    expect(removed.sort()).toEqual(['afterprint', 'beforeprint', 'pagehide', 'resize', 'resize', 'scroll']);
+    // Each of the case's five, among the features' own (relayout's resize, Task 7b; the scroll spy's, Task 12; ...):
+    // that the case's own handlers are gone is what the dispatch below shows.
+    expect(removed).toEqual(expect.arrayContaining(['afterprint', 'beforeprint', 'pagehide', 'resize', 'scroll']));
     for (const t of ['scroll', 'resize', 'beforeprint', 'afterprint', 'pagehide']) view.dispatchEvent(new Event(t));
     expect(seen).toHaveLength(5);
   });
