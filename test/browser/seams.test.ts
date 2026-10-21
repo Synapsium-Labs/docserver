@@ -43,7 +43,9 @@ afterAll(closeBrowsers);
 
 describeBrowsers((browser) => {
   it('setStyle applies under the strict policy, important included, where a style attribute is refused; undo leaves no attribute', async () => {
-    const doc = await openDoc(DOC, {}, { browser, csp: 'strict' });
+    // Without the bar: the scroll feature (Task 12) measures --bar-h on the root at its own frames, and its write
+    // would race this case's.
+    const doc = await openDoc(DOC, { chrome: { bar: false } }, { browser, csp: 'strict' });
     try {
       await doc.page.evaluate(script);
       const got = await doc.page.evaluate(async () => {
@@ -126,9 +128,10 @@ describeBrowsers((browser) => {
         refused: true,
       });
       expect(got.after).toEqual({ faults: 0, attrs: [false, false, false], width: true, barH: true });
-      // The one refusal is the style attribute (a browser may name the directive's -attr form).
-      const violations = await doc.violations();
-      expect(violations.map((v) => (v.split(' ')[0] ?? '').replace(/-attr$/, ''))).toEqual(['style-src']);
+      // The one refusal is the style attribute (a browser may name the directive's -attr form). The report arrives as
+      // an event, later under load, so the case waits for it rather than for a fixed time.
+      const refusals = async (): Promise<string[]> => (await doc.violations()).map((v) => (v.split(' ')[0] ?? '').replace(/-attr$/, ''));
+      await expect.poll(refusals, { timeout: 10_000 }).toEqual(['style-src']);
     } finally {
       await doc.close();
     }
