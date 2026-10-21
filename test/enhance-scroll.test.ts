@@ -201,9 +201,9 @@ function placer(root: Element, at: Readonly<Record<string, number>>): (y: number
   };
 }
 
-/** Place every h2 and h3 of the root, in document order, at these page positions less `y`. */
+/** Place every h2 and h3 of the document in the root (the headings the reader made, a dialog's, left out), in document order, at these page positions less `y`. */
 function ladder(root: Element, tops: readonly number[]): (y: number) => void {
-  const hs = Array.from(root.querySelectorAll('h2, h3'));
+  const hs = Array.from(root.querySelectorAll('h2, h3')).filter((h) => !h.hasAttribute('data-docreader-chrome'));
   if (hs.length !== tops.length) throw new Error(`ladder: ${String(hs.length)} headings, ${String(tops.length)} tops`);
   return (y) => {
     hs.forEach((h, i) => rects.set(h, { top: (tops[i] ?? 0) - y }));

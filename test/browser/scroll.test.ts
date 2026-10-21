@@ -333,17 +333,13 @@ describeBrowsers((browser) => {
       await scrollTo(doc.page, 800);
       expect([await classes(doc.page), await shown()]).toEqual([['scrolled'], true]);
       expect(await stickyTops(doc.page)).toEqual(['48px', '54px']);
-      // A dialog open: scrolling down leaves the bar as it is.
-      await doc.page.evaluate(() => {
-        const w = window as unknown as Win & { __open: boolean };
-        w.__open = true;
-        w.__ctx.overlays.register('jump', { isOpen: () => w.__open, close: () => undefined });
-      });
+      // A dialog open (the quick jump, Task 16): scrolling down leaves the bar as it is.
+      await doc.page.keyboard.press('/');
+      await doc.page.waitForSelector('main[data-harness-root] .jump.open');
       await scrollTo(doc.page, 1500);
       expect(await shown()).toBe(true);
-      await doc.page.evaluate(() => {
-        (window as unknown as { __open: boolean }).__open = false;
-      });
+      await doc.page.keyboard.press('Escape');
+      await doc.page.waitForFunction(() => document.querySelector('main[data-harness-root] .jump.open') === null);
       await scrollTo(doc.page, 2000);
       expect(await shown()).toBe(false);
       await scrollTo(doc.page, 1900);
