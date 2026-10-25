@@ -123,6 +123,88 @@ function delay(ms: number): number {
   return Math.min(ms, MAX_DELAY);
 }
 
+type FrameWork = 'relayout' | 'spy' | 'rail';
+
+type FrameEntry = {
+  readonly fn: () => void;
+};
+
+type FrameQueue = {
+  readonly root: HTMLElement;
+  readonly env: Env;
+  readonly live: () => boolean;
+  readonly entries: Map<FrameWork, FrameEntry>;
+  scheduled: Cancel | null;
+  running: boolean;
+  last: 'reader' | 'rail';
+};
+
+/** The one physical-frame queue of each live reader root, allocated only when an env is built. */
+let frameQueues: WeakMap<HTMLElement, FrameQueue> | undefined;
+
+/** Pick one category without letting continuous reader work starve a pending rail follow. */
+function nextFrameWork(queue: FrameQueue): FrameWork | null {
+  const reader = queue.entries.has('relayout') || queue.entries.has('spy');
+  const rail = queue.entries.has('rail');
+  if (reader && rail) {
+    if (queue.last === 'reader') return 'rail';
+    return queue.entries.has('relayout') ? 'relayout' : 'spy';
+  }
+  if (reader) return queue.entries.has('relayout') ? 'relayout' : 'spy';
+  return rail ? 'rail' : null;
+}
+
+/** Schedule the next physical frame only after the current transaction has completed. */
+function scheduleFrameWork(queue: FrameQueue): void {
+  if (queue.running || queue.scheduled !== null || queue.entries.size === 0) return;
+  queue.scheduled = queue.env.frame(() => {
+    queue.scheduled = null;
+    if (!queue.live()) {
+      queue.entries.clear();
+      return;
+    }
+    const kind = nextFrameWork(queue);
+    if (kind === null) return;
+    const entry = queue.entries.get(kind);
+    if (entry === undefined) return;
+    // Consume before the call so reentry creates a distinct later entry.
+    queue.entries.delete(kind);
+    queue.running = true;
+    try {
+      entry.fn();
+    } finally {
+      queue.running = false;
+      queue.last = kind === 'rail' ? 'rail' : 'reader';
+      scheduleFrameWork(queue);
+    }
+  });
+}
+
+/** Queue one internal reader job; missing or no-longer-live roots deliberately have no fallback scheduler. */
+export function queueFrameWork(root: HTMLElement, kind: FrameWork, fn: () => void): Cancel {
+  const queue = frameQueues?.get(root);
+  if (queue === undefined || !queue.live()) return () => undefined;
+  const entry: FrameEntry = { fn };
+  queue.entries.set(kind, entry);
+  scheduleFrameWork(queue);
+  return () => {
+    if (queue.entries.get(kind) !== entry) return;
+    queue.entries.delete(kind);
+  };
+}
+
+/** Register this env's queue and remove only this instance's entry during its journal teardown. */
+function registerFrameQueue(root: HTMLElement, env: Env, journal: Journal, live: () => boolean): void {
+  const queue: FrameQueue = { root, env, live, entries: new Map(), scheduled: null, running: false, last: 'rail' };
+  (frameQueues ??= new WeakMap()).set(root, queue);
+  journal.defer(() => {
+    queue.scheduled?.();
+    queue.scheduled = null;
+    queue.entries.clear();
+    if (frameQueues?.get(root) === queue) frameQueues.delete(root);
+  });
+}
+
 /** The env of one instance: `live` and `operate` are its own. */
 export function createEnv(root: HTMLElement, journal: Journal, live: () => boolean, operate: Operate): Env {
   const doc = root.ownerDocument;
@@ -410,5 +492,6 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
       return view.getComputedStyle(el).getPropertyValue(prop).trim();
     },
   };
+  registerFrameQueue(root, env, journal, live);
   return Object.freeze(env);
 }

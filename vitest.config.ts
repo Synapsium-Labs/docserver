@@ -18,7 +18,8 @@ export default defineConfig({
     setupFiles: ['test/setup/no-network.ts'],
     testTimeout: 60_000,
     projects: [
-      { extends: true, test: { name: 'unit', include: ['test/**/*.test.ts'], exclude: [BROWSER, PACK, LAYOUT], sequence: { groupOrder: 0 } } },
+      { extends: true, test: { name: 'unit', include: ['test/**/*.test.ts'], exclude: [BROWSER, PACK, LAYOUT, 'test/enhance-since.test.ts'], sequence: { groupOrder: 0 } } },
+      { extends: true, test: { name: 'since-unit', include: ['test/enhance-since.test.ts'], env: { TZ: 'Asia/Kolkata' }, pool: 'forks', isolate: true, sequence: { groupOrder: 0 } } },
       { extends: true, test: { name: 'browser', include: [BROWSER], sequence: { groupOrder: 1 } } },
       { extends: true, test: { name: 'pack', include: [PACK], sequence: { groupOrder: 2 } } },
       { extends: true, test: { name: 'layout', include: [LAYOUT], hookTimeout: 60_000, sequence: { groupOrder: 3 } } },

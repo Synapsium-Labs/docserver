@@ -10,6 +10,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to __proto__"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: __proto__"
       "Fold"
 p
@@ -19,6 +21,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to constructor"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: constructor"
       "Fold"
 p
@@ -28,6 +32,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to jump"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: jump"
       "Fold"
 p
@@ -37,6 +43,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to toc-contents"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: toc-contents"
       "Fold"
 p
@@ -46,6 +54,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to toString"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: toString"
       "Fold"
 p

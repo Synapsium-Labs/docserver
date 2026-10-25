@@ -782,7 +782,7 @@ describe('position.keep', () => {
     anchor();
     expect(s.points[0]).toEqual([610, 12]);
     s.boxes.set(title, [370, 0]); // the title and the hidden meta line have no box: the next block has
-    s.boxes.set(find(root, 'p'), [0, 0]);
+    s.boxes.set(find(root, 'p[data-line]'), [0, 0]);
     s.boxes.set(find(root, 'h2'), [100, 30]);
     s.points.length = 0;
     anchor();
@@ -1105,33 +1105,58 @@ describe('the pin', () => {
     expect(calls).toBe(1);
   });
 
-  it('the root changing size holds it, where the window can observe sizes', async () => {
+  it('the pin observer holds its position while the root-width observer lives through destroy', async () => {
     const s = stage();
-    const observed: Element[] = [];
-    let report: (() => void) | null = null;
-    let disconnected = 0;
+    const original = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+    const observers: { instance: object; callback: (entries: unknown[]) => void; targets: Element[]; disconnects: number }[] = [];
     (window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
-      constructor(fn: () => void) {
-        report = fn;
+      private readonly record: (typeof observers)[number];
+
+      constructor(callback: (entries: unknown[]) => void) {
+        this.record = { instance: this, callback, targets: [], disconnects: 0 };
+        observers.push(this.record);
       }
       observe(target: Element): void {
-        observed.push(target);
+        this.record.targets.push(target);
       }
       unobserve(): void {}
       disconnect(): void {
-        disconnected += 1;
+        this.record.disconnects += 1;
       }
     };
     try {
       const root = mount();
+      const plan = el(root, 'h2', '3-plan');
+      const title = el(root, 'h1', 'navigation-sample');
+      s.tops.set(title, 900);
+      s.tops.set(plan, 3000);
       await enhance(root, { initialHash: '3-plan' });
-      expect(observed).toEqual([root]);
-      (report as unknown as (entries: unknown[]) => void)([]);
-      expect(s.intoView).toHaveLength(2);
+      expect(observers).toHaveLength(2);
+      expect(observers[0]?.instance).not.toBe(observers[1]?.instance);
+      for (const observer of observers) {
+        expect(observer.callback).toEqual(expect.any(Function));
+        expect(observer.targets).toEqual([root]);
+      }
+      const pin = observers.find((observer) => {
+        const beforeHold = s.intoView.length;
+        observer.callback([]);
+        return s.intoView.length === beforeHold + 1;
+      });
+      const rootWidth = observers.find((observer) => observer !== pin);
+      expect(pin).toBeDefined();
+      expect(rootWidth).toBeDefined();
+      expect(s.intoView).toEqual([[plan, 'auto'], [plan, 'auto']]);
+      expect(s.intoView).not.toContainEqual([title, 'auto']);
+      expect(s.y).toBe(3000);
       document.dispatchEvent(new Event('wheel'));
-      expect(disconnected).toBe(1);
+      expect(pin?.disconnects).toBe(1);
+      expect(rootWidth?.disconnects).toBe(0);
+      await destroyEnhancement(root);
+      expect(rootWidth?.disconnects).toBe(1);
+      expect(pin?.disconnects).toBe(1);
     } finally {
-      delete (window as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+      if (original === undefined) delete (window as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+      else Object.defineProperty(window, 'ResizeObserver', original);
     }
   });
 });

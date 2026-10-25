@@ -1,0 +1,12 @@
+{
+  "options": {
+    "info": {
+      "sha": "abcdef1",
+      "commits": [
+        { "sha": "abcdef1", "subject": "feat: current", "date": "2026-01-01T18:45:00Z", "parents": ["1234567"] },
+        { "sha": "1234567", "subject": "fix: earlier", "date": "2026-01-01T18:15:00Z", "parents": ["2345678"] }
+      ]
+    }
+  },
+  "scope": ["chg-pick"]
+}

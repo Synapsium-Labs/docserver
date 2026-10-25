@@ -1,0 +1,89 @@
+h1
+  "Edge label"
+h2
+  "1. Words used here"
+div
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "Long form"
+        td
+          "A neutral glossary term"
+figure
+  pre
+    "flowchart LR A[Start] -->|Long form| B[E"…
+  svg
+    style
+    g
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        polygon
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      g
+        g
+        g
+          path
+        g
+          g .dnode
+            g
+              foreignObject
+                div
+                  span
+                    p
+            rect .dn-ring chrome
+            circle .dn-dot chrome
+        g
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+    defs
+      filter
+        feDropShadow
+    defs
+      filter
+        feDropShadow
+    linearGradient
+      stop
+      stop
+  figcaption
+    "Figure 1. Edge label."

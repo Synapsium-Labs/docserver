@@ -131,6 +131,8 @@ export interface VocabularyWords {
   };
   /** Format contract: git's merge subjects, each after "Merge ". */
   mergeForms: string[];
+  /** Format contract: abbreviated local civil-day labels, Sunday through Saturday and January through December. */
+  dates: { weekdays: string[]; months: string[] };
   /** Format contract: the colour key, in its order. */
   colourKey: ColourKeyEntry[];
   /** Format contract: the level-2 headings of the editorial boxes, each the whole heading, in any case. */
@@ -183,6 +185,7 @@ export function defaultVocabulary(): VocabularyWords {
       nameJoins: ['and'],
     },
     mergeForms: ['pull request', 'branch', 'remote-tracking branch', 'tag', 'commit', 'remote branch'],
+    dates: { weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] },
     boxes: { short: ['in short'], stand: ['where things stand'] },
     callouts: { agreed: ['agreed'], waiting: ['waiting'], later: ['later'] },
     kindKeys: ['type', 'area', 'status', 'kind'],
@@ -372,6 +375,7 @@ function frozenCopy(w: VocabularyWords): Readonly<VocabularyWords> {
       nameJoins: list(w.glossary.nameJoins),
     }),
     mergeForms: list(w.mergeForms),
+    dates: Object.freeze({ weekdays: list(w.dates.weekdays), months: list(w.dates.months) }),
     colourKey: Object.freeze(w.colourKey.map((e) => Object.freeze({ role: e.role, label: e.label }))) as ColourKeyEntry[],
     boxes: Object.freeze({ short: list(w.boxes.short), stand: list(w.boxes.stand) }),
     callouts: Object.freeze({ agreed: list(w.callouts.agreed), waiting: list(w.callouts.waiting), later: list(w.callouts.later) }),

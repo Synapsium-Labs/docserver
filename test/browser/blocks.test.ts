@@ -6,13 +6,37 @@
 // line of wide characters); a root enhanced while hidden is measured only once shown; a --rem in rem counts as what it
 // resolves to; the bullet cells' hidden parts take no box; and the filter hides rows (on a phone, an open point).
 //
-// The rail is Task 18's: these cases stand in for it with the class `has-toc` and a `--rail-w` on the root, which is
-// what the code widths read.
+// The rail is Task 18's: the 1240px cases use its real source column, so code sees the same one-time 308px
+// allocation that the stylesheet lays out.
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 import type { Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName } from './harness.js';
 
 afterAll(closeBrowsers);
+
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+
+const ENTRY = [
+  "import { enhance } from './src/enhance/index.ts';",
+  "import { contextOf } from './src/enhance/lifecycle.ts';",
+  '(window as unknown as { __blocks: unknown }).__blocks = { enhance, contextOf };',
+].join('\n');
+
+/** Bundle only the held-font case's existing lifecycle context seam. */
+async function bundleLifecycle(): Promise<string> {
+  const r = await build({
+    stdin: { contents: ENTRY, resolveDir: ROOT, sourcefile: 'blocks-entry.ts', loader: 'ts' },
+    bundle: true,
+    write: false,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    logLevel: 'silent',
+  });
+  return r.outputFiles[0]?.text ?? '';
+}
 
 const x = (n: number): string => 'x'.repeat(n);
 
@@ -142,19 +166,32 @@ function tableState(page: Page): Promise<TableState[]> {
   );
 }
 
-/** Open `md` at `width` × 900, with the stand-in rail when `rail`, enhanced and settled. */
-async function openAt(browser: BrowserName, md: string, width: number, rail = false): Promise<Awaited<ReturnType<typeof openDoc>>> {
+/** Open `md` at `width` × 900, enhanced and settled. */
+async function openAt(browser: BrowserName, md: string, width: number): Promise<Awaited<ReturnType<typeof openDoc>>> {
   const doc = await openDoc(md, {}, { browser, viewport: { width, height: 900 }, enhance: false });
-  if (rail) {
-    await doc.page.evaluate(() => {
-      const root = document.querySelector('main[data-harness-root]') as HTMLElement;
-      root.classList.add('has-toc');
-      root.style.setProperty('--rail-w', '400px');
-    });
-  }
   await doc.enhance();
   await settle(doc.page);
   return doc;
+}
+
+/** A document-sized fixture that builds Task 18's actual rail. */
+function withRail(md: string): string {
+  return [
+    '# Rail',
+    '',
+    '## In short',
+    '',
+    'The reader builds its real contents rail for the code fit boundary.',
+    '',
+    '## Code',
+    '',
+    md.replace('# Code\n\n', ''),
+    '',
+    '## More',
+    '',
+    'This heading completes the document shape.',
+    '',
+  ].join('\n');
 }
 
 const label = (n: number): string => `Code block ${String(n)}, scrolls sideways`;
@@ -196,19 +233,18 @@ describeBrowsers((browser) => {
     }
   });
 
-  // The stand-in rail is a --rail-w and nothing else: it takes no room in the layout. So it moves only the estimate,
-  // which a laid-out pre no longer uses for its region (the region is its real overflow); at 1240 px the third block
-  // fits the wide width as laid out, as at 1239. The rail's arithmetic is held in jsdom (test/enhance-blocks.test.ts).
-  it('long and the region at 699, 700, 701, 1239 and 1240 px (the rail standing in from 1240)', async () => {
+  // At 1240px the real rail's 308px source-column allocation leaves the third block long and scrolling; at 1239px
+  // there is no rail and it fits the wide width. The code calculation has its independent jsdom cases.
+  it('long and the region at 699, 700, 701, 1239 and 1240 px, with the real rail at its boundary', async () => {
     const want: Record<number, { long: boolean[]; region: boolean[] }> = {
       699: { long: [false, false, true, true], region: [false, false, true, true] },
       700: { long: [false, false, true, true], region: [false, false, true, true] },
       701: { long: [false, true, true, true], region: [false, true, true, true] },
       1239: { long: [false, false, true, true], region: [false, false, false, true] },
-      1240: { long: [false, false, true, true], region: [false, false, false, true] },
+      1240: { long: [false, false, true, true], region: [false, false, true, true] },
     };
     for (const width of [699, 700, 701, 1239, 1240]) {
-      const doc = await openAt(browser, codeDoc, width, true);
+      const doc = await openAt(browser, width >= 1240 ? withRail(codeDoc) : codeDoc, width);
       try {
         const got = (await codeState(doc.page)).slice(0, 4);
         expect({ width, long: got.map((c) => c.long), region: got.map((c) => c.role === 'region') }).toEqual({ width, ...want[width] });
@@ -292,8 +328,8 @@ describeBrowsers((browser) => {
 
   it('with the fonts held back, --thead-h and long are measured again once they load', async () => {
     const doc = await openDoc(`${codeDoc}\n${TABLES.replace('# Tables', '## Tables')}`, {}, { browser, viewport: { width: 1440, height: 900 }, enhance: false });
+    let release: () => void = () => undefined;
     try {
-      let release: () => void = () => undefined;
       const gate = new Promise<void>((r) => {
         release = r;
       });
@@ -303,9 +339,25 @@ describeBrowsers((browser) => {
         await gate;
         await route.fallback();
       });
-      // The harness's enhance() waits for the fonts, which are held: start it, and wait for the first measure.
-      void doc.page.evaluate(() => {
-        void window.__docreaderHarness?.enhance();
+      await doc.page.evaluate(await bundleLifecycle());
+      await doc.page.evaluate(async () => {
+        const w = window as unknown as {
+          __blocks: {
+            enhance(root: HTMLElement): Promise<void>;
+            contextOf(root: Element): { onRelayout(fn: (reasons: ReadonlySet<string>) => unknown): unknown } | undefined;
+          };
+          __blockRuns: { reasons: string[]; loaded: boolean }[];
+        };
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        w.__blockRuns = [];
+        await w.__blocks.enhance(root);
+        const faces = (): boolean =>
+          ['Docreader Serif', 'Docreader Sans'].every((family) =>
+            Array.from(document.fonts as unknown as Iterable<FontFace>).some((f) => f.family.replace(/["']/g, '') === family && f.status === 'loaded'),
+          );
+        w.__blocks.contextOf(root)?.onRelayout((reasons) => {
+          w.__blockRuns.push({ reasons: [...reasons], loaded: faces() });
+        });
       });
       await doc.page.waitForFunction(() => {
         const w = document.querySelector('main[data-harness-root] .table-wrapper') as HTMLElement | null;
@@ -313,34 +365,65 @@ describeBrowsers((browser) => {
       });
       await settle(doc.page);
       expect(held).toBeGreaterThan(0);
-      const before = await tableState(doc.page);
       expect((await codeState(doc.page))[1]?.long).toBe(false);
-      // Change what is measured without a resize: a taller head, and a narrower root. Nothing measures yet.
+      // A real root-width change measures on the fallback faces, before fonts release.
+      await doc.page.evaluate(() => {
+        (document.querySelector('main[data-harness-root]') as HTMLElement).style.setProperty('width', '600px');
+      });
+      await doc.page.waitForFunction(() => {
+        const code = document.querySelectorAll('main[data-harness-root] .codehilite')[1] as HTMLElement;
+        return code?.classList.contains('long') === true;
+      });
+      await settle(doc.page);
+      const narrow = await tableState(doc.page);
+      expect((await codeState(doc.page))[1]?.long).toBe(true);
+      // At the now-stable narrow width, height alone cannot make the root observer remeasure.
       await doc.page.evaluate(() => {
         const root = document.querySelector('main[data-harness-root]') as HTMLElement;
-        root.style.setProperty('width', '600px');
         for (const th of Array.from(root.querySelectorAll('th'))) th.style.setProperty('padding-top', '40px');
       });
-      await doc.page.waitForTimeout(300);
+      await doc.page.waitForFunction(
+        (old) => {
+          const head = document.querySelector('main[data-harness-root] .table-wrapper thead') as HTMLElement;
+          return head.offsetHeight !== old;
+        },
+        narrow[0]?.headHeight ?? -1,
+      );
       await settle(doc.page);
-      expect((await tableState(doc.page)).map((t) => t.theadH)).toEqual(before.map((t) => t.theadH));
-      expect((await codeState(doc.page))[1]?.long).toBe(false);
+      const heldAfterPadding = await tableState(doc.page);
+      expect(heldAfterPadding[0]?.headHeight).not.toBe(narrow[0]?.headHeight);
+      expect(heldAfterPadding.map((t) => t.theadH)).toEqual(narrow.map((t) => t.theadH));
+      expect(
+        await doc.page.evaluate(() =>
+          ['Docreader Serif', 'Docreader Sans'].some((family) =>
+            Array.from(document.fonts as unknown as Iterable<FontFace>).some((f) => f.family.replace(/["']/g, '') === family && f.status === 'loaded'),
+          ),
+        ),
+      ).toBe(false);
       release();
       await doc.page.waitForFunction(
         (old) => {
           const w = document.querySelector('main[data-harness-root] .table-wrapper') as HTMLElement;
           return w.style.getPropertyValue('--thead-h') !== old;
         },
-        before[0]?.theadH ?? '',
+        narrow[0]?.theadH ?? '',
+        { timeout: 15_000 },
+      );
+      await doc.page.waitForFunction(
+        () => {
+          const w = window as unknown as { __blockRuns: { reasons: string[]; loaded: boolean }[] };
+          return w.__blockRuns.some((run) => run.loaded && run.reasons.includes('fonts'));
+        },
+        undefined,
         { timeout: 15_000 },
       );
       await settle(doc.page);
       const after = await tableState(doc.page);
       for (const t of after) expect(t.theadH).toBe(`${String(t.headHeight)}px`);
-      expect(after[0]?.headHeight).toBeGreaterThan((before[0]?.headHeight ?? 0) + 20);
-      // 600 px less the root's padding is less room than the second block's 643 px.
+      // The font-triggered rerun retains the narrow fallback decision.
       expect((await codeState(doc.page))[1]?.long).toBe(true);
     } finally {
+      release();
       await doc.close();
     }
   });
@@ -437,27 +520,28 @@ describeBrowsers((browser) => {
       await rootStyle('none');
       await doc.enhance();
       await settle(doc.page);
-      await rootStyle(null);
-      await settle(doc.page);
-      await doc.page.waitForTimeout(300);
-      const before = await tableState(doc.page);
       // Nothing was measured at 0 width: the wide table is not `fits` (which would spill it across the page), and the
       // short code block is neither long nor a region.
-      expect(before.map((t) => [t.fits, t.theadH])).toEqual([
+      const hidden = await tableState(doc.page);
+      expect(hidden.map((t) => [t.fits, t.theadH])).toEqual([
         [false, ''],
         [false, ''],
         [false, ''],
       ]);
       expect((await codeState(doc.page)).map((c) => [c.long, c.role])).toEqual([[false, null]]);
-      const spill = await doc.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
-      expect(spill).toBe(true);
-      await doc.page.setViewportSize({ width: 1439, height: 900 });
-      await doc.page.waitForTimeout(300);
+      await rootStyle(null);
+      await doc.page.waitForFunction(() => {
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const table = root.querySelector('.table-wrapper') as HTMLElement;
+        return root.getClientRects().length === 1 && table.style.getPropertyValue('--thead-h') !== '';
+      });
       await settle(doc.page);
       const after = await tableState(doc.page);
       expect(after.map((t) => t.fits)).toEqual([true, false, false]);
       for (const t of after) expect(t.theadH).toBe(`${String(t.headHeight)}px`);
       expect((await codeState(doc.page)).map((c) => [c.long, c.role])).toEqual([[false, null]]);
+      const spill = await doc.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+      expect(spill).toBe(true);
     } finally {
       await doc.close();
     }

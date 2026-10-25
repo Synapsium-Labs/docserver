@@ -1,0 +1,7 @@
+{
+  "options": {
+    "prefs": { "lens": "product" },
+    "chrome": { "settings": false }
+  },
+  "scope": ["tech", "peek-bar", "peek-btn", "lens-product", "path"]
+}

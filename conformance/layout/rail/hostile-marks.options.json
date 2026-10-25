@@ -1,0 +1,19 @@
+{
+  "options": {
+    "storageKey": "hostile",
+    "storage": {
+      "snapshot": {
+        "docreader:doc:hostile:marks": "{\"__proto__\":\"1uqzmfw\",\"constructor\":\"1y4xdmy\"}"
+      }
+    }
+  },
+  "scope": [
+    "doc-toc",
+    "mk",
+    "h-mark",
+    "h2[aria-label]",
+    "button[aria-pressed]"
+  ],
+  "hostile": true,
+  "viewport": { "width": 1440, "height": 900 }
+}

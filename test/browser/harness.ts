@@ -221,6 +221,8 @@ export interface OpenHow {
   readonly viewport?: { readonly width: number; readonly height: number };
   /** Enable touch input in the browser context; default false. */
   readonly hasTouch?: boolean;
+  /** Optional IANA timezone passed unchanged to the browser context. */
+  readonly timezoneId?: string;
   /** Default 'strict'. */
   readonly csp?: PolicyName;
   /** Call enhance() before returning; default true. */
@@ -269,6 +271,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
     viewport: how.viewport ?? { width: 1440, height: 1000 },
     deviceScaleFactor: 1,
     ...(how.hasTouch === undefined ? {} : { hasTouch: how.hasTouch }),
+    ...(how.timezoneId === undefined ? {} : { timezoneId: how.timezoneId }),
     colorScheme: 'light',
     serviceWorkers: 'block',
   });

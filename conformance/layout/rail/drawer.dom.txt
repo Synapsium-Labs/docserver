@@ -1,0 +1,54 @@
+button .toc-btn chrome aria-controls="docreader.1.toc" aria-expanded="false"
+  "Contents"
+nav .doc-toc chrome aria-label="Contents and index"
+  div .toc-tabs chrome role="tablist" aria-label="Contents and index"
+    button chrome role="tab" aria-controls="docreader.1.toc-contents" aria-selected="true"
+      "Contents"
+  div .toc-contents.toc-panel chrome role="tabpanel" aria-labelledby="docreader.1.tab-contents"
+    ul chrome
+      li .open chrome
+        a .active chrome aria-current="location"
+          span .t chrome
+            "Start"
+          span .meta chrome
+            span .cd chrome
+            span .mk chrome aria-hidden="true"
+      li chrome
+        a chrome
+          span .t chrome
+            "Middle"
+          span .meta chrome
+            span .cd chrome
+            span .mk chrome aria-hidden="true"
+      li chrome
+        a chrome
+          span .t chrome
+            "End"
+          span .meta chrome
+            span .cd chrome
+            span .mk chrome aria-hidden="true"
+  div .toc-index.toc-panel chrome role="tabpanel" hidden=""
+  div .toc-foot chrome
+    button .keys-btn.linkish chrome
+      "Keys"
+h1
+  "Drawer notes"
+h2 aria-label="1. Start"
+  "1. Start"
+  button .h-mark chrome aria-pressed="false"
+    "Mark read"
+p
+  "A short opening section."
+h2 aria-label="2. Middle"
+  "2. Middle"
+  button .h-mark chrome aria-pressed="false"
+    "Mark read"
+p
+  "A second section gives the rail more tha"…
+h2 aria-label="3. End"
+  "3. End"
+  button .h-mark chrome aria-pressed="false"
+    "Mark read"
+p
+  "A third section makes this a document."
+div .toc-scrim chrome hidden=""

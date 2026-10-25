@@ -169,10 +169,41 @@ export function build(ctx: FeatureContext): void {
     tools.appendChild(f);
   });
   strip.appendChild(tools);
+  const eligible = ctx.info.isDocument || isRulesDoc(ctx);
+  const facade: ReviewStrip = Object.freeze({
+    element: strip,
+    tools,
+    place: () => {
+      ctx.operate(() => {
+        if (!ctx.live() || !eligible || strip.parentNode !== null) return;
+        if (strip.querySelector('.rs-wait, .rs-notice') === null && tools.children.length === 0) return;
+        let after: Element | null = page.byline ?? root.querySelector('h1');
+        for (let n = after?.nextElementSibling ?? null; n !== null && n.hasAttribute('hidden'); n = n.nextElementSibling) after = n;
+        if (after === null) ctx.journal.insert(strip, root, root.firstChild);
+        else ctx.journal.insert(strip, after.parentNode as Node, after.nextSibling);
+      });
+    },
+  });
+  (strips ??= new WeakMap()).set(ctx, facade);
+  ctx.journal.defer(() => {
+    if (strips?.get(ctx) === facade) strips.delete(ctx);
+  });
 
-  if (!(ctx.info.isDocument || isRulesDoc(ctx)) || (waiting.length === 0 && facts.length === 0)) return;
-  let after: Element | null = page.byline ?? root.querySelector('h1');
-  for (let n = after?.nextElementSibling ?? null; n !== null && n.hasAttribute('hidden'); n = n.nextElementSibling) after = n;
-  if (after === null) ctx.journal.insert(strip, root, root.firstChild);
-  else ctx.journal.insert(strip, after.parentNode as Node, after.nextSibling);
+  facade.place();
+}
+
+/** A live strip's narrow cross-feature facade (C55). */
+export interface ReviewStrip {
+  readonly element: HTMLElement;
+  readonly tools: HTMLElement;
+  place(): void;
+}
+
+/** The retained strip of each context; no module-level DOM crosses reader roots. */
+let strips: WeakMap<FeatureContext, ReviewStrip> | undefined;
+
+/** The strip Task 20 built for this live context, or null when it is unavailable. */
+export function reviewStrip(ctx: FeatureContext): ReviewStrip | null {
+  const strip = strips?.get(ctx);
+  return strip === undefined || !ctx.live() ? null : strip;
 }

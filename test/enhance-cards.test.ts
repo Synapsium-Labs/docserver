@@ -15,12 +15,35 @@ import { chromeIdsIssued, contextOf } from '../src/enhance/lifecycle.js';
 import type { FeatureContext } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
 
-const fixture = vi.hoisted(() => ({ cardOnlyEffects: false }));
+const fixture = vi.hoisted(() => ({ cardOnlyEffects: false, cardAllocations: [] as string[] }));
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
   return {
     ...real,
-    features: () => real.features().filter((f) => !fixture.cardOnlyEffects || !['jump', 'keysheet', 'scroll'].includes(f.name)),
+    features: () => real.features()
+      .filter((f) => !fixture.cardOnlyEffects || !['jump', 'keysheet', 'scroll'].includes(f.name))
+      .map((feature) => {
+        if (!fixture.cardOnlyEffects || feature.name !== 'cards') return feature;
+        return {
+          ...feature,
+          build: (ctx: FeatureContext) => {
+            const descriptor = Object.getOwnPropertyDescriptor(ctx, 'chromeId');
+            if (descriptor?.configurable !== true || typeof descriptor.value !== 'function') throw new Error('cards allocator is not replaceable');
+            const chromeId = descriptor.value as (name: string) => string;
+            Object.defineProperty(ctx, 'chromeId', {
+              ...descriptor,
+              value: (name: string): string => {
+                if (name === 'card') fixture.cardAllocations.push(name);
+                return chromeId.call(ctx, name);
+              },
+            });
+            ctx.journal.defer(() => {
+              Object.defineProperty(ctx, 'chromeId', descriptor);
+            });
+            feature.build(ctx);
+          },
+        };
+      }),
   };
 });
 
@@ -94,6 +117,7 @@ afterEach(async () => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
   fixture.cardOnlyEffects = false;
+  fixture.cardAllocations.length = 0;
 });
 
 function ctxOf(root: HTMLElement): FeatureContext {
@@ -475,11 +499,13 @@ describe('ARIA, and the card in the root', () => {
     fixture.cardOnlyEffects = true;
     const adds = vi.spyOn(window, 'addEventListener');
     const removes = vi.spyOn(window, 'removeEventListener');
-    const ids = chromeIdsIssued(document);
+    const before = chromeIdsIssued(document);
     const root = await open();
+    // Task 18/19 now own their chrome IDs during startup. The card's lazy contract starts after the complete reader has.
+    const ids = chromeIdsIssued(document);
     const ctx = ctxOf(root);
     const scrolls = (): number => adds.mock.calls.filter((c) => c[0] === 'scroll').length - removes.mock.calls.filter((c) => c[0] === 'scroll').length;
-    expect([cardOf(root), chromeIdsIssued(document) - ids, scrolls()]).toEqual([null, 0, 0]);
+    expect([cardOf(root), fixture.cardAllocations, scrolls()]).toEqual([null, [], 0]);
     // The overlay is free until the first show; take the stand-in back before measuring card's one registration.
     ctx.overlays.register('card', { isOpen: () => false, close: () => undefined })();
     // The service is frozen, so replace only this context's service reference with a delegating object for the spy.
@@ -491,7 +517,7 @@ describe('ARIA, and the card in the root', () => {
     expect(registrations).toHaveBeenCalledTimes(1);
     expect(kind).toBe('card');
     expect(handler?.isOpen()).toBe(true);
-    expect([chromeIdsIssued(document) - ids, scrolls()]).toEqual([1, 1]);
+    expect([fixture.cardAllocations, chromeIdsIssued(document) - ids, scrolls()]).toEqual([['card'], 1, 1]);
     // hidden: no scroll is heard; shown again: one
     key(link(root, 'xref', 'D1'), 'Escape');
     expect(scrolls()).toBe(0);
@@ -502,9 +528,9 @@ describe('ARIA, and the card in the root', () => {
     focus(link(root, 'term', 'fold'));
     expect(registrations).toHaveBeenCalledTimes(1);
     expect(registrations).toHaveBeenLastCalledWith('card', handler);
-    expect([scrolls(), chromeIdsIssued(document) - ids, root.querySelectorAll('.xcard').length]).toEqual([1, 1, 1]);
+    expect([fixture.cardAllocations, scrolls(), chromeIdsIssued(document) - ids, root.querySelectorAll('.xcard').length]).toEqual([['card'], 1, 1, 1]);
     await destroyEnhancement(root);
-    expect([cardOf(root), chromeIdsIssued(document) - ids, scrolls()]).toEqual([null, 0, 0]);
+    expect([cardOf(root), chromeIdsIssued(document) - before, scrolls()]).toEqual([null, 0, 0]);
   });
 
   it('destroy removes the card and puts the triggers back as they were', async () => {
@@ -690,6 +716,23 @@ describe('hover, with a mouse', () => {
     pointer(plain, 'pointerout', { relatedTarget: root, buttons: 1 });
     vi.advanceTimersByTime(HIDE_DELAY_MS);
     expect(isOpen(root)).toBe(false);
+  });
+
+  it('does not suppress an ordinary diagram click inside host lookalike viewer wrappers', async () => {
+    const root = await open();
+    const hostOverlay = document.createElement('div');
+    hostOverlay.className = 'fig-overlay open';
+    const hostStage = document.createElement('div');
+    hostStage.className = 'fo-stage';
+    hostOverlay.append(hostStage);
+    document.body.removeChild(root);
+    hostStage.append(root);
+    document.body.append(hostOverlay);
+    const block = dnode(root, { ref: 'D1' });
+
+    click(block);
+
+    expect(isOpen(root)).toBe(true);
   });
 });
 

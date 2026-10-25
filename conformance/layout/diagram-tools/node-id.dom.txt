@@ -1,0 +1,88 @@
+h1
+  "Node ID"
+h2
+  "1. Decisions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "R1"
+        td
+          "A neutral reference"
+figure
+  pre
+    "flowchart LR A[R1] --> B[Plain]"
+  svg
+    style
+    g
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        polygon
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      g
+        g
+        g
+          path
+        g
+          g
+            g
+              foreignObject
+                div
+                  span
+        g
+          g .dnode
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+            rect .dn-ring chrome
+            circle .dn-dot chrome
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+    defs
+      filter
+        feDropShadow
+    defs
+      filter
+        feDropShadow
+    linearGradient
+      stop
+      stop
+  figcaption
+    "Figure 1. Node ID."

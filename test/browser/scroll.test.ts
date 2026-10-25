@@ -126,13 +126,17 @@ async function boxes(page: Page): Promise<Record<'root' | 'bar' | 'row' | 'progr
   });
 }
 
-/** The top of the root's first child past the skip link, the bar and the progress line: the document's first block. */
+/** The source title, excluding generated chrome such as an editorial eyebrow or dialog heading. */
 const firstBlock = (page: Page): Promise<number> =>
   page.evaluate(() => {
     const root = document.querySelector('main[data-harness-root]') as HTMLElement;
-    const first = Array.from(root.children).find((c) => !['skip-link', 'topbar', 'doc-progress'].some((k) => c.classList.contains(k)));
-    return (first as Element).getBoundingClientRect().top;
+    const title = Array.from(root.querySelectorAll(':scope > h1')).find((h) => !h.hasAttribute('data-docreader-chrome'));
+    if (title === undefined) throw new Error('no source title');
+    return title.getBoundingClientRect().top;
   });
+
+const rootTopPadding = (page: Page): Promise<string> =>
+  page.evaluate(() => getComputedStyle(document.querySelector('main[data-harness-root]') as Element).paddingTop);
 
 /**
  * The sticky tops of a fitted table's head and of a figure's tools, the parts that clear the bar: made here as the
@@ -171,6 +175,7 @@ describeBrowsers((browser) => {
       let bare: number;
       try {
         bare = await firstBlock(without.page);
+        expect(await rootTopPadding(without.page)).toBe(`${String(pad)}px`);
       } finally {
         await without.close();
       }
@@ -179,8 +184,8 @@ describeBrowsers((browser) => {
         const b = await boxes(doc.page);
         expect([b.bar.top, b.bar.left, b.bar.width]).toEqual([b.root.top, b.root.left, b.root.width]);
         expect([b.row.top, b.row.height, b.row.width]).toEqual([0, 48, b.root.width]);
-        expect(bare).toBe(pad); // the root's own top padding
-        expect(await firstBlock(doc.page)).toBe(bare + 49); // the row and the line under it, then that padding
+        expect(await rootTopPadding(doc.page)).toBe(`${String(pad)}px`);
+        expect(await firstBlock(doc.page)).toBe(bare + 49); // the bar moves the author title; the eyebrow is separate
         expect(b.progress.width).toBe(0);
         // Below a host's own header of 100 px, at the top of the page: the bar sits at the root's top edge, not above it.
         await doc.page.evaluate(() => {

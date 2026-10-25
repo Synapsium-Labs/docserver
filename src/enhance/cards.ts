@@ -519,6 +519,10 @@ export function build(ctx: FeatureContext): void {
       const a = triggerOf(e.target);
       if (a === null) return;
       if (a.matches('.dnode')) {
+        // The viewer's pointer-up owns only its own marked open chrome, never host lookalikes.
+        const stage = a.closest<HTMLElement>('.fo-stage');
+        const overlay = stage?.closest<HTMLElement>('.fig-overlay.open');
+        if (stage !== null && overlay !== undefined && overlay !== null && ctx.root.contains(overlay) && overlay.hasAttribute('data-docreader-chrome') && stage.hasAttribute('data-docreader-chrome') && overlay.contains(stage)) return;
         showFor(a);
         return;
       }

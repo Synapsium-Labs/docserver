@@ -1,0 +1,16 @@
+{
+  "options": {},
+  "scope": [
+    "doc-toc",
+    "mk",
+    "h-mark",
+    "task",
+    "task-id",
+    "task-open",
+    "h2[aria-label]",
+    "h3[aria-label]",
+    "button[aria-pressed]",
+    "button[aria-expanded]"
+  ],
+  "viewport": { "width": 1440, "height": 900 }
+}
