@@ -1,0 +1,19 @@
+{
+  "options": {
+    "storageKey": "malformed-length",
+    "storage": {
+      "snapshot": {
+        "docreader:doc:malformed-length:marks": "{\"1-first\":\"xxxxxxxx\",\"2-second\":\"1gizz3m\",\"3-third\":\"1wx2238\"}"
+      }
+    }
+  },
+  "scope": [
+    "doc-toc",
+    "mk",
+    "h-mark",
+    "h2[aria-label]",
+    "button[aria-pressed]"
+  ],
+  "hostile": true,
+  "viewport": { "width": 1440, "height": 900 }
+}

@@ -22,7 +22,7 @@
 // env's, which destroy cancels, and a fonts wait never settles after destroy (RF5).
 //
 // Import-inert: declarations only.
-import type { Cancel, Env } from './env.js';
+import { queueFrameWork, type Cancel, type Env } from './env.js';
 import type { Position } from './nav.js';
 import type { Events, RelayoutReason } from './registry.js';
 
@@ -38,24 +38,65 @@ export interface Relayout {
 }
 
 export interface RelayoutArgs {
+  readonly root: HTMLElement;
   readonly env: Env;
   readonly events: Events;
   readonly position: Position;
   readonly live: () => boolean;
 }
 
+/** One strict resolved CSS pixel value, never a partial numeric parse. */
+function pixels(value: string): number | undefined {
+  const match = /^(?:0|(?:\d+(?:\.\d+)?|\.\d+))px$/.exec(value);
+  if (match === null) return undefined;
+  const number = Number(match[0].slice(0, -2));
+  return Number.isFinite(number) && number >= 0 ? number : undefined;
+}
+
+/** A root content width only when its CSS shape has one unambiguous content box. */
+function contentWidth(root: HTMLElement, env: Env): number | undefined {
+  if (!root.isConnected || root.namespaceURI !== 'http://www.w3.org/1999/xhtml' || root.localName === 'html' || root.localName === 'body' || root.getClientRects().length !== 1) return undefined;
+  const display = env.computed(root, 'display');
+  if (display !== 'block' && display !== 'grid') return undefined;
+  if (
+    env.computed(root, 'writing-mode') !== 'horizontal-tb' ||
+    env.computed(root, 'overflow-x') !== 'visible' ||
+    env.computed(root, 'overflow-y') !== 'visible' ||
+    !['', 'auto'].includes(env.computed(root, 'scrollbar-gutter')) ||
+    !['auto', '1'].includes(env.computed(root, 'column-count')) ||
+    env.computed(root, 'column-width') !== 'auto'
+  ) {
+    return undefined;
+  }
+  const width = pixels(env.computed(root, 'width'));
+  if (width === undefined) return undefined;
+  const sizing = env.computed(root, 'box-sizing');
+  if (sizing === 'content-box') return width;
+  if (sizing !== 'border-box') return undefined;
+  const edges = ['padding-left', 'padding-right', 'border-left-width', 'border-right-width'].map((property) => pixels(env.computed(root, property)));
+  if (edges.some((edge) => edge === undefined)) return undefined;
+  const content = width - (edges[0] ?? 0) - (edges[1] ?? 0) - (edges[2] ?? 0) - (edges[3] ?? 0);
+  return Number.isFinite(content) && content >= 0 ? content : undefined;
+}
+
 /** Relayout for one instance: listens for resizes and starts the fonts wait now. */
 export function createRelayout(args: RelayoutArgs): Relayout {
-  const { env, events, position, live } = args;
+  const { root, env, events, position, live } = args;
   const listeners: ((reasons: ReadonlySet<RelayoutReason>) => void)[] = [];
   const pending = new Set<RelayoutReason>();
   let scheduled: Cancel | null = null;
+  let rootWidth: number | undefined;
+  let startMeasured = false;
 
   const run = (): void => {
     scheduled = null;
     const reasons: ReadonlySet<RelayoutReason> = new Set(pending);
     pending.clear();
+    const starts = reasons.has('start');
+    // This is intentionally before position.keep: only an unchanged, measurable start width covers an initial RO report.
+    const beforeStart = starts ? contentWidth(root, env) : undefined;
     const faults: unknown[] = [];
+    let measurementsComplete = true;
     position.keep(() => {
       for (const fn of [...listeners]) {
         try {
@@ -63,9 +104,18 @@ export function createRelayout(args: RelayoutArgs): Relayout {
         } catch (e) {
           faults.push(e);
         }
-        if (!live()) return;
+        if (!live()) {
+          measurementsComplete = false;
+          return;
+        }
       }
     });
+    if (starts) {
+      // A listener fault or any uncertain measurement leaves the next finite RO width observable.
+      const afterStart = live() ? contentWidth(root, env) : undefined;
+      rootWidth = measurementsComplete && faults.length === 0 && beforeStart !== undefined && beforeStart === afterStart ? beforeStart : undefined;
+      startMeasured = true;
+    }
     // The event goes out whatever a listener did; then a listener's throw is thrown again (it wins over the event's).
     const thrown = faults.length > 0;
     try {
@@ -76,8 +126,12 @@ export function createRelayout(args: RelayoutArgs): Relayout {
   };
 
   const relayout = (reason: RelayoutReason): void => {
+    if (!live()) return;
     pending.add(reason);
-    scheduled ??= env.frame(run);
+    scheduled ??= queueFrameWork(root, 'relayout', () => {
+      scheduled = null;
+      if (live()) run();
+    });
   };
 
   let resizing: Cancel | null = null;
@@ -88,6 +142,19 @@ export function createRelayout(args: RelayoutArgs): Relayout {
       relayout('resize');
     }, RESIZE_DEBOUNCE_MS);
   });
+
+  // The root can become visible or change width without a window resize. Height is deliberately ignored: relayout
+  // can change it, so observing it would feed a loop. Startup's pending measure covers reports that arrive before it.
+  const rootResize = env.observeResize((changes) => {
+    for (const change of changes) {
+      if (change.target !== root || !Number.isFinite(change.width)) continue;
+      if (!startMeasured) continue;
+      if (change.width === rootWidth) continue;
+      rootWidth = change.width;
+      relayout('resize');
+    }
+  });
+  rootResize?.observe(root);
 
   // A wait that ends once the instance is not live never settles (env.ts), so this runs only for a live instance.
   void env.fonts(FONTS_WAIT_MS).then((loaded) => {

@@ -868,16 +868,16 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
     });
     await enhance(root, { storage, storageKey: 'k' });
     expect(got).toEqual([{ line: '12-14', offset: 40, y: 900 }, { line: '12-14', offset: 40, y: 900 }, 'index', 7, undefined]);
-    expect(reads.filter((k) => k === posKeyOf('p') || k === UI_KEY)).toEqual([posKeyOf('p'), UI_KEY]);
+    expect(reads.filter((k) => k === posKeyOf('p') || k === UI_KEY)).toEqual([UI_KEY, posKeyOf('p')]);
   });
 
   it('after startup a key never read is not read: it reads as absent', async () => {
     const root = mount();
     const { storage, reads } = recordingStorage({ [posKeyOf('p')]: '{"y":1}', [UI_KEY]: '{"sidetab":"index"}' });
-    await enhance(root, { storage, storageKey: 'k' });
+    await enhance(root, { storage, storageKey: 'k', chrome: { rail: false } });
     const ctx = ctxOf(root);
     expect([ctx.state.readPos('p'), ctx.state.readUi('sidetab')]).toEqual([undefined, undefined]);
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]); // the reading position's own key (Task 14)
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'marks'), docKey('k', 'folds'), posKeyOf('k')]); // the reading position's own key (Task 14)
   });
 
   it('writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back', async () => {
@@ -927,7 +927,7 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
   it('a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten', async () => {
     const root = mount();
     const { storage, calls } = recordingStorage({ [UI_KEY]: JSON.stringify({ later: 'kept' }) });
-    await enhance(root, { storage });
+    await enhance(root, { storage, chrome: { rail: false } });
     const ctx = ctxOf(root);
     expect(ctx.state.readUi('later')).toBeUndefined(); // not read now: the snapshot is closed
     ctx.state.writeUi('sidetab', 'index');
@@ -1055,7 +1055,7 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
       },
     });
     await enhance(root, { storage, storageKey: 'k' });
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k'), UI_KEY]);
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'marks'), UI_KEY, docKey('k', 'ixfold'), docKey('k', 'folds'), posKeyOf('k')]);
   });
 });
 
@@ -1102,22 +1102,29 @@ describe('sections: section 0\'s units, measured before any node moves', () => {
     const root = mount(DOC);
     const h2s = Array.from(root.querySelectorAll(':scope > h2'));
     (h2s[1] as Element).removeAttribute('id');
-    const extra = document.createElement('dl');
-    extra.append(document.createElement('dt'));
-    (extra.firstChild as Element).textContent = 'not counted';
-    (h2s[0] as Element).after(extra);
+    const dl = document.createElement('dl');
+    dl.append(document.createElement('dt'));
+    (dl.firstChild as Element).textContent = 'dl words do not count';
+    const script = document.createElement('script');
+    script.type = 'application/json';
+    script.textContent = 'script words do not count';
+    (h2s[0] as Element).after(dl, script);
     const members: Element[] = [];
     for (let n = (h2s[0] as Element).nextElementSibling; n !== null && n !== h2s[1]; n = n.nextElementSibling) members.push(n);
     const text = unitText(h2s[0] as Element, members);
-    expect(text).not.toContain('not counted');
+    // This oracle omits only the two inert fixture members, not nodes the lifecycle measured.
+    const minutes = sectionMinutes(h2s[0] as Element, members.filter((member) => member !== dl && member !== script));
+    expect(text).not.toContain('dl words do not count');
+    expect(text).not.toContain('script words do not count');
     await enhance(root);
     const { sections } = ctxOf(root);
     expect(sections.map((s) => s.heading.id)).toEqual(['1-scope', '3-plan']);
     const first = sections[0];
     expect(first?.members).toEqual(members);
-    expect(first?.members[0]).toBe(extra);
+    expect(first?.members[0]).toBe(dl);
+    expect(first?.members[1]).toBe(script);
     expect(first?.fingerprint).toBe(hash(text));
-    expect(first?.minutes).toBe(sectionMinutes(h2s[0] as Element, members.slice(1)) + 0);
+    expect(first?.minutes).toBe(minutes);
   });
 
   it('the units and their member lists are frozen', async () => {

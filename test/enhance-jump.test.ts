@@ -3,11 +3,11 @@
 // tasks, defined IDs and figures (jump.ts, the reference layout's section 21), and "?" opens the sheet of the keys that
 // apply now, with the colour key (keysheet.ts, section 25).
 //
-// The IDs (Task 9), the plan (Task 11) and the figures (Task 15) are built beside this task, so these tests seed
-// ctx.index, ctx.plan and ctx.figures with fixtures, as Task 13's do: a probe feature that runs right before the jump.
-// The feature list is mocked with a pass-through that leaves out the features that fill those registries (rules, ids,
-// plans and figures; each a stub here), so a seed is the only definition whatever those features later build, puts
-// the test's probes right before the jump, and its late probes after every feature.
+// The plan (Task 11) and the figures (Task 15) are built beside this task, so these tests seed ctx.index, ctx.plan
+// and ctx.figures with fixtures, as Task 13's do: a probe feature that runs right before the jump. The feature list is
+// mocked with a pass-through that leaves out rules, IDs, plans and figures (each a stub here), except the one integration
+// that turns the real IDs feature back on before the rail. Seeds still run right before jump and late probes after every
+// feature.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
@@ -19,13 +19,15 @@ import type { FeatureContext } from '../src/enhance/types.js';
 import { defaultVocabulary } from '../src/enhance/vocab.js';
 import { render } from '../src/render/index.js';
 
-const hooks = vi.hoisted(() => ({ seeds: [] as unknown[], late: [] as unknown[] }));
+type FixtureFeature = 'position' | 'rail';
+
+const hooks = vi.hoisted(() => ({ seeds: [] as unknown[], late: [] as unknown[], without: new Set<string>(), realIds: false }));
 
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
-  const left = ['rules', 'ids', 'plans', 'figures'];
+  const left = ['rules', 'plans', 'figures'];
   const features = (): Feature[] => {
-    const list = real.features().filter((f) => !left.includes(f.name));
+    const list = real.features().filter((f) => (hooks.realIds || f.name !== 'ids') && !left.includes(f.name) && !hooks.without.has(f.name));
     const at = list.findIndex((f) => f.name === 'jump');
     return [...list.slice(0, at), ...(hooks.seeds as Feature[]), ...list.slice(at), ...(hooks.late as Feature[])];
   };
@@ -109,6 +111,8 @@ afterEach(async () => {
   document.body.replaceChildren();
   hooks.seeds.length = 0;
   hooks.late.length = 0;
+  hooks.without.clear();
+  hooks.realIds = false;
   vi.restoreAllMocks();
 });
 
@@ -194,9 +198,15 @@ function rows(root: HTMLElement): string[] {
 
 const selected = (root: HTMLElement): number => Array.from(listOf(root).children).findIndex((li) => li.classList.contains('sel'));
 
-async function enhanced(md = DOC, options: EnhanceOptions = {}): Promise<HTMLElement> {
+/** Omits only the real feature that this fixture deliberately impersonates. */
+async function enhanced(md = DOC, options: EnhanceOptions = {}, without: readonly FixtureFeature[] = []): Promise<HTMLElement> {
   const root = mount(md);
-  await enhance(root, options);
+  for (const name of without) hooks.without.add(name);
+  try {
+    await enhance(root, options);
+  } finally {
+    hooks.without.clear();
+  }
   return root;
 }
 
@@ -268,7 +278,7 @@ describe('the jump: what it lists', () => {
   it('an h3 task of the plan is a Task, an h2 task a Section; a chrome heading, a heading without an id and an h4 are not listed', async () => {
     seed((ctx) => {
       const task = byText(ctx.root, 'Task 3: Build the parser', 'h3');
-      ctx.plan.publish({ tasks: [task, headingById(ctx.root, 'task-9-ship-it')], steps: [], yours: 0, outlineable: false });
+      ctx.plan.publish({ tasks: [task, headingById(ctx.root, 'task-9-ship-it')], members: [[], []], fingerprints: ['', ''], steps: [], yours: 0, outlineable: false });
       const h = chrome(ctx.root.ownerDocument, 'h2', { text: 'Chrome heading', attrs: { id: 'chrome-heading' } });
       ctx.journal.insert(h, ctx.root, byText(ctx.root, 'Paragraph alpha.'));
     });
@@ -750,7 +760,7 @@ describe('the jump: choosing and going', () => {
       ctx.overlays.register('card', { isOpen: () => card.open, close: card.close });
       ctx.overlays.register('drawer', { isOpen: () => drawer.open, close: drawer.close });
     });
-    const root = await enhanced();
+    const root = await enhanced(DOC, {}, ['rail']);
     openByButton(root);
     expect(card.close).toHaveBeenCalledTimes(1);
     drawer.open = true;
@@ -760,6 +770,26 @@ describe('the jump: choosing and going', () => {
     key(inputOf(root), 'Enter');
     expect(drawer.close).toHaveBeenCalledTimes(1);
     expect(drawer.open).toBe(false);
+  });
+
+  it('a real narrow rail drawer stays open when jump closes, then navigation closes it', async () => {
+    const originalWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    try {
+      const root = await enhanced();
+      const drawer = root.querySelector('.toc-btn') as HTMLButtonElement;
+      drawer.click();
+      expect(root.classList.contains('toc-open')).toBe(true);
+      openByButton(root);
+      jumpOf(root)?.click();
+      expect(root.classList.contains('toc-open')).toBe(true);
+      openByButton(root);
+      key(inputOf(root), 'Enter');
+      expect(root.classList.contains('toc-open')).toBe(false);
+    } finally {
+      if (originalWidth === undefined) delete (window as { innerWidth?: number }).innerWidth;
+      else Object.defineProperty(window, 'innerWidth', originalWidth);
+    }
   });
 });
 
@@ -904,9 +934,67 @@ describe('the keys sheet', () => {
     const root = await enhanced();
     key(document.body, '?');
     expect(isOpen(sheetOf(root))).toBe(true);
-    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', '?|This sheet', 'Esc|Close']);
+    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', 'j k|Next / previous section', '?|This sheet', 'Esc|Close']);
     expect(document.activeElement).toBe(root.querySelector('.keys .kh button'));
     expect(ctxOf(root).overlays.top()).toBe('keys');
+  });
+
+  it('a source ID built before the rail gives its Index tab, i shortcut and sheet row their real order', async () => {
+    hooks.realIds = true;
+    try {
+      const root = await enhanced([
+        '# Index integration',
+        '',
+        '## 1. Design',
+        '',
+        '| ID | Decision |',
+        '|---|---|',
+        '| R14 | The real producer publishes this row. |',
+        '',
+        '## 2. Follow-up',
+        '',
+        'This leaves the rail enough headings to build.',
+        '',
+        '### Third detail',
+        '',
+        'One.',
+        '',
+        '### Fourth detail',
+        '',
+        'Two.',
+        '',
+        '### Fifth detail',
+        '',
+        'Three.',
+        '',
+        '### Sixth detail',
+        '',
+        'Four.',
+        '',
+      ].join('\n'), { chrome: { rail: true } });
+      const sourceRow = Array.from(root.querySelectorAll('tbody tr')).find((row) => row.firstElementChild?.textContent === 'R14');
+      expect(sourceRow).not.toBeUndefined();
+      const defined = ctxOf(root).index.get('R14');
+      expect(defined).toMatchObject({ id: 'R14', kind: 'row', target: sourceRow, row: sourceRow });
+      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('.toc-tabs button[role="tab"]'));
+      expect(tabs.map((tab) => tab.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Contents', 'Index 1']);
+      const indexTab = tabs[1];
+      expect(ctxOf(root).keys.bindings()).toContainEqual({ key: 'i', label: 'Open index' });
+      key(document.body, '?');
+      expect(sheetRows(root)).toEqual([
+        '/|Jump to a section, ID or figure',
+        'j k|Next / previous section',
+        'i|Open index',
+        '?|This sheet',
+        'Esc|Close',
+      ]);
+      key(root.querySelector('.keys .kh button') as HTMLButtonElement, 'Escape');
+      key(document.body, 'i');
+      expect(indexTab?.getAttribute('aria-selected')).toBe('true');
+      expect(root.querySelector('.toc-index')?.hasAttribute('hidden')).toBe(false);
+    } finally {
+      hooks.realIds = false;
+    }
   });
 
   it('a key bound by a later feature is listed, in the sheet\'s order; one that does not apply now, or is unlisted, is not', async () => {
@@ -918,7 +1006,7 @@ describe('the keys sheet', () => {
       ctx.keys.bind({ key: 'o', label: 'Outline: step titles only', when: () => applies, run: () => undefined });
       ctx.keys.bind({ key: 'z', label: 'Unlisted', listed: false, run: () => undefined });
     });
-    const root = await enhanced();
+    const root = await enhanced(DOC, {}, ['position']);
     key(document.body, '?');
     expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', 'j k|Next / previous section', '?|This sheet', 'x|A key of a later feature', 'Esc|Close']);
     // Read again at each opening: a key that applies now shows.
@@ -947,7 +1035,7 @@ describe('the keys sheet', () => {
     });
     const root = await enhanced();
     key(document.body, '?');
-    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', '?|This sheet', 'a b|Same', 'c|Between', 'd|Same', 'Esc|Close']);
+    expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', 'j k|Next / previous section', '?|This sheet', 'a b|Same', 'c|Between', 'd|Same', 'Esc|Close']);
   });
 
   it('the reference\'s pairs share a row whatever their labels: "j k" and "n p"; one of a pair alone has a row of its own', async () => {
@@ -958,7 +1046,7 @@ describe('the keys sheet', () => {
       ctx.keys.bind({ key: 'n', label: 'Next change', when: () => changes, run: () => undefined });
       ctx.keys.bind({ key: 'p', label: 'Previous change', run: () => undefined });
     });
-    const root = await enhanced();
+    const root = await enhanced(DOC, {}, ['position']);
     key(document.body, '?');
     expect(sheetRows(root)).toEqual(['/|Jump to a section, ID or figure', 'j k|Next / previous section', 'p|Previous change', '?|This sheet', 'Esc|Close']);
     key(document.body, 'Escape');
@@ -1049,16 +1137,32 @@ describe('the keys sheet', () => {
     expect(isOpen(sheetOf(root))).toBe(false);
   });
 
-  it('keyboard: false builds no sheet', async () => {
+  it('keyboard: false keeps its closed sheet reachable only through the real rail Keys button', async () => {
     const root = await enhanced(DOC, { keyboard: false });
-    expect(sheetOf(root)).toBeNull();
+    const sheet = sheetOf(root);
+    expect(sheet).not.toBeNull();
+    if (sheet === null) throw new Error('no keyboard sheet');
+    expect(isOpen(sheet)).toBe(false);
+    expect(sheet.isConnected).toBe(true);
+    expect(root.querySelector('.keys')).toBe(sheet);
     expect(ctxOf(root).keys.bindings().map((b) => b.key)).not.toContain('?');
+    key(document.body, '?');
+    expect(isOpen(sheet)).toBe(false);
+    expect(sheet.isConnected).toBe(true);
+    expect(root.querySelector('.keys')).toBe(sheet);
+    (root.querySelector('.keys-btn') as HTMLButtonElement).click();
+    expect(isOpen(sheet)).toBe(true);
+    expect(sheet.isConnected).toBe(true);
+    expect(root.querySelector('.keys')).toBe(sheet);
+    await destroyEnhancement(root);
+    expect(sheet.isConnected).toBe(false);
+    expect(sheetOf(root)).toBeNull();
   });
 
   it('a document with no jump still has its sheet, without "/"', async () => {
     const root = await enhanced(['# T', '', '## A', '', 'a', ''].join('\n'));
     key(document.body, '?');
-    expect(sheetRows(root)).toEqual(['?|This sheet', 'Esc|Close']);
+    expect(sheetRows(root)).toEqual(['j k|Next / previous section', '?|This sheet', 'Esc|Close']);
   });
 
   it('RF2: "?" opens the focused root\'s sheet; Escape closes only its own', async () => {

@@ -15,9 +15,9 @@ import { destroyEnhancement, enhance, setEnhancementPrefs, type EnhanceOptions, 
 import { TOOL_ORDER, type ToolKind } from '../src/enhance/bar.js';
 import type { Feature } from '../src/enhance/features.js';
 import { HEAD_SLOTS } from '../src/enhance/headctl.js';
-import { CHROME_ATTR, chrome } from '../src/enhance/journal.js';
+import { CHROME_ATTR, chrome, createJournal } from '../src/enhance/journal.js';
 import { CHORD, SHEET_ORDER } from '../src/enhance/keys.js';
-import type { Env } from '../src/enhance/env.js';
+import { createEnv, type Env } from '../src/enhance/env.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import { BAR_HOLD_MS, type Position } from '../src/enhance/nav.js';
 import { OVERLAY_ORDER, type OverlayKind } from '../src/enhance/overlays.js';
@@ -33,10 +33,10 @@ const hooks = vi.hoisted(() => ({ probes: [] as unknown[], beforeFolds: [] as un
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
   const features = (): Feature[] => {
-    // Without the quick jump and the keys sheet (Task 16): they bind "/", "?" and the chord and register the 'jump'
-    // and 'keys' overlays and the bar's jump tool, which these cases bind and register themselves, as stand-ins. And
-    // without the reading position (Task 14), whose j, k and anchor slot these cases' samples take.
-    const list = real.features().filter((f) => f.name !== 'jump' && f.name !== 'keysheet' && f.name !== 'position');
+    // Without features whose exclusive seams are the stand-ins under test: quick jump and keysheet own the "/", "?"
+    // and chord bindings, overlays, and jump tool; position owns j, k, and the anchor slot; rail owns the drawer,
+    // i binding, and contents tool; marks owns heading mark slots. Their feature tests cover the real integrations.
+    const list = real.features().filter((f) => !['jump', 'keysheet', 'position', 'rail', 'marks'].includes(f.name));
     const at = list.findIndex((f) => f.name === 'folds');
     return [...list.slice(0, at), ...(hooks.beforeFolds as Feature[]), ...list.slice(at), ...(hooks.probes as Feature[])];
   };
@@ -311,12 +311,12 @@ describe('registries: terms, blocks, figures, the plan and the page', () => {
     await enhance(root);
     // A slot of its own: the instance's own is published during the build once plans.ts is filled (Task 11).
     const plan = createPlan();
-    expect([plan.tasks, plan.steps, plan.yours, plan.outlineable, plan.published]).toEqual([[], [], 0, false, false]);
+    expect([plan.tasks, plan.members, plan.fingerprints, plan.steps, plan.yours, plan.outlineable, plan.published]).toEqual([[], [], [], [], 0, false, false]);
     const h = child(root, 'h2', '3-plan');
-    plan.publish({ tasks: [h], steps: [], yours: 2, outlineable: true });
-    expect([plan.tasks, plan.yours, plan.outlineable, plan.published]).toEqual([[h], 2, true, true]);
+    plan.publish({ tasks: [h], members: [[]], fingerprints: ['fingerprint'], steps: [], yours: 2, outlineable: true });
+    expect([plan.tasks, plan.members, plan.fingerprints, plan.yours, plan.outlineable, plan.published]).toEqual([[h], [[]], ['fingerprint'], 2, true, true]);
     expect(() => {
-      plan.publish({ tasks: [], steps: [], yours: 0, outlineable: false });
+      plan.publish({ tasks: [], members: [], fingerprints: [], steps: [], yours: 0, outlineable: false });
     }).toThrow(/once/);
   });
 
@@ -504,7 +504,7 @@ describe('overlays: the Escape order', () => {
 
   it('Escape closes figure, keys, jump, settings, changes menu, drawer, card, one per press, in that order', async () => {
     const root = mount();
-    await enhance(root);
+    await enhance(root, { chrome: { settings: false } });
     const ctx = ctxOf(root);
     expect(OVERLAY_ORDER).toEqual(['figure', 'keys', 'jump', 'settings', 'changes', 'drawer', 'card']);
     const closed = openAll(ctx, [...OVERLAY_ORDER].reverse());
@@ -860,19 +860,41 @@ describe('relayout', () => {
 
   it('a run calls its listeners inside position.keep, and a fonts wait that runs out asks for none (a fake window)', async () => {
     const frameQueue: (() => void)[] = [];
-    let fontsDone: (loaded: boolean) => void = () => undefined;
-    const env = {
-      frame: (fn: () => void) => {
-        frameQueue.push(fn);
-        return () => undefined;
+    const request = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    let next = 1;
+    const callbacks = new Map<number, () => void>();
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: (fn: () => void): number => {
+        const id = next;
+        next += 1;
+        callbacks.set(id, fn);
+        frameQueue.push(() => {
+          const callback = callbacks.get(id);
+          callbacks.delete(id);
+          callback?.();
+        });
+        return id;
       },
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: (id: number): void => { callbacks.delete(id); } });
+    let fontsDone: (loaded: boolean) => void = () => undefined;
+    const root = document.createElement('main');
+    document.body.append(root);
+    const live = (): boolean => true;
+    const control = createJournal(live, (fn) => fn());
+    const base = createEnv(root, control.journal, live, (fn) => fn());
+    const env = {
+      ...base,
       timeout: () => () => undefined,
       onResize: () => () => undefined,
+      observeResize: () => null,
       fonts: () =>
         new Promise<boolean>((r) => {
           fontsDone = r;
         }),
-    } as unknown as Env;
+    } satisfies Env;
     const order: string[] = [];
     const position: Position = {
       keep: <T>(fn: () => T): T => {
@@ -884,17 +906,25 @@ describe('relayout', () => {
       holdBar: () => undefined,
       barHeld: () => false,
     };
-    const events = createEvents(() => true);
+    const events = createEvents(live);
     events.on('relayout', () => order.push('event'));
-    const rl = createRelayout({ env, events, position, live: () => true });
-    rl.onRelayout(() => order.push('listener'));
-    rl.relayout('content');
-    expect(frameQueue).toHaveLength(1);
-    frameQueue.shift()?.();
-    expect(order).toEqual(['keep:in', 'listener', 'keep:out', 'event']);
-    fontsDone(false);
-    await flush();
-    expect(frameQueue).toHaveLength(0);
+    const rl = createRelayout({ root, env, events, position, live });
+    try {
+      rl.onRelayout(() => order.push('listener'));
+      rl.relayout('content');
+      expect(frameQueue).toHaveLength(1);
+      frameQueue.shift()?.();
+      expect(order).toEqual(['keep:in', 'listener', 'keep:out', 'event']);
+      fontsDone(false);
+      await flush();
+      expect(frameQueue).toHaveLength(0);
+    } finally {
+      control.undoAll();
+      if (request === undefined) delete (window as { requestAnimationFrame?: unknown }).requestAnimationFrame;
+      else Object.defineProperty(window, 'requestAnimationFrame', request);
+      if (cancel === undefined) delete (window as { cancelAnimationFrame?: unknown }).cancelAnimationFrame;
+      else Object.defineProperty(window, 'cancelAnimationFrame', cancel);
+    }
   });
 
   it('startup asks for one relayout of its own (start)', async () => {
@@ -921,6 +951,96 @@ describe('relayout', () => {
     expect(runs).toEqual([]);
     await wait(RESIZE_DEBOUNCE_MS + 60);
     expect(runs).toEqual([['resize']]);
+  });
+
+  it('a root content-box width change relayouts once; height-only, foreign and nonfinite reports do not poison its cache', async () => {
+    let report: (entries: unknown[]) => void = () => {
+      throw new Error('no root resize observer');
+    };
+    const observed: Element[] = [];
+    let disconnected = 0;
+    const original = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+    const existing = { configurable: true, enumerable: false, writable: true, value: class ExistingResizeObserver {} };
+    Object.defineProperty(window, 'ResizeObserver', existing);
+    try {
+      Object.defineProperty(window, 'ResizeObserver', {
+        configurable: true,
+        enumerable: false,
+        writable: true,
+        value: class {
+          constructor(callback: (entries: unknown[]) => void) {
+            report = callback;
+          }
+          observe(target: Element): void {
+            observed.push(target);
+          }
+          unobserve(): void {}
+          disconnect(): void {
+            disconnected += 1;
+          }
+        },
+      });
+      const root = mount();
+      const foreign = document.createElement('main');
+      await enhance(root);
+      await frames();
+      const runs: RelayoutReason[][] = [];
+      ctxOf(root).onRelayout((reasons) => runs.push([...reasons]));
+      expect(observed).toContain(root);
+
+      // A hidden root can report zero before it becomes visible; both reports share the pending relayout.
+      report([{ target: root, contentRect: { width: 0, height: 1 } }]);
+      report([{ target: root, contentRect: { width: 640, height: 1 } }]);
+      await frames();
+      expect(runs).toEqual([['resize']]);
+
+      // Zero is a real width, so after its coalesced run it independently relayouts when it becomes visible again.
+      report([{ target: root, contentRect: { width: 0, height: 2 } }]);
+      await frames();
+      expect(runs).toEqual([['resize'], ['resize']]);
+      report([{ target: root, contentRect: { width: 640, height: 3 } }]);
+      await frames();
+      expect(runs).toEqual([['resize'], ['resize'], ['resize']]);
+
+      report([{ target: root, contentRect: { width: 640, height: 4 } }]);
+      await frames();
+      expect(runs).toEqual([['resize'], ['resize'], ['resize']]);
+
+      report([{ target: root, contentRect: { width: 800, height: 4 } }]);
+      await frames();
+      expect(runs).toEqual([['resize'], ['resize'], ['resize'], ['resize']]);
+
+      // Discard before caching: invalid root entries must not make the current valid width look new.
+      report([
+        { target: root, contentRect: { width: Number.NaN, height: 5 } },
+        { target: root, contentRect: { width: Number.POSITIVE_INFINITY, height: 5 } },
+      ]);
+      await frames();
+      report([{ target: root, contentRect: { width: 800, height: 5 } }]);
+      await frames();
+      expect(runs).toHaveLength(4);
+
+      // Nor may a foreign entry set the root's cache before it is discarded.
+      report([{ target: foreign, contentRect: { width: 900, height: 5 } }]);
+      await frames();
+      expect(runs).toHaveLength(4);
+      report([{ target: root, contentRect: { width: 900, height: 5 } }]);
+      await frames();
+      expect(runs).toHaveLength(5);
+
+      await destroyEnhancement(root);
+      report([{ target: root, contentRect: { width: 1000, height: 5 } }]);
+      await frames();
+      expect([runs, disconnected]).toEqual([Array(5).fill(['resize']), 1]);
+    } finally {
+      try {
+        Object.defineProperty(window, 'ResizeObserver', existing);
+        expect(Object.getOwnPropertyDescriptor(window, 'ResizeObserver')).toEqual(existing);
+      } finally {
+        if (original === undefined) delete (window as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+        else Object.defineProperty(window, 'ResizeObserver', original);
+      }
+    }
   });
 
   it('a late fonts promise triggers one relayout; one that settles after destroy, none', async () => {
@@ -956,6 +1076,84 @@ describe('relayout', () => {
     await flush();
     await frames();
     expect(goneRuns).toEqual([]);
+  });
+
+  it('a live fonts continuation cannot replace the replacement reader\'s pending start relayout', async () => {
+    const frameQueue = new Map<number, FrameRequestCallback>();
+    const request = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    let next = 1;
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: (fn: FrameRequestCallback): number => {
+        const id = next;
+        next += 1;
+        frameQueue.set(id, fn);
+        return id;
+      },
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: (id: number): void => { frameQueue.delete(id); } });
+    const deliver = (): void => {
+      const cohort = [...frameQueue.entries()];
+      frameQueue.clear();
+      for (const [, callback] of cohort) callback(0);
+    };
+    let release: () => void = () => undefined;
+    const faces = new Promise<unknown[]>((resolve) => {
+      release = () => resolve([face]);
+    });
+    const root = mount();
+    const sibling = mount();
+    let replacement: Promise<void> | null = null;
+    let queuedReplacement = false;
+    const face = Object.defineProperty({}, 'status', {
+      get: () => {
+        if (!queuedReplacement) {
+          queuedReplacement = true;
+          queueMicrotask(() => {
+            Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => new Promise<unknown[]>(() => undefined) } });
+            void destroyEnhancement(root);
+            replacement = enhance(root);
+          });
+        }
+        return 'loaded';
+      },
+    });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { load: () => faces } });
+    try {
+      await Promise.all([enhance(root), enhance(sibling)]);
+      deliver();
+      const old = ctxOf(root);
+      const oldRuns: RelayoutReason[][] = [];
+      old.onRelayout((reasons) => oldRuns.push([...reasons]));
+
+      release();
+      await flush();
+      const current = ctxOf(root);
+      const currentRuns: RelayoutReason[][] = [];
+      current.onRelayout((reasons) => currentRuns.push([...reasons]));
+      deliver();
+
+      expect(oldRuns).toEqual([]);
+      expect(currentRuns).toEqual([['start']]);
+      current.relayout('content');
+      deliver();
+      expect(currentRuns).toEqual([['start'], ['content']]);
+
+      const siblingContext = ctxOf(sibling);
+      const siblingRuns: RelayoutReason[][] = [];
+      siblingContext.onRelayout((reasons) => siblingRuns.push([...reasons]));
+      siblingContext.relayout('content');
+      deliver();
+      expect(siblingRuns.some((reasons) => reasons.includes('content'))).toBe(true);
+      if (replacement === null) throw new Error('replacement was not queued');
+      await replacement;
+    } finally {
+      if (request === undefined) delete (window as { requestAnimationFrame?: unknown }).requestAnimationFrame;
+      else Object.defineProperty(window, 'requestAnimationFrame', request);
+      if (cancel === undefined) delete (window as { cancelAnimationFrame?: unknown }).cancelAnimationFrame;
+      else Object.defineProperty(window, 'cancelAnimationFrame', cancel);
+    }
   });
 
   it('the fonts wait is bounded, and a wait that runs out asks for no relayout', async () => {
@@ -1105,7 +1303,7 @@ describe('slots: the bar\'s skeleton', () => {
       expect(() => ctx.slots?.tool('jump', chrome(ctx.root.ownerDocument, 'button'))).toThrow(/tool/);
       expect(() => ctx.slots?.tool('other' as ToolKind, chrome(ctx.root.ownerDocument, 'button'))).toThrow(/tool/);
     });
-    await enhance(root);
+    await enhance(root, { chrome: { settings: false } });
     expect(TOOL_ORDER).toEqual(['changes', 'outline', 'jump', 'settings', 'contents']);
     expect(Array.from(find(root, '.bar-tools').children).map((c) => c.textContent)).toEqual([...TOOL_ORDER]);
   });
@@ -1334,21 +1532,37 @@ describe('registries: refusals, copies and caches', () => {
   it('the plan and the page check what they are given, and hold a frozen copy of it', () => {
     const plan = createPlan();
     const h = document.createElement('h3');
-    const steps = [document.createElement('li')];
+    const member = document.createElement('p');
+    const step = document.createElement('li');
+    const valid = () => ({ tasks: [h], members: [[member]], fingerprints: ['fingerprint'], steps: [step], yours: 1, outlineable: false });
     for (const bad of [
-      { tasks: [1], steps: [], yours: 0, outlineable: false },
-      { tasks: [], steps: [], yours: -1, outlineable: false },
-      { tasks: [], steps: [], yours: 1.5, outlineable: false },
-      { tasks: [], steps: [], yours: 0, outlineable: 'yes' },
+      { ...valid(), tasks: [1] },
+      { ...valid(), members: [[1]] },
+      { ...valid(), fingerprints: [1] },
+      { ...valid(), members: [] },
+      { ...valid(), fingerprints: [] },
+      { ...valid(), steps: [1] },
+      { ...valid(), yours: -1 },
+      { ...valid(), yours: 1.5 },
+      { ...valid(), outlineable: 'yes' },
     ]) {
       expect(() => {
         plan.publish(bad as never);
       }).toThrow(/plan has/);
     }
-    plan.publish({ tasks: [h], steps, yours: 1, outlineable: false });
+    const tasks = [h];
+    const members = [[member]];
+    const fingerprints = ['fingerprint'];
+    const steps = [step];
+    plan.publish({ tasks, members, fingerprints, steps, yours: 1, outlineable: false });
+    tasks.push(document.createElement('h3'));
+    members[0]?.push(document.createElement('p'));
+    members.push([]);
+    fingerprints.push('later');
     steps.push(document.createElement('li'));
-    expect(plan.steps).toHaveLength(1);
-    expect(Object.isFrozen(plan.steps)).toBe(true);
+    expect([plan.tasks, plan.members, plan.fingerprints, plan.steps, plan.published]).toEqual([[h], [[member]], ['fingerprint'], [step], true]);
+    expect([Object.isFrozen(plan.tasks), Object.isFrozen(plan.members), Object.isFrozen(plan.members[0]), Object.isFrozen(plan.fingerprints), Object.isFrozen(plan.steps)]).toEqual([true, true, true, true, true]);
+    expect([plan.tasks, plan.members, plan.members[0], plan.fingerprints, plan.steps]).not.toEqual([tasks, members, members[0], fingerprints, steps]);
     const page = createPage();
     const facts = page.facts;
     for (const bad of [
@@ -1580,55 +1794,99 @@ describe('nav: the rest of its guards', () => {
 });
 
 describe('relayout, reveal, headCtl and the bar: the rest of their guards', () => {
-  /** A relayout with a window of fakes: frames and timeouts the case runs by hand. */
+  /** A real queue with only the browser frame delivery made deterministic. */
   function fakeRelayout(live: () => boolean) {
     const frameQueue: (() => void)[] = [];
-    const env = {
-      frame: (fn: () => void) => {
-        frameQueue.push(fn);
-        return () => undefined;
+    const request = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    let next = 1;
+    const callbacks = new Map<number, () => void>();
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: (fn: () => void): number => {
+        const id = next;
+        next += 1;
+        callbacks.set(id, fn);
+        frameQueue.push(() => {
+          const callback = callbacks.get(id);
+          callbacks.delete(id);
+          callback?.();
+        });
+        return id;
       },
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: (id: number): void => { callbacks.delete(id); } });
+    const root = document.createElement('main');
+    document.body.append(root);
+    const control = createJournal(live, (fn) => fn());
+    const base = createEnv(root, control.journal, live, (fn) => fn());
+    const env = {
+      ...base,
       timeout: () => () => undefined,
       onResize: () => () => undefined,
+      observeResize: () => null,
       fonts: () => new Promise<boolean>(() => undefined),
-    } as unknown as Env;
+    } satisfies Env;
     const position: Position = { keep: <T>(fn: () => T): T => fn(), holdBar: () => undefined, barHeld: () => false };
     const events = createEvents(live);
-    return { rl: createRelayout({ env, events, position, live }), frameQueue, events };
+    return {
+      rl: createRelayout({ root, env, events, position, live }),
+      frameQueue,
+      events,
+      cleanup: () => {
+        control.undoAll();
+        if (request === undefined) delete (window as { requestAnimationFrame?: unknown }).requestAnimationFrame;
+        else Object.defineProperty(window, 'requestAnimationFrame', request);
+        if (cancel === undefined) delete (window as { cancelAnimationFrame?: unknown }).cancelAnimationFrame;
+        else Object.defineProperty(window, 'cancelAnimationFrame', cancel);
+      },
+    };
   }
 
   it('a listener that throws stops neither the next nor the event, and its throw comes after; one that destroys stops the run', () => {
     let alive = true;
-    const { rl, frameQueue, events } = fakeRelayout(() => alive);
+    const first = fakeRelayout(() => alive);
     const got: string[] = [];
-    rl.onRelayout(() => {
-      got.push('one');
-      throw new Error('one');
-    });
-    rl.onRelayout(() => got.push('two'));
-    events.on('relayout', () => got.push('event'));
-    rl.relayout('content');
-    expect(() => frameQueue.shift()?.()).toThrow('one');
-    expect(got).toEqual(['one', 'two', 'event']);
-    const stopper = fakeRelayout(() => alive);
-    stopper.rl.onRelayout(() => {
-      alive = false;
-    });
-    stopper.rl.onRelayout(() => got.push('late'));
-    stopper.rl.relayout('content');
-    stopper.frameQueue.shift()?.();
-    expect(got).toEqual(['one', 'two', 'event']);
+    try {
+      first.rl.onRelayout(() => {
+        got.push('one');
+        throw new Error('one');
+      });
+      first.rl.onRelayout(() => got.push('two'));
+      first.events.on('relayout', () => got.push('event'));
+      first.rl.relayout('content');
+      expect(() => first.frameQueue.shift()?.()).toThrow('one');
+      expect(got).toEqual(['one', 'two', 'event']);
+      const stopper = fakeRelayout(() => alive);
+      try {
+        stopper.rl.onRelayout(() => {
+          alive = false;
+        });
+        stopper.rl.onRelayout(() => got.push('late'));
+        stopper.rl.relayout('content');
+        stopper.frameQueue.shift()?.();
+        expect(got).toEqual(['one', 'two', 'event']);
+      } finally {
+        stopper.cleanup();
+      }
+    } finally {
+      first.cleanup();
+    }
   });
 
   it('onRelayout takes a function, and its cancel stops it', () => {
-    const { rl, frameQueue } = fakeRelayout(() => true);
-    expect(() => rl.onRelayout(1 as never)).toThrow(/function/);
-    const got: string[] = [];
-    const stop = rl.onRelayout(() => got.push('run'));
-    stop();
-    rl.relayout('content');
-    frameQueue.shift()?.();
-    expect(got).toEqual([]);
+    const setup = fakeRelayout(() => true);
+    try {
+      expect(() => setup.rl.onRelayout(1 as never)).toThrow(/function/);
+      const got: string[] = [];
+      const stop = setup.rl.onRelayout(() => got.push('run'));
+      stop();
+      setup.rl.relayout('content');
+      setup.frameQueue.shift()?.();
+      expect(got).toEqual([]);
+    } finally {
+      setup.cleanup();
+    }
   });
 
   it('reveal: the root itself, or an element outside it, is no target; a details around the root stays closed; a revealer that stops itself does not skip the next', async () => {
@@ -1735,7 +1993,7 @@ describe('assets/reader.css: the markers later tasks insert at', () => {
     const css = readFileSync(path.join(import.meta.dirname, '..', 'assets', 'reader.css'), 'utf8');
     for (const marker of [
       "/* ─── marker: the bar's placement in the root (sticky, with its .scrolled and .bar-hidden states) goes below ─── */",
-      "/* ─── marker: the contents rail's placement in the root (a sticky column on a wide screen, a drawer below) goes below ─── */",
+      "/* ─── the contents rail: a root-owned column wide, a root-local drawer below ─── */",
       "/* ─── marker: the drawn figure's rules (the plate, and the source while a diagram is drawn) start below ─── */",
     ]) {
       expect(css.split(marker).length - 1, marker).toBe(1);

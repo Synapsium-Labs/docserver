@@ -749,9 +749,71 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:checked + label { background: var(--surface2); color: var(--text); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ─── contents and index panels ──────────────────────────────────────────── */
-/* the rail's placement (fixed or sticky, its width --toc-w, when it shows) is the host layout's, so only its inner type is set here */
-/* ─── marker: the contents rail's placement in the root (a sticky column on a wide screen, a drawer below) goes below ─── */
+/* ─── the contents rail: a root-owned column wide, a root-local drawer below ─── */
 [data-docreader-root] .doc-toc { padding: 4px 14px 0 20px; font-family: var(--sans); font-size: 13.5px; line-height: 1.35; display: flex; flex-direction: column; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .toc-btn,
+[data-docreader-root] .toc-scrim { display: none; }
+/* Keep prose list rhythm and generated markers out of the rail before its nested-list rules refine it. */
+[data-docreader-root][data-docreader-root]:not(i) .doc-toc ul { list-style: none; margin: 0; padding: 0; }
+[data-docreader-root][data-docreader-root]:not(i) .doc-toc li { margin: 0; }
+[data-docreader-root][data-docreader-root]:not(i) .doc-toc li::marker { content: normal; }
+@media screen and (min-width: 1240px) {
+  [data-docreader-root]:not(i).has-toc {
+    --rail-w: 308px;
+    display: grid;
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+  [data-docreader-root]:not(i).has-toc > .doc-toc {
+    grid-column: 1;
+    grid-row: 1 / span 100;
+    position: sticky;
+    top: calc(var(--bar-h) + 14px);
+    align-self: start;
+    width: calc(var(--toc-w) + 34px);
+    margin-left: 0;
+    margin-right: 0;
+    height: calc(100vh - var(--bar-h) - 14px);
+    max-height: calc(100vh - var(--bar-h) - 14px);
+    overflow: hidden;
+  }
+  [data-docreader-root]:not(i).has-toc > :not(.doc-toc):not(.toc-scrim) {
+    grid-column: 2;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  [data-docreader-root][data-docreader-root]:not(i).has-toc > .topbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    transform: none;
+    width: auto;
+    margin-left: calc(-1 * var(--pad));
+    margin-right: calc(-1 * var(--pad));
+  }
+  [data-docreader-root][data-docreader-root]:not(i).has-toc > .doc-progress { grid-column: 1 / -1; }
+  [data-docreader-root]:not(i).has-toc .running-head { padding-left: 192px; }
+}
+@media screen and (max-width: 1239px) {
+  [data-docreader-root]:not(i).has-toc > .doc-toc { display: none; }
+  [data-docreader-root][data-docreader-root][data-docreader-root]:not(i).has-toc .toc-btn { display: inline-flex; }
+  [data-docreader-root]:not(i).has-toc.toc-open > .doc-toc {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 2050;
+    width: calc(min(340px, 88vw) + 34px);
+    max-height: none;
+    padding-top: 16px;
+    background: var(--bg);
+    box-shadow: 6px 0 30px rgba(0, 0, 0, .18);
+  }
+  [data-docreader-root]:not(i).has-toc.toc-open > .toc-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 2040;
+    background: rgba(20, 18, 15, .35);
+  }
+}
 [data-docreader-root] .toc-tabs { display: flex; gap: 2px; margin: 0 0 10px 4px; flex: none; }
 [data-docreader-root] .toc-tabs button { font: inherit; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .12em; color: var(--text-faint); background: none; border: 0; border-bottom: 1.5px solid transparent; padding: 4px 6px 5px; cursor: pointer; }
 [data-docreader-root] .toc-tabs button:hover { color: var(--text-muted); }
