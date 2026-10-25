@@ -1091,8 +1091,8 @@
 /* ─── the Product lens: implementation detail quieter, never removed ──────── */
 [data-docreader-root] .peek-bar { display: none; }
 @media screen {
-  [data-docreader-root]:not(i).lens-product main.container code.path,
-  [data-docreader-root]:not(i).lens-product main.container td code { background: transparent; padding: 0; color: var(--text-muted); font-size: .76em; }
+  [data-docreader-root]:not(i).lens-product code.path,
+  [data-docreader-root]:not(i).lens-product td code { background: transparent; padding: 0; color: var(--text-muted); font-size: .76em; }
   [data-docreader-root]:not(i).lens-product .tech:not(.peek-open) { max-height: 8.6em; overflow: hidden !important; -webkit-mask-image: linear-gradient(#000 35%, transparent); mask-image: linear-gradient(#000 35%, transparent); }
   [data-docreader-root]:not(i).lens-product .tech.table-wrapper:not(.peek-open),
   [data-docreader-root]:not(i).lens-product .tbl-block.tech:not(.peek-open) { max-height: 13em; }
@@ -1108,7 +1108,7 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-btns button:disabled { opacity: .5; cursor: default; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-note { font-size: 11.5px; line-height: 1.35; color: var(--text-faint); margin: 5px 0 0; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-key { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
-[data-docreader-root] .aa-kh { font-size: 10.5px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-kh { font-size: 10.5px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
 [data-docreader-root] .ckey { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--sans); font-size: 12px; line-height: 1.3; color: var(--text-muted); }
 [data-docreader-root] .ckey li { display: flex; align-items: center; gap: 8px; margin: 0; }
 [data-docreader-root] .ckey .sw { flex: none; width: 14px; height: 10px; border-radius: 2px; background: var(--sw); }

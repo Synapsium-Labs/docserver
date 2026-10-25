@@ -504,7 +504,7 @@ describe('overlays: the Escape order', () => {
 
   it('Escape closes figure, keys, jump, settings, changes menu, drawer, card, one per press, in that order', async () => {
     const root = mount();
-    await enhance(root);
+    await enhance(root, { chrome: { settings: false } });
     const ctx = ctxOf(root);
     expect(OVERLAY_ORDER).toEqual(['figure', 'keys', 'jump', 'settings', 'changes', 'drawer', 'card']);
     const closed = openAll(ctx, [...OVERLAY_ORDER].reverse());
@@ -1105,7 +1105,7 @@ describe('slots: the bar\'s skeleton', () => {
       expect(() => ctx.slots?.tool('jump', chrome(ctx.root.ownerDocument, 'button'))).toThrow(/tool/);
       expect(() => ctx.slots?.tool('other' as ToolKind, chrome(ctx.root.ownerDocument, 'button'))).toThrow(/tool/);
     });
-    await enhance(root);
+    await enhance(root, { chrome: { settings: false } });
     expect(TOOL_ORDER).toEqual(['changes', 'outline', 'jump', 'settings', 'contents']);
     expect(Array.from(find(root, '.bar-tools').children).map((c) => c.textContent)).toEqual([...TOOL_ORDER]);
   });

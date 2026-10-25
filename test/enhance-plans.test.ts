@@ -525,7 +525,7 @@ describe('steps: numbers, owners and bodies', () => {
     const long = 'word '.repeat(30).trim();
     const root = mount(['# P', '', `- [ ] **Step 1: ${long}**`, `- [ ] a${' '.repeat(310)}b`, ''].join('\n'));
     await enhance(root);
-    const [a = '', b = ''] = Array.from(root.querySelectorAll('input')).map((i) => i.getAttribute('aria-label') ?? '');
+    const [a = '', b = ''] = Array.from(root.querySelectorAll('li.task-list-item input[type="checkbox"]')).map((i) => i.getAttribute('aria-label') ?? '');
     expect(a).toBe(`Step 1: ${ctxOf(root).text.clip(long, 90)}`);
     expect(a.endsWith('…')).toBe(true);
     expect(b).toBe('a'); // the "b" lies past the first 300 characters
@@ -559,7 +559,7 @@ describe('steps: numbers, owners and bodies', () => {
     for (const n of Array.from(last.childNodes)) if (n.nodeType === 3) n.remove();
     await enhance(root);
     expect(items[0]?.querySelector('.step-no')?.textContent).toBe('Step 1');
-    expect(root.querySelectorAll('input')).toHaveLength(1);
+    expect(root.querySelectorAll('li.task-list-item input[type="checkbox"]')).toHaveLength(1);
     expect(last.querySelector('input')?.getAttribute('aria-label')).toBe('Step');
   });
 

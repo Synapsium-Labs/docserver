@@ -782,7 +782,7 @@ describe('position.keep', () => {
     anchor();
     expect(s.points[0]).toEqual([610, 12]);
     s.boxes.set(title, [370, 0]); // the title and the hidden meta line have no box: the next block has
-    s.boxes.set(find(root, 'p'), [0, 0]);
+    s.boxes.set(find(root, 'p[data-line]'), [0, 0]);
     s.boxes.set(find(root, 'h2'), [100, 30]);
     s.points.length = 0;
     anchor();

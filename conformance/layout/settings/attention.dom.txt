@@ -1,0 +1,79 @@
+h1
+  "Attention"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-21Draft"
+h2
+  "1. Reader actions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Status"
+        th
+          "Owner"
+    tbody
+      tr .attn
+        td
+          "R1"
+        td
+          span .pill.wait chrome
+            "Awaiting review"
+        td
+          "other"
+      tr .attn
+        td
+          "R2"
+        td
+          span .ok.pill chrome
+            "Agreed"
+        td
+          "you"
+      tr
+        td
+          "R3"
+        td
+          span .ok.pill chrome
+            "Agreed"
+        td
+          "other"
+div
+  table
+    thead
+      tr
+        th
+          "Topic"
+        th
+          "Status"
+        th
+          "Owner"
+    tbody
+      tr
+        td
+          "Plain prose"
+        td
+          span .pill.wait chrome
+            "Awaiting review"
+        td
+          "other"
+h2
+  "2. Open answers"
+div
+  table
+    thead
+      tr
+        th
+          "Question"
+        th
+          "Answer"
+    tbody
+      tr .attn
+        td
+          "Which format?"
+        td
+          "TBD"

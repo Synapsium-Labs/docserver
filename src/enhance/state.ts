@@ -369,10 +369,12 @@ export function createReaderState(args: StateArgs): ReaderState {
 
 /**
  * Put the prefs on the root: data-theme (absent for 'auto', so the stylesheet's system rule applies), data-width,
- * data-font. The lens is stored and restored with them; the feature that shows it puts its class on the root.
+ * data-font and the lens class. This is the sole writer of the root preference state, so startup and later changes
+ * take the same journaled, conditionally-restored path.
  */
 export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Prefs>): void {
   journal.setAttribute(root, 'data-theme', prefs.theme === 'auto' ? null : prefs.theme);
   journal.setAttribute(root, 'data-width', prefs.width);
   journal.setAttribute(root, 'data-font', prefs.font);
+  journal.toggleClass(root, 'lens-product', prefs.lens === 'product');
 }
