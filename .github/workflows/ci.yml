@@ -10,6 +10,16 @@ name: ci
 # The layout tests (test/browser/) run in real browsers: the pinned playwright-core installs its Chromium and
 # WebKit builds and their system libraries first, and both run (DOCREADER_BROWSERS is never set here); a run that
 # leaves conformance/layout/ changed (an expected snapshot written by the tests) fails.
+# The browser install must not hang the job on a stalling package mirror: apt retries and gives up on a silent
+# connection after 30 seconds, the browser builds come from a cache keyed on the runner and the pinned
+# playwright-core version, and the install runs at most twice, each attempt bounded, inside its own step timeout.
+# The key names the runner's architecture and OS release (the ID and VERSION_ID of /etc/os-release), because
+# playwright-core picks its browser builds by those and never re-downloads a build it finds restored: a key
+# without them would restore builds made for the previous release once ubuntu-latest moves.
+# The cached directory is the one playwright-core installs into on Linux: $XDG_CACHE_HOME/ms-playwright, or
+# .cache/ms-playwright under $HOME when XDG_CACHE_HOME is unset.
+# Every remote action is pinned by full commit sha, its release tag in the trailing comment; this workflow holds
+# no local `uses:`, because the release workflow calls it.
 on:
   push:
     branches: [main]
@@ -27,22 +37,49 @@ jobs:
   test:
     name: test (${{ matrix.node }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         node: [22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npx playwright-core install --with-deps chromium webkit
+      - name: the pinned playwright-core version, the runner's OS release and the browser directory
+        id: playwright
+        run: |
+          version="$(node -p "require('./package.json').devDependencies['playwright-core']")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          os="$(unset ID VERSION_ID && . /etc/os-release && echo "${ID:?}${VERSION_ID:?}")"
+          [[ "$os" =~ ^[a-z0-9._-]+$ ]]
+          browsers="${XDG_CACHE_HOME:-${HOME:?}/.cache}/ms-playwright"
+          printf '%s\n' "version=$version" "os=$os" "browsers=$browsers" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.playwright.outputs.browsers }}
+          key: ms-playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.os }}-playwright-core-${{ steps.playwright.outputs.version }}
+      - name: apt retries and timeouts
+        run: |
+          printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+            'DPkg::Lock::Timeout "300";' \
+            | sudo tee /etc/apt/apt.conf.d/80-docserver-ci > /dev/null
+      - name: install the pinned browsers and their system libraries
+        timeout-minutes: 22
+        run: |
+          for attempt in 1 2; do
+            if timeout -k 30 600 npx playwright-core install --with-deps chromium webkit; then
+              exit 0
+            fi
+            echo "::warning::browser install attempt ${attempt} of 2 failed or timed out"
+          done
+          exit 1
       - run: npm run typecheck
       - run: ./node_modules/.bin/vitest run
       - name: the tests wrote no layout snapshot
