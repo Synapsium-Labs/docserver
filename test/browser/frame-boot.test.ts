@@ -379,13 +379,32 @@ describeBrowsers((browser) => {
       await host.mount(srcdocOf(md, nonce), frameCsp());
       expect(data(await host.waitMessages(1, 10_000))).toEqual([{ t: 'ready', v: 1, nonce }]);
       const f = host.frame();
-      const auxclick = (buttons: readonly number[]): Promise<void> =>
+      // The frame's document as the test sees it: a right click must leave it in place, one load, links intact.
+      const state = (): Promise<Record<string, unknown>> =>
+        host.frame().evaluate(() => ({
+          url: document.URL,
+          ready: document.readyState,
+          article: document.querySelector('article') !== null,
+          links: document.querySelectorAll('a[href]').length,
+          other: document.querySelector('article a[href="other.md"]') !== null,
+        }));
+      const before = await state();
+      // Each dispatch must find its link, so the "send nothing" half cannot pass by finding nothing.
+      const auxclick = (buttons: readonly number[]): Promise<boolean> =>
         f.evaluate((bs) => {
           const a = document.querySelector('article a[href="other.md"]');
           for (const button of bs) a?.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, composed: true, button }));
+          return a !== null;
         }, buttons);
       await f.locator('article a[href="https://example.com/x"]').click({ button: 'right' });
-      await auxclick([2, 3, 4]);
+      await sleep(400);
+      const afterRight = await state();
+      const right = await host.record();
+      expect(
+        { loads: right.loads.length, sameFrame: host.frame() === f, ...afterRight },
+        JSON.stringify({ before, afterRight, messages: data(right) }),
+      ).toMatchObject({ loads: 1, sameFrame: true, article: true, other: true });
+      expect(await auxclick([2, 3, 4])).toBe(true);
       await sleep(400);
       expect(data(await host.record()).slice(1)).toEqual([]);
       // What the engine did with the middle button's auxclick, observed from the test side only (the shipped scripts
