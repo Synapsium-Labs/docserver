@@ -114,7 +114,8 @@ const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> 
     '.getComputedStyle': 2,
     'Date.now': 1,
   },
-  'src/enhance/journal.ts': { '.style': 1 },
+  // cloneSvg reads CSSOM only on its detached SVG clone; no feature gains a style escape hatch.
+  'src/enhance/journal.ts': { '.style': 2 },
 };
 
 /** Attribute names never written: inline handlers (any `on...`), what loads a URL or a frame, and style. */

@@ -29,14 +29,20 @@
 // focus), take it out of the hidden sheet. A destroy while it is open closes it first, so the focus goes back before
 // the sheet goes.
 //
-// With `keyboard: false` it is not built: no key opens it, and no feature has a way to open it. The reference's
-// contents rail had one, a "Keys" button that opened the sheet whatever the keyboard setting; that button is Task 18's,
-// and when it comes this sheet has to be built with `keyboard: false` too.
+// With `keyboard: false` no key opens it, but the sheet is still built for the reference's contents rail "Keys"
+// button (Task 18), which opens it through showKeys(ctx).
 //
 // Standard files, slug `jump`: test/enhance-jump.test.ts, test/browser/jump.test.ts, conformance/layout/jump/.
 // Registered in features.ts, whose header says where in the build order and why.
 import { chrome } from './journal.js';
 import type { FeatureContext } from './types.js';
+
+let sheets: WeakMap<FeatureContext, () => void> | undefined;
+
+/** Show this root's keys sheet when the feature built one. */
+export function showKeys(ctx: FeatureContext): void {
+  sheets?.get(ctx)?.();
+}
 
 /** The reference sheet's pairs: two keys on one row, read with the pair's label (the reference's words). */
 const PAIRS: readonly { readonly first: string; readonly second: string; readonly label: string }[] = [
@@ -49,7 +55,6 @@ const ESCAPE_ROW = { keys: ['Esc'], label: 'Close' } as const;
 
 /** Build this feature during startup: the sheet, closed, and its key. */
 export function build(ctx: FeatureContext): void {
-  if (!ctx.options.keyboard) return;
   const { root, journal } = ctx;
   const doc = root.ownerDocument;
 
@@ -104,6 +109,7 @@ export function build(ctx: FeatureContext): void {
   };
 
   const openSheet = (): void => {
+    if (!ctx.live()) return;
     opener = doc.activeElement;
     fill();
     sheet.classList.add('open');
@@ -130,5 +136,10 @@ export function build(ctx: FeatureContext): void {
   });
 
   ctx.overlays.register('keys', { isOpen, close });
-  ctx.keys.bind({ key: '?', label: 'This sheet', run: openSheet });
+  const registry = sheets ??= new WeakMap<FeatureContext, () => void>();
+  journal.defer(() => {
+    registry.delete(ctx);
+  });
+  registry.set(ctx, openSheet);
+  if (ctx.options.keyboard) ctx.keys.bind({ key: '?', label: 'This sheet', run: openSheet });
 }

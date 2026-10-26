@@ -4,20 +4,31 @@
 // of the stylesheet and fonts). Open index.html in a browser; the query parameters theme (auto, light, dark), width
 // (standard, wide) and font (serif, sans) choose the prefs, through setEnhancementPrefs. The page's <html> carries
 // data-ready="false" until the layout is built and the prefs applied, then "true": scripts/visual/compare.mjs waits
-// for it.
+// for it. --reuse-assets is a development-only option: its stylesheet is read directly from the existing asset tree
+// rather than copied into the new output directory.
 //
-// Run it from the repository root: node scripts/demo/build.mjs [--sample <file>] [--out <dir>]
+// Run it from the repository root: node scripts/demo/build.mjs [--sample <file>] [--out <dir>] [--reuse-assets]
 import { existsSync } from 'node:fs';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
-const USAGE = 'usage: node scripts/demo/build.mjs [--sample <file>] [--out <dir>]';
+const USAGE = 'usage: node scripts/demo/build.mjs [--sample <file>] [--out <dir>] [--reuse-assets]';
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
 const given = {};
+let reuseAssets = false;
 for (let i = 0; i < args.length; i += 2) {
+  if (args[i] === '--reuse-assets') {
+    if (reuseAssets) {
+      console.error(USAGE);
+      process.exit(2);
+    }
+    reuseAssets = true;
+    i -= 1; // a flag with no value
+    continue;
+  }
   const key = { '--sample': 'sample', '--out': 'out' }[args[i]];
   const value = args[i + 1];
   if (key === undefined || value === undefined || value === '' || Object.hasOwn(given, key)) {
@@ -74,7 +85,8 @@ await build({
   logLevel: 'error',
 });
 
-await cp(path.join(repo, 'assets'), path.join(out, 'assets'), { recursive: true });
+const assetRoot = path.join(repo, 'assets');
+if (!reuseAssets) await cp(assetRoot, path.join(out, 'assets'), { recursive: true });
 
 // Data in a JSON script block, with the characters that could close or open a tag written as escapes.
 const json = JSON.stringify({ title: result.meta.title, frontList: result.meta.frontList })
@@ -89,7 +101,7 @@ const page = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
-<link rel="stylesheet" href="assets/reader.css">
+<link rel="stylesheet" href="${reuseAssets ? pathToFileURL(path.join(assetRoot, 'reader.css')).href : 'assets/reader.css'}">
 <style>html, body { margin: 0; } [data-demo-root] { min-height: 100vh; }</style>
 </head>
 <body>

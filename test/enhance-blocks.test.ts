@@ -902,29 +902,18 @@ describe('code widths', () => {
     expect(widths(root)[2]).toEqual([true, false]);
   });
 
-  it('the rail: has-toc with a --rail-w takes its width off the room from 1240 px of viewport, and not below', async () => {
-    const root = mount(codeDoc([need(760), need(761), need(1121)]));
+  it('the root content box is the final code room at the 1240px rail boundary', async () => {
+    const root = mount(codeDoc([need(643), need(943)]));
     room(root, { w: 1240, client: 1240, pad: 40 });
     root.classList.add('has-toc');
-    root.style.setProperty('--rail-w', '400px');
+    root.style.setProperty('--rail-w', '308px');
+    root.style.setProperty('padding-left', '348px');
     await enhance(root);
     await frames();
-    expect(widths(root).map(([, r]) => r)).toEqual([false, true, true]);
-    viewport(1239);
+    expect(widths(root)).toEqual([[false, false], [true, true]]);
+    room(root, { w: 1239, client: 1239, pad: 40 });
     await relayout(root);
-    expect(widths(root).map(([, r]) => r)).toEqual([false, false, true]);
-    viewport(1240);
-    root.classList.remove('has-toc');
-    await relayout(root);
-    expect(widths(root).map(([, r]) => r)).toEqual([false, false, true]); // no has-toc: no rail
-    root.classList.add('has-toc');
-    root.style.removeProperty('--rail-w');
-    await relayout(root);
-    expect(widths(root).map(([, r]) => r)).toEqual([false, false, true]); // no --rail-w: no rail
-    root.style.setProperty('--rail-w', '-1000px');
-    Object.defineProperty(root, 'clientWidth', { configurable: true, get: () => 680 });
-    await relayout(root);
-    expect(widths(root).map(([, r]) => r)).toEqual([true, true, true]); // a negative rail gives no room: 600 px
+    expect(widths(root)).toEqual([[false, false], [true, false]]);
   });
 
   it("a line is measured on the canvas in the stylesheet's code face and size, a tab counting 8 characters, its longest line counting", async () => {

@@ -382,7 +382,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   });
   const { nav } = navigation;
   const position = createPosition(navigation);
-  const relayout = createRelayout({ env, events, position, live });
+  const relayout = createRelayout({ root, env, events, position, live });
   const ctx: FeatureContext = {
     root,
     journal,
@@ -414,7 +414,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     onRelayout: relayout.onRelayout,
     headCtl: createHeadCtl({ root, journal }),
     slots: bar?.slots ?? null,
-    folds: createFolds(),
+    folds: createFolds(root),
     setPrefs: (change) => {
       const checked = normalizePrefs(change);
       operate(inst, () => {

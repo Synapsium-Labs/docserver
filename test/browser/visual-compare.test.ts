@@ -4,10 +4,10 @@
 // file that names it exits 0 and reports it by that name; extra space between two blocks is a gap difference;
 // pages that share no block, a page that does not open and a browser that cannot start exit 3, the last naming the
 // install command; the screenshots and the report land in visual-out/ under the current directory. And the demo
-// page (scripts/demo/build.mjs): --sample and --out are read, anything else is refused, and the page marks itself
-// ready, which the script waits for.
+// page (scripts/demo/build.mjs): --sample and --out are read, --reuse-assets is explicit, anything else is refused,
+// and the page marks itself ready, which the script waits for.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,9 +35,18 @@ function page(name: string, width: number, between = '', body = ''): string {
   return file;
 }
 
-function run(args: readonly string[], env: NodeJS.ProcessEnv = process.env): { status: number | null; out: string } {
-  const r = spawnSync(process.execPath, [SCRIPT, '--states', 'light', '--offline', ...args], { cwd: dir, env, encoding: 'utf8', timeout: 120_000 });
+function run(args: readonly string[], env: NodeJS.ProcessEnv = process.env, cwd = dir): { status: number | null; out: string } {
+  const states = args.includes('--states') ? [] : ['--states', 'light'];
+  const r = spawnSync(process.execPath, [SCRIPT, ...states, '--offline', ...args], { cwd, env, encoding: 'utf8', timeout: 120_000 });
   return { status: r.status, out: `${r.stdout}${r.stderr}` };
+}
+
+function freshOut(name: string): string {
+  return mkdtempSync(path.join(dir, `${name}-`));
+}
+
+function expectCompactOutput(out: string): void {
+  expect(readdirSync(path.join(out, 'visual-out'))).toEqual(['report.txt']);
 }
 
 describe('compare.mjs and the demo, without a browser', () => {
@@ -61,11 +70,11 @@ describe('compare.mjs and the demo, without a browser', () => {
     expect([bad.status, bad.out]).toEqual([2, 'compare: the expected file is a JSON list\n']);
   });
 
-  it('the demo build reads --sample and --out, each once, and refuses anything else', () => {
-    for (const bad of [['--bogus'], ['--sample'], ['--sample', TABLES, '--sample', TABLES], ['--out', dir]]) {
+  it('the demo build reads --sample and --out, accepts --reuse-assets once, and refuses anything else', () => {
+    for (const bad of [['--bogus'], ['--sample'], ['--sample', TABLES, '--sample', TABLES], ['--reuse-assets', '--reuse-assets'], ['--out', dir]]) {
       const r = spawnSync(process.execPath, [DEMO, ...bad], { encoding: 'utf8' });
       expect(r.status, r.stderr).toBe(2);
-      expect(r.stderr).toMatch(/^(usage: node scripts\/demo\/build\.mjs \[--sample <file>\] \[--out <dir>\]|demo: .* exists; --out names a directory that does not exist yet)\n$/);
+      expect(r.stderr).toMatch(/^(usage: node scripts\/demo\/build\.mjs \[--sample <file>\] \[--out <dir>\] \[--reuse-assets\]|demo: .* exists; --out names a directory that does not exist yet)\n$/);
     }
   });
 });
@@ -104,6 +113,41 @@ describe('compare.mjs and the demo, without a browser', () => {
       expect(r.out).toMatch(/UNEXPECTED p@3-3 box\.gap: ours=\d+(\.\d+)? reference=\d+(\.\d+)?/);
     });
 
+    it('compact mode compares a named action for both pages without PNGs or measure.json', () => {
+      const setup = path.join(dir, 'compact-setup.mjs');
+      const out = freshOut('compact-out');
+      writeFileSync(setup, `export async function act({ page, side, state }) {\n  if (state === 'folded') await page.evaluate((width) => { document.querySelector('p').style.width = width; }, side === 'ours' ? '301px' : '302px');\n}\n`);
+      const r = run(['--compact', '--ours', page('compact-a.html', 300), '--reference', page('compact-b.html', 300), '--states', 'folded', '--setup', setup], process.env, out);
+      expect(r.status, r.out).toBe(1);
+      for (const combo of ['desktop-folded', 'phone-folded']) {
+        const section = r.out.match(new RegExp(`${combo}:.*?(?=\\n(?:desktop|phone)-|\\nresult:)`, 's'))?.[0] ?? '';
+        expect(section).toContain(`${combo}: 2 blocks in both pages, 2 differences, 2 unexpected`);
+        expect(section).toContain('UNEXPECTED p@3-3 box.width: ours=301 reference=302');
+        expect(section).toContain('UNEXPECTED p@3-3 width: ours=301px reference=302px');
+      }
+      expectCompactOutput(out);
+    });
+
+    it('compact mode preserves the equal-page result without full artifacts', () => {
+      const out = freshOut('compact-equal-out');
+      const r = run(['--compact', '--ours', page('compact-equal-a.html', 300), '--reference', page('compact-equal-b.html', 300)], process.env, out);
+      expect(r.status, r.out).toBe(0);
+      expect(r.out).toContain('desktop-light: 2 blocks in both pages, 0 differences, 0 unexpected');
+      expect(r.out).toContain('result: 0 unexpected differences');
+      expectCompactOutput(out);
+    });
+
+    it('compact mode retains expected difference reporting and its exit status', () => {
+      const out = freshOut('compact-expected-out');
+      const expected = path.join(dir, 'compact-expected.json');
+      writeFileSync(expected, JSON.stringify([{ name: 'compact width', blocks: ['p@*'], props: ['width', 'box.width'] }]));
+      const r = run(['--compact', '--ours', page('compact-expected-a.html', 300), '--reference', page('compact-expected-b.html', 301), '--expected', expected], process.env, out);
+      expect(r.status, r.out).toBe(0);
+      expect(r.out).toContain('expected (compact width): 2');
+      expect(readFileSync(path.join(out, 'visual-out', 'report.txt'), 'utf8')).toContain('result: 0 unexpected differences');
+      expectCompactOutput(out);
+    });
+
     it('--offline refuses and reports every request that is not for a file', () => {
       const img = '<img alt="" src="http://unrouted.localhost:2/x.png">';
       const r = run(['--ours', page('img.html', 300, '', img), '--reference', page('b.html', 300)]);
@@ -127,11 +171,13 @@ describe('compare.mjs and the demo, without a browser', () => {
 
     it('the demo page of a sample marks itself ready, and the script compares it', { timeout: 120_000 }, () => {
       const out = path.join(dir, 'demo');
-      const built = spawnSync(process.execPath, [DEMO, '--sample', TABLES, '--out', out], { encoding: 'utf8', timeout: 120_000 });
+      const built = spawnSync(process.execPath, [DEMO, '--sample', TABLES, '--out', out, '--reuse-assets'], { encoding: 'utf8', timeout: 120_000 });
       expect(built.status).toBe(0);
       const html = readFileSync(path.join(out, 'index.html'), 'utf8');
       expect(html).toContain('<html lang="en" data-ready="false">');
       expect(html).toContain('<title>Tables</title>');
+      expect(html).toContain('file:///');
+      expect(existsSync(path.join(out, 'assets'))).toBe(false);
       const index = path.join(out, 'index.html');
       const r = run(['--ours', index, '--reference', index]);
       expect(r.status, r.out).toBe(0);

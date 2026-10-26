@@ -1,0 +1,15 @@
+{
+  "options": {},
+  "scope": [
+    "doc-toc",
+    "toc-btn",
+    "toc-scrim",
+    "toc-tabs",
+    "toc-panel",
+    "mk",
+    "h-mark",
+    "h2[aria-label]",
+    "button[aria-expanded]"
+  ],
+  "viewport": { "width": 390, "height": 844 }
+}

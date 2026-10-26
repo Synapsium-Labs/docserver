@@ -169,6 +169,10 @@ export interface Figures {
 export interface PlanInfo {
   /** The task headings, in document order. */
   readonly tasks: readonly HTMLElement[];
+  /** The source members of each task, aligned with `tasks`, for read-mark fingerprints. */
+  readonly members: readonly (readonly Element[])[];
+  /** The source fingerprints of each task, aligned with `tasks`, before plan chrome exists. */
+  readonly fingerprints: readonly string[];
   /** The steps (`li.task-list-item`), in document order. */
   readonly steps: readonly HTMLElement[];
   /** How many steps name the reader as their owner. */
@@ -431,11 +435,17 @@ const elements = (v: unknown): v is readonly HTMLElement[] => Array.isArray(v) &
 
 /** The plan slot of one instance: empty until published. */
 export function createPlan(): PlanSlot {
-  let info: PlanInfo = Object.freeze({ tasks: Object.freeze([]), steps: Object.freeze([]), yours: 0, outlineable: false });
+  let info: PlanInfo = Object.freeze({ tasks: Object.freeze([]), members: Object.freeze([]), fingerprints: Object.freeze([]), steps: Object.freeze([]), yours: 0, outlineable: false });
   let published = false;
   return Object.freeze({
     get tasks() {
       return info.tasks;
+    },
+    get members() {
+      return info.members;
+    },
+    get fingerprints() {
+      return info.fingerprints;
     },
     get steps() {
       return info.steps;
@@ -451,9 +461,20 @@ export function createPlan(): PlanSlot {
     },
     publish(p: PlanInfo): void {
       if (published) throw new Error('docreader: the plan is published once');
-      if (typeof p !== 'object' || p === null || !elements(p.tasks) || !elements(p.steps)) throw new Error('docreader: a plan has tasks and steps');
-      if (!Number.isInteger(p.yours) || p.yours < 0 || typeof p.outlineable !== 'boolean') throw new Error('docreader: a plan has a count of yours and outlineable');
-      info = Object.freeze({ tasks: Object.freeze([...p.tasks]), steps: Object.freeze([...p.steps]), yours: p.yours, outlineable: p.outlineable });
+      if (typeof p !== 'object' || p === null || !elements(p.tasks) || !Array.isArray(p.members) || !p.members.every(elements) || !Array.isArray(p.fingerprints) || !p.fingerprints.every((value) => typeof value === 'string') || !elements(p.steps)) {
+        throw new Error('docreader: a plan has tasks, members, fingerprints and steps');
+      }
+      if (p.members.length !== p.tasks.length || p.fingerprints.length !== p.tasks.length || !Number.isInteger(p.yours) || p.yours < 0 || typeof p.outlineable !== 'boolean') {
+        throw new Error('docreader: a plan has aligned members, fingerprints, a count of yours and outlineable');
+      }
+      info = Object.freeze({
+        tasks: Object.freeze([...p.tasks]),
+        members: Object.freeze(p.members.map((members) => Object.freeze([...members]))),
+        fingerprints: Object.freeze([...p.fingerprints]),
+        steps: Object.freeze([...p.steps]),
+        yours: p.yours,
+        outlineable: p.outlineable,
+      });
       published = true;
     },
   });

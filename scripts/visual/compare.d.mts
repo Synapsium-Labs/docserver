@@ -33,6 +33,7 @@ export interface Args {
   readonly expected: string | undefined;
   readonly setup: string | undefined;
   readonly offline: boolean;
+  readonly compact: boolean;
 }
 
 export declare const VIEWPORTS: Readonly<Record<'desktop' | 'phone', { readonly width: number; readonly height: number }>>;

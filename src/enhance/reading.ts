@@ -15,31 +15,47 @@ export function words(s: string): number {
   return n;
 }
 
+/** Compact integer reading contributions: prose words, code words and figures. */
+export type ReadingContribution = readonly [prose: number, code: number, figures: number];
+
+/** The contribution of one heading. */
+export function headingContribution(heading: Element | null): ReadingContribution {
+  return [heading === null ? 0 : words(heading.textContent ?? ''), 0, 0];
+}
+
+/** The contribution of one direct presentation member. */
+export function memberContribution(n: Element): ReadingContribution {
+  if (n.localName === 'script' || n.localName === 'dl') return [0, 0, 0];
+  if (n.localName === 'figure') return [0, 0, 1];
+  const all = words(n.textContent ?? '');
+  if (n.classList.contains('codehilite') || n.localName === 'pre') return [0, all, 0];
+  let code = 0;
+  let figures = 0;
+  if (n.firstElementChild !== null) {
+    for (const x of Array.from(n.querySelectorAll('.codehilite'))) code += words(x.textContent ?? '');
+    figures = n.getElementsByTagName('figure').length;
+  }
+  return [Math.max(0, all - code), code, figures];
+}
+
+/** Convert integer reading contributions once, after their section has been summed. */
+export function contributionMinutes(prose: number, code: number, figures: number): number {
+  return prose / 230 + code / 520 + figures * 0.5;
+}
+
 /** The reading time of a heading (or none, for what comes before the first one) and its blocks, in minutes. */
 export function sectionMinutes(heading: Element | null, members: readonly Element[]): number {
-  let prose = heading === null ? 0 : words(heading.textContent ?? '');
-  let code = 0;
-  let figs = 0;
-  for (const n of members) {
-    if (n.localName === 'script' || n.localName === 'dl') continue;
-    if (n.localName === 'figure') {
-      figs += 1;
-      continue;
-    }
-    const all = words(n.textContent ?? '');
-    if (n.classList.contains('codehilite') || n.localName === 'pre') {
-      code += all;
-      continue;
-    }
-    let inner = 0;
-    if (n.firstElementChild !== null) {
-      for (const x of Array.from(n.querySelectorAll('.codehilite'))) inner += words(x.textContent ?? '');
-      figs += n.getElementsByTagName('figure').length;
-    }
-    code += inner;
-    prose += Math.max(0, all - inner);
+  const [headingProse, headingCode, headingFigures] = headingContribution(heading);
+  let prose = headingProse;
+  let code = headingCode;
+  let figures = headingFigures;
+  for (const member of members) {
+    const [memberProse, memberCode, memberFigures] = memberContribution(member);
+    prose += memberProse;
+    code += memberCode;
+    figures += memberFigures;
   }
-  return prose / 230 + code / 520 + figs * 0.5;
+  return contributionMinutes(prose, code, figures);
 }
 
 /**

@@ -92,6 +92,13 @@ function ends(h: Element, n: Element): boolean {
   return n.matches('.short') && Array.from(n.querySelectorAll('h1, h2, h3')).some((x) => level(x) <= level(h));
 }
 
+/** A task's source fingerprint, before the plan feature adds its own chrome. */
+function fingerprint(heading: HTMLElement, members: readonly Element[], ctx: FeatureContext): string {
+  let text = heading.textContent ?? '';
+  for (const member of members) if (member.localName !== 'script' && member.localName !== 'dl') text += `\u0001${member.textContent ?? ''}`;
+  return ctx.text.hash(text);
+}
+
 /** A text with its white space runs as one space, trimmed. */
 const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
 
@@ -207,7 +214,14 @@ export function build(ctx: FeatureContext): void {
   }
 
   const outlineable = steps.length >= OUTLINE_MIN_STEPS;
-  ctx.plan.publish({ tasks: tasks.map((t) => t.heading), steps, yours, outlineable });
+  ctx.plan.publish({
+    tasks: tasks.map((t) => t.heading),
+    members: tasks.map((t) => t.parts),
+    fingerprints: tasks.map((t) => fingerprint(t.heading, t.parts, ctx)),
+    steps,
+    yours,
+    outlineable,
+  });
   if (!outlineable) return;
 
   // ── Outline mode

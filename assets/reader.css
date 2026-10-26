@@ -48,9 +48,11 @@
    that fills its frame or its page gets them right; a root much narrower than the viewport keeps the wide layout, so
    a host that shows the reader in a narrow column of a wide page gives it a frame of its own.
 
-   Diagrams. A Mermaid figure's source stays readable text until the Mermaid feature (a later version) marks the root
-   with data-docreader-mermaid; from then on the source of a figure not yet drawn (pre.mermaid without
-   data-processed) is hidden under the drawing's plate. Nothing in this version sets that mark.
+   Diagrams. A Mermaid figure's source stays readable text until the Mermaid feature marks the root with
+   data-docreader-mermaid, which it does when drawing starts (only when the host gives Mermaid). From then on, keyed on
+   the figure's class: the source (render()'s pre.mermaid, which is never drawn into) is a transparent placeholder
+   until its figure is .drawn or .draw-failed, and hidden after; the drawing, a chrome pre.mermaid beside it, takes the
+   plate once the figure is drawn; a failed figure shows its .fig-error, never a blank plate.
 
    Specificity. The rules keep the cascade order of the layout they were ported from, so a prose rule, a component rule
    and a state rule beat or lose to each other exactly as before. Each selector carries the root attribute once (a class
@@ -555,8 +557,15 @@
 [data-docreader-root] figure.mermaid-figure { position: relative; background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; margin-top: 2.4em !important; margin-bottom: 2.6em !important; overflow: visible !important; }
 /* ─── marker: the drawn figure's rules (the plate, and the source while a diagram is drawn) start below ─── */
 [data-docreader-root] figure.mermaid-figure pre.mermaid { background: var(--plate) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; padding: 34px 24px 26px !important; margin: 0 !important; overflow-x: auto; font-family: var(--sans); font-size: 13px !important; color: var(--text-muted); }
-/* the source under a diagram that is about to be drawn; only where the Mermaid feature marked the root (see the header) */
-[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure pre.mermaid:not([data-processed]) { color: transparent !important; min-height: 180px; user-select: none; }
+/* a diagram's source, only where the Mermaid feature marked the root (see the header): the transparent placeholder until
+   its figure is drawn or has failed, then hidden. Keyed on the figure's class, since the source is never drawn into */
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure > pre.mermaid:not([data-docreader-chrome]) { color: transparent !important; min-height: 180px; user-select: none; }
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure.drawn > pre.mermaid:not([data-docreader-chrome]),
+[data-docreader-root][data-docreader-root][data-docreader-mermaid]:not(i) figure.mermaid-figure.draw-failed > pre.mermaid:not([data-docreader-chrome]) { display: none !important; }
+/* the drawing, the chrome pre.mermaid beside the source: laid out but unseen over the placeholder while Mermaid draws
+   into it (it measures what it draws), the plate once the figure is drawn, and gone when it failed (its .fig-error shows) */
+[data-docreader-root] figure.mermaid-figure:not(.drawn) > pre.mermaid[data-docreader-chrome] { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
+[data-docreader-root] figure.mermaid-figure.draw-failed > pre.mermaid[data-docreader-chrome] { display: none !important; }
 [data-docreader-root] figure.mermaid-figure svg { cursor: zoom-in; filter: var(--fig-filter); }
 [data-docreader-root] figure.mermaid-figure figcaption { font-family: var(--prose) !important; font-size: calc(.95 * var(--rem)) !important; line-height: 1.5; color: var(--text-muted) !important; margin: .95em 0 0 !important; max-width: var(--measure); }
 [data-docreader-root] figure.mermaid-figure figcaption a { color: var(--accent); }
@@ -582,6 +591,7 @@
 [data-docreader-root] svg .dnode:focus-visible > .dn-ring,
 [data-docreader-root] svg .dnode[aria-expanded="true"] > .dn-ring { opacity: 1; }
 [data-docreader-root] svg .dnode:focus-visible > .dn-ring { stroke-dasharray: none !important; }
+[data-docreader-root] figure.mermaid-figure svg path.flowchart-link.rv-draw,
 [data-docreader-root] svg path.flowchart-link.rv-draw { transition: stroke-dashoffset .55s ease; }
 [data-docreader-root] svg.flowing path.flowchart-link:not(.edge-pattern-dotted):not(.edge-pattern-dashed) { stroke-dasharray: 7 5 !important; animation: docreader-flow .9s linear infinite; }
 [data-docreader-root] svg.flowing path.flowchart-link.edge-pattern-dotted { stroke-dasharray: 2 5 !important; animation: docreader-flow-dot 1.2s linear infinite; }
@@ -593,8 +603,9 @@
 [data-docreader-root] .fig-error summary { cursor: pointer; color: var(--text-muted); }
 [data-docreader-root] .fig-error pre.fig-src { margin: .6em 0 0; text-align: left; white-space: pre; overflow: auto; max-height: 50vh; background: var(--code-block-bg); padding: 12px 14px; font-size: calc(.78 * var(--rem)); border: 0; border-radius: 3px; }
 /* full screen */
-[data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay { position: fixed; inset: 0; z-index: 2000; background: #161514; display: none; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay { position: fixed; inset: 0; z-index: 2000; max-width: none; margin: 0; background: #161514; display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay.open { display: block; }
+[data-docreader-root].fig-open { overflow: hidden; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay .fo-bar { position: absolute; top: 10px; left: 16px; right: 16px; display: flex; gap: 12px; align-items: flex-start; color: #ece8e0; font-family: var(--sans); font-size: 14px; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay .fo-cap { flex: 1; min-width: 0; font-family: var(--prose); font-style: italic; line-height: 1.35; padding-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay .fo-btns { display: flex; gap: 6px; flex: none; }
@@ -749,8 +760,62 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:checked + label { background: var(--surface2); color: var(--text); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ─── contents and index panels ──────────────────────────────────────────── */
-/* the rail's placement (fixed or sticky, its width --toc-w, when it shows) is the host layout's, so only its inner type is set here */
-/* ─── marker: the contents rail's placement in the root (a sticky column on a wide screen, a drawer below) goes below ─── */
+/* ─── the contents rail: a root-owned column wide, a root-local drawer below ─── */
+[data-docreader-root][data-docreader-root][data-docreader-root] .toc-btn,
+[data-docreader-root] .toc-scrim { display: none; }
+/* Keep prose list rhythm and generated markers out of the rail before its nested-list rules refine it. */
+[data-docreader-root][data-docreader-root]:not(i) .doc-toc ul { list-style: none; margin: 0; padding: 0; }
+[data-docreader-root][data-docreader-root]:not(i) .doc-toc li { margin: 0; }
+[data-docreader-root][data-docreader-root]:not(i) .doc-toc li::marker { content: normal; }
+@media screen and (min-width: 1240px) {
+  [data-docreader-root]:not(i).has-toc {
+    --rail-w: 308px;
+    padding-left: calc(var(--pad) + var(--rail-w));
+  }
+  [data-docreader-root]:not(i).has-toc > .doc-toc {
+    position: sticky;
+    top: calc(var(--bar-h) + 14px);
+    float: left;
+    width: var(--toc-w);
+    margin-left: calc(-1 * var(--rail-w));
+    margin-right: 2px;
+    height: calc(100vh - var(--bar-h) - 14px);
+    max-height: calc(100vh - var(--bar-h) - 14px);
+  }
+  [data-docreader-root]:not(i).has-toc > :not(.doc-toc):not(.toc-scrim) {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  [data-docreader-root][data-docreader-root]:not(i).has-toc > .topbar {
+    width: auto;
+    margin-left: calc(-1 * (var(--pad) + var(--rail-w)));
+    margin-right: calc(-1 * var(--pad));
+  }
+  [data-docreader-root]:not(i).has-toc .running-head { padding-left: 192px; }
+}
+@media screen and (max-width: 1239px) {
+  [data-docreader-root]:not(i).has-toc > .doc-toc { display: none; }
+  [data-docreader-root][data-docreader-root][data-docreader-root]:not(i).has-toc .toc-btn { display: inline-flex; }
+  [data-docreader-root]:not(i).has-toc.toc-open > .doc-toc {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 2050;
+    width: min(340px, 88vw);
+    max-height: none;
+    padding-top: 16px;
+    background: var(--bg);
+    box-shadow: 6px 0 30px rgba(0, 0, 0, .18);
+  }
+  [data-docreader-root]:not(i).has-toc.toc-open > .toc-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 2040;
+    background: rgba(20, 18, 15, .35);
+  }
+}
+[data-docreader-root][data-docreader-root][data-docreader-root] .doc-toc { max-width: none; }
 [data-docreader-root] .doc-toc { padding: 4px 14px 0 20px; font-family: var(--sans); font-size: 13.5px; line-height: 1.35; display: flex; flex-direction: column; }
 [data-docreader-root] .toc-tabs { display: flex; gap: 2px; margin: 0 0 10px 4px; flex: none; }
 [data-docreader-root] .toc-tabs button { font: inherit; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .12em; color: var(--text-faint); background: none; border: 0; border-bottom: 1.5px solid transparent; padding: 4px 6px 5px; cursor: pointer; }
@@ -969,7 +1034,7 @@
 [data-docreader-root] .codehilite .hljs-quote { color: var(--code-comment) !important; font-style: italic; }
 [data-docreader-root] .codehilite .hljs-doctag { color: var(--code-comment) !important; font-weight: bold; }
 @media (prefers-color-scheme: dark) {
-  [data-docreader-root]:not([data-theme="light"]) .codehilite { color: #e6edf3; }
+  [data-docreader-root]:not([data-theme="light"]) .codehilite { color: var(--text); }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-keyword,
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-bullet,
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-template-tag { color: #ff7b72; font-weight: bold; }
@@ -1020,7 +1085,7 @@
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-emphasis { font-style: italic; }
   [data-docreader-root]:not([data-theme="light"]) .codehilite .hljs-strong { font-weight: bold; }
 }
-[data-docreader-root][data-theme="dark"] .codehilite { color: #e6edf3; }
+[data-docreader-root][data-theme="dark"] .codehilite { color: var(--text); }
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-keyword,
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-bullet,
 [data-docreader-root][data-theme="dark"] .codehilite .hljs-template-tag { color: #ff7b72; font-weight: bold; }
@@ -1091,8 +1156,8 @@
 /* ─── the Product lens: implementation detail quieter, never removed ──────── */
 [data-docreader-root] .peek-bar { display: none; }
 @media screen {
-  [data-docreader-root]:not(i).lens-product main.container code.path,
-  [data-docreader-root]:not(i).lens-product main.container td code { background: transparent; padding: 0; color: var(--text-muted); font-size: .76em; }
+  [data-docreader-root]:not(i).lens-product code.path,
+  [data-docreader-root]:not(i).lens-product td code { background: transparent; padding: 0; color: var(--text-muted); font-size: .76em; }
   [data-docreader-root]:not(i).lens-product .tech:not(.peek-open) { max-height: 8.6em; overflow: hidden !important; -webkit-mask-image: linear-gradient(#000 35%, transparent); mask-image: linear-gradient(#000 35%, transparent); }
   [data-docreader-root]:not(i).lens-product .tech.table-wrapper:not(.peek-open),
   [data-docreader-root]:not(i).lens-product .tbl-block.tech:not(.peek-open) { max-height: 13em; }
@@ -1108,7 +1173,7 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-btns button:disabled { opacity: .5; cursor: default; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-note { font-size: 11.5px; line-height: 1.35; color: var(--text-faint); margin: 5px 0 0; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-key { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
-[data-docreader-root] .aa-kh { font-size: 10.5px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu .aa-kh { font-size: 10.5px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
 [data-docreader-root] .ckey { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--sans); font-size: 12px; line-height: 1.3; color: var(--text-muted); }
 [data-docreader-root] .ckey li { display: flex; align-items: center; gap: 8px; margin: 0; }
 [data-docreader-root] .ckey .sw { flex: none; width: 14px; height: 10px; border-radius: 2px; background: var(--sw); }

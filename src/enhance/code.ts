@@ -21,9 +21,8 @@
 // did, so a line of wide characters (about one em each, twice the estimate's character) is reached too; a `pre` with
 // no box (in a folded section, say) keeps the estimate's answer. So a relayout reads the room, writes `long`, reads
 // the pres' widths (one layout), then writes the regions. The room:
-//   - the root's content-box width (its client width less its padding), less the contents rail's `--rail-w` when the
-//     root has the class `has-toc` and the viewport is RAIL_MIN_W px wide or more (the rail is Task 18's; without the
-//     class, or without a length in px for the property, there is no rail);
+//   - the root's final content-box width (its client width less its padding), after any contents-rail reservation in
+//     the root padding;
 //   - the column: the stylesheet's measure for the prefs (COLUMN_REM rem, less SANS_REM for the sans face), at most
 //     that room; LIST_INDENT px less in a list item. The rem is the root's `--rem` when it is a length in px; else the
 //     code's computed size (always in px) over CODE_REM, since the stylesheet sets it at CODE_REM rem, so a host's
@@ -53,9 +52,6 @@ const TALL_LINES = 36;
 
 /** The widest viewport that is a phone, in px: the stylesheet's `@media (max-width: 700px)`. */
 const PHONE_MAX_W = 700;
-
-/** The narrowest viewport with the contents rail beside the text, in px (LD10). */
-const RAIL_MIN_W = 1240;
 
 /** The reading column, in rem, by the prefs' width: the stylesheet's `--measure`. */
 const COLUMN_REM: Readonly<Record<Prefs['width'], number>> = { standard: 44, wide: 52 };
@@ -94,10 +90,8 @@ const SAMPLE = '0123456789012345678901234567890123456789';
 interface CodeRoom {
   /** The viewport's width. */
   readonly w: number;
-  /** The root's content-box width. */
+  /** The root's final content-box width. */
   readonly box: number;
-  /** The contents rail's width (`--rail-w` with `has-toc`), or 0. */
-  readonly rail: number;
   readonly prefs: Readonly<Pick<Prefs, 'width' | 'font'>>;
   /** The layout's rem, in px. */
   readonly rem: number;
@@ -119,7 +113,7 @@ function longestLine(text: string): number {
 /** Whether a block of `chars` characters is long, and whether it scrolls sideways, in `room` (see the header). */
 function codeFit(room: CodeRoom, chars: number, inList: boolean): { readonly long: boolean; readonly scrolls: boolean } {
   const phone = room.w <= PHONE_MAX_W;
-  const avail = room.box - (room.w >= RAIL_MIN_W ? room.rail : 0);
+  const avail = room.box;
   const measure = COLUMN_REM[room.prefs.width] - (room.prefs.font === 'sans' ? SANS_REM : 0);
   const col = Math.min(measure * room.rem, avail);
   const wide = Math.min(WIDE_PX[room.prefs.width], avail);
@@ -146,19 +140,18 @@ function positive(value: string): number | null {
   return n !== null && n > 0 ? n : null;
 }
 
-/** Read the room now: the viewport, the root's box, the rail, the prefs, the rem and the code's character (see the header). */
+/** Read the room now: the viewport, final root box, prefs, rem and code character (see the header). */
 function readRoom(ctx: FeatureContext, pre: HTMLPreElement): CodeRoom {
   const { root, env } = ctx;
   const w = env.viewport().w;
   const box = root.clientWidth - (px(env.computed(root, 'padding-left')) ?? 0) - (px(env.computed(root, 'padding-right')) ?? 0);
-  const rail = root.classList.contains('has-toc') ? Math.max(0, px(env.computed(root, '--rail-w')) ?? 0) : 0;
   const remRead = positive(env.computed(root, '--rem'));
   const size = positive(env.computed(pre, 'font-size'));
   const rem = remRead ?? (size === null ? REM_PX : thousandths(size / CODE_REM));
   const width = env.textWidth(SAMPLE, `${String(size ?? thousandths(CODE_REM * rem))}px ${MONO}`);
   const charW = width !== null && Number.isFinite(width) && width > 0 ? width / SAMPLE.length : CHAR_W_FALLBACK;
   const { width: pw, font } = ctx.state.prefs;
-  return { w, box, rail, prefs: { width: pw, font }, rem, charW };
+  return { w, box, prefs: { width: pw, font }, rem, charW };
 }
 
 /** Whether a list item holds `el`: its ancestors up to the root, never past it. */

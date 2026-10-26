@@ -25,8 +25,9 @@ const PACKAGE = '@synapsium-labs/docserver';
 /**
  * A stand-in `npm`: records its arguments, then, when FAKE_KIND is set, installs a fake package into the consumer
  * (its working directory) whose declarations are `clean`; or import a module that does not exist (`dangling`); or
- * lack the conformance entry's `runCorpus` (`no-run-corpus`); or are clean at both entries while a third file, one
- * neither entry reaches, imports a module that does not exist (`dangling-unreached`).
+ * lack the conformance entry's `runCorpus` (`no-run-corpus`); omit `goToHash` (`missing-go-to-hash`); give it
+ * incompatible parameter types (`wrong-go-to-hash`); or are clean at both entries while a third file, one neither
+ * entry reaches, imports a module that does not exist (`dangling-unreached`).
  */
 const FAKE_NPM = `#!${process.execPath}
 const { appendFileSync, mkdirSync, writeFileSync } = require('node:fs');
@@ -53,6 +54,8 @@ if (kind) {
     'export declare function setEnhancementPrefs(root: Element, p: { theme?: string }): void;',
     'export declare class EnhanceError extends Error {}',
   ];
+  if (kind === 'wrong-go-to-hash') enhance.push('export declare function goToHash(root: string, id: number, from?: number): void;');
+  else if (kind !== 'missing-go-to-hash') enhance.push('export declare function goToHash(root: HTMLElement, id: string | null, from?: string | null): void;');
   for (const [sub, lines] of [['render', render], ['conformance', conformance], ['enhance', enhance]]) {
     mkdirSync(dir + '/dist/' + sub, { recursive: true });
     writeFileSync(dir + '/dist/' + sub + '/index.d.ts', lines.join('\\n') + '\\n');
@@ -102,7 +105,7 @@ beforeAll(() => {
   });
   after = Date.now();
   args = readFileSync(log, 'utf8').split('\n').filter((l) => l !== '');
-  for (const kind of ['clean', 'dangling', 'dangling-unreached', 'no-run-corpus']) typed.set(kind, runTyped(kind));
+  for (const kind of ['clean', 'dangling', 'dangling-unreached', 'no-run-corpus', 'missing-go-to-hash', 'wrong-go-to-hash']) typed.set(kind, runTyped(kind));
 }, 120_000);
 
 afterAll(() => {
@@ -155,6 +158,20 @@ describe('scripts/consumer-smoke.mjs: the strict consumer typecheck', () => {
     expect(r?.stderr).toMatch(/check\.ts\(\d+,\d+\): error TS2305: .*runCorpus/);
   });
 
+  it('fails the smoke when the enhance entry omits goToHash', () => {
+    const r = typed.get('missing-go-to-hash');
+    expect(r?.status).toBe(1);
+    expect(r?.stdout).not.toContain(STRICT);
+    expect(r?.stderr).toMatch(/check\.ts\(\d+,\d+\): error TS2305: .*goToHash/);
+  });
+
+  it('fails the smoke when goToHash cannot accept consumer calls', () => {
+    const r = typed.get('wrong-go-to-hash');
+    expect(r?.status).toBe(1);
+    expect(r?.stdout).not.toContain(STRICT);
+    expect(r?.stderr).toMatch(/check\.ts\(\d+,\d+\): error TS2345: .*HTMLElement.*string/);
+  });
+
   it('writes the consumer tsconfig with the strict flags and the check importing both entries', () => {
     expect(SOURCE).toMatch(/strict: true,/);
     expect(SOURCE).toMatch(/module: 'nodenext',/);
@@ -165,6 +182,8 @@ describe('scripts/consumer-smoke.mjs: the strict consumer typecheck', () => {
     expect(SOURCE).toContain("from '${PACKAGE}/render'");
     expect(SOURCE).toContain("from '${PACKAGE}/conformance'");
     expect(SOURCE).toContain("from '${PACKAGE}/enhance'");
+    expect(SOURCE).toContain('goToHash(root, \'section\');');
+    expect(SOURCE).toContain('goToHash(root, null, \'from-token\');');
     expect(SOURCE).toContain("lib: ['es2022', 'dom'],");
   });
 });
