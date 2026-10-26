@@ -61,6 +61,8 @@ The corrected local non-layout suite passes 2,647 assertions in 79 files. After 
 
 Browser corrections retain native Chromium touch and native WebKit taps, label unsupported WebKit gestures as a stage-local synthetic capture model, and assert actual input delivery. Strict-CSP clone paint uses a pinned, fail-closed WebKit capture transport that avoids Playwright's inline synchronization stylesheet; policy and pixel assertions remain intact. Corrected-tip WebKit CI must still prove these paths. Synthetic gesture coverage is not native gesture acceptance.
 
+The corrected run at `38f2ae87c430c65e3412d2f8668fb0cbbbea8869` completes the Node 22 job: all 3,167 tests in 114 files pass, including both browsers; typechecks, unchanged snapshots, build, ratchet, packaging and the strict packed-consumer smoke also pass (82 of 82 corpus cases). Node 24 exceeds the job's 30-minute limit during browser installation and is cancelled before typechecks or tests. That is an incomplete Node 24 gate, not a test failure or a green matrix. Both scoped re-review lenses close the original ten findings. The current built-Mermaid integration control and its exact M7 reversal are recorded separately in Task 23's journal; they do not imply packed-enhancement mutation coverage. No final-tip or release acceptance is inferred.
+
 ## 7. Remaining Verification
 
 - Complete corrected-tip Node 22/24 CI, both browsers, packed consumer smoke, built-artifact checks and scoped whole-branch fix closure. Local Chromium results do not stand in for these gates.
