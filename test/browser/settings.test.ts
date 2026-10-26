@@ -88,6 +88,31 @@ describeBrowsers((browser) => {
     }
   });
 
+  it('changes a native radio selection with ArrowRight inside one root-local preference group', async () => {
+    const doc = await openDoc(DOC, {}, { browser, csp: 'strict' });
+    try {
+      await doc.page.locator('main[data-harness-root] .aa-btn').click();
+      await doc.page.evaluate(() => {
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        (root.querySelector('input[data-pref="theme"][value="auto"]') as HTMLInputElement).focus();
+      });
+      await doc.page.keyboard.press('ArrowRight');
+      const changed = await doc.page.evaluate(() => {
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const auto = root.querySelector('input[data-pref="theme"][value="auto"]') as HTMLInputElement;
+        const light = root.querySelector('input[data-pref="theme"][value="light"]') as HTMLInputElement;
+        const names = Array.from(root.querySelectorAll<HTMLInputElement>('input[data-pref="theme"]'), (input) => input.name);
+        return { names, checked: [auto.checked, light.checked], active: document.activeElement === light };
+      });
+      expect(changed.names.every((name) => name === changed.names[0])).toBe(true);
+      expect(changed.checked).toEqual([false, true]);
+      expect(changed.active).toBe(true);
+      expect(await doc.violations()).toEqual([]);
+    } finally {
+      await doc.close();
+    }
+  });
+
   it('keeps the reader place within 2 px while collapsing and expanding sections', async () => {
     const doc = await openPositionDoc(browser);
     try {

@@ -1,5 +1,5 @@
-// Fullscreen viewer pointer qualification in offline Chromium. CDP touch drives the real stage;
-// the compatibility click supplement models the browser click that follows a touch sequence.
+// Fullscreen viewer pointer qualification: Chromium uses native CDP touch, WebKit uses a native touchscreen tap
+// for one-finger taps and an explicitly scoped synthetic pointer model for gestures CDP cannot transport there.
 import type { Page } from 'playwright-core';
 import { afterAll, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc } from './harness.js';
@@ -29,22 +29,100 @@ async function viewer(browser: 'chromium' | 'webkit', drawing = DRAWING, options
 
 type TouchStep = { readonly type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel'; readonly points: readonly { readonly x: number; readonly y: number; readonly id: number }[]; readonly delay?: number };
 
-async function touchSequence(page: Page, steps: readonly TouchStep[]): Promise<void> {
-  if (page.context().browser()?.browserType().name() !== 'chromium') return;
-  const session = await page.context().newCDPSession(page);
+async function observeDelivery(page: Page, run: () => Promise<void>): Promise<readonly string[]> {
+  await page.locator('.fo-stage').evaluate((stage) => {
+    const events: string[] = [];
+    const observe = (event: Event): void => { events.push(event.type); };
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) stage.addEventListener(type, observe, true);
+    (window as unknown as { __viewerEvents?: () => string[]; __viewerClear?: () => void }).__viewerEvents = () => [...events];
+    (window as unknown as { __viewerClear?: () => void }).__viewerClear = () => {
+      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) stage.removeEventListener(type, observe, true);
+    };
+  });
   try {
-    await session.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
-    for (const step of steps) {
-      if (step.delay !== undefined) await new Promise((resolve) => setTimeout(resolve, step.delay));
-      await session.send('Input.dispatchTouchEvent', { type: step.type, touchPoints: step.points.map((point) => ({ ...point })) });
-    }
+    await run();
+    return await page.evaluate(() => (window as unknown as { __viewerEvents: () => string[] }).__viewerEvents());
   } finally {
-    await session.detach();
+    await page.evaluate(() => (window as unknown as { __viewerClear: () => void }).__viewerClear());
   }
+}
+
+async function nativeTouch(page: Page, steps: readonly TouchStep[]): Promise<readonly string[]> {
+  return observeDelivery(page, async () => {
+    const session = await page.context().newCDPSession(page);
+    try {
+      await session.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+      for (const step of steps) {
+        if (step.delay !== undefined) await new Promise((resolve) => setTimeout(resolve, step.delay));
+        await session.send('Input.dispatchTouchEvent', { type: step.type, touchPoints: step.points.map((point) => ({ ...point })) });
+      }
+    } finally {
+      await session.detach();
+    }
+  });
+}
+
+/** WebKit has no CDP touch gesture endpoint. This model is scoped to one stage and restores native capture methods. */
+async function syntheticGesture(page: Page, steps: readonly TouchStep[]): Promise<readonly string[]> {
+  return page.locator('.fo-stage').evaluate(async (stage, input) => {
+    const saved = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'].map((name) => [name, Object.getOwnPropertyDescriptor(stage, name)] as const);
+    const captured = new Set<number>();
+    const active = new Map<number, { x: number; y: number }>();
+    const events: string[] = [];
+    const observe = (event: Event): void => { events.push(event.type); };
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) stage.addEventListener(type, observe, true);
+    Object.defineProperties(stage, {
+      setPointerCapture: { configurable: true, value: (id: number): void => { captured.add(id); } },
+      releasePointerCapture: { configurable: true, value: (id: number): void => { captured.delete(id); } },
+      hasPointerCapture: { configurable: true, value: (id: number): boolean => captured.has(id) },
+    });
+    try {
+      for (const step of input) {
+        if (step.delay !== undefined) await new Promise<void>((resolve) => window.setTimeout(resolve, step.delay));
+        const type = step.type === 'touchStart' ? 'pointerdown' : step.type === 'touchMove' ? 'pointermove' : step.type === 'touchEnd' ? 'pointerup' : 'pointercancel';
+        if (step.type === 'touchStart' || step.type === 'touchMove') for (const point of step.points) active.set(point.id, { x: point.x, y: point.y });
+        const points = step.type === 'touchEnd' || step.type === 'touchCancel' ? [...active].map(([id, point]) => ({ id, ...point })) : step.points;
+        for (const point of points) {
+          if (step.type === 'touchStart' && !active.has(point.id)) continue;
+          const target = captured.has(point.id) ? stage : document.elementFromPoint(point.x, point.y) ?? stage;
+          target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: point.id, pointerType: 'touch', clientX: point.x, clientY: point.y }));
+        }
+        if (step.type === 'touchEnd' || step.type === 'touchCancel') { active.clear(); captured.clear(); }
+      }
+      return events;
+    } finally {
+      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) stage.removeEventListener(type, observe, true);
+      for (const [name, descriptor] of saved) {
+        if (descriptor === undefined) delete (stage as unknown as Record<string, unknown>)[name];
+        else Object.defineProperty(stage, name, descriptor);
+      }
+    }
+  }, steps);
+}
+
+async function touchSequence(page: Page, steps: readonly TouchStep[]): Promise<readonly string[]> {
+  if (page.context().browser()?.browserType().name() === 'chromium') return nativeTouch(page, steps);
+  const simpleTap = steps.length === 2 && steps[0]?.type === 'touchStart' && steps[0].points.length === 1 && steps[1]?.type === 'touchEnd' && steps[1].points.length === 0 && steps[1].delay === undefined;
+  if (!simpleTap) return syntheticGesture(page, steps);
+  const point = steps[0]?.points[0];
+  if (point === undefined) return [];
+  return observeDelivery(page, () => page.touchscreen.tap(point.x, point.y));
 }
 
 function tap(x: number, y: number, delay?: number): readonly TouchStep[] {
   return [{ type: 'touchStart', points: [{ x, y, id: 1 }] }, { type: 'touchEnd', points: [], ...(delay === undefined ? {} : { delay }) }];
+}
+
+function transport(browser: 'chromium' | 'webkit', gesture = false): string {
+  return browser === 'chromium' ? 'native CDP touch' : gesture ? 'synthetic WebKit pointer gesture' : 'native WebKit touchscreen tap';
+}
+
+async function qualifiedTap(page: Page, x: number, y: number): Promise<number> {
+  return (await touchSequence(page, tap(x, y))).filter((type) => type === 'pointerup').length;
+}
+
+async function gesture(page: Page, steps: readonly TouchStep[]): Promise<readonly string[]> {
+  return touchSequence(page, steps);
 }
 
 async function compatibilityClick(block: Awaited<ReturnType<typeof viewer>>['block']): Promise<void> {
@@ -80,10 +158,10 @@ async function syntheticTapAt(block: Awaited<ReturnType<typeof viewer>>['block']
 }
 
 describeBrowsers((browser) => {
-  it('opens the real definition card from a qualified native touch pointer-up', async () => {
+  it(`opens the real definition card from a qualified ${transport(browser)} pointer-up`, async () => {
     const { doc, x, y } = await viewer(browser);
     try {
-      await touchSequence(doc.page, tap(x, y));
+      expect(await qualifiedTap(doc.page, x, y)).toBeGreaterThan(0);
       await doc.page.waitForFunction(() => document.querySelectorAll('.xcard.open').length === 1);
       expect(await doc.violations()).toEqual([]);
     } finally {
@@ -130,7 +208,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('changes zoom through native two-touch pinch and double tap', async () => {
+  it(`changes zoom through ${transport(browser, true)} pinch and ${transport(browser)} double tap`, async () => {
     const { doc } = await viewer(browser);
     try {
       const stage = doc.page.locator('.fo-stage');
@@ -141,16 +219,20 @@ describeBrowsers((browser) => {
       const y = box.y + 24;
       await doc.page.keyboard.press('-');
       const beforePinch = transform(await svg.evaluate((node) => node.style.transform));
-      await touchSequence(doc.page, [
+      expect((await gesture(doc.page, [
         { type: 'touchStart', points: [{ x, y, id: 1 }, { x: x + 30, y, id: 2 }] },
         { type: 'touchMove', points: [{ x, y, id: 1 }, { x: x + 90, y, id: 2 }] },
         { type: 'touchEnd', points: [] },
-      ]);
+      ])).length).toBeGreaterThan(0);
       const afterPinch = transform(await svg.evaluate((node) => node.style.transform));
       expect(afterPinch.scale).toBeGreaterThan(beforePinch.scale);
       await doc.page.getByRole('button', { name: '-' }).click();
       const beforeDoubleTap = transform(await svg.evaluate((node) => node.style.transform));
-      await touchSequence(doc.page, [...tap(x, y), ...tap(x, y, 50)]);
+      if (browser === 'chromium') await touchSequence(doc.page, [...tap(x, y), ...tap(x, y, 50)]);
+      else {
+        await doc.page.touchscreen.tap(x, y);
+        await doc.page.touchscreen.tap(x, y);
+      }
       const afterDoubleTap = transform(await svg.evaluate((node) => node.style.transform));
       expect(afterDoubleTap.scale).toBeGreaterThan(beforeDoubleTap.scale);
     } finally {
@@ -165,8 +247,8 @@ describeBrowsers((browser) => {
     it(`opens a qualified tap after a completed ${name} in the same viewer`, async () => {
       const { doc, x, y } = await viewer(browser);
       try {
-        await touchSequence(doc.page, first(x, y));
-        await touchSequence(doc.page, tap(x, y));
+        expect((await gesture(doc.page, first(x, y))).length).toBeGreaterThan(0);
+        expect(await qualifiedTap(doc.page, x, y)).toBeGreaterThan(0);
         await doc.page.waitForFunction(() => document.querySelectorAll('.xcard.open').length === 1);
       } finally {
         await doc.close();

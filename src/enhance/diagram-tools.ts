@@ -17,9 +17,12 @@ const MAX_ZOOM = 12;
 type Edge = { readonly path: SVGPathElement; readonly from: string | null; readonly to: string | null; readonly label: SVGGElement | null };
 type Graph = { readonly nodes: Map<string, SVGGElement>; readonly edges: readonly Edge[]; readonly clusters: readonly SVGGElement[] };
 type Playback = {
+  readonly play: HTMLButtonElement;
   cancel: Cancel | null;
   readonly cancels: Set<Cancel>;
   readonly transient: Map<SVGPathElement, JournalControl>;
+  /** Source visibility writes undo conditionally when playback is cancelled. */
+  readonly visibility: JournalControl;
   clusters: JournalControl | null;
 };
 
@@ -150,8 +153,14 @@ export function build(ctx: FeatureContext): void {
     playback.cancels.clear();
     for (const scope of playback.transient.values()) scope.undoAll();
     playback.transient.clear();
+    playback.visibility.undoAll();
     playback.clusters?.undoAll();
     playback.clusters = null;
+  };
+  const settlePlayback = (drawing: SVGSVGElement, playback: Playback): void => {
+    cancelPlayback(playback);
+    if (!ctx.live() || playbacks.get(drawing) !== playback) return;
+    playback.play.textContent = 'Play';
   };
   // One teardown hook owns all short-lived replay scopes without retaining retired playback closures.
   ctx.journal.defer(() => {
@@ -243,7 +252,7 @@ export function build(ctx: FeatureContext): void {
     ctx.overlays.close('card');
     opener = trigger;
     const playback = playbacks.get(source);
-    if (playback !== undefined) cancelPlayback(playback);
+    if (playback !== undefined) settlePlayback(source, playback);
     let width = 0;
     let height = 0;
     try {
@@ -660,10 +669,10 @@ export function build(ctx: FeatureContext): void {
         const play = chrome(ctx.root.ownerDocument, 'button', { text: 'Play', attrs: { type: 'button', 'aria-label': 'Play this diagram step by step' } });
         ctx.journal.listen(play, 'click', () => {
           const prior = playbacks.get(drawing);
-          if (prior !== undefined) cancelPlayback(prior);
-          const playback: Playback = { cancel: null, cancels: new Set(), transient: new Map(), clusters: null };
-          playbacks.set(drawing, playback);
+          if (prior !== undefined) settlePlayback(drawing, prior);
           const scoped = (): JournalControl => createJournal(ctx.live, (fn) => { ctx.operate(fn); });
+          const playback: Playback = { play, cancel: null, cancels: new Set(), transient: new Map(), visibility: scoped(), clusters: null };
+          playbacks.set(drawing, playback);
           const schedule = (fn: () => void, ms: number): Cancel => {
             let cancel: Cancel;
             cancel = ctx.env.timeout(() => { playback.cancels.delete(cancel); fn(); }, ms);
@@ -680,23 +689,26 @@ export function build(ctx: FeatureContext): void {
             if (!ctx.live() || playbacks.get(drawing) !== playback) return;
             scope.undoAll();
             playback.transient.delete(edge.path);
-            if (edge.label !== null) ctx.journal.toggleClass(edge.label, 'rv-hide', false);
+            if (edge.label !== null) playback.visibility.journal.toggleClass(edge.label, 'rv-hide', false);
           };
           const clusterScope = scoped();
           playback.clusters = clusterScope;
           for (const cluster of graph.clusters) clusterScope.journal.setStyle(cluster, 'opacity', '0.35');
           const order = graphOrder(graph);
           const shown = new Set<string>();
-          for (const node of graph.nodes.values()) ctx.journal.toggleClass(node, 'rv-hide', true);
-          for (const edge of graph.edges) { ctx.journal.toggleClass(edge.path, 'rv-hide', true); if (edge.label !== null) ctx.journal.toggleClass(edge.label, 'rv-hide', true); }
+          for (const node of graph.nodes.values()) playback.visibility.journal.toggleClass(node, 'rv-hide', true);
+          for (const edge of graph.edges) {
+            playback.visibility.journal.toggleClass(edge.path, 'rv-hide', true);
+            if (edge.label !== null) playback.visibility.journal.toggleClass(edge.label, 'rv-hide', true);
+          }
           let at = 0;
           const step = (): void => {
             if (!ctx.live() || playbacks.get(drawing) !== playback) return;
             const id = order[at++];
             if (id === undefined) {
               for (const edge of graph.edges) {
-                ctx.journal.toggleClass(edge.path, 'rv-hide', false);
-                if (!playback.transient.has(edge.path) && edge.label !== null) ctx.journal.toggleClass(edge.label, 'rv-hide', false);
+                playback.visibility.journal.toggleClass(edge.path, 'rv-hide', false);
+                if (!playback.transient.has(edge.path) && edge.label !== null) playback.visibility.journal.toggleClass(edge.label, 'rv-hide', false);
               }
               playback.clusters?.undoAll();
               playback.clusters = null;
@@ -705,11 +717,11 @@ export function build(ctx: FeatureContext): void {
             }
             shown.add(id);
             const node = graph.nodes.get(id);
-            if (node !== undefined) ctx.journal.toggleClass(node, 'rv-hide', false);
+            if (node !== undefined) playback.visibility.journal.toggleClass(node, 'rv-hide', false);
             for (const edge of graph.edges) if (edge.path.classList.contains('rv-hide') && edge.from !== null && edge.to !== null && shown.has(edge.from) && shown.has(edge.to)) {
-              ctx.journal.toggleClass(edge.path, 'rv-hide', false);
+              playback.visibility.journal.toggleClass(edge.path, 'rv-hide', false);
               if (typeof edge.path.getTotalLength !== 'function') {
-                if (edge.label !== null) ctx.journal.toggleClass(edge.label, 'rv-hide', false);
+                if (edge.label !== null) playback.visibility.journal.toggleClass(edge.label, 'rv-hide', false);
                 continue;
               }
               const scope = scoped();

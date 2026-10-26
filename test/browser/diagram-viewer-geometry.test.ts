@@ -123,18 +123,44 @@ async function nativeTouch(page: Page, steps: readonly TouchStep[]): Promise<boo
   }
 }
 
-/** Explicit synthetic fallback for WebKit, which has no CDP touch endpoint. */
-async function syntheticPointers(page: Page, steps: readonly { readonly type: 'pointerdown' | 'pointermove' | 'pointerup'; readonly point: Point }[]): Promise<void> {
-  await page.locator('.fo-stage').evaluate((node, input) => {
-    for (const step of input) {
-      node.dispatchEvent(new PointerEvent(step.type, {
-        bubbles: true,
-        cancelable: true,
-        pointerId: step.point.id,
-        pointerType: 'touch',
-        clientX: step.point.x,
-        clientY: step.point.y,
-      }));
+/** Explicit synthetic fallback for WebKit gestures, with capture emulated only on this exact stage. */
+async function syntheticPointers(page: Page, steps: readonly { readonly type: 'pointerdown' | 'pointermove' | 'pointerup'; readonly point: Point }[]): Promise<readonly string[]> {
+  return page.locator('.fo-stage').evaluate((node, input) => {
+    const stage = node as HTMLElement;
+    const saved = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'].map((name) => [name, Object.getOwnPropertyDescriptor(stage, name)] as const);
+    const captured = new Set<number>();
+    const active = new Map<number, Point>();
+    const delivered: string[] = [];
+    const observe = (event: Event): void => { delivered.push(event.type); };
+    for (const type of ['pointerdown', 'pointermove', 'pointerup']) stage.addEventListener(type, observe, true);
+    Object.defineProperties(stage, {
+      setPointerCapture: { configurable: true, value: (id: number): void => { captured.add(id); } },
+      releasePointerCapture: { configurable: true, value: (id: number): void => { captured.delete(id); } },
+      hasPointerCapture: { configurable: true, value: (id: number): boolean => captured.has(id) },
+    });
+    try {
+      for (const step of input) {
+        if (step.type === 'pointerdown' || step.type === 'pointermove') active.set(step.point.id, step.point);
+        if (step.type !== 'pointerdown' && !active.has(step.point.id)) continue;
+        const point = active.get(step.point.id) ?? step.point;
+        const target = captured.has(point.id) ? stage : document.elementFromPoint(point.x, point.y) ?? stage;
+        target.dispatchEvent(new PointerEvent(step.type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId: point.id,
+          pointerType: 'touch',
+          clientX: point.x,
+          clientY: point.y,
+        }));
+        if (step.type === 'pointerup') { active.delete(point.id); captured.delete(point.id); }
+      }
+      return delivered;
+    } finally {
+      for (const type of ['pointerdown', 'pointermove', 'pointerup']) stage.removeEventListener(type, observe, true);
+      for (const [name, descriptor] of saved) {
+        if (descriptor === undefined) delete (stage as unknown as Record<string, unknown>)[name];
+        else Object.defineProperty(stage, name, descriptor);
+      }
     }
   }, steps);
 }
@@ -145,13 +171,16 @@ async function pinch(page: Page, first: Point, second: Point, movedSecond: Point
     { type: 'touchMove', points: [first, movedSecond] },
     { type: 'touchEnd', points: [] },
   ]);
-  if (!native) await syntheticPointers(page, [
-    { type: 'pointerdown', point: first },
-    { type: 'pointerdown', point: second },
-    { type: 'pointermove', point: movedSecond },
-    { type: 'pointerup', point: movedSecond },
-    { type: 'pointerup', point: first },
-  ]);
+  if (!native) {
+    const delivered = await syntheticPointers(page, [
+      { type: 'pointerdown', point: first },
+      { type: 'pointerdown', point: second },
+      { type: 'pointermove', point: movedSecond },
+      { type: 'pointerup', point: movedSecond },
+      { type: 'pointerup', point: first },
+    ]);
+    expect(delivered).toEqual(['pointerdown', 'pointerdown', 'pointermove', 'pointerup', 'pointerup']);
+  }
 }
 
 async function doubleTap(page: Page, point: Point): Promise<void> {
@@ -162,31 +191,8 @@ async function doubleTap(page: Page, point: Point): Promise<void> {
     { type: 'touchEnd', points: [] },
   ]);
   if (native) return;
-  // Synthetic fallback fixes its production clock inside the page so this is unambiguously a sub-300ms double tap.
-  await page.locator('.fo-stage').evaluate((node, input) => {
-    const originalNow = Date.now;
-    let now = 10_000;
-    const fire = (type: 'pointerdown' | 'pointerup'): void => {
-      node.dispatchEvent(new PointerEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        pointerId: input.id,
-        pointerType: 'touch',
-        clientX: input.x,
-        clientY: input.y,
-      }));
-    };
-    try {
-      Date.now = () => now;
-      fire('pointerdown');
-      fire('pointerup');
-      now += 50;
-      fire('pointerdown');
-      fire('pointerup');
-    } finally {
-      Date.now = originalNow;
-    }
-  }, point);
+  await page.touchscreen.tap(point.x, point.y);
+  await page.touchscreen.tap(point.x, point.y);
 }
 
 async function syntheticCloseWithoutFocusShift(page: Page): Promise<void> {
@@ -196,6 +202,23 @@ async function syntheticCloseWithoutFocusShift(page: Page): Promise<void> {
 afterAll(closeBrowsers);
 
 describeBrowsers((browser) => {
+  it('shows that native capture rejects an inactive synthetic pointer id before the stage-local gesture model runs', async () => {
+    const { doc, stage } = await viewer(browser);
+    try {
+      const name = await stage.evaluate((node) => {
+        try {
+          (node as HTMLElement).setPointerCapture(999_999);
+          return null;
+        } catch (error) {
+          return error instanceof DOMException ? error.name : String(error);
+        }
+      });
+      expect(name).toBe('NotFoundError');
+    } finally {
+      await doc.close();
+    }
+  });
+
   it('clamps repeated viewer control zoom at 0.08 and 12', async () => {
     const { doc } = await viewer(browser);
     try {

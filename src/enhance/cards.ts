@@ -453,7 +453,7 @@ export function build(ctx: FeatureContext): void {
       });
     }
     place();
-    return shown === a;
+    return ctx.live() && shown === a;
   };
 
   // ── The triggers, delegated from the root (a diagram block in the full-screen figure is in the root too)

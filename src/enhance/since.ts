@@ -457,7 +457,7 @@ export function build(ctx: FeatureContext): void {
   const groups = groupsOf(ctx);
   const hasPrior = prior !== null && prior.sha !== ctx.info.sha;
   const onlyActions = ctx.host.present.has('openVersion') && groups.some((group) => group.base !== null);
-  if ((!comparisons && !onlyActions) || groups.length === 0 || (commits.length < 2 && groups.length < 2 && !hasPrior && !onlyActions)) return;
+  if ((!comparisons && !onlyActions) || (groups.length === 0 && !hasPrior && !onlyActions) || (commits.length < 2 && groups.length < 2 && !hasPrior && !onlyActions)) return;
   const doc = ctx.root.ownerDocument;
   const menuId = ctx.chromeId('changes-menu');
   const wrap = chrome(doc, 'span', { className: 'fact chg-pick' });
@@ -472,7 +472,7 @@ export function build(ctx: FeatureContext): void {
     if (states?.get(ctx) === state) states.delete(ctx);
   });
   bindKeys(ctx, state);
-  if (commits.length >= 2 || groups.length >= 2) attachPicker(ctx, state);
+  if (commits.length >= 2 || groups.length >= 2 || onlyActions) attachPicker(ctx, state);
   if (hasPrior) {
     addNotice(ctx, state, prior as { sha: string; at: number });
   }

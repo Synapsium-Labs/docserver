@@ -166,6 +166,32 @@ describe('Changes since', () => {
     ]);
   });
 
+  it('attaches a useful singleton day picker and sends its exact host payload with or without changes', async () => {
+    for (const changes of [undefined, () => Promise.resolve({ changed: [] })] as const) {
+      const root = mount();
+      const opened: unknown[] = [];
+      await enhance(root, {
+        info: {
+          sha: SHA,
+          commits: [{ sha: SHA, subject: 'feat: current', date: '2026-01-02T18:45:00Z', parents: [OLDER] }],
+        },
+        ...(changes === undefined ? {} : { changes }),
+        openVersion: (value) => void opened.push(value),
+      });
+      const trigger = root.querySelector('.chg-trig') as HTMLButtonElement | null;
+      expect(trigger).not.toBeNull();
+      if (trigger === null) throw new Error('missing singleton day picker');
+      expect(trigger.isConnected).toBe(true);
+      trigger.click();
+      const only = root.querySelector('.cm-only') as HTMLButtonElement | null;
+      expect(only).not.toBeNull();
+      if (only === null) throw new Error('missing singleton Only this day action');
+      expect(only.isConnected).toBe(true);
+      only.click();
+      expect(opened).toEqual([{ sha: SHA, only: OLDER }]);
+    }
+  });
+
   it('gives the root-local menu a generated id declared by its trigger', async () => {
     const root = mount();
     await enhance(root, { info: commits(), changes: () => Promise.resolve({ changed: [] }) });
@@ -206,6 +232,29 @@ describe('Changes since', () => {
     const back = dayRoot.querySelector('.ver-banner button:last-child') as HTMLButtonElement;
     back.click();
     expect(opened).toEqual([{ sha: SHA, only: OLDER }, { sha: null, only: null }]);
+  });
+
+  it('measures a valid prior visit and writes seen once even when commits are omitted', async () => {
+    const root = mount();
+    const calls: string[] = [];
+    const writes: [string, string | null][] = [];
+    await enhance(root, {
+      info: { sha: SHA },
+      storage: {
+        snapshot: { [docKey('no-history', 'seen')]: JSON.stringify({ sha: OLDER, at: 0 }) },
+        set: (name, value) => void writes.push([name, value]),
+      },
+      storageKey: 'no-history',
+      changes: (base) => {
+        calls.push(base);
+        return Promise.resolve({ changed: [[1, 1]] });
+      },
+    });
+    await flush();
+
+    expect(calls).toEqual([OLDER]);
+    expect(writes).toEqual([[docKey('no-history', 'seen'), expect.any(String)]]);
+    expect(root.querySelector('.rs-notice')?.textContent).toContain('Changed since your last visit');
   });
 
   it('adds the measured last visit before quick ranges without duplicating its range', async () => {

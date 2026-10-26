@@ -237,12 +237,53 @@ describe('reading settings', () => {
     expect([collapse.disabled, expand.disabled]).toEqual([false, true]);
   });
 
-  it('keeps radio groups separate across roots and builds lens peeks only when product is chosen', async () => {
+  it('recomputes bulk fold controls from external fold state when the menu opens and a section is revealed', async () => {
+    const root = mount();
+    await enhance(root);
+    const ctx = contextOf(root);
+    if (ctx === undefined) throw new Error('root was not enhanced');
+    const [first] = ctx.folds.headings();
+    if (first === undefined) throw new Error('missing foldable heading');
+    const buttons = (): [HTMLButtonElement, HTMLButtonElement] => {
+      const all = Array.from(root.querySelectorAll<HTMLButtonElement>('.aa-btns button'));
+      const collapse = all.find((button) => button.textContent === 'Collapse all');
+      const expand = all.find((button) => button.textContent === 'Expand all');
+      if (collapse === undefined || expand === undefined) throw new Error('missing bulk fold controls');
+      return [collapse, expand];
+    };
+
+    ctx.folds.setFold(first, true);
+    click(tool(root));
+    expect(buttons().map((button) => button.disabled)).toEqual([false, false]);
+    click(tool(root));
+    ctx.folds.setAll(true);
+    ctx.folds.setFold(first, false);
+    click(tool(root));
+    expect(buttons().map((button) => button.disabled)).toEqual([false, false]);
+    ctx.folds.setAll(true);
+    await vi.waitFor(() => expect(buttons().map((button) => button.disabled)).toEqual([true, false]));
+    ctx.folds.setFold(first, false);
+    await vi.waitFor(() => expect(buttons().map((button) => button.disabled)).toEqual([false, false]));
+  });
+
+  it('keeps radio preference groups root-local and builds lens peeks only when product is chosen', async () => {
     const a = mount();
     const b = mount();
     await enhance(a);
     await enhance(b);
 
+    const groups = [
+      ['theme', ['auto', 'light', 'dark']],
+      ['font', ['serif', 'sans']],
+      ['width', ['standard', 'wide']],
+      ['lens', ['all', 'product']],
+    ] as const;
+    const names = groups.map(([pref, values]) => {
+      expect(new Set(values.map((value) => radio(a, pref, value).name)).size).toBe(1);
+      expect(new Set(values.map((value) => radio(b, pref, value).name)).size).toBe(1);
+      return radio(a, pref, values[0]).name;
+    });
+    expect(new Set(names).size).toBe(groups.length);
     expect(radio(a, 'theme', 'auto').name).not.toBe(radio(b, 'theme', 'auto').name);
     expect(a.querySelector('.peek-bar')).toBeNull();
     choose(radio(a, 'lens', 'product'));

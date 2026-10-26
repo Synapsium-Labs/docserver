@@ -545,6 +545,32 @@ describe('ARIA, and the card in the root', () => {
   });
 });
 
+describe('liveness', () => {
+  it('leaves an Enter key and outside host focus alone when native card placement requests destroy', async () => {
+    const root = await open();
+    const block = dnode(root, { ref: 'D1' });
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    const original = Object.getOwnPropertyDescriptor(block, 'getBoundingClientRect');
+    const anchorFocus = vi.spyOn(HTMLAnchorElement.prototype, 'focus');
+    let destroyed: Promise<void> | null = null;
+    Object.defineProperty(block, 'getBoundingClientRect', { configurable: true, value: () => {
+      destroyed ??= destroyEnhancement(root);
+      return { top: 20, bottom: 40, left: 20, right: 60, width: 40, height: 20, x: 20, y: 20, toJSON: () => ({}) } as DOMRect;
+    } });
+    try {
+      const event = key(block, 'Enter');
+      if (destroyed === null) throw new Error('placement did not request destroy');
+      await (destroyed as Promise<void>).catch(() => undefined);
+      expect([event.defaultPrevented, anchorFocus.mock.calls.length, document.activeElement === outside]).toEqual([false, 0, true]);
+    } finally {
+      if (original === undefined) delete (block as unknown as Record<string, unknown>).getBoundingClientRect;
+      else Object.defineProperty(block, 'getBoundingClientRect', original);
+    }
+  });
+});
+
 describe('hover, with a mouse', () => {
   it('shows after the delay, and only for a mouse', async () => {
     const root = await open();

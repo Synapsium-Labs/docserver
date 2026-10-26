@@ -51,10 +51,18 @@ All thirteen neutral source samples complete both viewports and three preference
 
 Task 23 records seventeen finite source guard assertion reds. Task 22 records split semantic reversals and preserves two independently measured redundant outer-live conjuncts as greens, not invented failures. Read-mark residuals directly establish non-document exclusion, valid-unit routing exclusion and successful startup on malformed stored records. Mutation journals retain earlier weak, incomplete and setup-error receipts with their limitations.
 
-## 6. Remaining Verification
+## 6. Integration Fix Round - 2026-10-26
 
-- Reconcile the approved integration squash without dropping main's navigation behavior, preserving the original feature branch and the verified-input snapshot.
-- Re-run the complete eligible tests and unchanged ratchet against the actual integration tip and its measured snapshot trailers.
-- Complete Node 22/24 CI, both browsers, packed consumer smoke, built-artifact checks and held-out whole-branch review. Local Chromium results do not stand in for these gates.
+The approved main-based integration preserves the original feature history and verified-input snapshot. Its first Node 22 and 24 CI run passes 3,143 assertions per job but fails the same ten WebKit cases: clone capture under strict CSP, pinch geometry and touch/card interactions. Later build and packed-consumer steps do not run. These failures are not dismissed as Chromium passes.
+
+The whole-branch panel identifies ten confirmed behavior and documentation findings. Regression assertions first reproduce radio grouping, stale bulk-fold controls, prior-visit comparison without history, a useful singleton day action, missing host contracts, post-destroy card focus, interrupted source playback and a detached clone ID write. The scoped fixes preserve immediate nonliveness, conditional restoration and the closed style vocabulary. Exact reversals of the card liveness check, clone-enumeration check and playback visibility ownership each produce a complete assertion failure, then restore the source bytes.
+
+The corrected local non-layout suite passes 2,647 assertions in 79 files. After test-only TypeScript narrowing corrections, the complete six-file affected control passes 264 assertions; all three TypeScript projects and the unchanged ratchet pass. The complete Chromium layout run passes 275 assertions in 34 files, with 235 WebKit cases excluded. An earlier callback-scope error and its output-limited run remain failed/incomplete evidence, not a pass.
+
+Browser corrections retain native Chromium touch and native WebKit taps, label unsupported WebKit gestures as a stage-local synthetic capture model, and assert actual input delivery. Strict-CSP clone paint uses a pinned, fail-closed WebKit capture transport that avoids Playwright's inline synchronization stylesheet; policy and pixel assertions remain intact. Corrected-tip WebKit CI must still prove these paths. Synthetic gesture coverage is not native gesture acceptance.
+
+## 7. Remaining Verification
+
+- Complete corrected-tip Node 22/24 CI, both browsers, packed consumer smoke, built-artifact checks and scoped whole-branch fix closure. Local Chromium results do not stand in for these gates.
 - Complete the actual requested-model review gate; differently reported runtime identities do not satisfy it.
 - Finish L3's frame, host adapters, asset manifest and provenance/release work before claiming the published shared library or consumer integration is complete.

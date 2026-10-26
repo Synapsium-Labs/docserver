@@ -358,6 +358,7 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
       const clone = source.cloneNode(true) as SVGSVGElement;
       if (!live()) throw new Error('docreader: journal.cloneSvg after cloning');
       const elements = [clone, ...Array.from(clone.querySelectorAll<Element>('*'))];
+      if (!live()) throw new Error('docreader: journal.cloneSvg after clone enumeration');
       for (const el of elements) {
         const next = snapshot.get(el.id);
         if (next !== undefined) el.id = next;

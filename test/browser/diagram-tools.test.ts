@@ -1,12 +1,32 @@
 // Fullscreen clone references in a real Chromium page. The strict policy permits CSSOM writes but rejects serialized
 // style attributes, so this proves the clone operation preserves paint without opening a CSP or network escape.
 import { inflateSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import type { Page } from 'playwright-core';
 import { build } from 'esbuild';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc } from './harness.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+
+/** WebKit's public screenshot preparation injects an inline stylesheet; capture its viewport without that DOM edit. */
+async function strictSvgScreenshot(page: Page): Promise<Buffer> {
+  const svg = page.locator('main[data-harness-root] .fig-overlay.open svg');
+  if (page.context().browser()?.browserType().name() !== 'webkit') return svg.screenshot();
+  const version = JSON.parse(readFileSync(new URL('../../node_modules/playwright-core/package.json', import.meta.url), 'utf8')) as { version: string };
+  if (version.version !== '1.63.0') throw new Error('Review the strict-CSP capture transport for the new Playwright version');
+  const box = await svg.boundingBox();
+  if (box === null) throw new Error('Missing fullscreen SVG capture box');
+  const internal = page as unknown as { _connection?: { toImpl?: (value: Page) => unknown } };
+  const implementation = internal._connection?.toImpl?.(page) as { delegate?: { _session?: { send?: (method: string, params: object) => Promise<{ dataURL: string }> } } } | undefined;
+  const session = implementation?.delegate?._session;
+  if (typeof session?.send !== 'function') throw new Error('Pinned WebKit capture transport unavailable');
+  const result = await session.send('Page.snapshotRect', { ...box, coordinateSystem: 'Viewport', omitDeviceScaleFactor: true, format: 'png' });
+  if (!result.dataURL.startsWith('data:image/png;base64,')) throw new Error('WebKit capture did not return a PNG');
+  return Buffer.from(result.dataURL.slice(result.dataURL.indexOf(',') + 1), 'base64');
+}
+
 const DOC = ['# Diagram clone', '', '## 1. One', '', 'Text.', '', '## 2. Two', '', 'Text.', '', '## 3. Three', '', 'Text.', ''].join('\n');
 const ENTRY = [
   "import { createJournal } from './src/enhance/journal.ts';",
@@ -392,7 +412,8 @@ describeBrowsers((browser) => {
       expect(got).toMatchObject({ fill: expect.stringMatching(/^url\(#docreader\./), clip: expect.stringMatching(/^url\(#docreader\./), marker: expect.stringMatching(/^url\(#docreader\./), chrome: true, source });
       expect(got.paint).toMatch(/url\(["']?#docreader\./);
       expect(got.geometry).toBeGreaterThan(0);
-      const image = decodePng(await doc.page.locator('main[data-harness-root] .fig-overlay.open svg').screenshot());
+      expect(await doc.violations()).toEqual([]);
+      const image = decodePng(await strictSvgScreenshot(doc.page));
       const sample = (x: number, y: number): readonly number[] => pixel(image, Math.floor(image.width * x / (got.box.svgWidth || 1)), Math.floor(image.height * y / (got.box.svgHeight || 1)));
       const painted = sample(got.box.x + got.box.width / 4, got.box.y + got.box.height / 4);
       const clipped = sample(got.box.x + got.box.width * 0.9, got.box.y + got.box.height / 4);

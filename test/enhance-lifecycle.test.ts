@@ -753,6 +753,35 @@ describe('the journal', () => {
     expect(ran).toBe(false);
   });
 
+  it('does not rewrite a clone ID after clone enumeration requests destroy', () => {
+    const source = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    source.id = 'source-root';
+    const child = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    child.id = 'source-child';
+    source.append(child);
+    let live = true;
+    const { journal } = createJournal(() => live, (fn) => fn());
+    const original = Object.getOwnPropertyDescriptor(SVGSVGElement.prototype, 'querySelectorAll');
+    const nativeQuery = SVGSVGElement.prototype.querySelectorAll;
+    let clone: SVGSVGElement | null = null;
+    Object.defineProperty(SVGSVGElement.prototype, 'querySelectorAll', { configurable: true, value: function <E extends Element>(selector: string): NodeListOf<E> {
+      const result = nativeQuery.call(this, selector) as NodeListOf<E>;
+      if (this !== source && selector === '*') {
+        clone = this;
+        live = false;
+      }
+      return result;
+    } });
+    try {
+      expect(() => journal.cloneSvg(source, new Map([['source-root', 'docreader.1.figure'], ['source-child', 'docreader.2.figure']]))).toThrow();
+      const captured = clone as SVGSVGElement | null;
+      expect([captured?.id, captured?.querySelector('g')?.id]).toEqual(['source-root', 'source-child']);
+    } finally {
+      if (original === undefined) delete (SVGSVGElement.prototype as unknown as Record<string, unknown>).querySelectorAll;
+      else Object.defineProperty(SVGSVGElement.prototype, 'querySelectorAll', original);
+    }
+  });
+
   it('undo attempts every entry in reverse even when one throws, and returns the faults', () => {
     const { a } = siblings();
     const { journal, undoAll } = createJournal(() => true, (fn) => fn());

@@ -59,11 +59,12 @@ export function build(ctx: FeatureContext): void {
     const fieldset = chrome(doc, 'fieldset');
     fieldset.append(chrome(doc, 'legend', { text: labels[name] }));
     const segment = chrome(doc, 'div', { className: 'seg' });
+    const group = ctx.chromeId(`settings-${name}`);
     const inputs = new Map<string, HTMLInputElement>();
     for (const [value, label] of choices[name]) {
       const id = ctx.chromeId(`settings-${name}-${value}`);
       const input = chrome(doc, 'input', {
-        attrs: { type: 'radio', name: ctx.chromeId(`settings-${name}`), id, value, 'data-pref': name },
+        attrs: { type: 'radio', name: group, id, value, 'data-pref': name },
       });
       const caption = chrome(doc, 'label', { text: label, attrs: { for: id } });
       const option = chrome(doc, 'span', { className: 'opt' }, [input, caption]);
@@ -118,6 +119,7 @@ export function build(ctx: FeatureContext): void {
   };
   const show = (): void => {
     if (!menu.hidden) return;
+    update();
     returnTo = contains(ctx.root, doc.activeElement) ? doc.activeElement as Element : null;
     menu.hidden = false;
     button.setAttribute('aria-expanded', 'true');
@@ -140,6 +142,9 @@ export function build(ctx: FeatureContext): void {
 
   sync(ctx.state.prefs);
   ctx.events.on('prefs', sync);
+  ctx.onRelayout((reasons) => {
+    if (reasons.has('folds')) update();
+  });
   wrap.append(button, menu);
   ctx.slots.tool('settings', wrap);
 }

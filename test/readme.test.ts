@@ -125,6 +125,26 @@ describe('README', () => {
     }
   });
 
+  it('documents the checked changes reply, including inclusive bounds, optional removals, caps, clamping and unavailable replies', () => {
+    for (const text of [
+      '`changes(sha)`', '`{ changed: [from, to][], removedAfter?: number[] }`', 'inclusive source-line bounds',
+      '`removedAfter`', 'finite integer', 'no greater than its end', 'very start', '10000 ranges', '10000 deletions',
+      'clamped to the line after the document ends', 'getter failure', 'host throw/rejection', 'unavailable reply', 'invalid reply',
+    ]) expect(README.includes(text), text).toBe(true);
+  });
+
+  it('qualifies strict CSP and Mermaid styling by the reader policy rather than relaxed scripts', () => {
+    for (const text of [
+      'strict Content Security Policy', 'Mermaid', 'style-src', "'unsafe-inline'", 'scripts remain restricted to the page origin',
+    ]) expect(README.includes(text), text).toBe(true);
+  });
+
+  it('states the fixed-preview host constraint for transformed, filtered, perspective and containing ancestors', () => {
+    for (const text of [
+      'fixed-position preview', 'transformed', 'filter', 'perspective', 'containing ancestor', 'host constraint',
+    ]) expect(README.includes(text), text).toBe(true);
+  });
+
   it('documents itemLink activation, limits and accepted link results', () => {
     for (const text of [
       '`vocabulary.itemFields`', '`vocabulary.itemHeadings`', 'both default to empty', 'at most 16 keys', 'at most 64 links',

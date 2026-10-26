@@ -1179,6 +1179,55 @@ describe('diagram tools', () => {
     vi.useRealTimers();
   });
 
+  it('restores authored source visibility and preserves a later host visibility edit when fullscreen cancels playback', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const hostEdit of [false, true]) {
+        const root = figure();
+        const source = root.querySelector('svg') as SVGSVGElement;
+        const node = source.querySelectorAll<SVGGElement>('g.node')[1];
+        if (node === undefined) throw new Error('missing second playback node');
+        if (!hostEdit) node.classList.add('rv-hide');
+        await enhance(root, { copy: () => undefined });
+        const play = Array.from(root.querySelectorAll('button')).find((button) => button.textContent === 'Play') as HTMLButtonElement;
+        const full = Array.from(root.querySelectorAll('button')).find((button) => button.textContent === 'Full screen') as HTMLButtonElement;
+
+        play.click();
+        await vi.advanceTimersByTimeAsync(520);
+        if (hostEdit) node.classList.add('rv-hide');
+        full.click();
+
+        expect(node.classList.contains('rv-hide')).toBe(true);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('settles source playback when fullscreen opens and closes, despite late scheduled work', async () => {
+    vi.useFakeTimers();
+    try {
+      const root = figure();
+      const source = root.querySelector('svg') as SVGSVGElement;
+      const edge = source.querySelector('path') as SVGPathElement;
+      Object.defineProperty(edge, 'getTotalLength', { configurable: true, value: () => 42 });
+      await enhance(root, { copy: () => undefined });
+      const play = Array.from(root.querySelectorAll('button')).find((button) => button.textContent === 'Play') as HTMLButtonElement;
+      const full = Array.from(root.querySelectorAll('button')).find((button) => button.textContent === 'Full screen') as HTMLButtonElement;
+
+      play.click();
+      expect(source.querySelectorAll('.rv-hide').length).toBeGreaterThan(0);
+      full.click();
+      const overlay = root.querySelector('.fig-overlay') as HTMLElement;
+      overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await vi.runAllTimersAsync();
+
+      expect([source.querySelectorAll('.rv-hide').length, play.textContent, overlay.classList.contains('open')]).toEqual([0, 'Play', false]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not insert a clone after destroy reenters from its journalled width write', async () => {
     const root = figure();
     const source = root.querySelector('svg') as SVGSVGElement;
