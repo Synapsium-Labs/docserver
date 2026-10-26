@@ -20,10 +20,10 @@
     },
     {
       "path": "frame/guard.js",
-      "sha256": "a158bb26ea07fcb2d8cf6c0945cd3dfac0f290f2129494cb4259cbec217574e2",
+      "sha256": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
       "bytes": 3643,
       "kind": "script",
-      "csp": "'sha256-oVi7JuoH/LLYz2wJRc09+sDykPISlJTLQlnL7CF1dOI='"
+      "csp": "'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0='"
     },
     {
       "path": "frame/reader.css",

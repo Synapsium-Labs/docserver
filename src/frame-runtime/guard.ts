@@ -3,10 +3,10 @@
 // and after it failed, and hands each link it stopped to the bootstrap:
 //
 //   1. The net: window click and auxclick listeners in the BUBBLE phase. For an event no one prevented whose path holds
-//      a link (HTML a[href] or area[href], SVG a with href or xlink:href), and that is a click or a middle-button
-//      auxclick (any other button's auxclick is left alone), it calls preventDefault, then dispatches a
-//      non-bubbling `docserver:link` event, detail {href, newTab}, on its own script element; the bootstrap listens
-//      there. Bubble, not capture: the reader's own delegated handler returns early on a prevented click
+//      a link (HTML a[href] or area[href], SVG a with href or xlink:href), it calls preventDefault, whatever the
+//      button (WebKit follows a link on any auxclick but the right button's). For a click or a middle-button
+//      auxclick it then dispatches a non-bubbling `docserver:link` event, detail {href, newTab}, on its own script
+//      element; the bootstrap listens there. Any other button's auxclick is prevented and not forwarded. Bubble, not capture: the reader's own delegated handler returns early on a prevented click
 //      (src/enhance/nav.ts), so a capture-phase net would take every link from the reader.
 //   2. The stop wrappers: Event.prototype.stopPropagation, stopImmediatePropagation and the cancelBubble setter call
 //      preventDefault first when the event is a click or auxclick with a link on its path, so a handler that stops a
@@ -66,13 +66,14 @@
 
   const net = (event: Event): void => {
     if (prevented.call(event)) return;
-    // Of the non-primary buttons only the middle one follows a link (into a new tab). A right click, or a back or
-    // forward button, is left alone: its default does not navigate, and forwarding it would move the host page.
-    const button = buttonOf.call(event);
-    if (typeOf.call(event) === 'auxclick' && button !== 1) return;
     const link = linkOf(event);
     if (link === null) return;
+    // Every activation of a link is prevented, whatever the button: WebKit follows a link in place on an auxclick of
+    // any button but the right one (a back or forward button included). Of the non-primary buttons only the middle
+    // one is forwarded (a new tab); forwarding a back, forward or right button would move the host page.
     preventDefault.call(event);
+    const button = buttonOf.call(event);
+    if (typeOf.call(event) === 'auxclick' && button !== 1) return;
     const m = event as MouseEvent;
     const newTab = m.ctrlKey || m.metaKey || m.shiftKey || button === 1;
     dispatch.call(me, new Custom('docserver:link', { bubbles: false, detail: freeze({ href: link.href, newTab }) }));

@@ -406,7 +406,12 @@ describeBrowsers((browser) => {
       ).toMatchObject({ loads: 1, sameFrame: true, article: true, other: true });
       expect(await auxclick([2, 3, 4])).toBe(true);
       await sleep(400);
-      expect(data(await host.record()).slice(1)).toEqual([]);
+      // Nothing crosses, and the frame stays where it is: WebKit follows a link in place on an auxclick of any button
+      // but the right one, so a guard that left those alone would lose the frame here (measured on CI, run
+      // 40364156288: the link was gone after these three).
+      const aux = await host.record();
+      expect(data(aux).slice(1)).toEqual([]);
+      expect({ loads: aux.loads.length, ...(await state()) }, JSON.stringify(await state())).toMatchObject({ loads: 1, article: true, other: true });
       // What the engine did with the middle button's auxclick, observed from the test side only (the shipped scripts
       // are untouched): whether the link was found, the dispatch's return value, and what a window bubble listener
       // added after the guard's net and a listener on the guard's element saw.
