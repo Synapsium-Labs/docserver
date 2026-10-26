@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task by task. Each task runs as L2's did: an implementer subagent, a held-out review panel, then one fix round ("How this wave runs"). The plan is lean (C40): it holds no implementation code. It does hold the frame contract in full ("Reference: the frame contract"), because the design it was written from is not committed and a task must stand on this file alone.
 
-**Status:** draft for the operator's review. Nothing in it has run yet. Written 2026-10-26 from the L3 design (three candidate designs, two judges, the coordinator's rulings R1 to R7 and the critic's minors), the prototype on draft PR #41 (branch `l3-prototype`: `main` at `d7eb18fb4` plus `95d14bb8` and `58d9016e`) and its fix round. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
+**Status:** in execution under ledger C85 (2026-10-26): the plan runs with its defaults, each still open to the operator's review; every outward step of Task 15 waits for the operator's explicit go. The repository becomes public at v1 (C84). Written 2026-10-26 from the L3 design (three candidate designs, two judges, the coordinator's rulings R1 to R7 and the critic's minors), the prototype on draft PR #41 (branch `l3-prototype`: `main` at `d7eb18fb4` plus `95d14bb8` and `58d9016e`) and its fix round. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
 
 **Goal:** Ship the frame layer of `@synapsium-labs/docserver` and then v1. `./frame` builds the sealed reader frame's srcdoc as a pure string. Its click guard, bootstrap and enhance bundle ship as hashed classic scripts, with a classic Mermaid build beside them. `./host` mounts that frame for other viewers. `./highlight`, `render(md, {highlight: false})` and the xml strip answer the first consumer's requests (a) to (c). `assets.json` lists every shipped asset with its sha256 and size. Then v1: the repository goes public, and the package is published through npm trusted publishing with provenance and a build attestation, from a signed tag.
 
@@ -27,7 +27,7 @@
   4. dropping the face probe is an equivalent mutant while L2 loads the regular faces at start, so its browser row accepts that and a unit row pins the probe;
   5. the 2 MiB measurement row is opt-in (`DOCREADER_MEASURE=1`).
 - **A sixth finding, from WebKit CI:** WebKit follows a link in place on an `auxclick` of any button but the right one, a back or forward button included. The prototype's guard left those alone, so on WebKit the frame navigated away (CI runs on `58d9016e` and `c58b3b87`: the link was gone after synthetic auxclicks of buttons 2 to 4). The guard now prevents every link activation whatever the button and forwards only a click or the middle button's auxclick (P-13); the "P6 other buttons" row asserts the frame keeps its one load and its links.
-- **Operator gates.** The repository flip, the npm trusted-publisher setup, the protected `npm-release` environment, the tag-signing key, the signed tag and the publish approval are the operator's acts (Task 15). Waiting: Q5 (a placeholder publish, if npm needs one) and Q9 (the signing key), plus this plan's review.
+- **Operator gates.** The repository flip, the npm trusted-publisher setup, the protected `npm-release` environment, the tag-signing key, the signed tag and the publish approval are the operator's acts (Task 15). Waiting, at release: Q5 (a placeholder publish, if npm needs one) and Q9 (the signing key). The plan's defaults stay open to the operator's review without blocking execution (ledger C85).
 
 ## Global Constraints
 
@@ -1017,7 +1017,7 @@ Also: `public-ready.test.ts` pins `publishConfig`, `repository.url`, LICENSE (MI
 
 - **Q5.** If npm requires the package to exist before a trusted publisher can be attached: may the operator publish a deprecated `0.0.0-reserve` placeholder once, by hand with 2FA and no stored token, so that v1.0.0 still goes through OIDC? Acted on at release time (Task 15 step 4).
 - **Q9.** Who holds the tag-signing key, and is an SSH hardware key acceptable? Its public line goes into `.github/release-signers` in the v1 release PR (Task 15 step 5), before the tag (step 7); Task 14 ships the file without a key line.
-- **This plan's review.** The operator reviews this plan before any task runs; the review includes acknowledging the two Mermaid builds (FD4, Q12) and the defaults below.
+- **This plan's review.** Open, and not blocking (ledger C85): the operator may overturn the two Mermaid builds (FD4, Q12) or any default below, and the tasks that took it are reworked before release.
 
 ### Defaults taken, for review
 
