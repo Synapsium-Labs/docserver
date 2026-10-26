@@ -881,10 +881,12 @@ describe('README: the options of ./enhance', () => {
     expect(bounds.filter(([k, phrase]) => !row(k)[1].includes(phrase))).toEqual([]);
   });
 
-  it('says which options this version reads and checks but does not act on yet', () => {
-    const note = section.split('\n\n').find((p) => p.includes('take effect as the parts of the layout that use them land')) ?? '';
-    const named = ['posKey', 'keyboard', 'chrome', 'rules', 'initialHash', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid', 'lens', 'sha', 'draft', 'commits', 'only'];
-    expect(named.filter((k) => !note.includes(`\`${k}\``))).toEqual([]);
+  it('documents the final L2 option surface and its host callbacks without a deferred-layout claim', () => {
+    const contract = section.split('\n\n').find((p) => p.startsWith('The documented options are the L2 contract.')) ?? '';
+    const callbacks = section.split('\n\n').find((p) => p.startsWith('**Host callbacks.**')) ?? '';
+    expect(contract).not.toContain('take effect as the parts of the layout that use them land');
+    expect(['chrome', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid'].filter((k) => !contract.includes(`\`${k}\``))).toEqual([]);
+    expect(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid.load'].filter((k) => !callbacks.includes(`\`${k}\``))).toEqual([]);
   });
 
   it('keeps the ownership rules out of the host callbacks paragraph', () => {

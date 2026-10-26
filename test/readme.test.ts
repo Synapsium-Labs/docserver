@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as conformance from '../src/conformance/index.js';
+import * as enhance from '../src/enhance/index.js';
 import * as render from '../src/render/index.js';
 
 const README = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
@@ -79,9 +80,14 @@ describe('README', () => {
     }
   });
 
-  it('PD8 says a front-matter key is cut to 500 code points, as a value is (ruling C31)', () => {
+  it('PD8 distinguishes C31 key truncation from C46 simple-key reference refusal', () => {
     const row = README.split('\n').find((l) => l.startsWith('| PD8 | ')) ?? '';
-    expect(row).toContain('a front-matter key is cut to 500 code points, as a value is');
+    for (const text of [
+      'a front-matter key is cut to 500 code points, as a value is',
+      '1024 source characters',
+      'reference refuses the front-matter block',
+      'this renderer loads it and cuts the key to 500 code points',
+    ]) expect(row).toContain(text);
   });
 
   it("PD6 covers markdown-it's own Unicode tables: the five Unicode 15.1 symbols, and that the runtime does not matter (ruling C36)", () => {
@@ -102,5 +108,47 @@ describe('README', () => {
   it("shows a consumer's CI call with scanRefs, and the golden-move trailer", () => {
     expect(README).toContain('runCorpus(render, { scanRefs })');
     expect(README).toContain('Goldens-moved: <id>, <id>');
+  });
+
+  it('names every runtime export of ./enhance, including goToHash', () => {
+    const names = Object.keys(enhance).sort();
+    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'setEnhancementPrefs']);
+    expect(names.filter((name) => !README.includes(`\`${name}\``) && !README.includes(`\`${name}(`))).toEqual([]);
+  });
+
+  it('documents the namespace-derived storage keys and root marker contract', () => {
+    for (const text of ['`<namespace>:prefs`', '`<namespace>:ui`', '`<namespace>:pos:<posKey>`', '`<namespace>:doc:<storageKey>:<name>`']) {
+      expect(README).toContain(text);
+    }
+    for (const text of ['`data-docreader-root`', '`data-docreader-chrome`', '`data-theme`', '`data-width`', '`data-font`', '`lens-product`']) {
+      expect(README).toContain(text);
+    }
+  });
+
+  it('documents the checked changes reply, including inclusive bounds, optional removals, caps, clamping and unavailable replies', () => {
+    for (const text of [
+      '`changes(sha)`', '`{ changed: [from, to][], removedAfter?: number[] }`', 'inclusive source-line bounds',
+      '`removedAfter`', 'finite integer', 'no greater than its end', 'very start', '10000 ranges', '10000 deletions',
+      'clamped to the line after the document ends', 'getter failure', 'host throw/rejection', 'unavailable reply', 'invalid reply',
+    ]) expect(README.includes(text), text).toBe(true);
+  });
+
+  it('qualifies strict CSP and Mermaid styling by the reader policy rather than relaxed scripts', () => {
+    for (const text of [
+      'strict Content Security Policy', 'Mermaid', 'style-src', "'unsafe-inline'", 'scripts remain restricted to the page origin',
+    ]) expect(README.includes(text), text).toBe(true);
+  });
+
+  it('states the fixed-preview host constraint for transformed, filtered, perspective and containing ancestors', () => {
+    for (const text of [
+      'fixed-position preview', 'transformed', 'filter', 'perspective', 'containing ancestor', 'host constraint',
+    ]) expect(README.includes(text), text).toBe(true);
+  });
+
+  it('documents itemLink activation, limits and accepted link results', () => {
+    for (const text of [
+      '`vocabulary.itemFields`', '`vocabulary.itemHeadings`', 'both default to empty', 'at most 16 keys', 'at most 64 links',
+      '1 to 2048 code units', 'white space', 'control character', 'http or https',
+    ]) expect(README).toContain(text);
   });
 });

@@ -60,6 +60,7 @@
 // Registered in features.ts, after the rail it keeps in step (Task 18 listens to 'spy') and before folds.
 //
 // Import-inert: declarations only.
+import { queueFrameWork, type Cancel } from './env.js';
 import { headingText } from './headctl.js';
 import { CHROME_ATTR, chrome } from './journal.js';
 import type { FeatureContext } from './types.js';
@@ -196,9 +197,9 @@ export function build(ctx: FeatureContext): void {
     journal.toggleClass(root, 'bar-hidden', on);
   };
 
-  let ticking = false;
-  const spy = (): void => {
-    ticking = false;
+  let scheduledSpy: Cancel | null = null;
+  const spy = (consumeScheduled = true): void => {
+    if (consumeScheduled) scheduledSpy = null;
     const vh = env.viewport().h;
     if (slots !== null) {
       const box = root.getBoundingClientRect();
@@ -253,14 +254,18 @@ export function build(ctx: FeatureContext): void {
     slots.running.replaceChildren(...(no === null ? [] : [chrome(doc, 'b', { text: `§ ${no}` })]), doc.createTextNode(text));
   };
 
-  env.onScroll(() => {
-    if (ticking) return;
-    ticking = true;
-    env.frame(spy);
-  });
+  const scheduleSpy = (): void => {
+    if (scheduledSpy !== null) return;
+    scheduledSpy = queueFrameWork(root, 'spy', spy);
+  };
+  env.onScroll(scheduleSpy);
   events.on('relayout', () => {
+    // An already-pending scroll spy is redundant, but a reentrant request made by reshow survives it.
+    const prior = scheduledSpy;
+    scheduledSpy = null;
+    prior?.();
     reshow();
-    spy();
+    spy(false);
   });
 
   if (slots === null) return;

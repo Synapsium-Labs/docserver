@@ -40,16 +40,19 @@ describe('compare.mjs: the command line', () => {
       expected: undefined,
       setup: undefined,
       offline: false,
+      compact: false,
     });
-    expect(parseArgs(['--reference', 'b', '--offline', '--ours', 'a', '--states', 'light, folded', '--expected', 'e.json', '--setup', 's.mjs'])).toEqual({
+    expect(parseArgs(['--reference', 'b', '--offline', '--compact', '--ours', 'a', '--states', 'light, folded', '--expected', 'e.json', '--setup', 's.mjs'])).toEqual({
       ours: 'a',
       reference: 'b',
       states: ['light', 'folded'],
       expected: 'e.json',
       setup: 's.mjs',
       offline: true,
+      compact: true,
     });
     expect(parseArgs(['--ours', 'a', '--reference', 'b', '--offline']).offline).toBe(true);
+    expect(parseArgs(['--ours', 'a', '--reference', 'b', '--compact']).compact).toBe(true);
   });
 
   it('--offline maps every host name and address to "not found" in Chromium', () => {
@@ -64,6 +67,7 @@ describe('compare.mjs: the command line', () => {
       ['--ours', 'a', '--reference', 'b', '--width', '1'],
       ['--ours', 'a', '--ours', 'b', '--reference', 'c'],
       ['--ours', 'a', '--reference', 'b', '--offline', '--offline'],
+      ['--ours', 'a', '--reference', 'b', '--compact', '--compact'],
       ['--offline', 'a', '--ours', 'a', '--reference', 'b'],
     ]) {
       expect(() => parseArgs(bad)).toThrow(USAGE);

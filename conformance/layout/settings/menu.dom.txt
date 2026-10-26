@@ -1,0 +1,113 @@
+div .aa-wrap chrome
+  button .aa-btn chrome aria-controls="docreader.1.settings" aria-expanded="false" aria-haspopup="dialog" aria-label="Reading settings"
+    span chrome
+      "Aa"
+  div .aa-menu chrome role="dialog" aria-label="Reading settings" hidden=""
+    fieldset chrome
+      legend chrome
+        "Theme"
+      div .seg chrome
+        span .opt chrome
+          input chrome
+          label chrome
+            "Auto"
+        span .opt chrome
+          input chrome
+          label chrome
+            "Light"
+        span .opt chrome
+          input chrome
+          label chrome
+            "Dark"
+    fieldset chrome
+      legend chrome
+        "Typeface"
+      div .seg chrome
+        span .opt chrome
+          input chrome
+          label chrome
+            "Serif"
+        span .opt chrome
+          input chrome
+          label chrome
+            "Sans"
+    fieldset chrome
+      legend chrome
+        "Text width"
+      div .seg chrome
+        span .opt chrome
+          input chrome
+          label chrome
+            "Standard"
+        span .opt chrome
+          input chrome
+          label chrome
+            "Wide"
+    fieldset chrome
+      legend chrome
+        "Reading lens"
+      div .seg chrome
+        span .opt chrome
+          input chrome
+          label chrome
+            "Everything"
+        span .opt chrome
+          input chrome
+          label chrome
+            "Product"
+      p .aa-note chrome
+        "Product quiets code, file paths and tech"…
+    fieldset chrome
+      legend chrome
+        "Sections"
+      div .aa-btns chrome
+        button chrome
+          "Collapse all"
+        button chrome
+          "Expand all"
+    div .aa-key chrome
+      p .aa-kh chrome
+        "Colour key"
+      ul .ckey chrome
+        li chrome
+          span .k-nav.sw chrome aria-hidden="true"
+          "Links, contents, section numbers"
+        li chrome
+          span .k-term.sw chrome aria-hidden="true"
+          "Terms defined in this doc"
+        li chrome
+          span .k-id.sw chrome aria-hidden="true"
+          "IDs: R14, F3, …"
+        li chrome
+          span .k-wait.sw chrome aria-hidden="true"
+          "Waiting on you · open · partial"
+        li chrome
+          span .k-chg.sw chrome aria-hidden="true"
+          "Changed (when you compare)"
+        li chrome
+          span .k-no.sw chrome aria-hidden="true"
+          "Rejected · diverges · risk"
+        li chrome
+          span .k-ok.sw chrome aria-hidden="true"
+          "Settled: ruled, agreed, done"
+        li chrome
+          span .k-info.sw chrome aria-hidden="true"
+          "Deferred · later · pinned"
+        li chrome
+          span .k-code.sw chrome aria-hidden="true"
+          "Code and file paths"
+h1
+  "Reading settings"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-21Draft"
+h2
+  "In short"
+p
+  "The reading settings menu keeps its cont"…
+h2
+  "1. Preferences"
+p
+  "The menu offers a small set of choices f"…

@@ -1,7 +1,7 @@
 // Visual comparison of two pages that show the same rendered document (docserver L2, Task 6).
 //
 //   node scripts/visual/compare.mjs --ours <page> --reference <page> [--states <list>] [--expected <file>]
-//                                   [--setup <module>] [--offline]
+//                                   [--setup <module>] [--offline] [--compact]
 //
 // A page is a URL (http, https or file) or a path to an HTML file. The reference page is given by argument only:
 // no tracked file names it. In Chromium (the pinned playwright-core build), at 1440×1000 ("desktop") and 390×844
@@ -33,7 +33,8 @@
 // A state other than the three built in needs a setup module with act().
 //
 // Output, in visual-out/ under the current directory (git-ignored): <combo>-ours.png, <combo>-reference.png,
-// measure.json and report.txt, where a combo is <viewport>-<state>. Exit 0 when every difference is expected,
+// measure.json and report.txt, where a combo is <viewport>-<state>. --compact keeps report.txt and the same comparison
+// result, but writes neither screenshots nor the full measurement matrix. Exit 0 when every difference is expected,
 // 1 when one is not, 2 on a usage error (an unreadable --expected or --setup file included), 3 when nothing could be compared: the browser could not start (the message
 // names INSTALL), a page failed to open or to become ready, or a combo's two pages share no measured block. Dev
 // tooling, never shipped; the pure parts are exported for test/visual-compare.test.ts.
@@ -73,17 +74,18 @@ export const INSTALL = 'npx playwright-core install --with-deps chromium webkit'
 export const OFFLINE_ARGS = Object.freeze(['--host-resolver-rules=MAP * ~NOTFOUND']);
 
 export const USAGE =
-  'usage: node scripts/visual/compare.mjs --ours <page> --reference <page> [--states <list>] [--expected <file>] [--setup <module>] [--offline]';
+  'usage: node scripts/visual/compare.mjs --ours <page> --reference <page> [--states <list>] [--expected <file>] [--setup <module>] [--offline] [--compact]';
 
 /** The command line, read; throws USAGE (or a reason) on anything else. */
 export function parseArgs(argv) {
-  const out = { ours: undefined, reference: undefined, states: Object.keys(STATES), expected: undefined, setup: undefined, offline: false };
+  const out = { ours: undefined, reference: undefined, states: Object.keys(STATES), expected: undefined, setup: undefined, offline: false, compact: false };
   const flags = { '--ours': 'ours', '--reference': 'reference', '--states': 'states', '--expected': 'expected', '--setup': 'setup' };
   const seen = new Set();
   for (let i = 0; i < argv.length; i += 2) {
-    if (argv[i] === '--offline') {
-      if (out.offline) throw new Error(USAGE);
-      out.offline = true;
+    if (argv[i] === '--offline' || argv[i] === '--compact') {
+      const key = argv[i].slice(2);
+      if (out[key]) throw new Error(USAGE);
+      out[key] = true;
       i -= 1; // a flag with no value
       continue;
     }
@@ -303,13 +305,13 @@ async function compare(args) {
             if (typeof setup.ready === 'function') await setup.ready({ side, state, page });
             else await defaultReady(page);
             await setup.act?.({ side, state, page });
-            await page.screenshot({ path: path.join(out, `${combo}-${side}.png`), fullPage: true });
+            if (!args.compact) await page.screenshot({ path: path.join(out, `${combo}-${side}.png`), fullPage: true });
             got[side] = await page.evaluate(measure, [...PROPS]);
           } finally {
             await context.close();
           }
         }
-        measured[combo] = got;
+        if (!args.compact) measured[combo] = got;
         const both = got.ours.filter((b) => got.reference.some((r) => r.key === b.key)).length;
         if (both === 0) {
           empty += 1;
@@ -336,7 +338,7 @@ async function compare(args) {
   if (unused.length > 0) report.push(`expected entries that matched nothing: ${unused.join('; ')}`);
   if (empty > 0) report.push(`result: nothing was compared in ${String(empty)} of the combinations`);
   else report.push(`result: ${String(unexpectedCount)} unexpected differences`);
-  writeFileSync(path.join(out, 'measure.json'), `${JSON.stringify(measured, null, 2)}\n`);
+  if (!args.compact) writeFileSync(path.join(out, 'measure.json'), `${JSON.stringify(measured, null, 2)}\n`);
   writeFileSync(path.join(out, 'report.txt'), `${report.join('\n')}\n`);
   console.log(report.join('\n'));
   if (empty > 0) return 3;

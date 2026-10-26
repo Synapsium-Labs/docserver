@@ -1,0 +1,19 @@
+h1
+  "Changes since layout"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-24Draft"
+h2
+  "1. Scope"
+p
+  "A local-day menu shows recent committed "…
+h2
+  "2. Design"
+p
+  "The host opens an earlier version only f"…
+h2
+  "3. Plan"
+p
+  "The current document remains the default"…

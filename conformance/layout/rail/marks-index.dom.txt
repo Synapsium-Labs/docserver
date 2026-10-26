@@ -1,0 +1,93 @@
+nav .doc-toc chrome aria-label="Contents and index"
+  div .toc-tabs chrome role="tablist" aria-label="Contents and index"
+    button chrome role="tab" aria-controls="docreader.1.toc-contents" aria-selected="false"
+      "Contents"
+    button chrome role="tab" aria-controls="docreader.1.toc-index" aria-selected="true"
+      "Index"
+      span .count chrome
+        "2"
+  div .toc-contents.toc-panel chrome role="tabpanel" aria-labelledby="docreader.1.tab-contents" hidden=""
+    ul chrome
+      li .open chrome
+        a .active chrome aria-current="location" aria-description="read"
+          span .t chrome
+            "Read"
+          span .meta chrome
+            span .cd chrome
+            span .mk.read chrome aria-hidden="true"
+              "✓"
+      li chrome
+        a chrome aria-description="changed since you read it"
+          span .t chrome
+            "Definitions"
+          span .meta chrome
+            span .cd chrome
+            span .changed.mk chrome aria-hidden="true"
+      li chrome
+        a chrome aria-description="changed since you read it"
+          span .t chrome
+            "Later"
+          span .meta chrome
+            span .cd chrome
+            span .changed.mk chrome aria-hidden="true"
+  div .toc-index.toc-panel chrome role="tabpanel" aria-labelledby="docreader.1.tab-index"
+    button .ix-group chrome aria-controls="docreader.1.index-group" aria-expanded="false"
+      span .gt chrome
+        "Definitions"
+      span .c chrome
+        "2"
+    ul chrome hidden=""
+      li chrome
+        a .ix chrome
+          span .ix-id chrome
+            "D1"
+          span .t chrome
+            "A small decision"
+          span .dot.none chrome aria-hidden="true"
+      li chrome
+        a .ix chrome
+          span .ix-id chrome
+            "D2"
+          span .t chrome
+            "A second decision"
+          span .dot.none chrome aria-hidden="true"
+  div .toc-foot chrome
+    button .keys-btn.linkish chrome
+      "Keys"
+h1
+  "Reading notes"
+h2 aria-label="1. Read"
+  "1. Read"
+  button .h-mark.on chrome aria-pressed="true"
+    "Read"
+p
+  "This section is remembered."
+h2 aria-label="2. Definitions"
+  "2. Definitions"
+  button .changed.h-mark chrome aria-pressed="false"
+    "Changed since you read it"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "D1"
+        td
+          "A small decision"
+      tr
+        td
+          "D2"
+        td
+          "A second decision"
+h2 aria-label="3. Later"
+  "3. Later"
+  button .changed.h-mark chrome aria-pressed="false"
+    "Changed since you read it"
+p
+  "This section changed after the earlier v"…

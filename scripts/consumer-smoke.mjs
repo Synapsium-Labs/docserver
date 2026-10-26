@@ -64,7 +64,7 @@ const CHECK_TS = `import { ALLOWLIST, render } from '${PACKAGE}/render';
 import type { RenderResult } from '${PACKAGE}/render';
 import { runCorpus } from '${PACKAGE}/conformance';
 import type { CorpusRun } from '${PACKAGE}/conformance';
-import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs } from '${PACKAGE}/enhance';
+import { destroyEnhancement, enhance, EnhanceError, goToHash, setEnhancementPrefs } from '${PACKAGE}/enhance';
 import type { EnhanceOptions } from '${PACKAGE}/enhance';
 
 export const result: RenderResult = render('# title');
@@ -72,6 +72,10 @@ export const run: CorpusRun = runCorpus(render, { timeScale: 1 });
 export const allowlist: unknown = ALLOWLIST;
 export const options: EnhanceOptions = { prefs: { theme: 'dark' }, folds: true };
 export const layout: unknown[] = [enhance, destroyEnhancement, setEnhancementPrefs, EnhanceError];
+export function navigate(root: HTMLElement): void {
+  goToHash(root, 'section');
+  goToHash(root, null, 'from-token');
+}
 `;
 
 /** Runs inside the consumer project; every specifier resolves from there. */

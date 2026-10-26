@@ -1,8 +1,8 @@
 // The shared services in a real browser (docserver L2, Task 7b): relayout measures again once the reader's faces load
 // (LD5; relayout.ts). The font files are held back by a route of the page's own until the case lets them go, so the
 // startup's own relayout ('start') runs on the fallback faces, and a second one ('fonts') runs once both faces have
-// loaded, and no more. The same holds when the reader's stylesheet itself arrives after enhance(): a face no
-// stylesheet declares yet is not a loaded face. Whether a face loaded is read from the font set's own faces (their
+// loaded, and no more. When the reader's stylesheet arrives after enhance(), its real content width changes before the
+// held faces release: the fallback resize precedes the one loaded-font run. Whether a face loaded is read from the font set's own faces (their
 // status), never from check(), which answers true for a family nothing declares. And the skip link skips the bar: the
 // next Tab after it goes into the text. What jsdom cannot show: the browser's own font loading, its frames and its
 // focus order.
@@ -53,6 +53,7 @@ type Win = {
     contextOf(root: Element): { onRelayout(fn: (reasons: ReadonlySet<string>) => void): unknown; slots: { tool(kind: string, node: HTMLElement): void } | null } | undefined;
   };
   __runs: Run[];
+  __contentWidths: number[];
 };
 
 /** In the page: enhance the root, then record each relayout with whether both reader faces had loaded by then. */
@@ -109,30 +110,63 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('a stylesheet that arrives after enhance(): no fonts run on the fallback faces, then one once the faces load', async () => {
-    const doc = await openDoc(DOC, {}, { browser, csp: 'strict', enhance: false });
+  it('a stylesheet that arrives after enhance() resizes on fallback, then runs fonts once they load', async () => {
+    const doc = await openDoc(DOC, { chrome: { rail: true } }, { browser, csp: 'strict', enhance: false });
+    let release: () => void = () => undefined;
     try {
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await doc.page.route('**/assets/fonts/*.woff2', async (route) => {
+        await gate;
+        await route.fallback();
+      });
       await doc.page.evaluate(script);
       // The reader's stylesheet leaves the page before enhance(), so no @font-face declares the faces yet.
       await doc.page.evaluate(() => {
         const link = document.querySelector('link[href="/assets/reader.css"]') as HTMLLinkElement;
-        (window as unknown as { __sheet: HTMLLinkElement }).__sheet = link;
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const w = window as unknown as Win & { __sheet: HTMLLinkElement };
+        w.__sheet = link;
+        w.__contentWidths = [];
         link.remove();
+        const Native = window.ResizeObserver;
+        window.ResizeObserver = class extends Native {
+          constructor(callback: ResizeObserverCallback) {
+            super((entries, observer) => {
+              w.__contentWidths.push(...entries.filter((entry) => entry.target === root).map((entry) => entry.contentRect.width));
+              callback(entries, observer);
+            });
+          }
+        };
       });
       await enhanceAndRecord(doc.page);
       await doc.page.waitForFunction(() => (window as unknown as Win).__runs.length >= 1);
       await doc.page.waitForTimeout(300);
       expect(await runsOf(doc.page)).toEqual([{ reasons: ['start'], loaded: false }]);
       await doc.page.evaluate(() => {
-        document.head.append((window as unknown as { __sheet: HTMLLinkElement }).__sheet);
+        document.head.append((window as unknown as Win & { __sheet: HTMLLinkElement }).__sheet);
       });
-      await doc.page.waitForFunction(() => (window as unknown as Win).__runs.length >= 2, undefined, { timeout: 15_000 });
+      await doc.page.waitForFunction(() => (window as unknown as Win).__contentWidths.includes(1052));
+      await doc.page.waitForFunction(() => (window as unknown as Win).__runs.length >= 2);
+      const width = await doc.page.evaluate(() => (window as unknown as Win).__contentWidths);
+      expect(width[0]).toBe(1440);
+      expect(width).toContain(1052);
+      expect(width.slice(1).every((receipt) => receipt === 1052)).toBe(true);
+      expect(await runsOf(doc.page)).toEqual([
+        { reasons: ['start'], loaded: false },
+        { reasons: ['resize'], loaded: false },
+      ]);
+      release();
+      await doc.page.waitForFunction(() => (window as unknown as Win).__runs.length >= 3, undefined, { timeout: 15_000 });
       await doc.page.waitForTimeout(300);
       expect(await runsOf(doc.page)).toEqual([
         { reasons: ['start'], loaded: false },
+        { reasons: ['resize'], loaded: false },
         { reasons: ['fonts'], loaded: true },
       ]);
     } finally {
+      release();
       await doc.close();
     }
   });

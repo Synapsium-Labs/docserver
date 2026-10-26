@@ -1,0 +1,5 @@
+{
+  "options": { "mermaid": {} },
+  "scope": ["dnode", "dn-ring", "dn-dot"],
+  "csp": "reader"
+}

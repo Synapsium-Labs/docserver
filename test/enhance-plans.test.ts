@@ -22,6 +22,7 @@ const hooks = vi.hoisted(() => ({
   afterPlans: [] as unknown[],
   /** Each position.keep() while `watch` is on: how many roots were outlined before and after it ran its function. */
   kept: [] as [number, number][],
+  withoutMarks: false,
   watch: false,
 }));
 
@@ -49,7 +50,7 @@ vi.mock('../src/enhance/nav.js', async (importOriginal) => {
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
   const features = (): Feature[] => {
-    const list = real.features();
+    const list = real.features().filter((feature) => !hooks.withoutMarks || feature.name !== 'marks');
     const at = list.findIndex((f) => f.name === 'plans');
     return [...list.slice(0, at), ...(hooks.beforePlans as Feature[]), list[at] as Feature, ...(hooks.afterPlans as Feature[]), ...list.slice(at + 1)];
   };
@@ -157,6 +158,7 @@ afterEach(async () => {
   hooks.beforePlans.length = 0;
   hooks.afterPlans.length = 0;
   hooks.kept.length = 0;
+  hooks.withoutMarks = false;
   hooks.watch = false;
   vi.restoreAllMocks();
 });
@@ -525,7 +527,7 @@ describe('steps: numbers, owners and bodies', () => {
     const long = 'word '.repeat(30).trim();
     const root = mount(['# P', '', `- [ ] **Step 1: ${long}**`, `- [ ] a${' '.repeat(310)}b`, ''].join('\n'));
     await enhance(root);
-    const [a = '', b = ''] = Array.from(root.querySelectorAll('input')).map((i) => i.getAttribute('aria-label') ?? '');
+    const [a = '', b = ''] = Array.from(root.querySelectorAll('li.task-list-item input[type="checkbox"]')).map((i) => i.getAttribute('aria-label') ?? '');
     expect(a).toBe(`Step 1: ${ctxOf(root).text.clip(long, 90)}`);
     expect(a.endsWith('…')).toBe(true);
     expect(b).toBe('a'); // the "b" lies past the first 300 characters
@@ -559,7 +561,7 @@ describe('steps: numbers, owners and bodies', () => {
     for (const n of Array.from(last.childNodes)) if (n.nodeType === 3) n.remove();
     await enhance(root);
     expect(items[0]?.querySelector('.step-no')?.textContent).toBe('Step 1');
-    expect(root.querySelectorAll('input')).toHaveLength(1);
+    expect(root.querySelectorAll('li.task-list-item input[type="checkbox"]')).toHaveLength(1);
     expect(last.querySelector('input')?.getAttribute('aria-label')).toBe('Step');
   });
 
@@ -630,7 +632,12 @@ describe('outline mode (the reference layout, section 23)', () => {
     beforePlans((ctx) => {
       ctx.headCtl(heading(ctx.root, 'h3', 'Task 2.'), 'mark', chrome(ctx.root.ownerDocument, 'button', { className: 'h-mark', text: 'Mark read' }));
     });
-    await enhance(root);
+    hooks.withoutMarks = true;
+    try {
+      await enhance(root);
+    } finally {
+      hooks.withoutMarks = false;
+    }
     for (const h of ctxOf(root).plan.tasks) {
       const btn = Array.from(h.children).find((c) => c.classList.contains('task-open')) as HTMLButtonElement | undefined;
       expect(btn?.hasAttribute(CHROME_ATTR)).toBe(true);
@@ -640,6 +647,19 @@ describe('outline mode (the reference layout, section 23)', () => {
     }
     // The h2 task has its fold control: the button is before it.
     expect(heading(root, 'h2', 'Task 3').querySelector('.h-ctl')).not.toBeNull();
+  });
+
+  it('real marks and plans keep their distinct heading slots after Show all', async () => {
+    const root = mount();
+    await enhance(root);
+    const task = heading(root, 'h2', 'Task 3');
+    const show = task.querySelector('.task-open') as HTMLButtonElement;
+    const controls = task.querySelector('.h-ctl') as HTMLElement;
+    const mark = controls.querySelector('.h-mark') as HTMLButtonElement;
+    expect(show.nextElementSibling).toBe(controls);
+    expect(Array.from(controls.children).map((control) => control.className)).toEqual(['h-anchor', 'h-mark', 'h-fold']);
+    mark.click();
+    expect(mark.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('a stored outline is applied during the build, so the full plan is never shown first', async () => {

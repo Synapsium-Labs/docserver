@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions, type ReaderStorage } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR, createJournal, IMPORTANT_STYLE_PROPS, STYLE_PROPS } from '../src/enhance/journal.js';
+import { createEnv } from '../src/enhance/env.js';
 import { chromeIdsIssued, contextOf } from '../src/enhance/lifecycle.js';
 import { docKey, posKeyOf, PREFS_KEY, UI_KEY } from '../src/enhance/state.js';
 import { buildStatusMarks, statusOf } from '../src/enhance/status.js';
@@ -158,23 +159,28 @@ describe('env: the root\'s window behind one module (RF5)', () => {
     expect(seen).toEqual(['timeout: still enhanced true', 'frame: still enhanced true', 'idle: still enhanced true']);
   });
 
-  it('destroy cancels every pending timeout, frame and idle callback with the window\'s own cancel', async () => {
+  it('cancels a bare env allocation once and ignores retained callbacks after teardown', () => {
     const root = mount();
-    await enhance(root);
-    await wait(50); // the startup's own relayout (Task 7b) has had its frame, so every pending call is this case's
     const view = viewOf(root);
     const timers = captureScheduler(view, 'setTimeout', 'clearTimeout');
     const frames = captureScheduler(view, 'requestAnimationFrame', 'cancelAnimationFrame');
-    const env = ctxOf(root).env;
+    let live = true;
+    const journal = createJournal(() => live, (fn) => fn());
+    const env = createEnv(root, journal.journal, () => live, (fn) => fn());
     const ran: string[] = [];
-    env.timeout(() => ran.push('timeout'), 100);
+    env.timeout(() => ran.push('timeout'), 1);
     env.frame(() => ran.push('frame'));
-    env.idle(() => ran.push('idle')); // no requestIdleCallback in jsdom: a timeout stands in
+    env.idle(() => ran.push('idle'));
     expect([timers.queued.length, frames.queued.length]).toEqual([2, 1]);
-    await destroyEnhancement(root);
+    live = false;
+    journal.undoAll();
     expect(timers.cleared.sort()).toEqual([1, 2]);
     expect(frames.cleared).toEqual([1]);
+    for (const callback of [...timers.queued, ...frames.queued]) callback();
     expect(ran).toEqual([]);
+    journal.undoAll();
+    expect(timers.cleared.sort()).toEqual([1, 2]);
+    expect(frames.cleared).toEqual([1]);
   });
 
   it('a callback already queued when the instance is destroyed does nothing', async () => {
@@ -868,16 +874,16 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
     });
     await enhance(root, { storage, storageKey: 'k' });
     expect(got).toEqual([{ line: '12-14', offset: 40, y: 900 }, { line: '12-14', offset: 40, y: 900 }, 'index', 7, undefined]);
-    expect(reads.filter((k) => k === posKeyOf('p') || k === UI_KEY)).toEqual([posKeyOf('p'), UI_KEY]);
+    expect(reads.filter((k) => k === posKeyOf('p') || k === UI_KEY)).toEqual([UI_KEY, posKeyOf('p')]);
   });
 
   it('after startup a key never read is not read: it reads as absent', async () => {
     const root = mount();
     const { storage, reads } = recordingStorage({ [posKeyOf('p')]: '{"y":1}', [UI_KEY]: '{"sidetab":"index"}' });
-    await enhance(root, { storage, storageKey: 'k' });
+    await enhance(root, { storage, storageKey: 'k', chrome: { rail: false } });
     const ctx = ctxOf(root);
     expect([ctx.state.readPos('p'), ctx.state.readUi('sidetab')]).toEqual([undefined, undefined]);
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]); // the reading position's own key (Task 14)
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'marks'), docKey('k', 'folds'), posKeyOf('k')]); // the reading position's own key (Task 14)
   });
 
   it('writePos writes behind, as JSON, under the position key; null deletes it; the local value reads back', async () => {
@@ -927,7 +933,7 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
   it('a UI write after startup, with the key never read, stays local: the stored fields it cannot see are never overwritten', async () => {
     const root = mount();
     const { storage, calls } = recordingStorage({ [UI_KEY]: JSON.stringify({ later: 'kept' }) });
-    await enhance(root, { storage });
+    await enhance(root, { storage, chrome: { rail: false } });
     const ctx = ctxOf(root);
     expect(ctx.state.readUi('later')).toBeUndefined(); // not read now: the snapshot is closed
     ctx.state.writeUi('sidetab', 'index');
@@ -1055,7 +1061,7 @@ describe('reader state: the reading position and the UI memory (LD8)', () => {
       },
     });
     await enhance(root, { storage, storageKey: 'k' });
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k'), UI_KEY]);
+    expect(reads).toEqual([PREFS_KEY, docKey('k', 'marks'), UI_KEY, docKey('k', 'ixfold'), docKey('k', 'folds'), posKeyOf('k')]);
   });
 });
 
@@ -1102,22 +1108,29 @@ describe('sections: section 0\'s units, measured before any node moves', () => {
     const root = mount(DOC);
     const h2s = Array.from(root.querySelectorAll(':scope > h2'));
     (h2s[1] as Element).removeAttribute('id');
-    const extra = document.createElement('dl');
-    extra.append(document.createElement('dt'));
-    (extra.firstChild as Element).textContent = 'not counted';
-    (h2s[0] as Element).after(extra);
+    const dl = document.createElement('dl');
+    dl.append(document.createElement('dt'));
+    (dl.firstChild as Element).textContent = 'dl words do not count';
+    const script = document.createElement('script');
+    script.type = 'application/json';
+    script.textContent = 'script words do not count';
+    (h2s[0] as Element).after(dl, script);
     const members: Element[] = [];
     for (let n = (h2s[0] as Element).nextElementSibling; n !== null && n !== h2s[1]; n = n.nextElementSibling) members.push(n);
     const text = unitText(h2s[0] as Element, members);
-    expect(text).not.toContain('not counted');
+    // This oracle omits only the two inert fixture members, not nodes the lifecycle measured.
+    const minutes = sectionMinutes(h2s[0] as Element, members.filter((member) => member !== dl && member !== script));
+    expect(text).not.toContain('dl words do not count');
+    expect(text).not.toContain('script words do not count');
     await enhance(root);
     const { sections } = ctxOf(root);
     expect(sections.map((s) => s.heading.id)).toEqual(['1-scope', '3-plan']);
     const first = sections[0];
     expect(first?.members).toEqual(members);
-    expect(first?.members[0]).toBe(extra);
+    expect(first?.members[0]).toBe(dl);
+    expect(first?.members[1]).toBe(script);
     expect(first?.fingerprint).toBe(hash(text));
-    expect(first?.minutes).toBe(sectionMinutes(h2s[0] as Element, members.slice(1)) + 0);
+    expect(first?.minutes).toBe(minutes);
   });
 
   it('the units and their member lists are frozen', async () => {
@@ -1695,15 +1708,15 @@ describe('features: registration in the final build order', () => {
       // Each module is a stub or names the task that built it; none is neither.
       expect(isStub(name) || /\bTask \d+[a-z]?\b/.test(headerOf(name)), name).toBe(true);
     }
-    expect(names.filter((n) => isStub(n)).length).toBeGreaterThan(0);
   });
 
   it('every stub names its section of the reference layout and the task that fills it, and builds nothing yet', async () => {
     const root = mount();
     await enhance(root);
+    const stubs = (await realFeatures()).filter((x) => isStub(x.name));
     const html = root.outerHTML;
     const ctx = ctxOf(root);
-    for (const f of (await realFeatures()).filter((x) => isStub(x.name))) {
+    for (const f of stubs) {
       const header = headerOf(f.name);
       expect(header, f.name).toMatch(/\(the reference layout, sections? \d+[a-z]?\b/);
       expect(header, f.name).toMatch(/Consumes|Produces/);

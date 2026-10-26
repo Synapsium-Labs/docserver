@@ -1,0 +1,6 @@
+{
+  "options": { "mermaid": { "maxTextSize": 120 } },
+  "scope": ["drawn", "draw-failed", "fig-error"],
+  "hostile": true,
+  "csp": "reader"
+}

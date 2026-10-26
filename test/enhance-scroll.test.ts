@@ -238,7 +238,7 @@ function planProbe(levels = 'h3'): void {
       if (ctx.plan.published) return;
       const tasks = Array.from(ctx.root.querySelectorAll(levels)).filter((h) => /^Task \d+:/.test(h.textContent ?? '')) as HTMLElement[];
       const steps = Array.from(ctx.root.querySelectorAll('li.task-list-item')) as HTMLElement[];
-      ctx.plan.publish({ tasks, steps, yours: 0, outlineable: steps.length >= 20 });
+      ctx.plan.publish({ tasks, members: tasks.map(() => []), fingerprints: tasks.map(() => ''), steps, yours: 0, outlineable: steps.length >= 20 });
     },
   } satisfies Feature);
 }
@@ -807,7 +807,7 @@ describe('the bar: --bar-h and its landmark', () => {
         ctx.slots?.tool('contents', chrome(ctx.root.ownerDocument, 'button', { text: 'Contents' }));
       },
     } satisfies Feature);
-    await enhance(root);
+    await enhance(root, { chrome: { rail: false } }); // This probe claims the Contents slot; RF3 keeps the real rail.
     const bar = ctxOf(root).slots?.bar as HTMLElement;
     expect([bar.hasAttribute('role'), bar.getAttribute('aria-label')]).toEqual([false, 'Document tools']);
   });
@@ -848,7 +848,9 @@ describe('each frame writes only what changed, and a burst of scroll events is o
     phone = true;
     await scrollTo(200, place);
     await scrollTo(1000, place); // the bar hides, the title is gone, the progress moves, § 2 Design
-    expect([root.className, head(root)]).toEqual(['scrolled bar-hidden', '§ 2|Design']);
+    expect(root.classList.contains('scrolled')).toBe(true);
+    expect(root.classList.contains('bar-hidden')).toBe(true);
+    expect(head(root)).toBe('§ 2|Design');
     const writes = { style: 0, cls: 0, head: 0 };
     vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty').mockImplementation(function (this: CSSStyleDeclaration) {
       writes.style += 1;
@@ -890,6 +892,59 @@ describe('each frame writes only what changed, and a burst of scroll events is o
 });
 
 describe('RF3: rect reads per frame', () => {
+  /** Settle the bounded promise work a frame callback can schedule before accounting for its completed cohort. */
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  };
+
+  /** Deliver physical-frame cohorts, including request-time work and native-style microtask checkpoints between callbacks. */
+  function physicalFrameBuckets(): { start(): number; drain(start: number): Promise<{ readonly cohorts: number[]; readonly outside: number; readonly total: number }>; restore(): void } {
+    const queued = new Map<number, FrameRequestCallback>();
+    const request = Object.getOwnPropertyDescriptor(window, 'requestAnimationFrame');
+    const cancel = Object.getOwnPropertyDescriptor(window, 'cancelAnimationFrame');
+    let next = 1;
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: (fn: FrameRequestCallback): number => {
+        const id = next;
+        next += 1;
+        queued.set(id, fn);
+        return id;
+      },
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: (id: number): void => { queued.delete(id); } });
+    return {
+      start: () => reads,
+      drain: async (start) => {
+        const cohorts: number[] = [];
+        await settle();
+        for (let frame = 0; queued.size > 0 && frame < 32; frame += 1) {
+          const cohort = [...queued.keys()];
+          const before = reads;
+          for (const id of cohort) {
+            const callback = queued.get(id);
+            if (callback === undefined) continue; // an earlier callback's microtask cancelled this due callback
+            queued.delete(id);
+            callback(0);
+            await settle();
+          }
+          cohorts.push(reads - before);
+          await settle();
+        }
+        expect(queued).toHaveLength(0);
+        const total = reads - start;
+        const outside = total - cohorts.reduce((sum, count) => sum + count, 0);
+        return { cohorts, outside, total };
+      },
+      restore: () => {
+        if (request === undefined) delete (window as { requestAnimationFrame?: unknown }).requestAnimationFrame;
+        else Object.defineProperty(window, 'requestAnimationFrame', request);
+        if (cancel === undefined) delete (window as { cancelAnimationFrame?: unknown }).cancelAnimationFrame;
+        else Object.defineProperty(window, 'cancelAnimationFrame', cancel);
+      },
+    };
+  }
+
   /** A document with `n` level-2 sections, each placed 100 px below the last. */
   function many(n: number): { root: HTMLElement; place: (y: number) => void } {
     const md = ['# Many sections', '', ...Array.from({ length: n }, (_, i) => [`## Part ${String(i + 1)}`, '', `Text ${String(i + 1)}.`, '']).flat()].join('\n');
@@ -906,39 +961,78 @@ describe('RF3: rect reads per frame', () => {
 
   it('the spy reads at most 2⌈log₂ n⌉ + 4 rects a frame, and finds the same section a scan from the top would', async () => {
     const n = 1000;
-    const { root, place } = many(n);
-    await enhance(root);
-    await frames();
-    const log = spyLog(root);
-    const bound = 2 * Math.ceil(Math.log2(n)) + 4;
-    const line = Math.max(LINE_MIN, 768 * LINE_SHARE);
-    let worst = 0;
-    for (const y of [0, 769, 770, 771, 1000, 12_345, 50_000, 99_000, 99_769, 99_770, 99_771, 120_000]) {
-      reads = 0;
-      await scrollTo(y, place);
-      worst = Math.max(worst, reads);
-      // the last heading whose top is above the line, found by a scan
-      const k = Math.floor((y + line - 1000 - 1e-9) / 100);
-      const expected = k < 0 ? null : `part-${String(Math.min(n, k + 1))}`;
-      expect([y, ctxOf(root).sections.length, log.at(-1)?.section ?? null]).toEqual([y, n, expected]);
+    const physical = physicalFrameBuckets();
+    try {
+      const { root, place } = many(n);
+      const startupStart = physical.start();
+      await enhance(root);
+      const startup = await physical.drain(startupStart);
+      expect([startup.cohorts.length > 0, startup.total, startup.outside]).toEqual([true, expect.any(Number), 0]);
+      const log = spyLog(root);
+      const bound = 2 * Math.ceil(Math.log2(n)) + 4;
+      const line = Math.max(LINE_MIN, 768 * LINE_SHARE);
+      let worst = 0;
+      let cumulativeWorst = 0;
+      for (const y of [0, 769, 770, 771, 1000, 12_345, 50_000, 99_000, 99_769, 99_770, 99_771, 120_000]) {
+        Object.defineProperty(window, 'scrollY', { configurable: true, value: y });
+        place(y);
+        const start = physical.start();
+        window.dispatchEvent(new Event('scroll'));
+        const measurement = await physical.drain(start);
+        worst = Math.max(worst, ...measurement.cohorts);
+        cumulativeWorst = Math.max(cumulativeWorst, measurement.total);
+        expect([measurement.outside, measurement.total, measurement.cohorts.reduce((sum, count) => sum + count, 0)]).toEqual([0, measurement.total, measurement.total]);
+        // the last heading whose top is above the line, found by a scan
+        const k = Math.floor((y + line - 1000 - 1e-9) / 100);
+        const expected = k < 0 ? null : `part-${String(Math.min(n, k + 1))}`;
+        expect([y, ctxOf(root).sections.length, log.at(-1)?.section ?? null]).toEqual([y, n, expected]);
+      }
+      expect(worst).toBeGreaterThan(0);
+      expect(worst).toBeLessThanOrEqual(bound);
+      // Without tasks the unit is the section, so one physical frame reads the root, title, and one binary search.
+      expect(worst).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
+      expect(cumulativeWorst).toBeLessThanOrEqual(bound);
+
+      const syncStart = physical.start();
+      root.getBoundingClientRect();
+      window.requestAnimationFrame(() => root.getBoundingClientRect());
+      const sync = await physical.drain(syncStart);
+      expect(sync).toEqual({ cohorts: [1], outside: 1, total: 2 });
+
+      const microtaskStart = physical.start();
+      let second = 0;
+      window.requestAnimationFrame(() => {
+        root.getBoundingClientRect();
+        queueMicrotask(() => window.cancelAnimationFrame(second));
+      });
+      second = window.requestAnimationFrame(() => root.getBoundingClientRect());
+      const microtask = await physical.drain(microtaskStart);
+      expect(microtask).toEqual({ cohorts: [1], outside: 0, total: 1 });
+    } finally {
+      physical.restore();
     }
-    expect(worst).toBeGreaterThan(0);
-    expect(worst).toBeLessThanOrEqual(bound);
-    // Without tasks the unit is the section, so a frame searches one list: the root, the title, and that search.
-    expect(worst).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
   });
 
   it('without tasks a relayout\'s frame stays within the bound too: no unit\'s box is read for a search that never runs', async () => {
     const n = 1000;
-    const { root, place } = many(n);
-    await enhance(root);
-    await frames();
-    place(12_345);
-    reads = 0;
-    ctxOf(root).relayout('content');
-    await frames();
-    expect(reads).toBeGreaterThan(0);
-    expect(reads).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
+    const physical = physicalFrameBuckets();
+    try {
+      const { root, place } = many(n);
+      const startupStart = physical.start();
+      await enhance(root);
+      const startup = await physical.drain(startupStart);
+      expect([startup.cohorts.length > 0, startup.outside]).toEqual([true, 0]);
+      place(12_345);
+      const start = physical.start();
+      ctxOf(root).relayout('content');
+      const measurement = await physical.drain(start);
+      expect(Math.max(...measurement.cohorts)).toBeGreaterThan(0);
+      expect(Math.max(...measurement.cohorts)).toBeLessThanOrEqual(Math.ceil(Math.log2(n + 1)) + 2);
+      expect([measurement.outside, measurement.total, measurement.cohorts.reduce((sum, count) => sum + count, 0)]).toEqual([0, measurement.total, measurement.total]);
+      expect(measurement.total).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(n)) + 4);
+    } finally {
+      physical.restore();
+    }
   });
 
   it('on a plan, both searches together stay within the bound', async () => {

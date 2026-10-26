@@ -9,7 +9,16 @@ import config from '../vitest.config.js';
 
 interface Project {
   extends?: unknown;
-  test?: { name?: unknown; include?: unknown; exclude?: unknown; hookTimeout?: unknown; sequence?: { groupOrder?: unknown } };
+  test?: {
+    name?: unknown;
+    include?: unknown;
+    exclude?: unknown;
+    env?: unknown;
+    pool?: unknown;
+    isolate?: unknown;
+    hookTimeout?: unknown;
+    sequence?: { groupOrder?: unknown };
+  };
 }
 
 const test = config.test ?? {};
@@ -20,19 +29,27 @@ describe('vitest.config.ts', () => {
     expect([test.environment, test.setupFiles, test.testTimeout]).toEqual(['node', ['test/setup/no-network.ts'], 60_000]);
   });
 
-  it('runs every other test file first, then the browser bundle alone, then the packed tarball alone, then the layout tests', () => {
+  it('runs general unit tests and the isolated local-time unit test first, then the browser bundle, packed tarball and layout tests', () => {
     expect(
       projects.map((p) => [p.extends, p.test?.name, p.test?.include, p.test?.exclude, p.test?.sequence?.groupOrder]),
     ).toEqual([
-      [true, 'unit', ['test/**/*.test.ts'], ['test/browser-parity.test.ts', 'test/pack.test.ts', 'test/browser/**/*.test.ts'], 0],
+      [true, 'unit', ['test/**/*.test.ts'], ['test/browser-parity.test.ts', 'test/pack.test.ts', 'test/browser/**/*.test.ts', 'test/enhance-since.test.ts'], 0],
+      [true, 'since-unit', ['test/enhance-since.test.ts'], undefined, 0],
       [true, 'browser', ['test/browser-parity.test.ts'], undefined, 1],
       [true, 'pack', ['test/pack.test.ts'], undefined, 2],
       [true, 'layout', ['test/browser/**/*.test.ts'], undefined, 3],
     ]);
+    expect(projects.map((p) => [p.test?.env, p.test?.pool, p.test?.isolate])).toEqual([
+      [undefined, undefined, undefined],
+      [{ TZ: 'Asia/Kolkata' }, 'forks', true],
+      [undefined, undefined, undefined],
+      [undefined, undefined, undefined],
+      [undefined, undefined, undefined],
+    ]);
   });
 
   it('the layout project, last, waits up to 60 s in a hook (each browser block launches its browser in beforeAll); the others keep the default', () => {
-    expect(projects.map((p) => p.test?.hookTimeout)).toEqual([undefined, undefined, undefined, 60_000]);
+    expect(projects.map((p) => p.test?.hookTimeout)).toEqual([undefined, undefined, undefined, undefined, 60_000]);
     const orders = projects.map((p) => Number(p.test?.sequence?.groupOrder));
     expect(Math.max(...orders)).toBe(projects.find((p) => p.test?.name === 'layout')?.test?.sequence?.groupOrder);
   });

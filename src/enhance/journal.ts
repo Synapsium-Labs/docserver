@@ -36,6 +36,9 @@ const STYLE_VALUE_MAX = 200;
 
 /** A style value that could load a resource (a url() or an image function), escape a character, or end its declaration. */
 const STYLE_VALUE_REFUSED = /[\\;{}]|(?:url|src|image|image-set|cross-fade|element|paint)\s*\(/i;
+const ROOT_ISSUED_ID = /^docreader\.\d+\.[a-z][a-z0-9-]*(?:\.\d+)?$/;
+const LOCAL_URL = /^url\(\s*(?:['"])?#([A-Za-z][\w:.-]*)(?:['"])?\s*\)$/i;
+const LOCAL_HREF = /^#([A-Za-z][\w:.-]*)$/;
 
 /** An element with an inline style: HTML, SVG or MathML. */
 export type Styled = Element & ElementCSSInlineStyle;
@@ -82,6 +85,8 @@ export interface Journal {
    * when the element had none and nothing is left in it.
    */
   setStyle(el: Styled, prop: StyleProp, value: string | null, important?: boolean): void;
+  /** Clone an SVG into chrome and rebind a complete, validated local ID snapshot within that detached clone only. */
+  cloneSvg(source: SVGSVGElement, ids: ReadonlyMap<string, string>): SVGSVGElement;
 }
 
 /** The lifecycle's own handle on a journal: the writer, plus the undo that teardown runs once. */
@@ -115,6 +120,86 @@ function tokens(value: string | null): Set<string> {
 
 function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   return a.size === b.size && [...a].every((t) => b.has(t));
+}
+
+function mappedUrl(value: string, ids: ReadonlyMap<string, string>): string {
+  let out = '';
+  let at = 0;
+  while (at < value.length) {
+    const ch = value[at] ?? '';
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      let end = at + 1;
+      while (end < value.length) {
+        if (value[end] === '\\') end += 2;
+        else if (value[end++] === quote) break;
+      }
+      out += value.slice(at, end);
+      at = end;
+    } else if (value.slice(at, at + 4).toLowerCase() === 'url(') {
+      const end = value.indexOf(')', at + 4);
+      const token = end < 0 ? value.slice(at) : value.slice(at, end + 1);
+      const match = LOCAL_URL.exec(token);
+      const next = match === null ? undefined : ids.get(match[1] ?? '');
+      out += next === undefined ? token : `url(#${next})`;
+      at += token.length;
+    } else {
+      out += ch;
+      at += 1;
+    }
+  }
+  return out;
+}
+
+function cssId(id: string): string {
+  return id.replace(/[^A-Za-z0-9_-]/g, (c) => `\\${c}`);
+}
+
+/** Rebind only selector IDs and local URL tokens outside CSS strings and comments. */
+function mappedStyleText(value: string, ids: ReadonlyMap<string, string>): string {
+  let out = '';
+  let at = 0;
+  let selector = true;
+  while (at < value.length) {
+    const ch = value[at] ?? '';
+    if (ch === '/' && value[at + 1] === '*') {
+      const end = value.indexOf('*/', at + 2);
+      const stop = end < 0 ? value.length : end + 2;
+      out += value.slice(at, stop);
+      at = stop;
+    } else if (ch === '"' || ch === "'") {
+      const quote = ch;
+      let end = at + 1;
+      while (end < value.length) {
+        if (value[end] === '\\') end += 2;
+        else if (value[end++] === quote) break;
+      }
+      out += value.slice(at, end);
+      at = end;
+    } else if (value.slice(at, at + 4).toLowerCase() === 'url(') {
+      const end = value.indexOf(')', at + 4);
+      const token = end < 0 ? value.slice(at) : value.slice(at, end + 1);
+      out += mappedUrl(token, ids);
+      at += token.length;
+    } else if (selector && ch === '#') {
+      const escaped = /^#((?:[A-Za-z0-9_-]+|\\.)+)/.exec(value.slice(at));
+      const id = escaped?.[1]?.replace(/\\(.)/g, '$1');
+      const next = id === undefined ? undefined : ids.get(id);
+      if (escaped !== null && next !== undefined) {
+        out += `#${cssId(next)}`;
+        at += escaped[0].length;
+      } else {
+        out += ch;
+        at += 1;
+      }
+    } else {
+      out += ch;
+      at += 1;
+      if (ch === '{') selector = false;
+      else if (ch === '}') selector = true;
+    }
+  }
+  return out;
 }
 
 /**
@@ -250,6 +335,68 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
     defer(fn) {
       if (!live()) return;
       undo.push(fn);
+    },
+
+    cloneSvg(source, ids) {
+      if (!live()) throw new Error('docreader: journal.cloneSvg after a destroy');
+      const snapshot = new Map(ids);
+      if (source.id === '') throw new Error('docreader: journal.cloneSvg takes a source root ID');
+      const originals = [source, ...Array.from(source.querySelectorAll<Element>('[id]'))].filter((el) => el.id !== '');
+      if (!live()) throw new Error('docreader: journal.cloneSvg after source IDs');
+      const seen = new Set<string>();
+      if (originals.some((el) => seen.has(el.id) || (seen.add(el.id), false)) || originals.length !== snapshot.size) {
+        throw new Error('docreader: journal.cloneSvg takes every unique source ID exactly once');
+      }
+      const destinations = new Set<string>();
+      for (const id of seen) {
+        const destination = snapshot.get(id);
+        if (destination === undefined || !ROOT_ISSUED_ID.test(destination) || destinations.has(destination)) {
+          throw new Error('docreader: journal.cloneSvg takes unique root-issued destination IDs');
+        }
+        destinations.add(destination);
+      }
+      const clone = source.cloneNode(true) as SVGSVGElement;
+      if (!live()) throw new Error('docreader: journal.cloneSvg after cloning');
+      const elements = [clone, ...Array.from(clone.querySelectorAll<Element>('*'))];
+      if (!live()) throw new Error('docreader: journal.cloneSvg after clone enumeration');
+      for (const el of elements) {
+        const next = snapshot.get(el.id);
+        if (next !== undefined) el.id = next;
+        if (!live()) throw new Error('docreader: journal.cloneSvg after ID rewrite');
+        el.setAttribute(CHROME_ATTR, '');
+        if (!live()) throw new Error('docreader: journal.cloneSvg after chrome marking');
+        for (const name of ['href', 'xlink:href'] as const) {
+          const value = el.getAttribute(name);
+          const match = value === null ? null : LOCAL_HREF.exec(value);
+          const mapped = match === null ? undefined : snapshot.get(match[1] ?? '');
+          if (mapped !== undefined) el.setAttribute(name, `#${mapped}`);
+          if (!live()) throw new Error('docreader: journal.cloneSvg after href rewrite');
+        }
+        for (const name of ['aria-labelledby', 'aria-describedby'] as const) {
+          const value = el.getAttribute(name);
+          if (value !== null) el.setAttribute(name, value.split(/\s+/).map((id) => snapshot.get(id) ?? id).join(' '));
+          if (!live()) throw new Error('docreader: journal.cloneSvg after ARIA rewrite');
+        }
+        for (const name of ['fill', 'stroke', 'clip-path', 'mask', 'filter', 'marker-start', 'marker-mid', 'marker-end'] as const) {
+          const value = el.getAttribute(name);
+          if (value !== null) el.setAttribute(name, mappedUrl(value, snapshot));
+          if (!live()) throw new Error('docreader: journal.cloneSvg after presentation rewrite');
+        }
+        const style = (el as Styled).style;
+        for (let i = 0; i < style.length; i += 1) {
+          const name = style[i];
+          if (name === undefined) continue;
+          const value = style.getPropertyValue(name);
+          const next = mappedUrl(value, snapshot);
+          if (next !== value) style.setProperty(name, next, style.getPropertyPriority(name));
+          if (!live()) throw new Error('docreader: journal.cloneSvg after CSSOM rewrite');
+        }
+      }
+      for (const style of Array.from(clone.querySelectorAll('style'))) {
+        style.textContent = mappedStyleText(style.textContent ?? '', snapshot);
+        if (!live()) throw new Error('docreader: journal.cloneSvg after embedded style rewrite');
+      }
+      return clone;
     },
 
     setStyle(el, prop, value, important = false) {

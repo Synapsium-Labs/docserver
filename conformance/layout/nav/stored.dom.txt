@@ -10,6 +10,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to jump"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: jump"
       "Fold"
 p
@@ -19,6 +21,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to constructor"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: constructor"
       "Fold"
 p
@@ -28,6 +32,8 @@ h2
   span .h-ctl chrome
     a .h-anchor chrome aria-label="Link to Plain"
       "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
     button .h-fold chrome aria-expanded="true" aria-label="Fold or unfold: Plain"
       "Fold"
 p

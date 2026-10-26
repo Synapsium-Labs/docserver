@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs, type ReaderStorage } from '../src/enhance/index.js';
-import { docKey, posKeyOf, PREFS_KEY } from '../src/enhance/state.js';
+import { createReaderState, docKey, posKeyOf, PREFS_KEY, UI_KEY } from '../src/enhance/state.js';
 import { render } from '../src/render/index.js';
 
 const DOC = ['# Example spec', '', '## 1. Scope', '', 'Scope text.', '', '## 2. Design', '', 'Design text.', '', '## 3. Plan', '', 'Plan text.', ''].join('\n');
@@ -145,11 +145,48 @@ describe('the snapshot is read during startup only, each key once, only this rea
       },
     });
     await enhance(root, { storage: { snapshot }, storageKey: 'k' });
-    // and the reading position's, whose key defaults to storageKey (Task 14)
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]);
+    // The feature-order reads plus the reading position key, whose key defaults to storageKey (Task 14).
+    const startupReads = [PREFS_KEY, docKey('k', 'marks'), UI_KEY, docKey('k', 'ixfold'), docKey('k', 'folds'), posKeyOf('k')];
+    expect(reads).toEqual(startupReads);
     (root.querySelector('button.h-fold') as HTMLButtonElement).click();
     setEnhancementPrefs(root, { width: 'wide' });
-    expect(reads).toEqual([PREFS_KEY, docKey('k', 'folds'), posKeyOf('k')]);
+    expect(reads).toEqual(startupReads);
+  });
+});
+
+describe('a caller namespace reaches every state-key seam', () => {
+  it('uses a supplied namespace for prefs, UI, document and position reads and writes', () => {
+    const namespace = 'reader-a';
+    const calls: [string, string | null][] = [];
+    const state = createReaderState({
+      options: {
+        storage: {
+          snapshot: {
+            [`${namespace}:prefs`]: '{"theme":"dark"}',
+            [`${namespace}:ui`]: '{"tab":"index"}',
+            [`${namespace}:doc:doc-a:folds`]: '["scope"]',
+            [`${namespace}:pos:place-a`]: '{"line":"3","offset":0,"y":2}',
+          },
+          set: (key, value) => void calls.push([key, value]),
+        },
+        storageKey: 'doc-a',
+        prefs: {},
+        namespace,
+      },
+      live: () => true,
+      operate: (fn) => { fn(); },
+    });
+    expect(state.prefs.theme).toBe('dark');
+    expect(state.readUi('tab')).toBe('index');
+    expect(state.readDoc('folds')).toEqual(['scope']);
+    expect(state.readPos('place-a')).toEqual({ line: '3', offset: 0, y: 2 });
+    state.setPrefs({ width: 'wide' });
+    state.writeUi('tab', 'contents');
+    state.writeDoc('folds', ['design']);
+    state.writePos('place-a', { line: '7', offset: 1, y: 3 });
+    expect(calls.map(([key]) => key)).toEqual([
+      `${namespace}:prefs`, `${namespace}:ui`, `${namespace}:doc:doc-a:folds`, `${namespace}:pos:place-a`,
+    ]);
   });
 });
 

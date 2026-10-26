@@ -3,7 +3,29 @@
 // and its deferred teardown, conditional restore, and the journal it rests on. The fixtures are real render()
 // output, parsed by the test and moved into a root; a subtree is compared before enhance and after destroy by its
 // serialization (the tests read outerHTML; the library never touches it).
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const undoProbe = vi.hoisted(() => ({
+  onUndo: null as (() => void) | null,
+}));
+
+vi.mock('../src/enhance/journal.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/enhance/journal.js')>();
+  return {
+    ...actual,
+    createJournal(live: () => boolean, operate: (fn: () => void) => void) {
+      const control = actual.createJournal(live, operate);
+      return Object.freeze({
+        ...control,
+        undoAll(): unknown[] {
+          undoProbe.onUndo?.();
+          return control.undoAll();
+        },
+      });
+    },
+  };
+});
+
 import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR, chrome, createJournal, siblingRun } from '../src/enhance/journal.js';
 import { registrySize } from '../src/enhance/lifecycle.js';
@@ -56,6 +78,7 @@ function mount(md = DOC): HTMLElement {
 }
 
 afterEach(async () => {
+  undoProbe.onUndo = null;
   for (const root of mounted.splice(0)) await destroyEnhancement(root).catch(() => undefined);
   document.body.replaceChildren();
 });
@@ -326,14 +349,24 @@ describe('destroyEnhancement', () => {
     });
     delete (root as unknown as Record<string, unknown>)['removeAttribute'];
     expect(err).toBeInstanceOf(AggregateError);
-    expect((err as AggregateError).errors.every((e) => e === fault)).toBe(true);
+    const faults = (err as AggregateError).errors;
+    expect(faults).not.toHaveLength(0);
+    expect(faults.every((e) => e === fault)).toBe(true);
     expect(chromeCount(root)).toBe(0); // the other steps still ran
-    expect(root.hasAttribute('data-docreader-root')).toBe(true); // the step that failed left its marker
+    expect(registrySize(document)).toBe(0); // cleanup releases ownership despite its reported failures
+    // Each of these restorations used the host method that the fixture deliberately refused.
+    expect(root.getAttribute('class')).toBe('has-toc');
+    expect(root.hasAttribute('data-docreader-root')).toBe(true);
+    expect(root.getAttribute('data-width')).toBe('standard');
+    expect(root.getAttribute('data-font')).toBe('serif');
+    root.removeAttribute('class');
     root.removeAttribute('data-docreader-root');
     root.removeAttribute('data-width');
     root.removeAttribute('data-font');
     expect(root.outerHTML).toBe(before);
-    expect(await outcome(enhance(root))).toBe('resolved');
+    await enhance(root);
+    await destroyEnhancement(root);
+    expect(root.outerHTML).toBe(before);
   });
 });
 
@@ -541,6 +574,7 @@ describe('the knot: destroy in the middle of a fold action', () => {
     const root = mount();
     const before = root.outerHTML;
     const obs = new MutationObserver(() => undefined);
+    const forward: MutationRecord[] = [];
     let destroyed: Promise<void> | null = null;
     let again: Promise<void> | null = null;
     let chromeAtDestroy = -1;
@@ -555,21 +589,22 @@ describe('the knot: destroy in the middle of a fold action', () => {
     };
     await enhance(root, { storage, storageKey: 'k' });
     obs.observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
+    undoProbe.onUndo = () => {
+      // This is the boundary: every pending record is forward work, before undo restores anything.
+      forward.push(...obs.takeRecords());
+    };
     const btn = root.querySelector('button.h-fold') as HTMLButtonElement;
     const heading = btn.closest('h2') as HTMLElement;
     btn.click();
-    const afterDestroy = obs.takeRecords();
+    undoProbe.onUndo = null;
     obs.disconnect();
 
     expect(again).toBe(destroyed);
     expect(chromeAtDestroy).toBeGreaterThan(0); // deferred: still in place right after the call
+    expect(forward).toEqual([]);
     expect(chromeCount(root)).toBe(0); // torn down when the click handler unwound
-    // The fold never reached the DOM: no hidden or class write, and nothing on the button.
-    const illegal = afterDestroy.filter(
-      (r) => (r.type === 'attributes' && (r.attributeName === 'hidden' || r.attributeName === 'class' || r.attributeName === 'aria-expanded')) || r.target === btn,
-    );
-    expect(illegal).toEqual([]);
     expect(heading.classList.contains('folded')).toBe(false);
+    expect(root.outerHTML).toBe(before);
     let restoredAtResolve = false;
     await (destroyed as unknown as Promise<void>).then(() => {
       restoredAtResolve = root.outerHTML === before;
@@ -716,6 +751,35 @@ describe('the journal', () => {
     expect(parent.outerHTML).toBe(before);
     expect(undoAll()).toEqual([]);
     expect(ran).toBe(false);
+  });
+
+  it('does not rewrite a clone ID after clone enumeration requests destroy', () => {
+    const source = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    source.id = 'source-root';
+    const child = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    child.id = 'source-child';
+    source.append(child);
+    let live = true;
+    const { journal } = createJournal(() => live, (fn) => fn());
+    const original = Object.getOwnPropertyDescriptor(SVGSVGElement.prototype, 'querySelectorAll');
+    const nativeQuery = SVGSVGElement.prototype.querySelectorAll;
+    let clone: SVGSVGElement | null = null;
+    Object.defineProperty(SVGSVGElement.prototype, 'querySelectorAll', { configurable: true, value: function <E extends Element>(selector: string): NodeListOf<E> {
+      const result = nativeQuery.call(this, selector) as NodeListOf<E>;
+      if (this !== source && selector === '*') {
+        clone = this;
+        live = false;
+      }
+      return result;
+    } });
+    try {
+      expect(() => journal.cloneSvg(source, new Map([['source-root', 'docreader.1.figure'], ['source-child', 'docreader.2.figure']]))).toThrow();
+      const captured = clone as SVGSVGElement | null;
+      expect([captured?.id, captured?.querySelector('g')?.id]).toEqual(['source-root', 'source-child']);
+    } finally {
+      if (original === undefined) delete (SVGSVGElement.prototype as unknown as Record<string, unknown>).querySelectorAll;
+      else Object.defineProperty(SVGSVGElement.prototype, 'querySelectorAll', original);
+    }
   });
 
   it('undo attempts every entry in reverse even when one throws, and returns the faults', () => {

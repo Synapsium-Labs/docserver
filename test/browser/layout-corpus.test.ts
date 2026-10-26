@@ -38,6 +38,55 @@ const CLOBBERED = ['core/anchors', 'core/clobbering'];
 
 const FOLDS_KEY = 'docreader:doc:case:folds';
 
+const CUE_SCOPES: Readonly<Record<string, number>> = {
+  'diagram-tools/cluster-internal-shapes': 2,
+  'diagram-tools/edge-label': 1,
+  'diagram-tools/flowchart-link-data-id': 1,
+  'diagram-tools/node-id': 1,
+};
+
+interface CueState {
+  readonly targets: number;
+  readonly boxes: readonly { readonly width: number; readonly height: number }[];
+  readonly rings: readonly number[];
+  readonly dots: readonly number[];
+}
+
+function cueState(): CueState | null {
+  return document.querySelector('main[data-harness-root]') === null ? null : (() => {
+    const targets = Array.from(document.querySelectorAll<SVGGElement>('main[data-harness-root] figure svg g.dnode'));
+    return {
+      targets: targets.length,
+      boxes: targets.map((target) => {
+        const box = target.getBBox();
+        return { width: box.width, height: box.height };
+      }),
+      rings: targets.map((target) => target.querySelectorAll(':scope > .dn-ring').length),
+      dots: targets.map((target) => target.querySelectorAll(':scope > .dn-dot').length),
+    };
+  })();
+}
+
+async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>): Promise<void> {
+  const expected = CUE_SCOPES[c.id];
+  if (expected === undefined) return;
+  try {
+    await doc.page.waitForFunction((count) => {
+      const targets = Array.from(document.querySelectorAll<SVGGElement>('main[data-harness-root] figure svg g.dnode'));
+      return targets.length === count
+        && targets.every((target) => {
+          const box = target.getBBox();
+          return box.width > 0 && box.height > 0
+            && target.querySelectorAll(':scope > .dn-ring').length === 1
+            && target.querySelectorAll(':scope > .dn-dot').length === 1;
+        });
+    }, expected);
+  } catch (error) {
+    const state = await doc.page.evaluate(cueState);
+    throw new Error(`${c.id}: definition cues not ready ${JSON.stringify(state)}`, { cause: error });
+  }
+}
+
 afterAll(closeBrowsers);
 
 function how(c: LayoutCase): Omit<OpenHow, 'browser'> {
@@ -48,6 +97,7 @@ function how(c: LayoutCase): Omit<OpenHow, 'browser'> {
 async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void): Promise<void> {
   const doc = await openDoc(c.markdown, c.options, { browser, ...how(c) });
   try {
+    await waitForCues(c, doc);
     const snap = await doc.snapshot(c.scope);
     holdClean(c.id, { violations: await doc.violations(), aborted: doc.aborted, missing: doc.missing });
     holdIt(c.id, snap, c.expected);

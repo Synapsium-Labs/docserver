@@ -1,0 +1,25 @@
+{
+  "options": {
+    "storageKey": "rail",
+    "storage": {
+      "snapshot": {
+        "docreader:doc:rail:marks": "{\"1-read\":\"3xjn7e\",\"2-definitions\":\"ignxqi\",\"3-later\":\"prior\"}",
+        "docreader:doc:rail:ixfold": "{\"Definitions\":true}",
+        "docreader:ui": "{\"sidetab\":\"index\"}"
+      }
+    }
+  },
+  "scope": [
+    "doc-toc",
+    "toc-tabs",
+    "toc-panel",
+    "toc-index",
+    "ix-group",
+    "ix",
+    "mk",
+    "h-mark",
+    "h2[aria-label]",
+    "button[aria-pressed]"
+  ],
+  "viewport": { "width": 1440, "height": 900 }
+}

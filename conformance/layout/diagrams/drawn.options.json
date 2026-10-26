@@ -1,0 +1,5 @@
+{
+  "options": { "mermaid": {} },
+  "scope": ["drawn", "draw-failed", "fig-error", "svg[role]", "svg[aria-label]"],
+  "csp": "reader"
+}
