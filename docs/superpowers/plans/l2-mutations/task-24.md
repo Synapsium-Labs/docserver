@@ -24,7 +24,7 @@ Each reversal below runs serially in place through the bounded runner, produces 
 ]
 ```
 
-M3 measures the ownership group, not nine independently deleted guards. M4's original control is part of the 264-test selection; the restored settings file also passes all 29 assertions independently. M1 and M2 have both initial reproductions and exact post-fix deletion measurements. Earlier output-limited or setup-error attempts are not counted as assertion-red evidence.
+These four receipts use the runner's output and process-group deadline bounds, but do not record a measured `RLIMIT_NPROC` ceiling. That is a procedural limitation, not evidence that an omitted process cap was applied. M3 measures the ownership group, not nine independently deleted guards. M4's original control is part of the 264-test selection; the restored settings file also passes all 29 assertions independently. M1 and M2 have both initial reproductions and exact post-fix deletion measurements. Earlier output-limited or setup-error attempts are not counted as assertion-red evidence.
 
 ## Other test-first findings
 
