@@ -388,10 +388,25 @@ describeBrowsers((browser) => {
       await auxclick([2, 3, 4]);
       await sleep(400);
       expect(data(await host.record()).slice(1)).toEqual([]);
-      await auxclick([1]);
+      // What the engine did with the middle button's auxclick, observed from the test side only (the shipped scripts
+      // are untouched): whether the link was found, the dispatch's return value, and what a window bubble listener
+      // added after the guard's net and a listener on the guard's element saw.
+      const seen = await f.evaluate(() => {
+        const a = document.querySelector('article a[href="other.md"]');
+        const out: Record<string, unknown> = { found: a !== null, inChrome: a?.closest('[data-docreader-chrome]') != null };
+        const guardEl = document.head.querySelector('script');
+        const onWin = (e: Event): void => { out['atWindow'] = true; out['preventedAtWindow'] = e.defaultPrevented; };
+        const onLink = (e: Event): void => { out['link'] = (e as CustomEvent).detail; };
+        window.addEventListener('auxclick', onWin, false);
+        guardEl?.addEventListener('docserver:link', onLink);
+        out['notCanceled'] = a?.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, composed: true, button: 1 }));
+        window.removeEventListener('auxclick', onWin, false);
+        guardEl?.removeEventListener('docserver:link', onLink);
+        return out;
+      });
       await sleep(400);
       const after = await host.record();
-      expect(data(after).slice(1)).toEqual([{ t: 'navigate', href: 'other.md' }]);
+      expect(data(after).slice(1), JSON.stringify(seen)).toEqual([{ t: 'navigate', href: 'other.md' }]);
       expect(after.loads).toHaveLength(1);
     } finally {
       await done();
