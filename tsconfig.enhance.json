@@ -4,6 +4,6 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/enhance", "src/types/markdown-it-footnote.d.ts", "test/enhance-*.test.ts", "test/browser"],
+  "include": ["src/enhance", "src/frame-runtime", "src/types/markdown-it-footnote.d.ts", "test/enhance-*.test.ts", "test/browser"],
   "exclude": []
 }

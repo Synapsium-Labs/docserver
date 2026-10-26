@@ -50,6 +50,10 @@ const ALLOWED = [
   /^assets\/reader\.css$/,
   /^assets\/fonts\/[A-Za-z0-9._-]+\.(?:woff2|txt|md)$/,
   /^assets\/mermaid\/mermaid\.mjs$/,
+  // The frame assets (docserver L3): the committed manifest always; the frame files when build:frame has run.
+  /^assets\/assets\.json$/,
+  /^assets\/frame\/(?:guard|bootstrap|enhance)\.js$|^assets\/frame\/reader\.css$/,
+  /^assets\/mermaid\/mermaid\.frame\.js$/,
   /^(?:package\.json|README\.md|LICENSE|THIRD-PARTY-NOTICES)$/,
 ];
 
