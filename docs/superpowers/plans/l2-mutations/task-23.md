@@ -72,4 +72,24 @@ The original seven targeted rows ran sequentially against a green 43-test unit c
 | L2-T23-M14b | ASSERTION RED | Replacing `< 600` with `<= 600` opens a card at the synthetic 600ms pointer-up endpoint. | `task24-guard-M14b-browser-20261025.log` |
 | L2-T23-M15 | ASSERTION RED | Removing important priority leaves the definition dot fill priority absent. | `task24-guard-M15-browser-20261025.log` |
 
+## Current built-Mermaid integration control (2026-10-26)
+
+At `38f2ae87c430c65e3412d2f8668fb0cbbbea8869`, a fresh control, exact M7 reversal and restored control run in three separate Vitest processes. The command selects `discovers Mermaid internal` from `test/browser/diagram-tools.test.ts`, with `--project layout --maxWorkers=1 --fileParallelism=false` and `DOCREADER_BROWSERS=chromium`. Both controls pass one assertion case; the complete reversal fails at the generated cluster-label expectation, where text `R1` remains but its `ref` is undefined instead of `R1`. Receipts: `task24-built-M7-control-20261026.log`, `task24-built-M7-reversal-20261026.log`, `task24-built-M7-restored-20261026.log`.
+
+The harness calls `buildMermaid()` in memory, routes its exact returned module bytes to the page and imports that module in its bootstrap. The test therefore consumes real generated Mermaid output, not only a hand-authored SVG. This is the same built-Mermaid integration interpretation recorded in Task 21's notes. It closes this current integration-row qualification only: the enhancement bundle is separately built from source, and packed/released enhancement output, all other rows, both browsers and the requested-model gate are not proved by it. The earlier exclusions remain correct for their historical receipts.
+
+Frozen inputs (SHA-256):
+
+| Input | SHA-256 |
+|---|---|
+| `src/enhance/diagram-tools.ts` | `2292561d71cfc88d19b31e49626f659c6cfc5bb5ec96c22260fd736ac5fe0d3b` |
+| `scripts/build-mermaid.mjs` | `770d11b0ab2622d8f9e6cdb0f9324fa95767152f832012d0d720d09329b72011` |
+| `scripts/mermaid-elk-stub.mjs` | `31acb415b48e14d8cb80ec8d14f79b4bac8f541b549db16537917bd5c5c8d50c` |
+| `package-lock.json` | `e3fa9d2d0abba64fa53fb0171b9ab40fc0778bbfd8e078ed5e4e45270bcb1f02` |
+| `test/browser/harness.ts` | `00b3297fb3aa9c29e1c6443493c7194fb9dbc4344a66ab04787e2aed72ede834` |
+| `test/browser/page/bootstrap.ts` | `904ca1da973004471ba5b638f596318c2c3dec58d0782ed3d9af4d333b4e826b` |
+| `test/browser/diagram-tools.test.ts` | `899564abb17442f9816ac8198ee5dcb09baec41d71fc101a049f38eea8562cd8` |
+
+Source bytes restore exactly before the final control. No repository copy, install, disk build or new browser harness is used.
+
 Earlier M1 pre-child-boundary-only and M2 prior-fixture greens remain historical limitations; the complete two-boundary M1 witness and reordered-term M2 fixture supersede them for the listed exact reversals, not by deletion. Earlier M5a, M9, M10 and M12 survivor greens remain historical weaker probes, not redundancy rulings. The earlier M5 asynchronous interceptor and M7 readiness timeout remain limited historical receipts; the test-body M5 and completed-shape M7 assertion receipts above supersede them.
