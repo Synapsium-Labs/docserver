@@ -1,0 +1,42 @@
+{
+  "manifest": 1,
+  "package": "@synapsium-labs/docserver",
+  "version": "0.1.0",
+  "bridgeProtocol": 1,
+  "files": [
+    {
+      "path": "frame/bootstrap.js",
+      "sha256": "77f77ad9a7e0a4c2687ce4a7e5525cce6f31c1ff79b889653939eec70ac369fa",
+      "bytes": 17860,
+      "kind": "script",
+      "csp": "'sha256-d/d62afgpMJofOSn5VJczm8xwf95uIllOTnuxwrDafo='"
+    },
+    {
+      "path": "frame/enhance.js",
+      "sha256": "33232f70834a2e6909bbb2b1af43f42911cade6c9e42cb32f9a8613fed4b3050",
+      "bytes": 193270,
+      "kind": "script",
+      "csp": "'sha256-MyMvcINKLmkJu7Kxr0P0KRHK3myeQssy+ahhP+1LMFA='"
+    },
+    {
+      "path": "frame/guard.js",
+      "sha256": "a158bb26ea07fcb2d8cf6c0945cd3dfac0f290f2129494cb4259cbec217574e2",
+      "bytes": 3643,
+      "kind": "script",
+      "csp": "'sha256-oVi7JuoH/LLYz2wJRc09+sDykPISlJTLQlnL7CF1dOI='"
+    },
+    {
+      "path": "frame/reader.css",
+      "sha256": "7b4885c7951612ada8d02051da1abd1aa6ecbca93999350d3fc8ab56175eda0a",
+      "bytes": 546649,
+      "kind": "style"
+    },
+    {
+      "path": "mermaid/mermaid.frame.js",
+      "sha256": "7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3",
+      "bytes": 3747084,
+      "kind": "script",
+      "csp": "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='"
+    }
+  ]
+}
