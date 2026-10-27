@@ -132,10 +132,15 @@ describe('package.json: identity', () => {
     expect(pkg.engines.node).toBe('>=22');
   });
 
-  it('typecheck runs the whole-tree, the render-purity, the enhance (DOM) and the frame (no DOM) projects', () => {
+  it('typecheck runs the whole-tree, the render-purity, the enhance (DOM), the frame (no DOM) and the host (DOM) projects', () => {
     expect(pkg.scripts['typecheck']).toBe(
-      'tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json && tsc --noEmit -p tsconfig.frame.json',
+      'tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json && tsc --noEmit -p tsconfig.frame.json && tsc --noEmit -p tsconfig.host.json',
     );
+  });
+
+  it('the package build leaves src/host out until Task 12 exports ./host (it would emit dist/host and dist/frame)', () => {
+    const cfg = readJson('tsconfig.build.json') as { exclude: string[] };
+    expect(cfg.exclude).toContain('src/host');
   });
 });
 

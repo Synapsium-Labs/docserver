@@ -44,7 +44,7 @@
     "README.md"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json && tsc --noEmit -p tsconfig.frame.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json && tsc --noEmit -p tsconfig.frame.json && tsc --noEmit -p tsconfig.host.json",
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json && npm run build:mermaid",
     "build:mermaid": "node scripts/build-mermaid.mjs",
