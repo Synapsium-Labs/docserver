@@ -142,6 +142,11 @@ describe('package.json: identity', () => {
     const cfg = readJson('tsconfig.build.json') as { exclude: string[] };
     expect(cfg.exclude).toContain('src/host');
   });
+
+  it('the package build leaves src/highlight out until Task 12 exports ./highlight (it would emit dist/highlight)', () => {
+    const cfg = readJson('tsconfig.build.json') as { exclude: string[] };
+    expect(cfg.exclude).toContain('src/highlight');
+  });
 });
 
 describe('.npmrc', () => {

@@ -187,7 +187,7 @@ describe('npm pack', () => {
     const needed = manifest
       .filter((m) => m.kind !== 'generated')
       .flatMap((m) => [`conformance/corpus/${m.id}.md`, `conformance/expected/${m.id}.html`, `conformance/expected/${m.id}.meta.json`]);
-    expect(needed.length).toBe(156);
+    expect(needed.length).toBe(162);
     expect(needed.filter((f) => !packed.files.includes(f))).toEqual([]);
   });
 
@@ -210,7 +210,7 @@ describe('the packed package, imported by name', () => {
         'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
         "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
         'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-        'consumer-smoke: 82 of 82 cases passed',
+        'consumer-smoke: 84 of 84 cases passed',
         '',
       ].join('\n'),
     );
@@ -241,7 +241,7 @@ describe('the packed package, imported by name', () => {
       'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
       "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
       'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-      'consumer-smoke: 81 of 82 cases passed',
+      'consumer-smoke: 83 of 84 cases passed',
     ]);
     expect(lines[9]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
     expect(brokenSmoke?.status).toBe(1);
