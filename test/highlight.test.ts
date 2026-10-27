@@ -77,6 +77,14 @@ describe('highlightCode', () => {
     });
   }
 
+  it('xml keeps the text of a script or a style element out of every other grammar (docserver L3, Task 11, request (c))', () => {
+    const html = highlightCode(SAMPLE, 'xml');
+    expect(html).toContain('<span class="hljs-tag">');
+    expect(html.match(/class="language-[a-z]+"/g)).toBeNull();
+    expect(html).toContain('&gt;</span>alert(1)<span class="hljs-tag">');
+    expect(html).toContain('&gt;</span>a{}<span class="hljs-tag">');
+  });
+
   it('ignores an illegal lexeme instead of giving up on the block', () => {
     expect(highlightCode('x = 1 ?\n', 'python')).toBe('x = <span class="hljs-number">1</span> ?\n');
   });

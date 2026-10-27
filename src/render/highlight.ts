@@ -10,6 +10,16 @@
 // page may configure or extend, and that must not move this library's output. highlight.js escapes the text
 // itself (& < > " and ' as &#x27;) and adds only <span class="..."> markup; the reference's Pygments markup
 // differs, so the corpus compares the text inside the wrapper (normaliseForCompare).
+//
+// Since L3 (Task 11, the first consumer's requests (a) to (c)) this module is also `./highlight`'s code, re-exported
+// unchanged by src/highlight/index.ts: createHighlighter() is the one implementation of the fence rule's decision
+// (which language, whole or line by line, or plain escaped text within one document's budget), so a host that colours
+// code itself colours it exactly as render() does. RenderOptions.highlight false gives render() a highlighter with no
+// budget. xml is registered as a private copy whose script and style modes hand nothing to another grammar
+// (xmlWithoutSubLanguages): through them the stock grammar ran every line of an xml fence through javascript or css
+// as well, the cost request (c) measured. No export of this module may name a highlight.js type: its declarations
+// are `./highlight`'s, and highlight.js's own begin `/// <reference lib="dom" />`, which would bring the DOM library
+// into a worker that imports the entry (test/highlight-api.test.ts reads the emitted declarations to hold this).
 import hljsCore from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
@@ -29,9 +39,41 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import { pyLower } from './pyText.js';
+import { escapeHtml } from './escape.js';
+import { pyLower, pyStrip } from './pyText.js';
 
 type LanguageDefinition = Parameters<typeof hljsCore.registerLanguage>[1];
+
+/** Delete every own `subLanguage` in a language definition's tree of modes, in place. */
+function dropSubLanguages(definition: object): void {
+  const seen = new Set<object>();
+  const stack: unknown[] = [definition];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (typeof node !== 'object' || node === null || seen.has(node)) continue;
+    seen.add(node);
+    if (Object.hasOwn(node, 'subLanguage')) Reflect.deleteProperty(node, 'subLanguage');
+    for (const value of Object.values(node)) stack.push(value);
+  }
+}
+
+/**
+ * highlight.js's xml grammar with no sub-language (request (c)): its script and style modes still find their end
+ * tags, and their text stays plain instead of being highlighted as javascript or css. Unconditional: the grammar is
+ * built fresh for each instance it is registered on, so the package's own grammar is never touched.
+ */
+const xmlCopy: LanguageDefinition = (api) => {
+  const definition = xml(api);
+  dropSubLanguages(definition);
+  return definition;
+};
+
+/**
+ * The xml grammar render() registers (xmlCopy), for tests to read; the entries never export it. Typed without
+ * highlight.js's declarations, which this module's declarations must not import: a function of a highlight.js
+ * instance that returns a fresh grammar.
+ */
+export const xmlWithoutSubLanguages: (api: never) => object = xmlCopy;
 
 /** Each registered language: its canonical name, its highlight.js definition, its other names. */
 const DEFINITIONS: readonly (readonly [name: string, definition: LanguageDefinition, aliases: readonly string[]])[] = [
@@ -50,7 +92,7 @@ const DEFINITIONS: readonly (readonly [name: string, definition: LanguageDefinit
   ['rust', rust, []],
   ['sql', sql, []],
   ['typescript', typescript, ['ts', 'tsx']],
-  ['xml', xml, ['html', 'svg']],
+  ['xml', xmlCopy, ['html', 'svg']],
   ['yaml', yaml, ['yml']],
   ['plaintext', plaintext, ['text']],
 ];
@@ -94,6 +136,65 @@ export function resolveLanguage(info: string): string | null {
 export const MAX_WHOLE_BLOCK_CHARS = 256;
 
 /**
+ * A block is highlighted only when none of its lines is longer than this, in code units. Several registered grammars
+ * (ini, java, javascript and typescript among them) take time quadratic in a line's length: a 30000-character line
+ * took 5-10 s.
+ */
+export const MAX_LINE_CHARS = 256;
+
+/** The default number of code units one highlighter highlights; a block that would pass it is plain escaped text. */
+export const MAX_DOCUMENT_CHARS = 262_144;
+
+/** The highlighting engine and its exact version, the package's pin. */
+export const HIGHLIGHT_ENGINE: Readonly<{ name: 'highlight.js'; version: string }> = Object.freeze({
+  name: 'highlight.js',
+  version: '11.12.0',
+});
+
+/** How a block was coloured: highlighted whole, highlighted one line at a time (ruling C24), or not at all. */
+export type HighlightMode = 'whole' | 'lines' | 'plain';
+
+export interface HighlighterOptions {
+  /** Code units this highlighter highlights in all, a non-negative safe integer. Default MAX_DOCUMENT_CHARS. */
+  maxDocumentChars?: number;
+}
+
+export interface HighlightResult {
+  /** The code as html: escaped text, and highlight.js spans unless the mode is 'plain'. */
+  html: string;
+  /** The canonical name the info string resolved to, or null; given whatever the mode. */
+  language: string | null;
+  mode: HighlightMode;
+  /** Code units this highlighter has highlighted so far, this block included; at most its maxDocumentChars. */
+  charsUsed: number;
+}
+
+export interface Highlighter {
+  /**
+   * `code` as html. `info` is a fence's info string, read as render() reads it: its first word after a Python-style
+   * strip, resolved without case through LANGUAGES. The code is used as given; render() passes the fence's text with
+   * its leading and trailing line feeds removed and one added.
+   */
+  highlight(code: string, info: string): HighlightResult;
+}
+
+/** The first word of a fence's info string: Python's `info.strip().split(" ")[0]`. */
+export function fenceName(info: string): string {
+  return pyStrip(info).split(' ')[0] ?? '';
+}
+
+/** Whether no line of `text` is longer than MAX_LINE_CHARS code units. */
+function shortLines(text: string): boolean {
+  for (let from = 0; from < text.length; ) {
+    const end = text.indexOf('\n', from);
+    const stop = end === -1 ? text.length : end;
+    if (stop - from > MAX_LINE_CHARS) return false;
+    from = stop + 1;
+  }
+  return true;
+}
+
+/**
  * `text` highlighted as `language`, a canonical name resolveLanguage returned: escaped text and
  * highlight.js spans. Throws RangeError for any other name.
  *
@@ -111,4 +212,33 @@ export function highlightCode(text: string, language: string): string {
     .split('\n')
     .map((line) => hljs.highlight(line, options).value)
     .join('\n');
+}
+
+/**
+ * A highlighter for one document (request (a)): each block is highlighted as its language when it has one, none of
+ * its lines is longer than MAX_LINE_CHARS, and it fits in what is left of `maxDocumentChars`; otherwise it is plain
+ * text, escaped as markdown-it escapes text. render() makes one for each document, so a host that makes one per
+ * document and passes each fence in order gets render()'s code html, block for block. Pure: no clock, no I/O, no
+ * global state; the only state is this highlighter's count. Throws RangeError for an invalid maxDocumentChars.
+ */
+export function createHighlighter(o?: HighlighterOptions): Highlighter {
+  const max: unknown = o?.maxDocumentChars === undefined ? MAX_DOCUMENT_CHARS : o.maxDocumentChars;
+  if (typeof max !== 'number' || !Number.isSafeInteger(max) || max < 0) {
+    throw new RangeError(`createHighlighter: maxDocumentChars must be a non-negative safe integer, got ${String(max)}`);
+  }
+  let used = 0;
+  return Object.freeze({
+    highlight(code: string, info: string): HighlightResult {
+      if (typeof code !== 'string' || typeof info !== 'string') {
+        throw new TypeError('highlight: code and info must be strings');
+      }
+      const language = resolveLanguage(fenceName(info));
+      if (language === null || used + code.length > max || !shortLines(code)) {
+        return { html: escapeHtml(code), language, mode: 'plain', charsUsed: used };
+      }
+      used += code.length;
+      const mode: HighlightMode = code.length <= MAX_WHOLE_BLOCK_CHARS ? 'whole' : 'lines';
+      return { html: highlightCode(code, language), language, mode, charsUsed: used };
+    },
+  });
 }

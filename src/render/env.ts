@@ -5,6 +5,7 @@
 // plugin (markdown-it-footnote) keeps its own per-document state on the same object, under `footnotes`,
 // which it creates when a document defines a footnote.
 import { createCommentScan, type CommentScan } from './allowlist.js';
+import { createHighlighter, MAX_DOCUMENT_CHARS, type Highlighter } from './highlight.js';
 import { createSlugState, type SlugState } from './slug.js';
 import type { FrontEntry, Heading } from './types.js';
 
@@ -21,8 +22,11 @@ export interface RenderEnv {
   figures: number;
   /** Their distinct diagram keywords, in document order, at most 32 (meta.mermaidKinds; fence.ts). */
   readonly mermaidKinds: string[];
-  /** Code units the fence rule has highlighted so far, at most MAX_HIGHLIGHT_CHARS (fence.ts). */
-  highlighted: number;
+  /**
+   * The document's code highlighter (fence.ts; highlight.ts's createHighlighter, `./highlight`'s): its budget is
+   * MAX_DOCUMENT_CHARS code units, or none when RenderOptions.highlight is false.
+   */
+  readonly highlighter: Highlighter;
   /** Tables the table_open rule has emitted so far (meta.tables; tables.ts). */
   tables: number;
   /** Empty cells the table rule has added to short rows in this document, at most 65536 (tables.ts). */
@@ -34,8 +38,8 @@ export interface RenderEnv {
   frontList: FrontEntry[] | null | undefined;
 }
 
-/** A fresh env for one render. */
-export function createEnv(o: { lineAttrs: boolean }): RenderEnv {
+/** A fresh env for one render. `highlight` (default true) is RenderOptions.highlight. */
+export function createEnv(o: { lineAttrs: boolean; highlight?: boolean }): RenderEnv {
   return {
     lineAttrs: o.lineAttrs,
     slugs: createSlugState(),
@@ -43,7 +47,7 @@ export function createEnv(o: { lineAttrs: boolean }): RenderEnv {
     comments: createCommentScan(),
     figures: 0,
     mermaidKinds: [],
-    highlighted: 0,
+    highlighter: createHighlighter({ maxDocumentChars: o.highlight === false ? 0 : MAX_DOCUMENT_CHARS }),
     tables: 0,
     emptyCells: 0,
     frontList: undefined,

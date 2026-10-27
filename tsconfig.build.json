@@ -8,5 +8,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src"],
-  "exclude": ["test", "src/frame", "src/frame-runtime", "src/host"]
+  "exclude": ["test", "src/frame", "src/frame-runtime", "src/host", "src/highlight"]
 }

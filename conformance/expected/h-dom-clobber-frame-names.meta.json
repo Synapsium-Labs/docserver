@@ -1,0 +1,50 @@
+{
+  "front": null,
+  "frontList": null,
+  "title": "seed",
+  "headings": [
+    {
+      "level": 1,
+      "id": "seed",
+      "text": "seed"
+    },
+    {
+      "level": 1,
+      "id": "bootstrap",
+      "text": "bootstrap"
+    },
+    {
+      "level": 1,
+      "id": "guard",
+      "text": "guard"
+    },
+    {
+      "level": 1,
+      "id": "docserver",
+      "text": "docserver"
+    },
+    {
+      "level": 1,
+      "id": "docreader",
+      "text": "docreader"
+    },
+    {
+      "level": 1,
+      "id": "currentscript",
+      "text": "currentScript"
+    },
+    {
+      "level": 1,
+      "id": "enhance",
+      "text": "enhance"
+    },
+    {
+      "level": 1,
+      "id": "mermaid",
+      "text": "mermaid"
+    }
+  ],
+  "figures": 0,
+  "tables": 0,
+  "mermaidKinds": []
+}

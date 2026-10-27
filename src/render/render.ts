@@ -144,16 +144,19 @@ function renderBounded(engine: MarkdownIt, tokens: Token[], env: RenderEnv, limi
 
 /**
  * render() with an explicit engine. Internal: tests inject a faulty engine here to reach the fallback.
- * Throws RangeError for an invalid `maxBytes` or `maxHtmlBytes`; never throws for any input text.
+ * Throws RangeError for an invalid `maxBytes` or `maxHtmlBytes`, TypeError for a `highlight` that is not a boolean;
+ * never throws for any input text.
  */
 export function renderWith(markdown: string, o: RenderOptions | undefined, engine: MarkdownIt): RenderResult {
   const maxBytes = checkLimit('render', 'maxBytes', o?.maxBytes ?? DEFAULT_MAX_BYTES);
   const maxHtmlBytes = checkLimit('render', 'maxHtmlBytes', o?.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES);
+  const highlight: unknown = o?.highlight === undefined ? true : o.highlight;
+  if (typeof highlight !== 'boolean') throw new TypeError(`render: highlight must be a boolean, got ${typeof highlight}`);
   const bytes = utf8Length(markdown, maxBytes);
   if (bytes > maxBytes) return { html: '', outcome: 'over-limit', bytes, meta: EMPTY_META };
   const src = stripBom(markdown);
   try {
-    const env = createEnv({ lineAttrs: o?.lineAttrs ?? true });
+    const env = createEnv({ lineAttrs: o?.lineAttrs ?? true, highlight });
     const tokens = engine.parse(src, env);
     const html = renderBounded(engine, tokens, env, maxHtmlBytes);
     if (html === undefined) {
@@ -165,7 +168,7 @@ export function renderWith(markdown: string, o: RenderOptions | undefined, engin
   }
 }
 
-/** Render Markdown to HTML and meta. Pure and deterministic; see RenderOptions for the three options. */
+/** Render Markdown to HTML and meta. Pure and deterministic; see RenderOptions for the four options. */
 export function render(markdown: string, o?: RenderOptions): RenderResult {
   return renderWith(markdown, o, ENGINE);
 }

@@ -17,16 +17,21 @@
 //   MAX_HIGHLIGHT_CHARS highlighted code units, keeps its language class and gets the escaped text, as an
 //   unregistered name does. The corpus compares the text inside the wrapper (PD1), so no golden depends
 //   on which fences were highlighted.
+// - That decision and the html are the document's highlighter's (env.highlighter, highlight.ts's
+//   createHighlighter, which `./highlight` exports as it is: docserver L3, Task 11). With RenderOptions.highlight
+//   false the highlighter has no budget, so every fence is the escaped text with its wrapper and class kept.
 // A figure's caption is found by the figcaption core rule (figcaption.ts), which puts `figcaption_open`, the
 // caption's inline token and `figcaption_close` right after the fence (ruling C28). When the next token is
 // `figcaption_open`, this rule leaves the figure open and figcaption_close closes it, so the caption is
 // rendered, and counted against the html bound, token by token. scanRefs (scan.ts) reads fenceName and MERMAID.
 import type { Token } from 'markdown-it';
 import type { RenderEnv } from './env.js';
-import { escapeHtml, pyEscape } from './escape.js';
-import { highlightCode, resolveLanguage } from './highlight.js';
+import { pyEscape } from './escape.js';
+import { fenceName, MAX_DOCUMENT_CHARS, MAX_LINE_CHARS } from './highlight.js';
 import { lineAttr } from './lineAttrs.js';
 import { pyStrip } from './pyText.js';
+
+export { fenceName };
 
 /** The fence name that makes a Mermaid figure. */
 export const MERMAID = 'mermaid';
@@ -34,22 +39,17 @@ export const MERMAID = 'mermaid';
 /** At most this many distinct diagram keywords in meta.mermaidKinds. */
 export const MAX_MERMAID_KINDS = 32;
 
-/** A fence is highlighted only when none of its lines is longer than this, in code units. */
-export const MAX_HIGHLIGHT_LINE = 256;
+/** A fence is highlighted only when none of its lines is longer than this, in code units (highlight.ts's MAX_LINE_CHARS). */
+export const MAX_HIGHLIGHT_LINE = MAX_LINE_CHARS;
 
-/** At most this many code units of one document are highlighted; a fence that would pass it is escaped text. */
-export const MAX_HIGHLIGHT_CHARS = 262_144;
+/** At most this many code units of one document are highlighted; a fence that would pass it is escaped text (MAX_DOCUMENT_CHARS). */
+export const MAX_HIGHLIGHT_CHARS = MAX_DOCUMENT_CHARS;
 
 /** A diagram keyword: an ASCII letter, then up to 39 ASCII letters, digits, `_` or `-`, at a line's start. */
 const KIND = /^[A-Za-z][A-Za-z0-9_-]{0,39}/;
 
 const BOM = 0xfeff;
 const LF = 0x0a;
-
-/** The first word of a fence's info string: Python's `info.strip().split(" ")[0]`. */
-export function fenceName(info: string): string {
-  return pyStrip(info).split(' ')[0] ?? '';
-}
 
 /**
  * The code text of a fence, as the reference's highlighter reads it (Pygments' lexer preprocessing): one
@@ -86,17 +86,6 @@ export function mermaidKind(source: string): string | null {
   return line === undefined ? null : (KIND.exec(line)?.[0] ?? null);
 }
 
-/** Whether no line of `text` is longer than MAX_HIGHLIGHT_LINE code units. */
-function shortLines(text: string): boolean {
-  for (let from = 0; from < text.length; ) {
-    const end = text.indexOf('\n', from);
-    const stop = end === -1 ? text.length : end;
-    if (stop - from > MAX_HIGHLIGHT_LINE) return false;
-    from = stop + 1;
-  }
-  return true;
-}
-
 /** Count one rendered figure and record its keyword: distinct, in document order, at most MAX_MERMAID_KINDS. */
 function recordFigure(env: RenderEnv, source: string): void {
   env.figures += 1;
@@ -117,11 +106,7 @@ export function renderFence(tokens: Token[], idx: number, _options: unknown, env
     const figure = `<figure class="mermaid-figure"${dl}><pre class="mermaid">${pyEscape(token.content)}</pre>`;
     return tokens[idx + 1]?.type === 'figcaption_open' ? figure : `${figure}</figure>\n`;
   }
-  const text = codeText(token.content);
-  const language = resolveLanguage(name);
-  const highlight = language !== null && env.highlighted + text.length <= MAX_HIGHLIGHT_CHARS && shortLines(text);
-  if (highlight) env.highlighted += text.length;
-  const code = highlight ? highlightCode(text, language) : escapeHtml(text);
+  const { html, language } = env.highlighter.highlight(codeText(token.content), token.info);
   const cls = language === null ? 'hljs' : `hljs language-${language}`;
-  return `<div class="codehilite"${dl}><pre><code class="${cls}">${code}</code></pre></div>\n`;
+  return `<div class="codehilite"${dl}><pre><code class="${cls}">${html}</code></pre></div>\n`;
 }

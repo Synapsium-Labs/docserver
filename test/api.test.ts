@@ -55,7 +55,8 @@ describe('./render: signatures (ruling C2)', () => {
 
   it('render(markdown, options?) returns a RenderResult', () => {
     expectTypeOf(render).toEqualTypeOf<(markdown: string, o?: RenderOptions) => RenderResult>();
-    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs'>();
+    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs' | 'highlight'>();
+    expectTypeOf<RenderOptions['highlight']>().toEqualTypeOf<boolean | undefined>();
   });
 
   it('RenderResult is html, outcome, bytes and meta', () => {
@@ -87,6 +88,8 @@ describe('./render: signatures (ruling C2)', () => {
       fences: number;
       largestBytes: number;
       totalBytes: number;
+      largestChars: number;
+      totalChars: number;
     }>();
   });
 });

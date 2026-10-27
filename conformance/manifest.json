@@ -300,6 +300,18 @@
     "probes": []
   },
   {
+    "id": "h-dom-clobber-frame-names",
+    "kind": "hostile",
+    "pins": "Headings and comment anchors named like the reader frame's own lookups, its seed and its bootstrap (seed, bootstrap, guard, docserver, docreader, currentScript, enhance, mermaid) are emitted exactly by the slug and anchor grammars, and nothing more (L3.R5).",
+    "probes": []
+  },
+  {
+    "id": "h-xml-script-style-256k",
+    "kind": "hostile",
+    "pins": "One 256 KiB xml fence of 255-unit lines alternating an open script and an open style element, committed because the generated inputs' 8 MiB total has no room for it: coloured line by line by the xml grammar alone, so its script and style text never reaches the javascript or css grammar, under its time bound with highlighting on and off (request (c), L3.R3). Its html variant is the same input with the fence named html, built by the test under the same verdict.",
+    "probes": []
+  },
+  {
     "id": "h-alert-caption-spoof",
     "kind": "hostile",
     "pins": "Alert spoofs stay text, 25 nested alerts stay bounded, and a caption carries escaped text only.",
