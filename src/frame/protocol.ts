@@ -10,8 +10,8 @@
 // key and sha predicates, the prefs' values, the ops per direction) are the package's own: the frame runtime and `./host`
 // import them from this file, and they are never semver surface (FD20).
 //
-// Scope until Tasks 5 and 9: the limits are constants only. Nothing enforces them yet (the frame-side outbox is Task 5's,
-// the parent's limiter Task 9's); this note goes when they consume them.
+// The limits are enforced on both sides: the frame paces itself by them (src/frame-runtime/outbox.ts) and `./host`'s
+// limiter reads them as token buckets (src/host/limits.ts).
 import { DOC_FIELDS } from './doc-fields.generated.js';
 
 export { DOC_FIELDS };

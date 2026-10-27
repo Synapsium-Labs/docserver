@@ -1,13 +1,14 @@
-// A minimal parent page for the sealed reader frame (docserver L3 prototype; design §10.1 and §10.2). It stands in for
-// `./host`, which the plan builds: it is served from https://docreader.test/ by this file's route, mounts a srcdoc the
+// A minimal parent page for the sealed reader frame (docserver L3, the prototype's page kept by Task 5; plan Reference
+// §11.1 and §11.2). It stands in for `./host` (Task 10): it is served from https://docreader.test/ by this file's route, mounts a srcdoc the
 // test built in Node, and records what the frame does from the parent's side, so the frame's shipped bytes run with no
 // test probe of any kind.
 //
-// The page builds the iframe in the order of design §10.1 step 6: sandbox exactly `allow-scripts`, referrerpolicy
+// The page builds the iframe in the order of Reference §11.1 step 6: sandbox exactly `allow-scripts`, referrerpolicy
 // no-referrer, the csp attribute, the title, then srcdoc, BEFORE insertion; the load listener goes on the element
 // before insertion too. On the first load it posts hello with one port (or, for the hello row, a battery of hellos),
-// and it records every port message (with its time since insertion), every load and every port close. It is a test
-// page, not `./host`: its window `message` listener only records strays.
+// and it records every port message (with its time since insertion), every load and every port close. It keeps each
+// channel's own end by name, so a row can answer the frame on it (`send`: prefs, a changes.result). It is a test page,
+// not `./host`: its window `message` listener only records strays.
 //
 // The parent page has no policy of its own: a srcdoc frame inherits its embedder's policy container, so a strict one
 // here would also bind the frame (design R7; the plan's HB rows measure that).
@@ -23,8 +24,16 @@
 //   - `countCloses` (P3b only): wraps MessagePort.prototype.close before the bootstrap captures it, because the parent
 //     cannot see a close where MessagePort's close event is missing (Chromium today);
 //   - `observeDiagrams` (P7): a MutationObserver on `data-docreader-diagrams` (it substitutes no built-in);
+//   - `diagramsAtReady` (the L3.B6 rows): wraps MessagePort.prototype.postMessage before the bootstrap captures it (its
+//     Phase S reads it off the prototype), and when the message posted is the `ready` op, records the content root's
+//     `data-docreader-diagrams` at that instant (null when the root or the attribute is absent), then posts it
+//     unchanged. It reads the reader's state in the frame's own realm, at the post, so the order of ready and the
+//     drawing is not left to when either side's observer runs;
 //   - `measure` (the measurement rows): times DOMContentLoaded and the content root's append, wrapping
-//     Node.prototype.appendChild before the bootstrap captures it.
+//     Node.prototype.appendChild before the bootstrap captures it;
+//   - `stepWallClock` (the outbox's clock row only): wraps Date.now before the bootstrap could capture it, adding the
+//     record's `wallOffset`, so a row can step the frame's wall clock the way a system clock change does, leaving
+//     performance.now alone.
 // The record sits under a symbol key, so no authored id can shadow it.
 import type { Browser, BrowserContext, ConsoleMessage, Frame, Page } from 'playwright-core';
 import { ORIGIN } from './harness.js';
@@ -58,6 +67,8 @@ export interface InitHow {
   readonly measure?: boolean;
   readonly countCloses?: boolean;
   readonly observeDiagrams?: boolean;
+  readonly diagramsAtReady?: boolean;
+  readonly stepWallClock?: boolean;
 }
 
 /** How the page builds the iframe. */
@@ -77,11 +88,14 @@ export interface FrameRecord {
   readonly origin: number;
   /** Each change of a `data-docreader-diagrams` attribute: its new value and when (frame time). */
   readonly diagrams: readonly { readonly state: string | null; readonly at: number }[];
+  /** One entry per `ready` op the frame posted: the root's `data-docreader-diagrams` at the post (null: absent), and when. */
+  readonly ready: readonly { readonly state: string | null; readonly at: number }[];
 }
 
 interface HostApi {
   mount(srcdoc: string, csp: string, hello: HelloMode, sandbox: string | null): void;
   secondHello(): void;
+  send(port: string, data: unknown): void;
   record(): HostRecord;
 }
 
@@ -101,6 +115,7 @@ function hostMain(): void {
     inserted: 0,
   };
   let iframe: HTMLIFrameElement | null = null;
+  const ends: Record<string, MessagePort> = {};
   window.addEventListener('message', (e) => {
     rec.windowMessages.push(e.data);
   });
@@ -112,6 +127,7 @@ function hostMain(): void {
     ch.port1.addEventListener('close', () => {
       rec.closes.push(name);
     });
+    ends[name] = ch.port1;
     return ch.port2;
   };
   const api = {
@@ -142,6 +158,9 @@ function hostMain(): void {
     secondHello(): void {
       iframe?.contentWindow?.postMessage({ t: 'hello', v: 1 }, '*', [channel('second')]);
     },
+    send(port: string, data: unknown): void {
+      ends[port]?.postMessage(data);
+    },
     record() {
       return {
         messages: rec.messages.slice(),
@@ -170,11 +189,17 @@ const PAGE = `<!doctype html>
 
 /** The init script, or null when nothing is asked for: in the srcdoc document only, each part opt-in. */
 function initScript(how: InitHow): string | null {
-  if (how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true) return null;
+  if (how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true) return null;
   return `(() => {
   if (location.href !== 'about:srcdoc') return;
-  const rec = { dcl: null, root: null, closed: 0, diagrams: [] };
+  const rec = { dcl: null, root: null, closed: 0, diagrams: [], ready: [], wallOffset: 0 };
   Object.defineProperty(window, Symbol.for('frame-test.record'), { value: rec });
+  if (${String(how.stepWallClock === true)}) {
+    const now = Date.now;
+    Date.now = function () {
+      return now.call(Date) + rec.wallOffset;
+    };
+  }
   if (${String(how.countCloses === true)}) {
     const close = MessagePort.prototype.close;
     MessagePort.prototype.close = function () {
@@ -186,6 +211,21 @@ function initScript(how: InitHow): string | null {
     new MutationObserver((list) => {
       for (const m of list) rec.diagrams.push({ state: m.target.getAttribute('data-docreader-diagrams'), at: performance.now() });
     }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-docreader-diagrams'] });
+  }
+  if (${String(how.diagramsAtReady === true)}) {
+    const post = MessagePort.prototype.postMessage;
+    const query = Document.prototype.querySelector;
+    const getAttribute = Element.prototype.getAttribute;
+    const perf = performance;
+    const perfNow = Performance.prototype.now;
+    MessagePort.prototype.postMessage = function (...args) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && m.t === 'ready') {
+        const root = query.call(document, 'body > article');
+        rec.ready.push({ state: root === null ? null : getAttribute.call(root, 'data-docreader-diagrams'), at: perfNow.call(perf) });
+      }
+      return post.apply(this, args);
+    };
   }
   if (${String(how.measure === true)}) {
     document.addEventListener('DOMContentLoaded', () => { rec.dcl = performance.now(); });
@@ -209,6 +249,8 @@ export interface FrameHost {
   readonly errors: readonly string[];
   mount(srcdoc: string, csp: string, how?: HelloMode | MountHow): Promise<void>;
   secondHello(): Promise<void>;
+  /** Post `data` on the page's end of the channel named `port` (the frame's port messages: prefs, changes.result). */
+  send(port: string, data: unknown): Promise<void>;
   record(): Promise<HostRecord>;
   /** The mounted frame (Playwright's handle; it evaluates in the frame whatever its policy). */
   frame(): Frame;
@@ -285,14 +327,15 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}): Promis
       return p.evaluate(([s, c, h, sb]) => (window.__frameHost as HostApi).mount(s, c, h, sb), args);
     },
     secondHello: () => p.evaluate(() => (window.__frameHost as HostApi).secondHello()),
+    send: (port, data) => p.evaluate(([n, d]) => (window.__frameHost as HostApi).send(n, d), [port, data] as const),
     record,
     frame,
     frameRecord: () =>
       frame().evaluate(() => {
         const r = (window as unknown as Record<symbol, FrameRecord | undefined>)[Symbol.for('frame-test.record')];
         return r === undefined
-          ? { dcl: null, root: null, closed: -1, origin: -1, diagrams: [] }
-          : { dcl: r.dcl, root: r.root, closed: r.closed, origin: performance.timeOrigin, diagrams: [...r.diagrams] };
+          ? { dcl: null, root: null, closed: -1, origin: -1, diagrams: [], ready: [] }
+          : { dcl: r.dcl, root: r.root, closed: r.closed, origin: performance.timeOrigin, diagrams: [...r.diagrams], ready: [...r.ready] };
       }),
     async waitMessages(n, ms) {
       const until = Date.now() + ms;
