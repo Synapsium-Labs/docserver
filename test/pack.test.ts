@@ -3,7 +3,10 @@
 // the checkout's own dist/. The tarball must hold the three code entries, their declarations, the whole corpus
 // a consumer's runCorpus reads and the layout's assets (its stylesheet, its fonts, and the licence and notices the
 // fonts travel with, and the Mermaid file that scripts/build-mermaid.mjs builds, which the notices also cover), and
-// nothing else: no Python references, no scripts, no sources, tests or working papers. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
+// nothing else: no Python references, no scripts, no sources, tests or working papers. Since L3 Task 6 the copy is
+// built as `npm run build` builds it (the Mermaid file, the frame build, then tsc), so the frame assets and
+// assets/assets.json are required, and it is packed with npm's scripts on, so prepack (scripts/verify-assets.mjs) runs:
+// the packed tarball stays within its 8 MiB budget, and a one-byte edit or an unlisted file under assets/ stops the pack. The types those declarations import (@types/markdown-it and @types/js-yaml) are not in it: they are
 // dependencies, which a consumer's install brings (review 458, F7).
 // Then scripts/consumer-smoke.mjs installs the tarball offline (its dependencies linked from this checkout's
 // node_modules) and imports it by package name, exactly as CI's registry-installed smoke does; a second tarball
@@ -14,11 +17,13 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import {
   appendFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -26,6 +31,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ASSET_BUDGETS } from '../scripts/build-frame.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TSC = path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
@@ -50,7 +56,7 @@ const ALLOWED = [
   /^assets\/reader\.css$/,
   /^assets\/fonts\/[A-Za-z0-9._-]+\.(?:woff2|txt|md)$/,
   /^assets\/mermaid\/mermaid\.mjs$/,
-  // The frame assets (docserver L3): the committed manifest always; the frame files when build:frame has run.
+  // The frame assets (docserver L3): the committed manifest, the frame files and the Mermaid frame file (Task 6).
   /^assets\/assets\.json$/,
   /^assets\/frame\/(?:guard|bootstrap|enhance)\.js$|^assets\/frame\/reader\.css$/,
   /^assets\/mermaid\/mermaid\.frame\.js$/,
@@ -64,6 +70,8 @@ interface Packed {
 
 let work = '';
 let packed: Packed = { filename: '', files: [] };
+let packedBytes = -1;
+const refusedPacks = new Map<string, SpawnSyncReturns<string>>();
 let smoke: SpawnSyncReturns<string> | null = null;
 let brokenSmoke: SpawnSyncReturns<string> | null = null;
 const untypedSmokes = new Map<string, SpawnSyncReturns<string>>();
@@ -104,14 +112,19 @@ beforeAll(() => {
     filter: (src) => !/(?:^|[\\/])(?:\.git|node_modules|dist|coverage)$|\.tgz$/.test(path.relative(ROOT, src)),
   });
   symlinkSync(realpathSync(path.join(ROOT, 'node_modules')), path.join(stage, 'node_modules'), 'dir');
-  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.build.json'], { cwd: stage, encoding: 'utf8' });
-  if (build.status !== 0) throw new Error(`build failed: ${build.stdout}${build.stderr}`);
+  // `npm run build`'s three steps, in its order (test/frame-build.test.ts pins the script).
   const mermaid = spawnSync(process.execPath, [path.join('scripts', 'build-mermaid.mjs')], { cwd: stage, encoding: 'utf8' });
   if (mermaid.status !== 0) throw new Error(`the Mermaid build failed: ${mermaid.stdout}${mermaid.stderr}`);
-  const pack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', work], stage);
+  const frame = spawnSync(process.execPath, [path.join('scripts', 'build-frame.mjs')], { cwd: stage, encoding: 'utf8' });
+  if (frame.status !== 0) throw new Error(`the frame build failed: ${frame.stdout}${frame.stderr}`);
+  const build = spawnSync(process.execPath, [TSC, '-p', 'tsconfig.build.json'], { cwd: stage, encoding: 'utf8' });
+  if (build.status !== 0) throw new Error(`build failed: ${build.stdout}${build.stderr}`);
+  // npm's scripts on: prepack checks every byte under assets/ against assets/assets.json first.
+  const pack = npm(['pack', '--json', '--pack-destination', work], stage);
   if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
   const [first] = JSON.parse(pack.stdout) as { filename: string; files: { path: string }[] }[];
   packed = { filename: first?.filename ?? '', files: (first?.files ?? []).map((f) => f.path).sort() };
+  packedBytes = statSync(path.join(work, packed.filename)).size;
   const deps = realpathSync(path.join(ROOT, 'node_modules'));
   smoke = runSmoke([path.join(work, packed.filename), '--deps-from', deps, '--time-scale', '10']);
   // The same package with one of the two @types packages back in devDependencies: a consumer's install would
@@ -140,6 +153,17 @@ beforeAll(() => {
   const repack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', broken], stage);
   if (repack.status !== 0) throw new Error(`npm pack failed: ${repack.stderr}`);
   brokenSmoke = runSmoke([path.join(broken, packed.filename), '--deps-from', deps, '--time-scale', '10']);
+  // prepack refuses bytes assets/assets.json does not name: a one-byte edit of a frame file, then a stray file. Each
+  // destination exists, so npm itself would pack into it: only prepack's refusal can stop the pack (review E1).
+  mkdirSync(path.join(work, 'refused-edit'));
+  mkdirSync(path.join(work, 'refused-stray'));
+  const guard = path.join(stage, 'assets', 'frame', 'guard.js');
+  const guardText = readFileSync(guard, 'utf8');
+  writeFileSync(guard, `${guardText} `);
+  refusedPacks.set('a one-byte edit', npm(['pack', '--json', '--pack-destination', path.join(work, 'refused-edit')], stage));
+  writeFileSync(guard, guardText);
+  writeFileSync(path.join(stage, 'assets', 'frame', 'stray.js'), '');
+  refusedPacks.set('an unlisted file', npm(['pack', '--json', '--pack-destination', path.join(work, 'refused-stray')], stage));
 }, 300_000);
 
 afterAll(() => {
@@ -177,6 +201,13 @@ describe('npm pack', () => {
       'assets/fonts/README.md',
       // the Mermaid file, built from the pinned dev dependency, whose bundled packages the notices list
       'assets/mermaid/mermaid.mjs',
+      // the frame assets and their manifest (L3 Task 6): required, since the build always makes them
+      'assets/assets.json',
+      'assets/frame/guard.js',
+      'assets/frame/bootstrap.js',
+      'assets/frame/enhance.js',
+      'assets/frame/reader.css',
+      'assets/mermaid/mermaid.frame.js',
       'THIRD-PARTY-NOTICES',
     ]) {
       expect(packed.files).toContain(must);
@@ -189,6 +220,26 @@ describe('npm pack', () => {
       .flatMap((m) => [`conformance/corpus/${m.id}.md`, `conformance/expected/${m.id}.html`, `conformance/expected/${m.id}.meta.json`]);
     expect(needed.length).toBe(156);
     expect(needed.filter((f) => !packed.files.includes(f))).toEqual([]);
+  });
+
+  it('L3.M18: the tarball is within its 8 MiB budget', () => {
+    expect(ASSET_BUDGETS.tarball).toBe(8 * 1024 * 1024);
+    expect(packedBytes).toBeGreaterThan(0);
+    expect(packedBytes).toBeLessThanOrEqual(ASSET_BUDGETS.tarball);
+  });
+
+  it('L3.M15: prepack refuses a one-byte edit of a frame file and an unlisted file under assets/, and nothing is packed', () => {
+    // Soft, so a log names every claim that fails, each on its own: the exit, the reason, the empty destination.
+    const edit = refusedPacks.get('a one-byte edit');
+    expect.soft(edit?.status, 'the refused edit exits non-zero').not.toBe(0);
+    expect.soft(edit?.stderr).toMatch(/verify-assets: assets\/frame\/guard\.js: /);
+    const stray = refusedPacks.get('an unlisted file');
+    expect.soft(stray?.status, 'the refused stray file exits non-zero').not.toBe(0);
+    expect.soft(stray?.stderr).toContain('verify-assets: assets/frame/stray.js: not listed in assets/assets.json');
+    for (const dir of ['refused-edit', 'refused-stray']) {
+      expect.soft(existsSync(path.join(work, dir)), `${dir} exists`).toBe(true);
+      expect.soft(existsSync(path.join(work, dir, packed.filename)), `nothing is packed into ${dir}`).toBe(false);
+    }
   });
 
   it('holds nothing else: no references, scripts, sources, tests, CI files or working papers', () => {

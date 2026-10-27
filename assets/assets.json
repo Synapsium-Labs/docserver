@@ -5,11 +5,47 @@
   "bridgeProtocol": 1,
   "files": [
     {
+      "path": "fonts/OFL.txt",
+      "sha256": "18aabf190848725e2576eefb5c29ba06aac1029d02132252a7f312eac2e50cf3",
+      "bytes": 4314,
+      "kind": "text"
+    },
+    {
+      "path": "fonts/README.md",
+      "sha256": "cfd817cfc6a573679d6961ed40a410b9c0c87ccd1af8bdce2d28c00846e314e9",
+      "bytes": 2418,
+      "kind": "text"
+    },
+    {
+      "path": "fonts/source-sans-3-latin-wght-italic.woff2",
+      "sha256": "9a15dafc2c2b2414aaa9d6c30830d9aab4361329d8495b1574633603b994b411",
+      "bytes": 28532,
+      "kind": "font"
+    },
+    {
+      "path": "fonts/source-sans-3-latin-wght-normal.woff2",
+      "sha256": "7a19a7027e125257d310c6dbd78ae3a30b5ea1e3794d60b12bb28227a003bfda",
+      "bytes": 28740,
+      "kind": "font"
+    },
+    {
+      "path": "fonts/source-serif-4-latin-opsz-italic.woff2",
+      "sha256": "96e6393209728ab93c334ae739af8a040cd2006c82e8614d6465a8084db88f89",
+      "bytes": 130188,
+      "kind": "font"
+    },
+    {
+      "path": "fonts/source-serif-4-latin-opsz-normal.woff2",
+      "sha256": "f2ea9c12d2fe9bd3a9589b02ad2c0909da88f30938c91adc838c4f4098f9f9e0",
+      "bytes": 122360,
+      "kind": "font"
+    },
+    {
       "path": "frame/bootstrap.js",
-      "sha256": "c52bde15f29ff8326172004e60cad1fb5408be72fee09cf570b2fc6f37e5e302",
-      "bytes": 25423,
+      "sha256": "681e164ddd52dd2ea59d9d11d27559660e5cfae3e4e86d2fdebcac1b38312d1c",
+      "bytes": 26816,
       "kind": "script",
-      "csp": "'sha256-xSveFfKf+DJhcgBOYMrR+1QIvnL+4Jz1cLL8bzfl4wI='"
+      "csp": "'sha256-aB4WTd1S3S6lnZ0R0nVZZg5c+uPk6G0v3rysGzgxLRw='"
     },
     {
       "path": "frame/enhance.js",
@@ -27,8 +63,8 @@
     },
     {
       "path": "frame/reader.css",
-      "sha256": "7b4885c7951612ada8d02051da1abd1aa6ecbca93999350d3fc8ab56175eda0a",
-      "bytes": 546649,
+      "sha256": "dfcb7c5f19a5b0ea14076838db3d4eca58ee5dab1c72b472f93dc15a340a0e75",
+      "bytes": 546894,
       "kind": "style"
     },
     {
@@ -37,6 +73,18 @@
       "bytes": 3747084,
       "kind": "script",
       "csp": "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='"
+    },
+    {
+      "path": "mermaid/mermaid.mjs",
+      "sha256": "dfba66fc5c75e030c35bf16d5e7a62bbee7be5496cabec94ec93f85d626b38df",
+      "bytes": 3748365,
+      "kind": "module"
+    },
+    {
+      "path": "reader.css",
+      "sha256": "c9d6d231d03b7ba0ced32b410c30827a2100d1fcdd69c29dd4c3e40d22470fdc",
+      "bytes": 133469,
+      "kind": "style"
     }
   ]
 }

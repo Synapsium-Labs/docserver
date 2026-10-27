@@ -27,6 +27,11 @@ name: ci
 # dpkg finishes any configuration the first attempt interrupted.
 # Every remote action is pinned by full commit sha, its release tag in the trailing comment; this workflow holds
 # no local `uses:`, because the release workflow calls it.
+# The build also builds the frame assets (scripts/build-frame.mjs) and rewrites the two committed manifests, so right
+# after it a fresh frame build must equal what it wrote (--check) and git must see neither manifest moved: a change
+# that moves an asset's hash without its rebuilt manifests is red. npm pack runs the prepack check
+# (scripts/verify-assets.mjs: every byte under assets/ is the one assets/assets.json names), and the smoke installs
+# the tarball whose name npm pack --json gives, never a name spelled from the version.
 on:
   push:
     branches: [main]
@@ -121,9 +126,21 @@ jobs:
       - name: the tests wrote no layout snapshot
         run: test -z "$(git status --porcelain -- conformance/layout)"
       - run: npm run build
+      - run: node scripts/build-frame.mjs --check
+      - run: git diff --exit-code -- assets/assets.json src/frame/
       - name: ratchet
         env:
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || github.event_name == 'push' && 'HEAD^' || 'origin/main' }}
         run: node scripts/ratchet.mjs --base "${BASE}"
-      - run: npm pack
-      - run: node scripts/consumer-smoke.mjs ./synapsium-labs-docserver-0.1.0.tgz
+      - name: pack, naming the tarball from npm pack --json
+        id: pack
+        run: |
+          npm pack --json > "${RUNNER_TEMP:?}/pack.json"
+          tarball="$(node -e 'const [p] = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String(p.filename))' "$RUNNER_TEMP/pack.json")"
+          [[ "$tarball" =~ ^[a-z0-9][a-z0-9._-]*\.tgz$ ]]
+          test -f "$tarball"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+      - name: consumer smoke on the packed tarball
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: node scripts/consumer-smoke.mjs "./${TARBALL:?}"

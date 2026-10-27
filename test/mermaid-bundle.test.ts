@@ -104,9 +104,9 @@ describe('package.json', () => {
     expect(Object.keys(pkg.dependencies).filter((d) => d === 'mermaid' || d === 'elkjs')).toEqual([]);
   });
 
-  it('builds the Mermaid file as part of the build', () => {
+  it('builds the Mermaid file as part of the build, before the frame build that lists it in assets/assets.json (L3 Task 6)', () => {
     expect(pkg.scripts['build:mermaid']).toBe('node scripts/build-mermaid.mjs');
-    expect(pkg.scripts['build']).toBe('tsc -p tsconfig.build.json && npm run build:mermaid');
+    expect(pkg.scripts['build']).toBe('npm run build:mermaid && npm run build:frame && tsc -p tsconfig.build.json');
   });
 });
 
