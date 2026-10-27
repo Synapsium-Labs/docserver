@@ -182,14 +182,14 @@ describe('U4 policy refusals: each rule of checkFrameCsp refuses on its own', ()
     ['img-src https:', () => swap('img-src data:', 'img-src https:'), 'img-src'],
     ['font-src *', () => swap('font-src data:', 'font-src *'), 'font-src'],
     ['style-src https:', () => swap("style-src 'unsafe-inline' data:", 'style-src https:'), 'style-src'],
-    ["default-src 'self'", () => swap("default-src 'none'", "default-src 'self'"), "default-src must be 'none'"],
-    ['base-uri missing', () => swap("; base-uri 'none'", ''), "base-uri must be 'none'"],
-    ['form-action missing', () => swap("; form-action 'none'", ''), "form-action must be 'none'"],
-    ['a duplicate script-src', () => `${good}; script-src ${FRAME_MANIFEST.guard.csp}`, 'duplicate script-src'],
-    ['an unknown hash of the right form', () => swap('script-src ', `script-src ${UNKNOWN} `), `unknown hash ${UNKNOWN}`],
-    ['a double quote in a value', () => swap('img-src data:', 'img-src data:"'), 'a character outside printable ASCII, or one of "<>&'],
-    ['a character outside printable ASCII', () => swap('img-src data:', 'img-src data:\u00e9'), 'a character outside printable ASCII, or one of "<>&'],
-    ['over 4096 characters (trailing spaces only)', () => `${good}${' '.repeat(4097 - good.length)}`, 'not a policy'],
+    ["default-src 'self'", () => swap("default-src 'none'", "default-src 'self'"), 'default-src'],
+    ['base-uri missing', () => swap("; base-uri 'none'", ''), 'base-uri'],
+    ['form-action missing', () => swap("; form-action 'none'", ''), 'form-action'],
+    ['a duplicate script-src', () => `${good}; script-src ${FRAME_MANIFEST.guard.csp}`, 'duplicate'],
+    ['an unknown hash of the right form', () => swap('script-src ', `script-src ${UNKNOWN} `), 'unknown-hash'],
+    ['a double quote in a value', () => swap('img-src data:', 'img-src data:"'), 'character'],
+    ['a character outside printable ASCII', () => swap('img-src data:', 'img-src data:\u00e9'), 'character'],
+    ['over 4096 characters (trailing spaces only)', () => `${good}${' '.repeat(4097 - good.length)}`, 'length'],
   ];
   for (const [name, policy, why] of CASES) {
     it(`${name}: refused by its own rule, and frameDocument throws csp`, () => {
