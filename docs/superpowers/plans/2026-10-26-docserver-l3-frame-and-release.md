@@ -113,7 +113,7 @@ Paths without a prefix are in this repository. Anchors such as `diagrams.ts:465`
 ```ts
 // ───────── ./frame (pure) ─────────
 import type { FrontEntry, RenderOutcome } from '../render/types.js';
-import type { ChromeOptions, CommitEntry, Prefs as EnhancePrefs, VocabularyOptions } from '../enhance/types.js';
+import type { ChromeOptions, CommitEntry, FramePrefs, VocabularyOptions } from './wire-types.js';   // DOM-free copies held equal to ../enhance/types.js (C86)
 
 export const BRIDGE_PROTOCOL = 1;   // separate from semver; additive changes only
 export const SEED_SCHEMA = 1;       // internal; frameDocument and the bootstrap always ship together
@@ -149,7 +149,7 @@ export interface FrameAssets {
   readonly mermaid?: string;   // assets/mermaid/mermaid.frame.js; required when FrameOptions.mermaid is non-null
 }
 
-export type FramePrefs = Pick<EnhancePrefs, 'theme' | 'width' | 'font'>;   // lens stays frame-local (Q1)
+// FramePrefs (in ./wire-types.js) equals Pick<Prefs, 'theme' | 'width' | 'font'> of ../enhance/types.js; the lens stays frame-local (Q1)
 
 export interface FrameFeatures {
   readonly rules?: boolean; readonly folds?: boolean; readonly keyboard?: boolean;
@@ -673,7 +673,7 @@ flowchart LR
 **Consumes.** L2's `writeDoc`/`readDoc` call sites in `src/enhance`; L2's ID and rule-ID grammars (`src/enhance/vocab.ts`, `src/enhance/types.ts` `ids`); `render()`'s emitted ids over `conformance/expected` and the hostile outputs.
 **Produces.** `FRAGMENT_ID_GRAMMAR`, `isFragmentId` (Reference §9); `PREF_KEYS = ['prefs', 'ui']`; `DOC_FIELDS` (includes `pos`); `OP_KEYS: Record<t, readonly string[]>`; `node scripts/gen-doc-fields.mjs [--check]` (exit 0, 1, 2) with the resolution rules of Reference §8.3; `conformance/bridge-cases.json`: labelled frame-to-parent and parent-to-frame messages with verdicts (accept, or refuse with a reason) forming the M8.5 battery (footnote, slug, anchor and `D2.1a` hashes accepted; `''` and the §9 refusals; a delete as `'null'`; `pref:<name>` and `doc:<field>` keys; `changes.result` with and without `removedAfter`), plus **timed sequences** (message, time in ms, verdict) for the bucket reading of the limits.
 **Acceptance tests.**
-- L3.M10: the grammar accepts every `id=` in every expected and hostile output (footnotes included) and every ID shape the default ID and rule-ID grammars recognise (generated: prefix length 1 to 4, with and without the dash, dotted and dashed parts, the trailing letter, plus a sample of the corpus's defined IDs: `R14`, `OP-6`, `D2.1a`, `AB-12-C`); accepts 256 code units; refuses `''`, `#x`, `a b`, `a/b`, 257 code units and 129 astral letters; a source scan finds the pattern in `src/frame/fragment.ts` alone.
+- L3.M10: the grammar accepts every non-empty `id=` in every expected and hostile output (footnotes included; `render()` writes `id=""` on an empty heading, and a separate row pins that only headings carry one, C86) and every ID shape the default ID and rule-ID grammars recognise (generated: prefix length 1 to 4, with and without the dash, dotted and dashed parts, the trailing letter, plus a sample of the corpus's defined IDs: `R14`, `OP-6`, `D2.1a`, `AB-12-C`); accepts 256 code units; refuses `''`, `#x`, `a b`, `a/b`, 257 code units and 129 astral letters; a source scan finds the pattern in `src/frame/fragment.ts` alone.
 - L3.M11: DOC_FIELDS is a superset of every `writeDoc`/`readDoc` name by AST scan; fixtures resolve a literal, an imported const, an `as const` member, a re-export and a field through two wrappers; a computed key, a template with a substitution and a fifth wrapper level each fail the generator with file and line; `--check` equals the committed file.
 - Bridge cases: every case parses as JSON, each verdict names a reason from one closed list, each timed sequence is monotone in time, and a self-check replays the timed sequences through a reference bucket written in the test (Task 9's limiter must agree).
 - `BRIDGE_LIMITS` equals Reference §8.4 exactly; 16 in a window fits under both readings (U9).
