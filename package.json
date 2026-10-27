@@ -46,9 +46,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.render.json && tsc --noEmit -p tsconfig.enhance.json && tsc --noEmit -p tsconfig.frame-runtime.json && tsc --noEmit -p tsconfig.frame.json && tsc --noEmit -p tsconfig.host.json",
     "test": "vitest run",
-    "build": "tsc -p tsconfig.build.json && npm run build:mermaid",
+    "build": "npm run build:mermaid && npm run build:frame && tsc -p tsconfig.build.json",
     "build:mermaid": "node scripts/build-mermaid.mjs",
     "build:frame": "node scripts/build-frame.mjs",
+    "prepack": "node scripts/verify-assets.mjs",
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {

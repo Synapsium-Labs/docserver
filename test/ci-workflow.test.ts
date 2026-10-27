@@ -29,6 +29,14 @@
 // attempts still fit the step limit. The fakes `pkill`, `sleep`, `dpkg` and `date` stand in for those (so no row ever
 // signals a real process), and every fake that the apt step or the install's cleanup reaches, `sudo` included, records
 // its call in one ordered log.
+//
+// L3 Task 6 (rows L3.M14 and L3.M15's CI half) adds the frame build's checks right after `npm run build`, which now
+// runs the frame build too: `node scripts/build-frame.mjs --check` (a fresh in-memory build equals what the build
+// wrote), then `git diff --exit-code -- assets/assets.json src/frame/` (the build moved no committed manifest, so a
+// change that moves a hash without committing the rebuilt manifests is red). The pack step takes the tarball's name
+// from `npm pack --json` (npm's prepack, scripts/verify-assets.mjs, writes only to stderr, so that stdout stays JSON)
+// and hands it to the consumer smoke, in place of a name spelled from package.json's version; a fake `npm` stands in
+// for its behaviour rows.
 import { spawnSync } from 'node:child_process';
 import { accessSync, chmodSync, constants as fsConstants, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -146,6 +154,12 @@ const CACHE_KEY =
 const OS_RELEASE = '/etc/os-release';
 /** The ratchet's exact command: its base is the BASE the step's env computes (pull request, push or by hand). */
 const RATCHET_RUN = 'node scripts/ratchet.mjs --base "${BASE}"';
+/** The frame build's two checks after `npm run build` (L3 Task 6), each a step of its own. */
+const FRAME_CHECK = 'node scripts/build-frame.mjs --check';
+const MANIFEST_DIFF = 'git diff --exit-code -- assets/assets.json src/frame/';
+/** The pack step and the smoke step, by name (L3 Task 6). */
+const PACK = 'pack, naming the tarball from npm pack --json';
+const SMOKE = 'consumer smoke on the packed tarball';
 /** A remote action reference pinned by a full commit sha: `owner/repo[/path]@<40 hex>`. */
 const SHA_PINNED = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[^@\s]+)?@[0-9a-f]{40}$/;
 
@@ -216,6 +230,15 @@ beforeAll(() => {
   fake('pkill', `${record('pkill')}[ "$FAKE_PKILL" = none ] && exit 1\nexit 0\n`);
   fake('sleep', `${record('sleep')}exit 0\n`);
   fake('dpkg', `${record('dpkg')}[ "$FAKE_DPKG" = fail ] && exit 2\nexit 0\n`);
+  // npm, for the pack step only: records its arguments, prints FAKE_PACK_JSON as `npm pack --json` would, and writes the
+  // tarball it names into the working directory unless FAKE_PACK_FILE=none; FAKE_PACK_RC sets its exit code.
+  fake(
+    'npm',
+    'printf \'%s\\n\' "$*" >> "$NPM_LOG"\n' +
+      'printf \'%s\\n\' "$FAKE_PACK_JSON"\n' +
+      '[ "$FAKE_PACK_FILE" = none ] || : > "$FAKE_PACK_NAME"\n' +
+      'exit "${FAKE_PACK_RC:-0}"\n',
+  );
 });
 
 /** A fresh, empty call log for one row. */
@@ -315,9 +338,11 @@ describe('ci.yml: the test job', () => {
       './node_modules/.bin/vitest run',
       'the tests wrote no layout snapshot',
       'npm run build',
+      FRAME_CHECK,
+      MANIFEST_DIFF,
       'ratchet',
-      'npm pack',
-      `node scripts/consumer-smoke.mjs ./${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.tgz`,
+      PACK,
+      SMOKE,
     ]);
   });
 
@@ -339,6 +364,7 @@ describe('ci.yml: the test job', () => {
       ['apt retries and timeouts', { ARCHIVES: ARCHIVES_DIR }],
       [READABLE, { ARCHIVES: ARCHIVES_DIR }],
       ['ratchet', ratchet?.env],
+      [SMOKE, { TARBALL: '${{ steps.pack.outputs.tarball }}' }],
     ]);
   });
 
@@ -511,6 +537,71 @@ describe('ci.yml: the browser install survives a stalling package mirror (L3 Tas
     expect(TEXT).toContain('uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0');
     expect(TEXT).toContain('uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0');
     expect(TEXT).toContain('uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0');
+  });
+});
+
+describe('ci.yml: the frame build is checked and the packed tarball is the one npm names (L3 Task 6)', () => {
+  it('right after `npm run build`, a fresh frame build equals what it wrote, and git sees no moved manifest', () => {
+    const at = steps.findIndex((s) => s.run === 'npm run build');
+    expect(at).toBeGreaterThan(steps.findIndex((s) => s.run === './node_modules/.bin/vitest run'));
+    expect(steps.slice(at + 1, at + 3)).toEqual([{ run: FRAME_CHECK }, { run: MANIFEST_DIFF }]);
+    expect(pkg.name).toBe('@synapsium-labs/docserver');
+    const scripts = (JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts;
+    expect(scripts['build']).toContain('npm run build:frame');
+    expect(scripts['prepack']).toBe('node scripts/verify-assets.mjs');
+  });
+
+  it('the pack step runs `npm pack --json` once, after the ratchet, and the smoke step reads the name it hands over; no step spells a tarball name or a version', () => {
+    const packAt = steps.findIndex((s) => s.name === PACK);
+    expect(packAt).toBe(steps.findIndex((s) => s.name === 'ratchet') + 1);
+    const pack = steps[packAt];
+    expect(pack?.id).toBe('pack');
+    expect(steps.filter((s) => s.run?.includes('npm pack') === true)).toEqual([pack]);
+    expect(steps[packAt + 1]).toEqual({ name: SMOKE, env: { TARBALL: '${{ steps.pack.outputs.tarball }}' }, run: 'node scripts/consumer-smoke.mjs "./${TARBALL:?}"' });
+    expect(steps.at(-1)?.name).toBe(SMOKE);
+    expect(TEXT.replace(/^\s*#.*$/gm, '')).not.toMatch(/\.tgz\b(?!\$)|0\.1\.0/);
+  });
+
+  /** Runs the pack step in a fresh directory with the fake npm answering `json`; resolves its result, outputs and npm calls. */
+  function pack(json: string, extra: Record<string, string> = {}): { r: SpawnSyncReturns<string>; out: string; npm: string[] } {
+    const run = steps.find((s) => s.name === PACK)?.run ?? 'exit 9';
+    const cwd = mkdtempSync(path.join(work, 'pack-'));
+    const out = path.join(cwd, 'github-output.txt');
+    const log = path.join(cwd, 'npm-log.txt');
+    writeFileSync(out, '');
+    writeFileSync(log, '');
+    const name = (() => {
+      try {
+        return String((JSON.parse(json) as { filename?: unknown }[])[0]?.filename);
+      } catch {
+        return 'none.tgz';
+      }
+    })();
+    const runner = mkdtempSync(path.join(work, 'runner-temp-'));
+    const r = runStep(run, { GITHUB_OUTPUT: out, NPM_LOG: log, RUNNER_TEMP: runner, FAKE_PACK_JSON: json, FAKE_PACK_NAME: /^[A-Za-z0-9._-]+$/.test(name) ? name : 'x.tgz', ...extra }, cwd);
+    return { r, out: readFileSync(out, 'utf8'), npm: calls(log) };
+  }
+
+  it('hands over the filename `npm pack --json` gives, whatever the version', () => {
+    for (const filename of ['synapsium-labs-docserver-1.0.0.tgz', 'synapsium-labs-docserver-1.1.0-rc.2.tgz']) {
+      const { r, out, npm } = pack(JSON.stringify([{ name: pkg.name, filename, files: [] }]));
+      expect(r.status, r.stderr).toBe(0);
+      expect(out.split('\n').filter((l) => l !== '')).toEqual([`tarball=${filename}`]);
+      expect(npm).toEqual(['pack --json']);
+    }
+  });
+
+  it.each([
+    ['npm pack fails (prepack refused the bytes)', JSON.stringify([{ filename: 'synapsium-labs-docserver-1.0.0.tgz' }]), { FAKE_PACK_RC: '1' }],
+    ['stdout is not JSON', 'verify-assets: ok', {}],
+    ['no filename', JSON.stringify([{ name: 'x' }]), {}],
+    ['a name with a path', JSON.stringify([{ filename: '../x.tgz' }]), {}],
+    ['a name that is not a tarball', JSON.stringify([{ filename: 'x.zip' }]), {}],
+    ['no tarball where npm says it wrote one', JSON.stringify([{ filename: 'synapsium-labs-docserver-1.0.0.tgz' }]), { FAKE_PACK_FILE: 'none' }],
+  ])('fails, handing over nothing, when %s', (_what, json, extra) => {
+    const { r, out } = pack(json, extra);
+    expect(r.status).not.toBe(0);
+    expect(out).toBe('');
   });
 });
 
