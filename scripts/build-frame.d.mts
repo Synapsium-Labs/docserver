@@ -14,6 +14,8 @@ export interface BuiltFile {
   /** Its CSP hash source, or null for the stylesheet. */
   readonly csp: string | null;
   readonly kind: 'script' | 'style';
+  /** For guard, bootstrap and enhance: the esbuild metafile's inputs, from the package root, sorted. */
+  readonly inputs?: readonly string[];
 }
 
 export interface BuiltFrame {
@@ -33,6 +35,8 @@ export declare const MANIFEST_TS: string;
 export declare const FREE_DEFINES: Readonly<Record<string, string>>;
 export declare const MERMAID_FRAME_ENTRY: string;
 export declare function byteRules(root?: string): Promise<ByteRules>;
+/** The esbuild options the build uses for one frame script. */
+export declare function scriptOptions(name: 'guard' | 'bootstrap' | 'enhance', root?: string): import('esbuild').BuildOptions & { write: false; metafile: true };
 export declare function buildFrame(options?: { root?: string }): Promise<BuiltFrame>;
 export declare function writeFrame(built: BuiltFrame, out?: string): void;
 export declare function checkFrame(built: BuiltFrame, out?: string): string[];
