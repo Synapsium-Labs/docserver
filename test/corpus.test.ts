@@ -44,7 +44,7 @@ describe('loadCorpus', () => {
     ) as { id: string }[];
     expect(cases.map((c) => c.id)).toEqual(manifest.map((m) => m.id));
     expect(cases.filter((c) => c.kind === 'golden')).toHaveLength(37);
-    expect(cases.filter((c) => c.kind === 'hostile')).toHaveLength(15);
+    expect(cases.filter((c) => c.kind === 'hostile')).toHaveLength(17);
     expect(cases.filter((c) => c.kind === 'generated')).toHaveLength(30);
     expect(cases.filter((c) => c.expected !== null && !c.expected.meta.endsWith('}\n')).map((c) => c.id)).toEqual([]);
   });

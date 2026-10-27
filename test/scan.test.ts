@@ -13,7 +13,7 @@ import { utf8Length } from '../src/render/pyText.js';
 import { scanWith } from '../src/render/scan.js';
 import type { ScanRefsResult } from '../src/render/types.js';
 
-const NO_MERMAID = { fences: 0, largestBytes: 0, totalBytes: 0 };
+const NO_MERMAID = { fences: 0, largestBytes: 0, totalBytes: 0, largestChars: 0, totalChars: 0 };
 const OVER: ScanRefsResult = { outcome: 'over-limit', images: [], imagesTruncated: false, mermaid: NO_MERMAID };
 
 /** markdown-it's escapeHtml undone: the four entities it writes into an attribute value. */
@@ -53,10 +53,13 @@ function consistent(markdown: string): void {
   expect(s.images).toEqual(h.images.slice(0, DEFAULT_MAX_IMAGES));
   expect(s.imagesTruncated).toBe(h.images.length > DEFAULT_MAX_IMAGES);
   const sizes = h.sources.map((x) => utf8Length(x, Number.MAX_SAFE_INTEGER));
+  const units = h.sources.map((x) => x.length);
   expect(s.mermaid).toEqual({
     fences: h.sources.length,
     largestBytes: sizes.reduce((a, b) => Math.max(a, b), 0),
     totalBytes: sizes.reduce((a, b) => a + b, 0),
+    largestChars: units.reduce((a, b) => Math.max(a, b), 0),
+    totalChars: units.reduce((a, b) => a + b, 0),
   });
   expect(s.mermaid.fences).toBe(r.meta.figures);
   expect(r.meta.tables).toBe(h.tables);
@@ -188,13 +191,48 @@ describe('scanRefs: Mermaid fences', () => {
   it('counts only the fences render() turns into figures', () => {
     const md =
       '```Mermaid\nA\n```\n\n```mermaid extra\nB\n```\n\n``` mermaid\nC\n```\n\n~~~mermaid\nD\n~~~\n\n    ```mermaid\n';
-    expect(scanRefs(md).mermaid).toEqual({ fences: 3, largestBytes: 2, totalBytes: 6 });
+    expect(scanRefs(md).mermaid).toEqual({ fences: 3, largestBytes: 2, totalBytes: 6, largestChars: 2, totalChars: 6 });
     expect(render(md).meta.figures).toBe(3);
   });
 
   it('sizes are UTF-8 bytes of the source: the largest one, and the sum', () => {
     const md = '```mermaid\ngraph TD\nA-->B\n```\n\n```mermaid\n\u00e9\ud83d\ude00\n```\n\n```mermaid\n```\n';
-    expect(scanRefs(md).mermaid).toEqual({ fences: 3, largestBytes: 15, totalBytes: 22 });
+    expect(scanRefs(md).mermaid).toEqual({ fences: 3, largestBytes: 15, totalBytes: 22, largestChars: 15, totalChars: 19 });
+  });
+});
+
+describe('L3.R4: Mermaid sizes in UTF-16 code units, the unit of the layout\'s maxTextSize gate (FD12)', () => {
+  it('largestChars and totalChars count code units: an astral character is two, a three-byte one is one', () => {
+    // 'graph TD\nA-->B\n' is 15 units and 15 bytes; '\u00e9\ud83d\ude00\n' is 4 units and 7 bytes; '\u4e2d\u6587\n' 3 units, 7 bytes.
+    const md = '```mermaid\ngraph TD\nA-->B\n```\n\n```mermaid\n\u00e9\ud83d\ude00\n```\n\n```mermaid\n\u4e2d\u6587\n```\n';
+    expect(scanRefs(md).mermaid).toEqual({ fences: 3, largestBytes: 15, totalBytes: 29, largestChars: 15, totalChars: 22 });
+  });
+
+  it('where bytes and units disagree on the largest fence, each field names its own', () => {
+    const astral = '\ud83d\ude00'.repeat(10);
+    const md = `\`\`\`mermaid\n${astral}\n\`\`\`\n\n\`\`\`mermaid\n${'a'.repeat(30)}\n\`\`\`\n`;
+    expect(scanRefs(md).mermaid).toEqual({ fences: 2, largestBytes: 41, totalBytes: 72, largestChars: 31, totalChars: 52 });
+  });
+
+  it('a three-byte character is one unit and three bytes', () => {
+    const md = `\`\`\`mermaid\n${'\u4e2d'.repeat(100)}\n\`\`\`\n`;
+    expect(scanRefs(md).mermaid).toEqual({ fences: 1, largestBytes: 301, totalBytes: 301, largestChars: 101, totalChars: 101 });
+  });
+
+  it('over the corpus, the Chars fields are the code-unit lengths of the figures render() writes', () => {
+    let checked = 0;
+    for (const c of loadCorpus()) {
+      const r = render(c.input, c.options);
+      if (r.outcome !== 'rendered') continue;
+      const units = fromHtml(r.html).sources.map((x) => x.length);
+      const s = scanRefs(c.input, c.options.maxBytes === undefined ? {} : { maxBytes: c.options.maxBytes });
+      expect([s.mermaid.largestChars, s.mermaid.totalChars], c.id).toEqual([
+        units.reduce((a, b) => Math.max(a, b), 0),
+        units.reduce((a, b) => a + b, 0),
+      ]);
+      if (units.length > 0) checked += 1;
+    }
+    expect(checked).toBeGreaterThan(1);
   });
 });
 
@@ -233,7 +271,7 @@ describe('scanRefs: parse only, state per call', () => {
       outcome: 'scanned',
       images: ['a.png'],
       imagesTruncated: false,
-      mermaid: { fences: 1, largestBytes: 2, totalBytes: 2 },
+      mermaid: { fences: 1, largestBytes: 2, totalBytes: 2, largestChars: 2, totalChars: 2 },
     });
   });
 
@@ -247,7 +285,7 @@ describe('scanRefs: parse only, state per call', () => {
       outcome: 'scanned',
       images: ['b.png'],
       imagesTruncated: false,
-      mermaid: { fences: 1, largestBytes: 2, totalBytes: 2 },
+      mermaid: { fences: 1, largestBytes: 2, totalBytes: 2, largestChars: 2, totalChars: 2 },
     });
     expect(scanRefs(a)).toEqual({
       outcome: 'scanned',

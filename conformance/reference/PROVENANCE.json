@@ -37,6 +37,7 @@
     "h-attr-smuggle": "af1adccc5fa7c70f619a02e982f377fc53c357fb2bad8ec9ac8ced0d57732cdd",
     "h-comment-anchor-injection": "0aa0d15737e8301779215f1e7462801a6f9ad16f43ba178959c3542ae5048950",
     "h-details-hostile": "b092d02bb0e1b496cd6455cb9d74dad1022134044e0d0001f5c95a898f109ba9",
+    "h-dom-clobber-frame-names": "020b47a35e0cb2498d20fa370f662614456e0f3518ad709af7070f6525fbbfc1",
     "h-dom-clobber-names": "2168c49e1204f00c9740a870e363ef921b8088f3f1a83ba6df461dfd5eab2eec",
     "h-fence-injection": "48355f8ad966451bc93660226c526c218edfed7ec56e9778a01808fc98e46a90",
     "h-frontmatter-hostile/alias-bomb": "031ee088c0938138ac0a0733ce02718f5e6ffdc876381feb89ef1128bc4ae9f1",
@@ -47,6 +48,7 @@
     "h-frontmatter-hostile/yaml-tags": "50bde2547ec23fefd28cf12f272d7ddae3aee4c53a66fdb39326c085e523dfc3",
     "h-js-links": "caaaeba64ad0f27f37a5166bf890811c27e2ccc792613b1fd1eb01b084dc4936",
     "h-script-and-tags": "f580e41867223ec24b8438f4a52fe8f3ca72665bde3559ba7a2a41056347aa24",
+    "h-xml-script-style-256k": "d61ae1a4edeef1becd685020faa351ad5ce9850e6af31babbd0fb7b89537b291",
     "heading-ids-edge": "d23be924b7edfb04799e6632ef047e341f8d84d9d9e9ef1ac4e7bc49a7589a46",
     "heading-unicode-case": "145da6707880b6e76f7c888aff88f703d336bc03c071ad4cc625041f19d30571",
     "headings": "070dc0078c08042ae4a0f88c434a11df38fa3830fe6a3821d2f34f7e4d621e99",
@@ -61,5 +63,5 @@
     "tables": "65d1be358cd2dae8200c53ab8eb6eabf6bdc7e25a4e203b9004429000bf7db79",
     "text-edges": "91386f7bc9949e942ba16d6408448e73057c914196c44b68234573f529a423e4"
   },
-  "date": "2026-10-14"
+  "date": "2026-10-27"
 }

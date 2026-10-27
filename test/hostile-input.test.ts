@@ -6,6 +6,7 @@
 import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { runCorpus } from '../src/conformance/index.js';
 import {
   buildInput,
   crossCheck,
@@ -16,6 +17,8 @@ import {
   type HostileEntry,
   type InputSpec,
 } from '../src/conformance/hostile.js';
+
+import { render } from '../src/render/index.js';
 
 const readJson = (rel: string): unknown => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 const MiB = 1024 * 1024;
@@ -174,9 +177,9 @@ describe('the shipped hostile.json', () => {
   const manifest = readJson('../conformance/manifest.json') as { id: string; kind: string }[];
   const entries = parseHostile(readJson('../conformance/hostile.json'));
 
-  it('agrees with the manifest: 15 hostile and 30 generated cases', () => {
+  it('agrees with the manifest: 17 hostile and 30 generated cases', () => {
     expect(crossCheck(manifest, entries)).toEqual([]);
-    expect(entries.filter((e) => e.input === undefined)).toHaveLength(15);
+    expect(entries.filter((e) => e.input === undefined)).toHaveLength(17);
     expect(entries.filter((e) => e.input !== undefined)).toHaveLength(30);
   });
 
@@ -195,5 +198,76 @@ describe('the shipped hostile.json', () => {
   it('is ASCII only: every other character is written as a \\u escape', () => {
     const text = readFileSync(new URL('../conformance/hostile.json', import.meta.url), 'utf8');
     expect([...text].filter((ch) => ch > '~' || (ch < ' ' && ch !== '\n'))).toEqual([]);
+  });
+});
+
+describe('L3.R5: h-dom-clobber-frame-names (the spec\'s DOM clobbering case, for the reader frame)', () => {
+  const ID = 'h-dom-clobber-frame-names';
+  /** The names the frame, its seed and its bootstrap rely on (plan Task 11). */
+  const FRAME_NAMES = ['seed', 'bootstrap', 'guard', 'docserver', 'docreader', 'currentScript', 'enhance', 'mermaid'];
+  const manifest = readJson('../conformance/manifest.json') as { id: string; kind: string }[];
+  const entries = parseHostile(readJson('../conformance/hostile.json'));
+  const input = readFileSync(new URL(`../conformance/corpus/${ID}.md`, import.meta.url), 'utf8');
+
+  it('is a hostile case of the manifest, listed in hostile.json with an exact golden', () => {
+    expect(manifest.find((c) => c.id === ID)?.kind).toBe('hostile');
+    expect(entries.find((e) => e.id === ID)?.verdict).toMatchObject({ outcome: 'rendered', exact: true });
+  });
+
+  it('its input names each one as a heading and as a comment anchor', () => {
+    for (const name of FRAME_NAMES) {
+      expect(input.split('\n')).toContain(`# ${name}`);
+      expect(input.split('\n')).toContain(`<!-- id:${name} -->`);
+    }
+  });
+
+  it('its verdict requires each id as render() emits it: the heading slug, and the anchor exactly', () => {
+    const require = entries.find((e) => e.id === ID)?.verdict.require ?? [];
+    expect(require).toEqual([
+      ...FRAME_NAMES.map((n) => `<h1 id="${n.toLowerCase()}"`),
+      ...FRAME_NAMES.map((n) => `<span class="doc-anchor" id="${n}"></span>`),
+    ]);
+  });
+
+  it('renders to its expected output under its verdict: runCorpus carries it', () => {
+    const run = runCorpus(render, { only: [ID] });
+    expect(run).toMatchObject({ ok: true, total: 1, passed: 1 });
+    expect(render(input).html).toBe(readFileSync(new URL(`../conformance/expected/${ID}.html`, import.meta.url), 'utf8'));
+  });
+
+  it('the earlier clobbering case keeps its own seven names, none of the frame\'s', () => {
+    const old = entries.find((e) => e.id === 'h-dom-clobber-names')?.verdict.require ?? [];
+    expect(old).toHaveLength(7);
+    expect(FRAME_NAMES.filter((n) => old.some((r) => r.includes(`id="${n}"`) || r.includes(`id="${n.toLowerCase()}"`)))).toEqual([]);
+  });
+});
+
+describe('L3.R3: h-xml-script-style-256k (request (c))', () => {
+  const ID = 'h-xml-script-style-256k';
+  const entries = parseHostile(readJson('../conformance/hostile.json'));
+  const input = readFileSync(new URL(`../conformance/corpus/${ID}.md`, import.meta.url), 'utf8');
+
+  it('is one 256 KiB xml fence of 255-unit lines alternating an open script and an open style', () => {
+    expect(input.startsWith('```xml\n')).toBe(true);
+    expect(input.endsWith('\n```\n')).toBe(true);
+    const body = input.slice('```xml\n'.length, -'```\n'.length);
+    expect(body.length).toBe(256 * 1024);
+    const lines = body.split('\n').slice(0, -1);
+    expect(lines).toHaveLength(1024);
+    expect(lines.filter((l) => l.length !== 255)).toEqual([]);
+    expect(lines.filter((l, i) => !l.startsWith(i % 2 === 0 ? '<script>' : '<style>'))).toEqual([]);
+  });
+
+  it('is committed as a hostile case: the generated inputs already fill their 8 MiB total but for a few KiB', () => {
+    const specs = entries.flatMap((e) => (e.input === undefined ? [] : [e.input]));
+    expect(MAX_INPUT_BYTES - sumInputSizes(specs)).toBeLessThan(Buffer.byteLength(input, 'utf8'));
+  });
+
+  it('its verdict forbids the javascript and css classes, bounds the time and requires the xml tags', () => {
+    const v = entries.find((x) => x.id === ID)?.verdict;
+    expect(v?.maxMs).toBeLessThanOrEqual(1000);
+    expect(v?.forbid).toEqual(expect.arrayContaining(['class="language-javascript"', 'class="language-css"']));
+    expect(v?.require).toEqual(['<code class="hljs language-xml">', '<span class="hljs-tag">']);
+    expect(v?.exact).toBe(true);
   });
 });

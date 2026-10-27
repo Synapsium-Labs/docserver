@@ -37,7 +37,7 @@ const SCAN: ScanRefsResult = {
   outcome: 'scanned',
   images: Array.from({ length: 512 }, (_, i) => `${i}.png`),
   imagesTruncated: true,
-  mermaid: { fences: 0, largestBytes: 0, totalBytes: 0 },
+  mermaid: { fences: 0, largestBytes: 0, totalBytes: 0, largestChars: 0, totalChars: 0 },
 };
 
 describe('outcome', () => {

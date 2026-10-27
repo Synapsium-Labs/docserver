@@ -20,6 +20,12 @@ export interface RenderOptions {
   maxHtmlBytes?: number;
   /** Emit data-line="a-b" on block elements. Default true. */
   lineAttrs?: boolean;
+  /**
+   * Colour code fences with highlight.js. Default true. With false every fence keeps its wrapper, its data-line and
+   * its `language-<name>` class and holds the code as escaped text, with no span; nothing else changes (request (b)).
+   * Any other value than a boolean is a TypeError.
+   */
+  highlight?: boolean;
 }
 
 export interface Heading {
@@ -81,8 +87,11 @@ export interface ScanRefsResult {
   images: string[];
   /** true when more than maxImages distinct images exist */
   imagesTruncated: boolean;
-  /** only fences render() turns into figures; UTF-8 bytes of their content */
-  mermaid: { fences: number; largestBytes: number; totalBytes: number };
+  /**
+   * only fences render() turns into figures: their content's size in UTF-8 bytes, and in UTF-16 code units (`Chars`,
+   * the unit of the layout's Mermaid `maxTextSize` check, `text.length`)
+   */
+  mermaid: { fences: number; largestBytes: number; totalBytes: number; largestChars: number; totalChars: number };
 }
 
 /** Default UTF-8 byte cap for render() and scanRefs(): 4 MiB (ruling C3). Hosts pass their own. */

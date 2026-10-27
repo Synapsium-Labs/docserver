@@ -3,7 +3,11 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2022"],
-    "types": []
+    "types": [],
+    "paths": {
+      "highlight.js/lib/core": ["./src/types/purity/highlight-core.d.ts"],
+      "highlight.js/lib/languages/*": ["./src/types/purity/highlight-language.d.ts"]
+    }
   },
   "include": ["src/frame", "src/highlight"],
   "exclude": []

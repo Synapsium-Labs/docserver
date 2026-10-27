@@ -52,6 +52,14 @@
     "verdict": {"outcome": "rendered", "maxMs": 1000, "require": ["<h1 id=\"location\"", "<h1 id=\"document\"", "<h1 id=\"__proto__\"", "<h1 id=\"constructor\"", "<h1 id=\"doc-meta\"", "<span class=\"doc-anchor\" id=\"doc-progress\"></span>", "<span class=\"doc-anchor\" id=\"toString\"></span>"], "exact": true}
   },
   {
+    "id": "h-dom-clobber-frame-names",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "require": ["<h1 id=\"seed\"", "<h1 id=\"bootstrap\"", "<h1 id=\"guard\"", "<h1 id=\"docserver\"", "<h1 id=\"docreader\"", "<h1 id=\"currentscript\"", "<h1 id=\"enhance\"", "<h1 id=\"mermaid\"", "<span class=\"doc-anchor\" id=\"seed\"></span>", "<span class=\"doc-anchor\" id=\"bootstrap\"></span>", "<span class=\"doc-anchor\" id=\"guard\"></span>", "<span class=\"doc-anchor\" id=\"docserver\"></span>", "<span class=\"doc-anchor\" id=\"docreader\"></span>", "<span class=\"doc-anchor\" id=\"currentScript\"></span>", "<span class=\"doc-anchor\" id=\"enhance\"></span>", "<span class=\"doc-anchor\" id=\"mermaid\"></span>"], "exact": true}
+  },
+  {
+    "id": "h-xml-script-style-256k",
+    "verdict": {"outcome": "rendered", "maxMs": 1000, "maxOutputRatio": 2, "forbid": ["class=\"language-javascript\"", "class=\"language-css\"", "class=\"hljs-subst\"", "class=\"hljs-selector-tag\"", "class=\"hljs-attribute\""], "require": ["<code class=\"hljs language-xml\">", "<span class=\"hljs-tag\">"], "balanced": ["div", "pre", "code", "span"], "exact": true}
+  },
+  {
     "id": "h-alert-caption-spoof",
     "verdict": {"outcome": "rendered", "maxMs": 1000, "maxTagDepth": {"blockquote": 20}, "forbid": ["<script"], "require": ["[!NOTE&quot;&gt;&lt;script&gt;", "<p data-line=\"4-5\">[!note]", "<figcaption>Figure 1. &lt;script&gt;"], "exact": true}
   },

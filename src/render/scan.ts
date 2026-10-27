@@ -21,7 +21,9 @@
 //    text, so an image inside an alt is never read. At most `maxImages` distinct sources are kept; when
 //    another distinct source exists, `imagesTruncated` is true, so a cut list is never read as a whole one.
 // 4. mermaid: the fences render() turns into figures, by renderFence's own test (fenceName(info) is exactly
-//    MERMAID), counted with the UTF-8 sizes of their sources (the fence content the figure writes escaped).
+//    MERMAID), counted with the UTF-8 sizes of their sources (the fence content the figure writes escaped), and
+//    with their sizes in UTF-16 code units (largestChars, totalChars: docserver L3, Task 11, FD12), the unit of
+//    the layout's Mermaid maxTextSize check, so a host gates a document in the unit that check uses.
 import type { MarkdownIt, Token } from 'markdown-it';
 import { createEnv } from './env.js';
 import { fenceName, MERMAID } from './fence.js';
@@ -38,6 +40,8 @@ interface Scan {
   fences: number;
   largestBytes: number;
   totalBytes: number;
+  largestChars: number;
+  totalChars: number;
 }
 
 /** A fence's size is counted to the end: the whole input is already under maxBytes. */
@@ -63,6 +67,9 @@ function scanFence(t: Token, s: Scan): void {
   s.fences += 1;
   s.totalBytes += bytes;
   s.largestBytes = Math.max(s.largestBytes, bytes);
+  const chars = t.content.length;
+  s.totalChars += chars;
+  s.largestChars = Math.max(s.largestChars, chars);
 }
 
 /**
@@ -77,10 +84,19 @@ export function scanWith(markdown: string, o: ScanRefsOptions | undefined, engin
       outcome: 'over-limit',
       images: [],
       imagesTruncated: false,
-      mermaid: { fences: 0, largestBytes: 0, totalBytes: 0 },
+      mermaid: { fences: 0, largestBytes: 0, totalBytes: 0, largestChars: 0, totalChars: 0 },
     };
   }
-  const s: Scan = { maxImages, images: new Set(), imagesTruncated: false, fences: 0, largestBytes: 0, totalBytes: 0 };
+  const s: Scan = {
+    maxImages,
+    images: new Set(),
+    imagesTruncated: false,
+    fences: 0,
+    largestBytes: 0,
+    totalBytes: 0,
+    largestChars: 0,
+    totalChars: 0,
+  };
   for (const t of engine.parse(stripBom(markdown), createEnv({ lineAttrs: true }))) {
     if (t.type === 'inline') scanInline(t.children ?? [], s);
     else if (t.type === 'fence') scanFence(t, s);
@@ -89,7 +105,13 @@ export function scanWith(markdown: string, o: ScanRefsOptions | undefined, engin
     outcome: 'scanned',
     images: [...s.images],
     imagesTruncated: s.imagesTruncated,
-    mermaid: { fences: s.fences, largestBytes: s.largestBytes, totalBytes: s.totalBytes },
+    mermaid: {
+      fences: s.fences,
+      largestBytes: s.largestBytes,
+      totalBytes: s.totalBytes,
+      largestChars: s.largestChars,
+      totalChars: s.totalChars,
+    },
   };
 }
 
