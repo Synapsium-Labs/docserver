@@ -41,7 +41,16 @@
 // ignored), and no vocabulary check or image rewrite (content.ts).
 import { cspFloor } from '../frame/csp-rules.js';
 import type { ErrorWhy, FrameToParent } from '../frame/protocol.js';
-import { validateSeed, type Seed } from '../frame/seed.js';
+import { validateSeed, type Seed, type SeedMermaid } from '../frame/seed.js';
+
+/** The seed's Mermaid settings as enhance takes them today: its caps and secure keys, without `draw` (Task 16). */
+function mermaidSettings(m: SeedMermaid): { maxTextSize?: number; maxEdges?: number; secure: readonly string[] } {
+  return {
+    ...(m.maxTextSize === undefined ? {} : { maxTextSize: m.maxTextSize }),
+    ...(m.maxEdges === undefined ? {} : { maxEdges: m.maxEdges }),
+    secure: m.secure,
+  };
+}
 import { createAdapters } from './adapters.js';
 import { materialise } from './content.js';
 
@@ -329,7 +338,8 @@ interface EnhanceApi {
         info: { title: seed.title },
         initialHash: seed.initialHash,
         onLink: adapters.onLink,
-        ...(seed.mermaid === null || mermaidModule === null ? {} : { mermaid: { ...seed.mermaid, load: () => Promise.resolve(mermaidModule) } }),
+        // The seed's `draw` is not passed yet: L2's options refuse an unknown mermaid key until Task 16 adds it.
+        ...(seed.mermaid === null || mermaidModule === null ? {} : { mermaid: { ...mermaidSettings(seed.mermaid), load: () => Promise.resolve(mermaidModule) } }),
       });
       if (seed.mermaid !== null) await diagramsSettled(root);
     } catch {

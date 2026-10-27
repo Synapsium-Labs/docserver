@@ -6,10 +6,10 @@
   "files": [
     {
       "path": "frame/bootstrap.js",
-      "sha256": "e89deea4a3ede527dfd38af70c56906e0c2f81989ddab08bb0fe16ba25d31dcc",
-      "bytes": 18977,
+      "sha256": "6482f36e3a482cac0e7887763f34d4a0008fb8a95999b29a5d7e071feac1f051",
+      "bytes": 30285,
       "kind": "script",
-      "csp": "'sha256-6J3upKPt5Sff04r3DFaQbgwvgZid2rCLsP4WuiXTHcw='"
+      "csp": "'sha256-ZILzbjpILKwOeId2PzTUoACPuKlZmbKaXX4HH+rB8FE='"
     },
     {
       "path": "frame/enhance.js",
