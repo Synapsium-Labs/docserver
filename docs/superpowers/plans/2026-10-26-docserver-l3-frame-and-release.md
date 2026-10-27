@@ -917,6 +917,8 @@ flowchart LR
 
 ### Task 13: Mermaid 12.2.0
 
+> **Deferred past v1 (ledger C93).** v1 ships Mermaid 12.1.0; this task becomes a later minor release. Task 8 baselines on 12.1.0 and Task 14's notices carry 12.1.0.
+
 **Goal.** Move the Mermaid pin before v1 and before the browser rows are baselined, because it moves hashes and may move SVG ids.
 **Files.** Modify `package.json`, the lockfile, the regenerated `assets/assets.json` and `src/frame/manifest.generated.ts`, `THIRD-PARTY-NOTICES` (version strings only; Task 14 owns the rest), Level 2 cases under `conformance/layout/` that pin Mermaid internals (each named in `Layout-moved:`), `test/mermaid-bundle.test.ts` and any test pinning 12.1.0. Create `l3-mutations/task-13.md`.
 **From the prototype.** Built on 12.1.0.
