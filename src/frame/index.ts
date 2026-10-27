@@ -5,6 +5,15 @@
 export { checkFrameCsp, frameCsp } from './csp.js';
 export { FrameError, frameDocument } from './document.js';
 export type { FrameAssets, FrameErrorCode, FrameOptions, RenderInput } from './document.js';
+export { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';
 export { FRAME_MANIFEST } from './manifest.generated.js';
-export { BRIDGE_LIMITS, BRIDGE_PROTOCOL, ERROR_WHY, SEED_SCHEMA } from './protocol.js';
-export type { ErrorWhy, FrameToParent, ParentToFrame } from './protocol.js';
+export {
+  BRIDGE_LIMITS,
+  BRIDGE_PROTOCOL,
+  DOC_FIELDS,
+  ERROR_WHY,
+  OP_KEYS,
+  PREF_KEYS,
+  SEED_SCHEMA,
+} from './protocol.js';
+export type { BridgeStoreKey, ErrorWhy, FrameToParent, ParentToFrame } from './protocol.js';

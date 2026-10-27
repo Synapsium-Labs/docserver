@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildFrame, byteRules, checkFrame, writeFrame, type BuiltFrame, type ByteRules } from '../scripts/build-frame.mjs';
-import { BRIDGE_LIMITS, checkFrameCsp, frameCsp, FrameError, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../src/frame/index.js';
+import { checkFrameCsp, frameCsp, FrameError, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../src/frame/index.js';
 import { validateSeed } from '../src/frame/seed.js';
 import { base64, cspHash, hex, hexToBase64, sha256Text } from '../src/frame/sha256.js';
 import { render } from '../src/render/index.js';
@@ -270,39 +270,7 @@ describe('U8 the seed validator (the bootstrap fails closed on each)', () => {
   });
 });
 
-describe('U9 BRIDGE_LIMITS: exactly design §3 (ruling R5)', () => {
-  it('the parent reads its limits as token buckets, and the frame paces by a sliding window that neither reading refuses', () => {
-    expect(BRIDGE_LIMITS).toEqual({
-      bucketCapacity: 40,
-      bucketRefillPerSecond: 20,
-      storeSetBucketCapacity: 10,
-      storeSetRefillPerSecond: 10,
-      changesInFlight: 1,
-      coalesceMs: 250,
-      refusalsToClose: 16,
-      valueMaxBytes: 65536,
-      copyMaxBytes: 65536,
-      hashMaxCodeUnits: 256,
-      hrefMaxChars: 4096,
-      storeBudgetBytes: 1048576,
-      changesTimeoutMs: 30000,
-      frameWindowMs: 1000,
-      frameMaxPerWindow: 16,
-      frameStoreSetMaxPerWindow: 8,
-      frameCopyMaxPerWindow: 4,
-      frameChangesTimeoutMs: 35000,
-    });
-    expect(Object.isFrozen(BRIDGE_LIMITS)).toBe(true);
-  });
-  it('the frame window fits under the strict reading of both parent limits, and the frame outlasts the parent on changes', () => {
-    const L = BRIDGE_LIMITS;
-    expect(L.frameWindowMs).toBe(1000);
-    expect(L.frameMaxPerWindow).toBeLessThanOrEqual(Math.min(L.bucketCapacity, L.bucketRefillPerSecond));
-    expect(L.frameStoreSetMaxPerWindow).toBeLessThanOrEqual(Math.min(L.storeSetBucketCapacity, L.storeSetRefillPerSecond));
-    expect(L.frameCopyMaxPerWindow).toBeLessThanOrEqual(L.frameMaxPerWindow);
-    expect(L.frameChangesTimeoutMs).toBeGreaterThan(L.changesTimeoutMs);
-  });
-});
+// U9 (BRIDGE_LIMITS) moved to test/frame-protocol.test.ts with the protocol's single definition (L3 Task 1).
 
 describe('U5 byte rules', () => {
   it('refuses </SCRIPT, a CR, a NUL and a BOM in a script', () => {
