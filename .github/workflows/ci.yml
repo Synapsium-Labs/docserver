@@ -18,6 +18,13 @@ name: ci
 # without them would restore builds made for the previous release once ubuntu-latest moves.
 # The cached directory is the one playwright-core installs into on Linux: $XDG_CACHE_HOME/ms-playwright, or
 # .cache/ms-playwright under $HOME when XDG_CACHE_HOME is unset.
+# The system libraries --with-deps installs are cached too, so a warm job downloads no .deb: apt's archive
+# directory is moved, through the same apt configuration file, to a runner-owned directory under RUNNER_TEMP (its
+# partial/ made before the install), which a second cache step restores and saves under its own key on the same
+# inputs; apt writes there as root, so a step after the install hands the directory back to the runner for the save.
+# An attempt's timeout cannot stop the apt-get it started under sudo, which then holds the dpkg lock; so before the
+# second attempt only, a leftover apt-get or dpkg is stopped by exact name (TERM, then KILL after a short wait) and
+# dpkg finishes any configuration the first attempt interrupted.
 # Every remote action is pinned by full commit sha, its release tag in the trailing comment; this workflow holds
 # no local `uses:`, because the release workflow calls it.
 on:
@@ -52,34 +59,63 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: the pinned playwright-core version, the runner's OS release and the browser directory
+      - name: the pinned playwright-core version, the runner's OS release, the ISO week, the browser directory and apt's archive directory
         id: playwright
         run: |
           version="$(node -p "require('./package.json').devDependencies['playwright-core']")"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           os="$(unset ID VERSION_ID && . /etc/os-release && echo "${ID:?}${VERSION_ID:?}")"
           [[ "$os" =~ ^[a-z0-9._-]+$ ]]
+          week="$(date -u +%G-W%V)"
+          [[ "$week" =~ ^[0-9]{4}-W[0-9]{2}$ ]]
           browsers="${XDG_CACHE_HOME:-${HOME:?}/.cache}/ms-playwright"
-          printf '%s\n' "version=$version" "os=$os" "browsers=$browsers" >> "$GITHUB_OUTPUT"
+          archives=/var/cache/docserver-apt-archives
+          printf '%s\n' "version=$version" "os=$os" "week=$week" "browsers=$browsers" "archives=$archives" >> "$GITHUB_OUTPUT"
+      - name: apt retries and timeouts
+        env:
+          ARCHIVES: ${{ steps.playwright.outputs.archives }}
+        run: |
+          [[ "${ARCHIVES:?}" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0755 "$ARCHIVES" "$ARCHIVES/partial"
+          sudo -u _apt test -x "$ARCHIVES/partial" || {
+            echo "::error::_apt cannot reach $ARCHIVES/partial, so apt would download as root, unsandboxed"
+            exit 1
+          }
+          printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+            'DPkg::Lock::Timeout "300";' \
+            'APT::Keep-Downloaded-Packages "true";' "Dir::Cache::Archives \"$ARCHIVES/\";" \
+            | sudo tee /etc/apt/apt.conf.d/80-docserver-ci > /dev/null
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.playwright.outputs.browsers }}
           key: ms-playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.os }}-playwright-core-${{ steps.playwright.outputs.version }}
-      - name: apt retries and timeouts
-        run: |
-          printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
-            'DPkg::Lock::Timeout "300";' \
-            | sudo tee /etc/apt/apt.conf.d/80-docserver-ci > /dev/null
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.playwright.outputs.archives }}
+          key: apt-archives-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.os }}-playwright-core-${{ steps.playwright.outputs.version }}-${{ steps.playwright.outputs.week }}
+          restore-keys: apt-archives-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.os }}-playwright-core-${{ steps.playwright.outputs.version }}-
       - name: install the pinned browsers and their system libraries
         timeout-minutes: 22
         run: |
           for attempt in 1 2; do
+            if [ "$attempt" = 2 ]; then
+              sudo pkill -TERM -x 'apt-get|dpkg' || true
+              sleep 5
+              sudo pkill -KILL -x 'apt-get|dpkg' || true
+              sudo timeout -k 5 40 dpkg --configure -a || echo "::warning::dpkg --configure -a failed before browser install attempt 2"
+            fi
             if timeout -k 30 600 npx playwright-core install --with-deps chromium webkit; then
               exit 0
             fi
             echo "::warning::browser install attempt ${attempt} of 2 failed or timed out"
           done
           exit 1
+      - name: the apt archive cache is readable for its save
+        env:
+          ARCHIVES: ${{ steps.playwright.outputs.archives }}
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "${ARCHIVES:?}"
+          chmod -R u+rwX "$ARCHIVES"
       - run: npm run typecheck
       - run: ./node_modules/.bin/vitest run
       - name: the tests wrote no layout snapshot
