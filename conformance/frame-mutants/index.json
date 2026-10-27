@@ -1,0 +1,95 @@
+{
+  "format": 1,
+  "about": "Labelled srcdoc mutants for the first consumer's checks of a frameDocument output (its rows M8.3, M8.4 and M8.8). clean.html is frameDocument's output for one fixed document, with the policy and each asset text replaced by a placeholder; every other file is clean.html with exactly one defect, which its row's check must report. Expand the placeholders with this version's texts (frameCsp() and the files under assets/) before checking, and check clean.html too: it must pass every row. Check each mutant with its own row's check: a mutant need not fail the other rows' checks (seed-raw-line-separators.html passes the M8.3 and M8.4 checks and fails only M8.8's).",
+  "clean": "clean.html",
+  "placeholders": {
+    "{{docserver:csp}}": "frameCsp() from ./frame",
+    "{{docserver:guard}}": "assets/frame/guard.js",
+    "{{docserver:bootstrap}}": "assets/frame/bootstrap.js",
+    "{{docserver:css}}": "assets/frame/reader.css",
+    "{{docserver:enhance}}": "assets/frame/enhance.js",
+    "{{docserver:mermaid}}": "assets/mermaid/mermaid.frame.js"
+  },
+  "mutants": [
+    {
+      "file": "meta-appended.html",
+      "row": "M8.3",
+      "mutation": "the CSP meta comes last instead of first"
+    },
+    {
+      "file": "guard-missing.html",
+      "row": "M8.3",
+      "mutation": "the click guard is left out"
+    },
+    {
+      "file": "style-before-guard.html",
+      "row": "M8.3",
+      "mutation": "the stylesheet comes before the click guard"
+    },
+    {
+      "file": "element-between-seed-and-bootstrap.html",
+      "row": "M8.3",
+      "mutation": "an element sits between the seed and the bootstrap"
+    },
+    {
+      "file": "content-before-guard.html",
+      "row": "M8.3",
+      "mutation": "authored markup comes before the click guard"
+    },
+    {
+      "file": "bootstrap-before-seed.html",
+      "row": "M8.3",
+      "mutation": "the bootstrap comes before the seed"
+    },
+    {
+      "file": "bootstrap-twice.html",
+      "row": "M8.3",
+      "mutation": "the bootstrap appears twice"
+    },
+    {
+      "file": "script-src.html",
+      "row": "M8.4",
+      "mutation": "the click guard keeps a CDN src"
+    },
+    {
+      "file": "modulepreload.html",
+      "row": "M8.4",
+      "mutation": "a modulepreload link to a CDN follows the scripts"
+    },
+    {
+      "file": "preconnect.html",
+      "row": "M8.4",
+      "mutation": "a preconnect link to a CDN follows the scripts"
+    },
+    {
+      "file": "css-import.html",
+      "row": "M8.4",
+      "mutation": "the stylesheet opens with an @import of a remote stylesheet"
+    },
+    {
+      "file": "css-remote-font.html",
+      "row": "M8.4",
+      "mutation": "the stylesheet ends with a font loaded from a protocol-relative URL"
+    },
+    {
+      "file": "html-as-markup.html",
+      "row": "M8.4",
+      "mutation": "the document's html is emitted as markup after the scripts, its link and image with it"
+    },
+    {
+      "file": "seed-raw-json.html",
+      "row": "M8.8",
+      "mutation": "the seed is JSON.stringify's text with no <, > or & escaped (only U+2028 and U+2029), so the title ends the seed early"
+    },
+    {
+      "file": "seed-raw-line-separators.html",
+      "row": "M8.8",
+      "mutation": "the seed writes U+2028 and U+2029 raw (the one committed file that holds them raw, on purpose)"
+    },
+    {
+      "file": "seed-with-id.html",
+      "row": "M8.8",
+      "mutation": "the seed carries an id, as for a lookup by id"
+    }
+  ]
+}
