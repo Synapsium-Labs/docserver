@@ -33,6 +33,14 @@
 //   7. once every figure is done, the state reads `drawn`, `partial` (some failed) or `failed` (all did).
 // Each change of a figure runs through position.keep and asks for a relayout ('content').
 //
+// That is `mermaid.draw: 'auto'`, the default. With `'on-request'` (docserver L3, Task 16; FD13) the second phase
+// neither calls load() nor sets the gate or `drawing`: the root reads `data-docreader-diagrams="on-request"` for good, a
+// figure longer than maxTextSize takes its fallback with the long note at once, and every other figure gets one Render
+// button (chrome, a native button) and the per-figure state `data-docreader-draw`: `on-request`, `busy` once tapped,
+// then `drawn` or `failed`. The first tap calls load() once, after which steps 2, 3, 5 and 6 run for the tapped figure
+// alone, through the same queue, so a second tap waits (its button `aria-busy`) until the draw before it settles, and a
+// failure is that figure's only (onRequest, below).
+//
 // The configuration (§3.4), passed to initialize() before every run, so another root's never applies: startOnLoad
 // false, securityLevel 'strict' (no click handler is bound, labels are sanitised), suppressErrorRendering, the layout
 // 'dagre' (Mermaid 12.1.0 defaults to ELK, which the file leaves out, LD3 and C53: a diagram that asks for ELK fails
@@ -98,6 +106,9 @@ export const NOTES = {
 } as const;
 
 type Why = keyof typeof NOTES;
+
+/** The text of a figure's Render button, in 'on-request' mode (docserver L3, Task 16). */
+export const RENDER = 'Render';
 
 /** The note's disclosure. */
 const SHOW_SOURCE = 'Show its Mermaid source';
@@ -478,18 +489,12 @@ export function build(ctx: FeatureContext): void {
   void ctx;
 }
 
-/** The second phase (LD5): load Mermaid through the host, then draw every figure, near ones first. */
-export async function after(ctx: FeatureContext): Promise<void> {
-  const settings = ctx.options.mermaid;
-  if (settings === null) return; // no mermaid option, so no load to call (normalizeOptions keeps the two together)
-  const figs = drawable(ctx);
-  if (figs.length === 0) return;
-  ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
-  ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing'); // the state (LD5)
-  const config = configOf(settings, fontOf(ctx));
+/**
+ * Call the host's load(), and, as soon as the module is here, before the font wait ends, give it its configuration
+ * once: its start-on-load off, before a window load event can find it on (header, step 2).
+ */
+function load(ctx: FeatureContext, config: () => Record<string, unknown>): Promise<unknown> {
   const loading = ctx.host.loadMermaid();
-  // As soon as the module is here, before the font wait ends: its start-on-load off, with the rest of the
-  // configuration, before a window load event can find it on (header, step 2).
   void loading.then((mod) => {
     const early = mermaidOf(mod);
     if (early === null) return;
@@ -499,6 +504,86 @@ export async function after(ctx: FeatureContext): Promise<void> {
       return Promise.resolve();
     });
   });
+  return loading;
+}
+
+/**
+ * The second phase in 'on-request' mode (docserver L3, Task 16; FD13): nothing is loaded and nothing drawn. The root
+ * reads `on-request` (never `drawing`, and without the gate, so every source stays readable text); a figure longer than
+ * maxTextSize is left to its fallback at once, with the long note; every other figure gets one Render button, in a
+ * chrome `div.fig-render` right after its source, and the state `data-docreader-draw="on-request"`. A tap marks the
+ * button busy and the figure `busy`, and draws that figure only: the first tap calls load() once (with the font wait,
+ * as in 'auto'), and every draw goes through draw() and so through the module's one queue, one call at a time. Once
+ * the figure is drawn or has failed (the load note when the module is not Mermaid's, the error note otherwise), its
+ * Render control is hidden and its state reads `drawn` or `failed`; a later tap does nothing.
+ */
+function onRequest(ctx: FeatureContext, settings: MermaidSettings, figs: readonly Fig[]): void {
+  ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'on-request');
+  const config = configOf(settings, fontOf(ctx));
+  let module: Promise<MermaidApi | null> | null = null;
+  const api = (): Promise<MermaidApi | null> =>
+    (module ??= (async () => {
+      const loading = load(ctx, config);
+      await ctx.env.fonts(FONT_WAIT_MS);
+      return mermaidOf(await loading);
+    })());
+  const doc = ctx.root.ownerDocument;
+  const tap = async (f: Fig, bar: HTMLElement, button: HTMLButtonElement): Promise<void> => {
+    const a = await api();
+    if (!ctx.live()) return;
+    let drawn: boolean | null = false;
+    if (a === null) finish(ctx, f, null, 'load');
+    else drawn = await draw(ctx, a, config, settings, f);
+    if (drawn === null) return;
+    const ok = drawn;
+    ctx.operate(() => {
+      ctx.journal.setAttribute(button, 'aria-busy', null);
+      ctx.journal.setAttribute(bar, 'hidden', '');
+      ctx.journal.setAttribute(f.entry.figure, 'data-docreader-draw', ok ? 'drawn' : 'failed');
+    });
+  };
+  const max = settings.maxTextSize ?? MAX_TEXT_SIZE;
+  ctx.position.keep(() => {
+    for (const f of figs) {
+      if (f.text.length > max) {
+        markFailed(ctx, f, 'long');
+        ctx.journal.setAttribute(f.entry.figure, 'data-docreader-draw', 'failed');
+        continue;
+      }
+      const button = chrome(doc, 'button', { className: 'fig-render-btn', text: RENDER, attrs: { type: 'button', 'aria-label': `${RENDER} figure ${f.entry.no}` } });
+      const bar = chrome(doc, 'div', { className: 'fig-render' }, [button]);
+      let tapped = false;
+      ctx.journal.listen(button, 'click', () => {
+        if (tapped) return;
+        tapped = true;
+        ctx.journal.setAttribute(button, 'aria-busy', 'true');
+        ctx.journal.setAttribute(f.entry.figure, 'data-docreader-draw', 'busy');
+        void tap(f, bar, button);
+      });
+      ctx.journal.insert(bar, f.entry.figure, besideSource(f, true));
+      ctx.journal.setAttribute(f.entry.figure, 'data-docreader-draw', 'on-request');
+    }
+  });
+  ctx.relayout('content');
+}
+
+/**
+ * The second phase (LD5): load Mermaid through the host, then draw every figure, near ones first; in 'on-request'
+ * mode, only what a reader asks for (onRequest).
+ */
+export async function after(ctx: FeatureContext): Promise<void> {
+  const settings = ctx.options.mermaid;
+  if (settings === null) return; // no mermaid option, so no load to call (normalizeOptions keeps the two together)
+  const figs = drawable(ctx);
+  if (figs.length === 0) return;
+  if (settings.draw === 'on-request') {
+    onRequest(ctx, settings, figs);
+    return;
+  }
+  ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
+  ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing'); // the state (LD5)
+  const config = configOf(settings, fontOf(ctx));
+  const loading = load(ctx, config);
   await ctx.env.fonts(FONT_WAIT_MS);
   if (!ctx.live()) return;
   const api = mermaidOf(await loading);

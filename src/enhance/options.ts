@@ -33,7 +33,7 @@
 // is vocab.ts's: a list given replaces its default there. The namespace is the prefix of every storage key (state.ts),
 // `docreader` by default.
 import type { BoundCallback, HostCallbacks } from './host.js';
-import { EnhanceError, type CommitEntry, type FrontListEntry, type Prefs, type ReaderStorage, type VocabularyOptions } from './types.js';
+import { EnhanceError, type CommitEntry, type FrontListEntry, type MermaidDraw, type Prefs, type ReaderStorage, type VocabularyOptions } from './types.js';
 
 /** Which parts of the chrome the reader builds (LD10). */
 export interface ChromeFlags {
@@ -48,6 +48,8 @@ export interface MermaidSettings {
   readonly maxEdges: number | null;
   /** Configuration keys a diagram's directive may not set, added to the library's own list. */
   readonly secure: readonly string[];
+  /** When figures are drawn: all of them in the second phase ('auto'), or each on its Render tap ('on-request'). */
+  readonly draw: MermaidDraw;
 }
 
 /** The options after normalization: every field present, absent ones as null or their default. */
@@ -110,7 +112,10 @@ export const OPTION_KEYS: readonly string[] = [
 ];
 const INFO_KEYS: readonly string[] = ['title', 'frontList', 'sha', 'draft', 'commits', 'only'];
 const CHROME_KEYS: readonly string[] = ['bar', 'rail', 'settings'];
-const MERMAID_KEYS: readonly string[] = ['load', 'maxTextSize', 'maxEdges', 'secure'];
+const MERMAID_KEYS: readonly string[] = ['load', 'maxTextSize', 'maxEdges', 'secure', 'draw'];
+
+/** The values of mermaid.draw, the first being its default (docserver L3, Task 16; FD13). */
+export const MERMAID_DRAW_VALUES = ['auto', 'on-request'] as const;
 
 /** The option lists of the vocabulary, by group (vocab.ts says what each means). */
 const VOCABULARY_KEYS: readonly string[] = [
@@ -364,6 +369,14 @@ function normalizeSecure(v: unknown): readonly string[] {
   return Object.freeze(out);
 }
 
+/** mermaid.draw: 'auto' when left out, else one of MERMAID_DRAW_VALUES exactly. */
+function normalizeDraw(v: unknown): MermaidDraw {
+  if (v === undefined) return MERMAID_DRAW_VALUES[0];
+  const found = MERMAID_DRAW_VALUES.find((d) => d === v);
+  if (found === undefined) throw invalid(`mermaid.draw must be one of ${MERMAID_DRAW_VALUES.map((d) => `'${d}'`).join(', ')}`);
+  return found;
+}
+
 /** options.mermaid: its settings, and its load as a callback. */
 function normalizeMermaid(v: unknown): { settings: MermaidSettings; load: BoundCallback } {
   if (!isRecord(v)) throw invalid('mermaid must be an object');
@@ -374,6 +387,7 @@ function normalizeMermaid(v: unknown): { settings: MermaidSettings; load: BoundC
     maxTextSize: limit('mermaid.maxTextSize', fields['maxTextSize'], LIMITS.maxTextSize),
     maxEdges: limit('mermaid.maxEdges', fields['maxEdges'], LIMITS.maxEdges),
     secure: normalizeSecure(fields['secure']),
+    draw: normalizeDraw(fields['draw']),
   });
   return { settings, load };
 }

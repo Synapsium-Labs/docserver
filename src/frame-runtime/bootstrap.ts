@@ -27,10 +27,14 @@
 // initialize and run is FAILED('mermaid'). Otherwise the seed's html is materialised (content.ts: an inert parse, the
 // closed vocabulary check, the image rewrite) into an `article` root appended to the body, and enhance() runs on it
 // with the frame's adapters (adapters.ts: the enhance callbacks over the outbox, each only when the seed's bridge
-// allows its op). A refusal of the content, enhance's rejection, or a throw, is FAILED('render'). In 'auto' Mermaid
-// mode, ready then waits until the root's `data-docreader-diagrams` leaves `drawing` (a failed or partial drawing is
-// not an error). Then the face probe (fonts.ts): each face of the frame's font set is loaded once, bounded by 1500 ms,
-// so a data: font an inherited policy blocks raises its violation before ready. Then SETTLED.
+// allows its op). A refusal of the content, enhance's rejection, or a throw, is FAILED('render'). Enhance's `mermaid`
+// option carries the seed's caps, secure keys and `draw` (adapters.ts, enhanceMermaid). In 'auto' Mermaid mode, ready
+// then waits until the root's `data-docreader-diagrams` leaves `drawing` (a failed or partial drawing is not an error);
+// in 'on-request' mode nothing draws before ready, so it does not wait (waitsForDrawing; FD13); instead it asks for
+// inline style itself (styles.ts, probesInlineStyle), as a drawing will on a tap, so an inherited policy that blocks it
+// raises its violation before ready (fix round, review S1; Reference §11.5, ruling R7). Then the face probe (fonts.ts):
+// each face of the frame's font set is loaded once, bounded by 1500 ms, so a data: font an inherited policy blocks
+// raises its violation before ready. One more task, then the style probe's element comes out, and SETTLED.
 //
 // Hello: accepted only from the parent window, as a plain object with exactly {t, v}, t 'hello', v an integer of at
 // least 1, carrying exactly one port. Anything else is ignored and the listener stays; on acceptance the listener goes,
@@ -45,25 +49,17 @@
 // to the outbox's changes slot, which hands it to L2's `changes` callback (L2's readChangeSet checks it again).
 import { cspFloor } from '../frame/csp-rules.js';
 import { BRIDGE_LIMITS, type ErrorWhy } from '../frame/protocol.js';
-import { validateSeed, type Seed, type SeedMermaid } from '../frame/seed.js';
-import { createAdapters, FRAME_DOC_KEY, FRAME_NAMESPACE } from './adapters.js';
+import { validateSeed, type Seed } from '../frame/seed.js';
+import { createAdapters, enhanceMermaid, FRAME_DOC_KEY, FRAME_NAMESPACE, probesInlineStyle, waitsForDrawing } from './adapters.js';
 import { contentIntrinsics, materialise } from './content.js';
 import { FACES, FONT_WAIT_MS, probeFaces } from './fonts.js';
 import { parseParentMessage } from './inbound.js';
 import { createOutbox } from './outbox.js';
 import { pinFreeGlobals } from './pin.js';
+import { probeInlineStyle, styleIntrinsics } from './styles.js';
 
 /** The names the frame's bundled scripts read freely from the global: the build's scan (Task 6), a JSON array literal. */
 declare const DOCSERVER_FREE_GLOBALS: readonly string[];
-
-/** The seed's Mermaid settings as enhance takes them today: its caps and secure keys, without `draw` (Task 16). */
-function mermaidSettings(m: SeedMermaid): { maxTextSize?: number; maxEdges?: number; secure: readonly string[] } {
-  return {
-    ...(m.maxTextSize === undefined ? {} : { maxTextSize: m.maxTextSize }),
-    ...(m.maxEdges === undefined ? {} : { maxEdges: m.maxEdges }),
-    secure: m.secure,
-  };
-}
 
 /** What enhance-entry.ts registers. */
 interface EnhanceApi {
@@ -109,6 +105,7 @@ interface EnhanceApi {
   const closePort = MessagePort.prototype.close;
   const startPort = MessagePort.prototype.start;
   const content = contentIntrinsics();
+  const styles = styleIntrinsics();
   const Observer = MutationObserver;
   const documentElement = get<Element | null>(Document.prototype, 'documentElement');
   const fnToString = Function.prototype.toString;
@@ -357,21 +354,26 @@ interface EnhanceApi {
         ...(adapters.copy === undefined ? {} : { copy: adapters.copy }),
         ...(adapters.changes === undefined ? {} : { changes: adapters.changes }),
         ...(adapters.openVersion === undefined ? {} : { openVersion: adapters.openVersion }),
-        // The seed's `draw` is not passed yet: L2's options refuse an unknown mermaid key until Task 16 adds it.
-        ...(seed.mermaid === null || mermaidModule === null ? {} : { mermaid: { ...mermaidSettings(seed.mermaid), load: () => Promise.resolve(mermaidModule) } }),
+        // The seed's caps, secure keys and `draw`, passed through (Task 16).
+        ...(seed.mermaid === null || mermaidModule === null ? {} : { mermaid: enhanceMermaid(seed.mermaid, mermaidModule) }),
       });
-      if (seed.mermaid !== null) await diagramsSettled(root);
+      // 'auto': ready waits for the first full pass. 'on-request': nothing draws before ready, so nothing to wait for.
+      if (waitsForDrawing(seed.mermaid)) await diagramsSettled(root);
     } catch {
       fail('render');
       return;
     }
     if (state !== 'boot') return;
+    // On request, a drawing first asks for inline style on a tap, after ready: ask for it now (styles.ts).
+    const unprobe = probesInlineStyle(seed.mermaid) ? probeInlineStyle(doc, styles) : null;
     const set = fontsOf?.call(doc) as FontFaceSet | null | undefined;
     await probeFaces(set === null || set === undefined || loadFaces === undefined ? null : { load: (f: string) => loadFaces.call(set, f) }, FACES, FONT_WAIT_MS);
     // One more task, so a violation the probe raised is dispatched before the state settles.
     await new Promise<void>((resolve) => {
       later(resolve, 0);
     });
+    // Only now, so a violation the style probe raised still had the document on its path when it was dispatched.
+    if (unprobe !== null) unprobe();
     if (state !== 'boot') return;
     state = 'settled';
     maybeReady();

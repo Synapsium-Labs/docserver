@@ -602,6 +602,18 @@
 [data-docreader-root] .fig-error p { margin: 0 0 .4em !important; color: var(--text); }
 [data-docreader-root] .fig-error summary { cursor: pointer; color: var(--text-muted); }
 [data-docreader-root] .fig-error pre.fig-src { margin: .6em 0 0; text-align: left; white-space: pre; overflow: auto; max-height: 50vh; background: var(--code-block-bg); padding: 12px 14px; font-size: calc(.78 * var(--rem)); border: 0; border-radius: 3px; }
+/* Mermaid on request (mermaid.draw 'on-request'; the root reads data-docreader-diagrams="on-request" and carries no gate,
+   so each source stays readable text): the Render button under the source, busy while its draw waits or runs, hidden
+   once the figure is drawn or has failed; then the source goes as it does under the gate (its drawing or its note
+   shows) */
+[data-docreader-root] figure.mermaid-figure > .fig-render { display: flex; justify-content: flex-end; margin: 8px 0 0; }
+[data-docreader-root] figure.mermaid-figure > .fig-render[hidden] { display: none !important; }
+[data-docreader-root] figure.mermaid-figure > .fig-render button { font-family: var(--sans); font-size: calc(.78 * var(--rem)); font-weight: 600; padding: 3px 12px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg); color: var(--text-muted); cursor: pointer; line-height: 1.5; }
+[data-docreader-root] figure.mermaid-figure > .fig-render button:hover,
+[data-docreader-root] figure.mermaid-figure > .fig-render button:focus-visible { border-color: var(--accent); color: var(--accent); }
+[data-docreader-root] figure.mermaid-figure > .fig-render button[aria-busy="true"] { cursor: progress; opacity: .6; }
+[data-docreader-root][data-docreader-root][data-docreader-diagrams="on-request"]:not(i) figure.mermaid-figure.drawn > pre.mermaid:not([data-docreader-chrome]),
+[data-docreader-root][data-docreader-root][data-docreader-diagrams="on-request"]:not(i) figure.mermaid-figure.draw-failed > pre.mermaid:not([data-docreader-chrome]) { display: none !important; }
 /* full screen */
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay { position: fixed; inset: 0; z-index: 2000; max-width: none; margin: 0; background: #161514; display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .fig-overlay.open { display: block; }

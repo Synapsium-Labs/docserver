@@ -241,6 +241,11 @@ export interface OpenedDoc {
   readonly aborted: readonly string[];
   /** Every path on the page's origin that was asked for and is not served, in order (each answered 404). */
   readonly missing: readonly string[];
+  /**
+   * Every path on the page's origin that was served (answered 200), in order, a repeat included: what the browser asked
+   * the network for, seen at the route, so a row can count a file's requests the same way on every engine.
+   */
+  readonly served: readonly string[];
   /** enhance(root, options) on the page; rejects with the page's EnhanceError code and message. */
   enhance(): Promise<void>;
   /** The structural snapshot of the root (page/snapshot.ts). */
@@ -277,6 +282,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
   });
   const aborted: string[] = [];
   const missing: string[] = [];
+  const served: string[] = [];
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin === ORIGIN) {
@@ -289,6 +295,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
       }
       const headers: Record<string, string> = { 'content-type': f.type };
       if (url.pathname === '/') headers['content-security-policy'] = policy;
+      served.push(url.pathname);
       await route.fulfill({ status: 200, headers, body: f.body });
       return;
     }
@@ -304,6 +311,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
     page,
     aborted,
     missing,
+    served,
     async enhance() {
       const out: EnhanceOutcome = await page.evaluate(() => (window.__docreaderHarness as HarnessApi).enhance());
       if (!out.ok) throw new Error(`enhance rejected: ${out.code}: ${out.message}`);
