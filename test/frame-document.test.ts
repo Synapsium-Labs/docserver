@@ -12,7 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { buildFrame, byteRules, checkFrame, writeFrame, type BuiltFrame, type ByteRules } from '../scripts/build-frame.mjs';
+import { build } from 'esbuild';
+import { buildFrame, byteRules, checkFrame, scriptOptions, writeFrame, type BuiltFrame, type ByteRules } from '../scripts/build-frame.mjs';
 import { checkFrameCsp, frameCsp, FrameError, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../src/frame/index.js';
 import { SEED_KEYS, SEED_LIMITS, validateSeed } from '../src/frame/seed.js';
 import { base64, cspHash, hex, hexToBase64, sha256Text } from '../src/frame/sha256.js';
@@ -297,8 +298,12 @@ describe("L3 Task 3 frameDocument never emits a seed its own bootstrap refuses: 
 });
 
 describe("L3 Task 3 the bootstrap bundles seed.ts's validator, not its srcdoc-size formulas (Reference 12 budget)", () => {
-  it('none of the size formulas reaches bootstrap.js, and it is within its 32 KiB budget', () => {
-    const text = built.files.bootstrap.text;
+  it('none of the size formulas reaches bootstrap.js, and it is within its 32 KiB budget', async () => {
+    // bootstrap.js is minified, names included (Task 5), so what it bundles is read from its metafile and from the
+    // same build with its names kept (tree shaking is the same either way).
+    expect(built.files.bootstrap.inputs).toContain('src/frame/seed.ts');
+    const named = await build({ ...scriptOptions('bootstrap'), minifyIdentifiers: false });
+    const text = named.outputFiles[0]?.text ?? '';
     expect(text).toContain('function validateSeed(');
     for (const name of ['IMAGE_BUDGET_CHARS', 'SEED_FIELDS_MAX_CHARS', 'seedFieldsMaxChars', 'snapshotMaxChars', 'featuresMaxChars', 'imageBudgetChars']) {
       expect(text, name).not.toContain(name);

@@ -2,7 +2,7 @@
 // assets/, the sha256 of its text's UTF-8 bytes, its length in bytes, and, for a script, its CSP hash source.
 export const FRAME_MANIFEST = {
   guard: { path: "frame/guard.js", sha256: "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d", bytes: 3643, csp: "'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0='" },
-  bootstrap: { path: "frame/bootstrap.js", sha256: "7a3d6fbc840c6f9b40aac5bc7c8cbb35239e7731e734d6aa42dff39b16cde095", bytes: 30153, csp: "'sha256-ej1vvIQMb5tAqsW8fIy7NSOedzHnNNaqQt/zmxbN4JU='" },
+  bootstrap: { path: "frame/bootstrap.js", sha256: "c52bde15f29ff8326172004e60cad1fb5408be72fee09cf570b2fc6f37e5e302", bytes: 25423, csp: "'sha256-xSveFfKf+DJhcgBOYMrR+1QIvnL+4Jz1cLL8bzfl4wI='" },
   enhance: { path: "frame/enhance.js", sha256: "33232f70834a2e6909bbb2b1af43f42911cade6c9e42cb32f9a8613fed4b3050", bytes: 193270, csp: "'sha256-MyMvcINKLmkJu7Kxr0P0KRHK3myeQssy+ahhP+1LMFA='" },
   css: { path: "frame/reader.css", sha256: "7b4885c7951612ada8d02051da1abd1aa6ecbca93999350d3fc8ab56175eda0a", bytes: 546649, csp: null },
   mermaid: { path: "mermaid/mermaid.frame.js", sha256: "7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3", bytes: 3747084, csp: "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='" },

@@ -5,7 +5,9 @@
 //   ... [--out <dir>]                             write to, or check, <dir> instead of the package root
 //
 // Four classic strict IIFEs, each built by esbuild with target es2022 and a "use strict" banner:
-// assets/frame/guard.js and assets/frame/bootstrap.js unminified (charset ascii), assets/frame/enhance.js minified with
+// assets/frame/guard.js unminified and assets/frame/bootstrap.js minified (charset ascii; the bootstrap reads its
+// free-global list from the define DOCSERVER_FREE_GLOBALS, an interim `[]` until Task 6's scan supplies it),
+// assets/frame/enhance.js minified with
 // its legal comments at the end and the free-global define set (charset ascii), and assets/mermaid/mermaid.frame.js,
 // which scripts/build-mermaid.mjs's buildMermaidFrame() builds from the same option object, pinned input and elk
 // stand-in as assets/mermaid/mermaid.mjs, with the define set. And assets/frame/reader.css: the OFL notice, the frame's prelude,
@@ -19,8 +21,8 @@
 //
 // The build is reproducible: the same inputs give the same bytes (inputs are named relative to the package root).
 //
-// Prototype scope: no `<!--` token scanner, no free-global scan or pin, no budgets; the Mermaid frame file is git-ignored
-// with the rest of assets/mermaid/ and its notices are the plan's.
+// Prototype scope: no `<!--` token scanner, no free-global scan (the bootstrap pins the interim empty list), no
+// budgets; the Mermaid frame file is git-ignored with the rest of assets/mermaid/ and its notices are the plan's.
 //
 // Exit codes: 0 built (or checked equal); 1 the build failed or an output differs (the reason on stderr); 2 a usage
 // error. Dev tooling, never shipped; what the tests use is exported (types in build-frame.d.mts).
@@ -95,9 +97,12 @@ export async function byteRules(root = ROOT) {
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest();
 
-async function script(root, name) {
-  const minify = name === 'enhance';
-  const result = await build({
+/**
+ * The esbuild options of the frame script `name` ('guard', 'bootstrap' or 'enhance'), as the build uses them: exported
+ * so a test can build the same bundle with its names kept and read what it holds.
+ */
+export function scriptOptions(name, root = ROOT) {
+  return {
     entryPoints: [ENTRIES[name]],
     absWorkingDir: root,
     bundle: true,
@@ -106,15 +111,27 @@ async function script(root, name) {
     target: 'es2022',
     charset: 'ascii',
     banner: { js: '"use strict";' },
-    minify,
-    legalComments: minify ? 'eof' : 'none',
+    // The bootstrap is minified like enhance (its names too): unminified, Task 5's runtime is about 47.6 KB, over its
+    // 32 KiB budget (Reference §12 step 5), and Task 6 adds the free-global list to it. The three parts are named, not
+    // `minify`, so a caller can turn one off (`minify` would override it).
+    minifyWhitespace: name !== 'guard',
+    minifySyntax: name !== 'guard',
+    minifyIdentifiers: name !== 'guard',
+    legalComments: name === 'enhance' ? 'eof' : 'none',
     ...(name === 'enhance' ? { define: { ...FREE_DEFINES } } : {}),
+    // Task 5's interim list: Task 6 replaces it with the free-global scan of the four bundled files (Reference §5.5).
+    ...(name === 'bootstrap' ? { define: { DOCSERVER_FREE_GLOBALS: '[]' } } : {}),
+    metafile: true,
     write: false,
     logLevel: 'silent',
-  });
+  };
+}
+
+async function script(root, name) {
+  const result = await build(scriptOptions(name, root));
   const [file] = result.outputFiles;
   if (file === undefined || result.outputFiles.length !== 1) throw new Error(`build-frame: ${name}: esbuild made ${String(result.outputFiles.length)} files`);
-  return file.text;
+  return { text: file.text, inputs: Object.keys(result.metafile.inputs).sort() };
 }
 
 function stylesheet(root) {
@@ -133,10 +150,15 @@ function stylesheet(root) {
  */
 export async function buildFrame({ root = ROOT } = {}) {
   const { scriptHazards, cssHazards } = await byteRules(root);
-  const texts = {
+  const scripts = {
     guard: await script(root, 'guard'),
     bootstrap: await script(root, 'bootstrap'),
     enhance: await script(root, 'enhance'),
+  };
+  const texts = {
+    guard: scripts.guard.text,
+    bootstrap: scripts.bootstrap.text,
+    enhance: scripts.enhance.text,
     css: stylesheet(root),
     mermaid: await buildMermaidFrame(root),
   };
@@ -152,6 +174,7 @@ export async function buildFrame({ root = ROOT } = {}) {
       sha256: digest.toString('hex'),
       csp: name === 'css' ? null : `'sha256-${digest.toString('base64')}'`,
       kind: name === 'css' ? 'style' : 'script',
+      ...(name in scripts ? { inputs: scripts[name].inputs } : {}),
     };
   }
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

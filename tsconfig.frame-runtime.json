@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/frame-runtime", "src/types/markdown-it-footnote.d.ts", "test/frame-runtime.test.ts"],
+  "exclude": []
+}
