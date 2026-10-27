@@ -1,7 +1,16 @@
-// The self-hosted Mermaid file (docserver L2, Task 15; LD3, LD4; spec §3.4 and §3.6).
+// The self-hosted Mermaid file (docserver L2, Task 15; LD3, LD4; spec §3.4 and §3.6), and its classic twin for the
+// sealed reader frame (docserver L3, Task 4; plan Reference §5.1 and §12 step 1).
 //
 //   node scripts/build-mermaid.mjs            build assets/mermaid/mermaid.mjs (npm run build:mermaid)
 //   node scripts/build-mermaid.mjs --notices  build it, and write the generated section of THIRD-PARTY-NOTICES
+//
+// The frame's file, assets/mermaid/mermaid.frame.js, is written by scripts/build-frame.mjs, which calls
+// buildMermaidFrame() here. Both files come from one option object, SHARED_OPTIONS (the pinned input's bundling,
+// platform, target, minification, legal comments and symlink handling), with the same elk stand-in: the ESM file adds
+// its format and entry; the frame file adds the IIFE format, the "use strict" banner, the free-global define set
+// (FREE_DEFINES) and its entry, scripts/mermaid-frame-entry.mjs, which switches start-on-load off and hands Mermaid's
+// API to the frame's bootstrap by one `docserver:register` event. test/mermaid-frame.test.ts reads the options back
+// from both builds.
 //
 // esbuild bundles the pinned `mermaid` dev dependency into ONE ESM file whose only export is the default, Mermaid's
 // API, with its start-on-load switched off: importing the file draws nothing, and Mermaid draws only when it is asked
@@ -60,6 +69,51 @@ export const ENTRY_NAME = 'mermaid-entry.mjs';
 /** The largest the built file may be, in bytes (4 MiB). Measured: about 3.75 MB for Mermaid 12.1.0 without elkjs. */
 export const MAX_BYTES = 4 * 1024 * 1024;
 
+/** The frame's Mermaid file, from the package root; scripts/build-frame.mjs writes it. */
+export const FRAME_OUT_FILE = 'assets/mermaid/mermaid.frame.js';
+
+/** The frame build's entry, from the package root (and its name in the metafile). */
+export const FRAME_ENTRY = 'scripts/mermaid-frame-entry.mjs';
+
+/** The first line of every frame script: a classic script is sloppy unless it says otherwise. */
+export const STRICT_BANNER = '"use strict";';
+
+/**
+ * Free names third-party code reads lazily (`typeof process`), defined away in the frame's builds (plan Reference
+ * §5.5, FD6). Not `require`: esbuild resolves a CommonJS module's `require('./x')` to the bundled module only while
+ * `require` is left alone, and a define replaces the call first (measured, prototype finding P-1: Mermaid's bundled
+ * sanitize-url then calls `(void 0)("./constants")` and the file throws on evaluation). A free `require` that survives
+ * the bundle is the boot-time pin's to close. scripts/build-frame.mjs re-exports this object for its enhance build.
+ */
+export const FREE_DEFINES = Object.freeze({
+  process: 'undefined',
+  global: 'undefined',
+  module: 'undefined',
+  exports: 'undefined',
+  define: 'undefined',
+  Deno: 'undefined',
+  Bun: 'undefined',
+});
+
+/**
+ * The esbuild options both Mermaid files are built with: one bundle of the pinned input, nothing split off, for the
+ * browser, es2022, minified, upstream legal comments gathered at the end, symlinks kept as written, in memory, with a
+ * metafile. Each build spreads this object and adds only its own keys (format, entry, output, and for the frame the
+ * banner and the define set), so the two cannot drift apart; each build's result carries the options it passed.
+ */
+export const SHARED_OPTIONS = Object.freeze({
+  bundle: true,
+  splitting: false,
+  platform: 'browser',
+  target: 'es2022',
+  minify: true,
+  legalComments: 'eof',
+  preserveSymlinks: true,
+  metafile: true,
+  write: false,
+  logLevel: 'silent',
+});
+
 /** A string elkjs's own code holds hundreds of times (its Java packages), and nothing else bundled holds. */
 export const ELK_SIGNATURE = 'org.eclipse.elk';
 
@@ -89,33 +143,18 @@ function elkStub(root) {
   };
 }
 
-/**
- * Bundle Mermaid in memory; nothing is written. `root` is the package root, whose node_modules holds the pinned
- * Mermaid. Resolves with what the tests and the command check: the outputs, the output's exports and the imports
- * left in it, the inputs, the file's text and bytes, its sha256, and the metafile.
- */
-export async function buildMermaid({ root = ROOT } = {}) {
-  const result = await build({
-    stdin: { contents: ENTRY, resolveDir: root, sourcefile: ENTRY_NAME, loader: 'js' },
-    absWorkingDir: root,
-    outfile: path.join(root, OUT_FILE),
-    bundle: true,
-    splitting: false,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2022',
-    minify: true,
-    legalComments: 'eof',
-    preserveSymlinks: true,
-    metafile: true,
-    write: false,
-    logLevel: 'silent',
-    plugins: [elkStub(root)],
-  });
+/** The options of one Mermaid build: SHARED_OPTIONS, the package root, the elk stand-in, then the build's own keys. */
+function optionsOf(root, own) {
+  return { ...SHARED_OPTIONS, absWorkingDir: root, plugins: [elkStub(root)], ...own };
+}
+
+/** Run one Mermaid build: exactly one output file, read into what the tests and the commands check. */
+async function bundle(options, outFile, label) {
+  const result = await build(options);
   const [file] = result.outputFiles;
-  if (file === undefined || result.outputFiles.length !== 1) throw new Error(`build-mermaid: esbuild made ${String(result.outputFiles.length)} files`);
+  if (file === undefined || result.outputFiles.length !== 1) throw new Error(`${label}: esbuild made ${String(result.outputFiles.length)} files`);
   const outputs = Object.keys(result.metafile.outputs).sort();
-  const out = result.metafile.outputs[OUT_FILE];
+  const out = result.metafile.outputs[outFile];
   return {
     outputs,
     exports: [...(out?.exports ?? [])].sort(),
@@ -126,7 +165,57 @@ export async function buildMermaid({ root = ROOT } = {}) {
     bytes: file.contents.length,
     sha256: createHash('sha256').update(file.contents).digest('hex'),
     metafile: result.metafile,
+    options,
   };
+}
+
+/**
+ * Bundle Mermaid in memory; nothing is written. `root` is the package root, whose node_modules holds the pinned
+ * Mermaid. Resolves with what the tests and the command check: the outputs, the output's exports and the imports
+ * left in it, the inputs, the file's text and bytes, its sha256, the metafile, and the options it was built with.
+ */
+export async function buildMermaid({ root = ROOT } = {}) {
+  const options = optionsOf(root, {
+    stdin: { contents: ENTRY, resolveDir: root, sourcefile: ENTRY_NAME, loader: 'js' },
+    outfile: path.join(root, OUT_FILE),
+    format: 'esm',
+  });
+  return bundle(options, OUT_FILE, 'build-mermaid');
+}
+
+/**
+ * Bundle the frame's Mermaid file in memory, unchecked; nothing is written. The same as buildMermaid() but for the
+ * build's own keys: the IIFE format, the banner, FREE_DEFINES and FRAME_ENTRY. buildMermaidFrame() is the checked one.
+ */
+export async function bundleMermaidFrame({ root = ROOT } = {}) {
+  const options = optionsOf(root, {
+    entryPoints: [FRAME_ENTRY],
+    outfile: path.join(root, FRAME_OUT_FILE),
+    format: 'iife',
+    banner: { js: STRICT_BANNER },
+    define: { ...FREE_DEFINES },
+  });
+  return bundle(options, FRAME_OUT_FILE, 'build-mermaid: frame');
+}
+
+/** Why the frame's Mermaid text may not ship: over MAX_BYTES of UTF-8, or holding elkjs's code. Empty when it may. */
+export function mermaidFrameHazards(text) {
+  const out = [];
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes > MAX_BYTES) out.push(`${String(bytes)} bytes, over ${String(MAX_BYTES)}`);
+  if (text.includes(ELK_SIGNATURE)) out.push('elkjs is bundled');
+  return out;
+}
+
+/**
+ * The frame's Mermaid file, built in memory and checked: resolves with its text, or throws when mermaidFrameHazards()
+ * names a reason. scripts/build-frame.mjs writes it to FRAME_OUT_FILE.
+ */
+export async function buildMermaidFrame(root = ROOT) {
+  const built = await bundleMermaidFrame({ root });
+  const hazards = mermaidFrameHazards(built.text);
+  if (hazards.length > 0) throw new Error(`build-mermaid: ${FRAME_OUT_FILE}: ${hazards.join(', ')}`);
+  return built.text;
 }
 
 /** A licence text as the notices carry it: no byte-order mark, LF line ends, no trailing white space, no blank first or last line. */

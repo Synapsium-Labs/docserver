@@ -1,5 +1,6 @@
-// Types for scripts/build-mermaid.mjs, which runs under plain Node and is imported by test/mermaid-bundle.test.ts and
-// test/browser/mermaid-file.test.ts.
+// Types for scripts/build-mermaid.mjs, which runs under plain Node and is imported by test/mermaid-bundle.test.ts,
+// test/mermaid-frame.test.ts, test/browser/mermaid-file.test.ts, test/browser/mermaid-parity.test.ts and
+// scripts/build-frame.mjs.
 import type { Metafile } from 'esbuild';
 
 /** What one build gives. */
@@ -17,6 +18,8 @@ export interface Built {
   readonly bytes: number;
   readonly sha256: string;
   readonly metafile: Metafile;
+  /** The esbuild options the build passed: SHARED_OPTIONS, the root, the elk stand-in, then the build's own keys. */
+  readonly options: Readonly<Record<string, unknown>>;
 }
 
 /** One licence file of a package, its text tidied (LF line ends, no trailing white space). */
@@ -49,11 +52,19 @@ export declare const STUB: string;
 export declare const ENTRY_NAME: string;
 export declare const MAX_BYTES: number;
 export declare const ELK_SIGNATURE: string;
+export declare const FRAME_OUT_FILE: string;
+export declare const FRAME_ENTRY: string;
+export declare const STRICT_BANNER: string;
+export declare const FREE_DEFINES: Readonly<Record<string, string>>;
+export declare const SHARED_OPTIONS: Readonly<Record<string, unknown>>;
 export declare const NOTICES_BEGIN: string;
 export declare const NOTICES_END: string;
 export declare const NO_LICENCE_FIELD: string;
 export declare const EMBEDDED: readonly EmbeddedPackage[];
 export declare function buildMermaid(options?: { root?: string }): Promise<Built>;
+export declare function bundleMermaidFrame(options?: { root?: string }): Promise<Built>;
+export declare function mermaidFrameHazards(text: string): string[];
+export declare function buildMermaidFrame(root?: string): Promise<string>;
 export declare function licenceFiles(dir: string, label: string): LicenceFile[];
 export declare function packagesOf(metafile: Metafile, root?: string): BundledPackage[];
 export declare function embeddedMarkers(metafile: Metafile, root?: string): EmbeddedPackage[];

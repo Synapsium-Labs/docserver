@@ -7,7 +7,8 @@
 // Four classic strict IIFEs, each built by esbuild with target es2022 and a "use strict" banner:
 // assets/frame/guard.js and assets/frame/bootstrap.js unminified (charset ascii), assets/frame/enhance.js minified with
 // its legal comments at the end and the free-global define set (charset ascii), and assets/mermaid/mermaid.frame.js,
-// Mermaid from the same pinned input and elk stand-in as assets/mermaid/mermaid.mjs, with the define set. And assets/frame/reader.css: the OFL notice, the frame's prelude,
+// which scripts/build-mermaid.mjs's buildMermaidFrame() builds from the same option object, pinned input and elk
+// stand-in as assets/mermaid/mermaid.mjs, with the define set. And assets/frame/reader.css: the OFL notice, the frame's prelude,
 // then assets/reader.css with each font url replaced by the font itself as a data: URL. Every output passes the byte
 // rules (src/frame/bytes.ts, the same functions frameDocument runs). Then the manifests: assets/assets.json (the frame
 // files only, in the prototype) and src/frame/manifest.generated.ts, which frameDocument and frameCsp read.
@@ -28,7 +29,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { ELK_SIGNATURE, MAX_BYTES as MERMAID_MAX_BYTES, STUB } from './build-mermaid.mjs';
+import { buildMermaidFrame, FRAME_ENTRY, FREE_DEFINES } from './build-mermaid.mjs';
+
+/** The free-global define set (plan Reference §5.5), defined once in scripts/build-mermaid.mjs. */
+export { FREE_DEFINES };
 
 /** The package root this script belongs to. */
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -42,28 +46,12 @@ export const FRAME_FILES = Object.freeze({
   mermaid: 'mermaid/mermaid.frame.js',
 });
 
-/** The Mermaid frame build's entry, from the package root. */
-export const MERMAID_FRAME_ENTRY = 'scripts/mermaid-frame-entry.mjs';
+/** The Mermaid frame build's entry, from the package root (scripts/build-mermaid.mjs's FRAME_ENTRY). */
+export const MERMAID_FRAME_ENTRY = FRAME_ENTRY;
 
 /** The committed outputs, from the package root. */
 export const ASSETS_JSON = 'assets/assets.json';
 export const MANIFEST_TS = 'src/frame/manifest.generated.ts';
-
-/**
- * Free names third-party code reads lazily (`typeof process`), defined away at build time (design §5.4). Not `require`:
- * esbuild resolves a CommonJS module's `require('./x')` to the bundled module only while `require` is left alone, and a
- * define replaces the call first (measured: Mermaid's bundled sanitize-url then calls `(void 0)("./constants")` and the
- * file throws on evaluation). A free `require` that survives the bundle is the boot-time pin's to close.
- */
-export const FREE_DEFINES = Object.freeze({
-  process: 'undefined',
-  global: 'undefined',
-  module: 'undefined',
-  exports: 'undefined',
-  define: 'undefined',
-  Deno: 'undefined',
-  Bun: 'undefined',
-});
 
 /** The scripts' entries, from the package root. */
 const ENTRIES = Object.freeze({
@@ -106,43 +94,6 @@ export async function byteRules(root = ROOT) {
 }
 
 const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest();
-
-/**
- * Mermaid as a classic strict IIFE (P7): the same pinned input, elk stand-in, target, minification, legal comments and
- * symlink handling as scripts/build-mermaid.mjs's ESM file, plus format iife, the "use strict" banner and the free-global
- * define set. Its entry registers the API by event.
- */
-async function mermaidFrame(root) {
-  const result = await build({
-    entryPoints: [MERMAID_FRAME_ENTRY],
-    absWorkingDir: root,
-    bundle: true,
-    splitting: false,
-    format: 'iife',
-    platform: 'browser',
-    target: 'es2022',
-    minify: true,
-    legalComments: 'eof',
-    preserveSymlinks: true,
-    banner: { js: '"use strict";' },
-    define: { ...FREE_DEFINES },
-    write: false,
-    logLevel: 'silent',
-    plugins: [
-      {
-        name: 'elkjs-stub',
-        setup(b) {
-          b.onResolve({ filter: /^elkjs(?:\/|$)/ }, () => ({ path: path.join(root, STUB) }));
-        },
-      },
-    ],
-  });
-  const [file] = result.outputFiles;
-  if (file === undefined || result.outputFiles.length !== 1) throw new Error(`build-frame: mermaid: esbuild made ${String(result.outputFiles.length)} files`);
-  if (file.contents.length > MERMAID_MAX_BYTES) throw new Error(`build-frame: mermaid: ${String(file.contents.length)} bytes, over ${String(MERMAID_MAX_BYTES)}`);
-  if (file.text.includes(ELK_SIGNATURE)) throw new Error('build-frame: mermaid: elkjs is bundled');
-  return file.text;
-}
 
 async function script(root, name) {
   const minify = name === 'enhance';
@@ -187,7 +138,7 @@ export async function buildFrame({ root = ROOT } = {}) {
     bootstrap: await script(root, 'bootstrap'),
     enhance: await script(root, 'enhance'),
     css: stylesheet(root),
-    mermaid: await mermaidFrame(root),
+    mermaid: await buildMermaidFrame(root),
   };
   const files = {};
   for (const [name, text] of Object.entries(texts)) {
