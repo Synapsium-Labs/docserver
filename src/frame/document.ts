@@ -14,12 +14,16 @@
 // implied head, and the implied body stays empty until the bootstrap appends the content root at DOMContentLoaded. The
 // rendered html travels only as text inside the seed. Pure: no DOM, no clock, no randomness, no I/O.
 //
-// Prototype scope: no images, version, snapshot, features or bridge options; the seed is schema 1's subset.
+// The seed carries every schema 1 key (Task 3): the keys frameDocument takes no option for yet (frontList, version,
+// images, snapshot, features, bridge, and mermaid's secure and draw) are written at their defaults. Task 7 validates and
+// seeds their real values from RenderInput and FrameOptions.
 import type { FrontEntry, RenderOutcome } from '../render/types.js';
 import { cssHazards, scriptHazards } from './bytes.js';
 import { checkFrameCsp } from './csp.js';
 import { FRAME_MANIFEST } from './manifest.generated.js';
-import { HASH_MAX_CODE_UNITS, isNonce, LANG, serializeSeed, type SeedMermaid, type SeedPrefs } from './seed.js';
+import { isFragmentId } from './fragment.js';
+import { FRAME_PREF_VALUES } from './protocol.js';
+import { isLang, isNonce, SEED_LIMITS, serializeSeed, type Seed, type SeedMermaid, type SeedPrefs } from './seed.js';
 import { hex, sha256Text } from './sha256.js';
 
 export type FrameErrorCode = 'not-rendered' | 'invalid-input' | 'nonce' | 'asset-mismatch' | 'unsafe-asset' | 'csp' | 'missing-asset';
@@ -40,7 +44,7 @@ export interface RenderInput {
     readonly html: string;
     readonly meta: { readonly title: string | null; readonly frontList: readonly FrontEntry[] | null };
   };
-  /** The id to open at, without '#'. Outside 1 to 256 code units it is ignored (seeded as null), never refused. */
+  /** The id to open at, without '#'. Outside FRAGMENT_ID_GRAMMAR it is ignored (seeded as null), never refused. */
   readonly initialHash?: string | null;
   /** Default 'en'. */
   readonly lang?: string;
@@ -63,16 +67,13 @@ export interface FrameOptions {
   readonly nonce: string;
   readonly assets: FrameAssets;
   readonly prefs?: SeedPrefs;
-  /** null or absent: no Mermaid script; figures show their source. */
-  readonly mermaid?: SeedMermaid | null;
+  /** null or absent: no Mermaid script; figures show their source. The seed completes it with `secure: []` and
+   *  `draw: 'auto'` (Task 7 takes both from here). */
+  readonly mermaid?: Pick<SeedMermaid, 'maxTextSize' | 'maxEdges'> | null;
 }
 
 const SCRIPTS = ['guard', 'bootstrap', 'enhance'] as const;
-const PREF_VALUES: Readonly<Record<string, readonly string[]>> = {
-  theme: ['auto', 'light', 'dark'],
-  width: ['standard', 'wide'],
-  font: ['serif', 'sans'],
-};
+const PREF_VALUES: Readonly<Record<string, readonly string[]>> = FRAME_PREF_VALUES;
 
 function verify(name: keyof typeof FRAME_MANIFEST, text: unknown): string {
   if (typeof text !== 'string') throw new FrameError('asset-mismatch', `frameDocument: assets.${name} is not a string`);
@@ -95,17 +96,22 @@ function prefsOf(p: unknown): SeedPrefs {
   return out as SeedPrefs;
 }
 
+/** The most each Mermaid cap may be: the seed's own (SEED_LIMITS), so the bootstrap never refuses what this writes. Task 7
+ *  lowers both to the frame's ceilings (50000 and 500). */
+const MERMAID_CAPS: Readonly<Record<string, number>> = { maxTextSize: SEED_LIMITS.maxTextSize, maxEdges: SEED_LIMITS.maxEdges };
+
 function mermaidOf(m: unknown): SeedMermaid | null {
   if (m === undefined || m === null) return null;
   if (typeof m !== 'object' || Array.isArray(m)) throw new FrameError('invalid-input', 'frameDocument: mermaid');
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(m)) {
-    if ((k !== 'maxTextSize' && k !== 'maxEdges') || typeof v !== 'number' || !Number.isInteger(v) || v < 1) {
+    const max = Object.hasOwn(MERMAID_CAPS, k) ? MERMAID_CAPS[k] : undefined;
+    if (max === undefined || typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > max) {
       throw new FrameError('invalid-input', `frameDocument: mermaid.${k}`);
     }
     out[k] = v;
   }
-  return out;
+  return { ...out, secure: [], draw: 'auto' };
 }
 
 /** The srcdoc for one mount of the sealed reader frame. Throws FrameError on any refusal (design §4.3). */
@@ -115,13 +121,13 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const html = r.result.html;
   const title = r.result.meta.title;
   if (typeof html !== 'string') throw new FrameError('invalid-input', 'frameDocument: result.html');
-  if (title !== null && typeof title !== 'string') throw new FrameError('invalid-input', 'frameDocument: meta.title');
+  if (title !== null && (typeof title !== 'string' || title.length > SEED_LIMITS.titleMaxCodeUnits)) throw new FrameError('invalid-input', 'frameDocument: meta.title');
   const lang = r.lang ?? 'en';
-  if (typeof lang !== 'string' || !LANG.test(lang)) throw new FrameError('invalid-input', 'frameDocument: lang');
-  // An initialHash outside its bounds is ignored (seeded as null), never refused (ruling R1): a host may forward a
-  // user's URL fragment as it found it. TODO(plan): FRAGMENT_ID_GRAMMAR (design §8.4) joins these bounds.
+  if (!isLang(lang)) throw new FrameError('invalid-input', 'frameDocument: lang');
+  // An initialHash outside FRAGMENT_ID_GRAMMAR is ignored (seeded as null), never refused (ruling R1): a host may
+  // forward a user's URL fragment as it found it.
   const hash: unknown = r.initialHash ?? null;
-  const initialHash = typeof hash === 'string' && hash.length > 0 && hash.length <= HASH_MAX_CODE_UNITS ? hash : null;
+  const initialHash = isFragmentId(hash) ? hash : null;
   const prefs = prefsOf(o.prefs);
   const guard = verify('guard', o.assets.guard);
   const bootstrap = verify('bootstrap', o.assets.bootstrap);
@@ -137,7 +143,23 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   if (mermaid !== null) required.push(FRAME_MANIFEST.mermaid.csp);
   const csp = checkFrameCsp(o.csp, required);
   if (!csp.ok) throw new FrameError('csp', `frameDocument: the policy is refused (${csp.why})`);
-  const seed = serializeSeed({ s: 1, nonce: o.nonce, html, title, lang, initialHash, prefs, mermaid: mermaidOptions });
+  const fields: Seed = {
+    s: 1,
+    nonce: o.nonce,
+    html,
+    title,
+    frontList: null,
+    version: { sha: null, draft: false, commits: null, only: null },
+    images: [],
+    initialHash,
+    lang,
+    prefs,
+    snapshot: [],
+    features: {},
+    mermaid: mermaidOptions,
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+  };
+  const seed = serializeSeed(fields);
   return (
     `<meta http-equiv="Content-Security-Policy" content="${o.csp}">` +
     `<script>${guard}</script>` +

@@ -14,7 +14,7 @@ import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildFrame, byteRules, checkFrame, writeFrame, type BuiltFrame, type ByteRules } from '../scripts/build-frame.mjs';
 import { checkFrameCsp, frameCsp, FrameError, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../src/frame/index.js';
-import { validateSeed } from '../src/frame/seed.js';
+import { SEED_KEYS, SEED_LIMITS, validateSeed } from '../src/frame/seed.js';
 import { base64, cspHash, hex, hexToBase64, sha256Text } from '../src/frame/sha256.js';
 import { render } from '../src/render/index.js';
 
@@ -217,59 +217,97 @@ describe('U4 initialHash: outside its bounds it is seeded as null, never refused
   it('an id of 1 and of 256 code units is seeded as given', () => {
     for (const h of ['a', 'x'.repeat(256), 'D2.1a']) expect(seedOf(frame(r(h)))['initialHash']).toBe(h);
   });
-});
-
-describe('U8 the seed validator (the bootstrap fails closed on each)', () => {
-  const NONCE_OK = 'b'.repeat(32);
-  const valid = (): Record<string, unknown> => ({ s: 1, nonce: NONCE_OK, html: '<p>x</p>', title: null, lang: 'en', initialHash: null, prefs: {}, mermaid: null });
-  const parsed = (over: string): unknown => JSON.parse(JSON.stringify(valid()).replace(/}$/, `,${over}}`).replace('{,', '{'));
-
-  it('a valid seed passes', () => {
-    expect(validateSeed(valid())).toMatchObject({ ok: true, seed: valid() });
-  });
-  it('an extra key: refused, with the nonce kept so the frame can report', () => {
-    expect(validateSeed({ ...valid(), extra: 1 })).toEqual({ ok: false, nonce: NONCE_OK, why: 'keys' });
-  });
-  it('a missing key: refused', () => {
-    const v = valid();
-    delete v['title'];
-    expect(validateSeed(v)).toEqual({ ok: false, nonce: NONCE_OK, why: 'keys' });
-  });
-  it('__proto__ nested in prefs (as JSON.parse makes it, an own key): refused', () => {
-    const v = JSON.parse(`{"s":1,"nonce":"${NONCE_OK}","html":"","title":null,"lang":"en","initialHash":null,"prefs":{"__proto__":{"x":1}},"mermaid":null}`) as unknown;
-    expect(validateSeed(v)).toEqual({ ok: false, nonce: NONCE_OK, why: 'a proto key or a non-plain object' });
-  });
-  it('constructor as a top-level key: refused', () => {
-    expect(validateSeed(parsed('"constructor":1'))).toMatchObject({ ok: false, nonce: NONCE_OK });
-  });
-  it('a bad nonce: refused with nonce null (the frame stays silent)', () => {
-    for (const n of ['B'.repeat(32), 'b'.repeat(31), 7, undefined]) expect(validateSeed({ ...valid(), nonce: n })).toEqual({ ok: false, nonce: null, why: 'nonce' });
-  });
-  it('not a plain object: refused with nonce null', () => {
-    for (const v of [null, [], 'x', Object.assign(Object.create({ inherited: 1 }) as object, valid())]) expect(validateSeed(v)).toMatchObject({ ok: false, nonce: null });
-  });
-  it('a bad schema, html, title, lang or initialHash: refused by name', () => {
-    expect(validateSeed({ ...valid(), s: 2 })).toMatchObject({ ok: false, why: 'schema' });
-    expect(validateSeed({ ...valid(), html: 1 })).toMatchObject({ ok: false, why: 'html' });
-    expect(validateSeed({ ...valid(), title: 1 })).toMatchObject({ ok: false, why: 'title' });
-    expect(validateSeed({ ...valid(), lang: 'e' })).toMatchObject({ ok: false, why: 'lang' });
-    expect(validateSeed({ ...valid(), lang: 'en_GB' })).toMatchObject({ ok: false, why: 'lang' });
-    expect(validateSeed({ ...valid(), initialHash: '' })).toMatchObject({ ok: false, why: 'initialHash' });
-    expect(validateSeed({ ...valid(), initialHash: 'x'.repeat(257) })).toMatchObject({ ok: false, why: 'initialHash' });
-  });
-  it('bad prefs: refused by key', () => {
-    expect(validateSeed({ ...valid(), prefs: { theme: 'neon' } })).toMatchObject({ ok: false, why: 'prefs.theme' });
-    expect(validateSeed({ ...valid(), prefs: { lens: 'product' } })).toMatchObject({ ok: false, why: 'prefs.lens' });
-    expect(validateSeed({ ...valid(), prefs: [] })).toMatchObject({ ok: false, why: 'prefs' });
-  });
-  it('a bad mermaid cap: refused by key', () => {
-    expect(validateSeed({ ...valid(), mermaid: { maxEdges: 0 } })).toMatchObject({ ok: false, why: 'mermaid.maxEdges' });
-    expect(validateSeed({ ...valid(), mermaid: { maxTextSize: 1.5 } })).toMatchObject({ ok: false, why: 'mermaid.maxTextSize' });
-    expect(validateSeed({ ...valid(), mermaid: { secure: 1 } })).toMatchObject({ ok: false, why: 'mermaid.secure' });
-    expect(validateSeed({ ...valid(), mermaid: { maxEdges: 10 } })).toMatchObject({ ok: true });
+  it('an id outside FRAGMENT_ID_GRAMMAR (a space, a #, a slash, 129 astral letters) is seeded as null, and the seed validates', () => {
+    for (const h of ['a b', '#x', 'a/b', '\u{1D400}'.repeat(129)]) {
+      const seed = seedOf(frame(r(h)));
+      expect(seed['initialHash'], h).toBeNull();
+      expect(validateSeed(seed).ok, h).toBe(true);
+    }
+    expect(seedOf(frame(r('fnref1:1')))['initialHash']).toBe('fnref1:1');
   });
 });
 
+describe("L3 Task 3 the default keys: frameDocument's seed holds every schema 1 key at its default", () => {
+  const seedOf = (out: string): Record<string, unknown> => {
+    const kids = tree(out).head.childNodes.filter(isElement);
+    return JSON.parse(textOf(kids[2] as Element)) as Record<string, unknown>;
+  };
+  const r = (): RenderInput => DOCS['details and footnotes']?.() as RenderInput;
+  const DEFAULTS = {
+    frontList: null,
+    version: { sha: null, draft: false, commits: null, only: null },
+    images: [],
+    snapshot: [],
+    features: {},
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+  };
+
+  it('mermaid off: exactly SEED_KEYS, each new key at its default, and the seed passes validateSeed', () => {
+    const d = r();
+    const seed = seedOf(frame(d, { prefs: { theme: 'dark' } }));
+    expect(Object.keys(seed).sort()).toEqual([...SEED_KEYS]);
+    expect(seed).toEqual({ s: 1, nonce: NONCE, html: d.result.html, title: d.result.meta.title, initialHash: null, lang: 'en', prefs: { theme: 'dark' }, mermaid: null, ...DEFAULTS });
+    expect(validateSeed(seed)).toEqual({ ok: true, seed });
+  });
+
+  it("mermaid on: the mermaid object is completed with secure [] and draw 'auto', and the seed passes validateSeed", () => {
+    for (const [m, want] of [
+      [{}, { secure: [], draw: 'auto' }],
+      [{ maxTextSize: 16384, maxEdges: 500 }, { maxTextSize: 16384, maxEdges: 500, secure: [], draw: 'auto' }],
+    ] as const) {
+      const seed = seedOf(frame(r(), { assets: { ...assets, mermaid: built.files.mermaid.text }, mermaid: m }));
+      expect(Object.keys(seed).sort()).toEqual([...SEED_KEYS]);
+      expect(seed['mermaid']).toEqual(want);
+      expect(validateSeed(seed)).toEqual({ ok: true, seed });
+    }
+  });
+
+  it('a lang over 64 code units (grammar-valid) is refused invalid-input, never seeded for the validator to refuse', () => {
+    const lang = `en${'-abcdefgh'.repeat(7)}`;
+    expect(lang.length).toBe(65);
+    expect(refusal(() => frame({ ...r(), lang }))).toBe('invalid-input');
+    expect(refusal(() => frame({ ...r(), lang: lang.slice(0, 64) }))).toBe('no refusal');
+  });
+});
+
+describe("L3 Task 3 frameDocument never emits a seed its own bootstrap refuses: the seed's caps are refused invalid-input", () => {
+  const seedOf = (out: string): Record<string, unknown> => {
+    const kids = tree(out).head.childNodes.filter(isElement);
+    return JSON.parse(textOf(kids[2] as Element)) as Record<string, unknown>;
+  };
+  const r = (): RenderInput => DOCS['plain']?.() as RenderInput;
+
+  it('mermaid.maxTextSize and maxEdges: the seed caps (SEED_LIMITS) pass and validate, one more is refused', () => {
+    const on = { assets: { ...assets, mermaid: built.files.mermaid.text } };
+    for (const [k, max] of [['maxTextSize', SEED_LIMITS.maxTextSize], ['maxEdges', SEED_LIMITS.maxEdges]] as const) {
+      const seed = seedOf(frame(r(), { ...on, mermaid: { [k]: max } }));
+      expect((seed['mermaid'] as Record<string, unknown>)[k], k).toBe(max);
+      expect(validateSeed(seed).ok, k).toBe(true);
+      expect(refusal(() => frame(r(), { ...on, mermaid: { [k]: max + 1 } })), k).toBe('invalid-input');
+    }
+  });
+
+  it('meta.title: SEED_LIMITS.titleMaxCodeUnits passes and validates, one more is refused', () => {
+    const d = r();
+    const titled = (n: number): RenderInput => ({ ...d, result: { ...d.result, meta: { ...d.result.meta, title: 't'.repeat(n) } } });
+    const seed = seedOf(frame(titled(SEED_LIMITS.titleMaxCodeUnits)));
+    expect(validateSeed(seed).ok).toBe(true);
+    expect(refusal(() => frame(titled(SEED_LIMITS.titleMaxCodeUnits + 1)))).toBe('invalid-input');
+  });
+});
+
+describe("L3 Task 3 the bootstrap bundles seed.ts's validator, not its srcdoc-size formulas (Reference 12 budget)", () => {
+  it('none of the size formulas reaches bootstrap.js, and it is within its 32 KiB budget', () => {
+    const text = built.files.bootstrap.text;
+    expect(text).toContain('function validateSeed(');
+    for (const name of ['IMAGE_BUDGET_CHARS', 'SEED_FIELDS_MAX_CHARS', 'seedFieldsMaxChars', 'snapshotMaxChars', 'featuresMaxChars', 'imageBudgetChars']) {
+      expect(text, name).not.toContain(name);
+    }
+    expect(built.files.bootstrap.bytes).toBeLessThanOrEqual(32768);
+  });
+});
+
+// U8 (the seed validator) moved to test/frame-seed.test.ts with the seed's full schema 1 (L3 Task 3, rows L3.M4).
 // U9 (BRIDGE_LIMITS) moved to test/frame-protocol.test.ts with the protocol's single definition (L3 Task 1).
 
 describe('U5 byte rules', () => {
@@ -364,7 +402,7 @@ describe('P7 (stretch) Mermaid in the skeleton', () => {
     const kids = tree(out).head.childNodes.filter(isElement);
     expect(kids.map((e) => e.tagName)).toEqual(['meta', 'script', 'script', 'script', 'style', 'script', 'script']);
     expect(textOf(kids[6] as Element)).toBe(built.files.mermaid.text);
-    expect((JSON.parse(textOf(kids[2] as Element)) as { mermaid: unknown }).mermaid).toEqual({ maxEdges: 500 });
+    expect((JSON.parse(textOf(kids[2] as Element)) as { mermaid: unknown }).mermaid).toEqual({ maxEdges: 500, secure: [], draw: 'auto' });
   });
   it('mermaid off (null or absent): no Mermaid script, and the seed says null', () => {
     for (const out of [frame(r()), frame(r(), { mermaid: null, assets: { ...assets, mermaid: built.files.mermaid.text } })]) {
