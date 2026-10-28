@@ -186,6 +186,17 @@ describe('public-shapes: the shapes and the names list', () => {
     expect(findShapes(`x${NAME_A} ${NAME_B}_y ${NAME_A}9`, listed)).toEqual([]);
   });
 
+  it('takes a name holding any ASCII punctuation, a hyphen above all, and matches it as written', () => {
+    // A real names list is mostly hyphenated names; an escape the `u` flag refuses (`\-` outside a class) once made
+    // the scan fail on its first listed name.
+    for (const c of `!"#$%&'()*+,-./:;<=>?@[\\]^_\`{|}~`) {
+      const name = `${NAME_A}${c}${NAME_B}`;
+      const listed = [namesShape([name])];
+      expect(findShapes(`see ${name} here`, listed).map((f) => f.shape), name).toEqual([LISTED_NAME]);
+      expect(findShapes(`see ${NAME_A} and ${NAME_B} here`, listed), name).toEqual([]);
+    }
+  });
+
   it('reads a names file: one name per line, blank and # lines skipped; an empty list is refused', () => {
     expect(parseNames(`# c\n ${NAME_A} \r\n\n${NAME_B}\n`)).toEqual([NAME_A, NAME_B]);
     expect(() => parseNames('# only a comment\n\n')).toThrow(/lists no name/);

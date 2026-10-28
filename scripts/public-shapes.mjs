@@ -54,7 +54,9 @@ export const LISTED_NAME = 'listed name';
  */
 export function namesShape(names) {
   if (!Array.isArray(names) || names.length === 0) throw new Error('public-shapes: the names list is empty');
-  const escaped = [...names].sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&'));
+  // Only the characters a pattern gives a meaning to are escaped: under the `u` flag an escape of any other character
+  // (`\-` outside a class, say) is a syntax error, and a hyphen stands for itself outside a class.
+  const escaped = [...names].sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'));
   return { name: LISTED_NAME, re: new RegExp(`(?<![\\p{L}\\p{N}_])(?:${escaped.join('|')})(?![\\p{L}\\p{N}_])`, 'giu') };
 }
 
