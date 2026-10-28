@@ -411,7 +411,13 @@ describeBrowsers((browser: BrowserName) => {
       // The barrier passed: the probe's requests, made after the battery, reached the route log.
       expect(barrier.length).toBeGreaterThanOrEqual(REACH_BAR);
       expect(leaked.map((c) => c.slug)).toEqual([]);
-      expect(host.requests.slice(from.requests).filter((r) => !isProbe(r.url)).map((r) => r.url)).toEqual([]);
+      // No other request either. WebKit's route log also lists blob: URLs the frame and the page create (measured on
+      // CI: 11 each, `blob:null/…` and `blob:<page origin>/…`, while no channel makes one); a blob: URL is read inside
+      // the browser and never leaves it, so it is printed, not counted (ledger C97(9)).
+      const others = host.requests.slice(from.requests).filter((r) => !isProbe(r.url));
+      const blobs = others.filter((r) => r.url.startsWith('blob:'));
+      console.warn(`host-measure: ${JSON.stringify({ row: 'HB1 mounted blob', browser, blobs: blobs.length })}`);
+      expect(others.filter((r) => !r.url.startsWith('blob:')).map((r) => r.url)).toEqual([]);
       expect(host.websockets.slice(from.websockets).filter((u) => !isProbe(u))).toEqual([]);
       // The frame is still the one mounted: no fallback, one iframe.
       const after = await host.lib();
