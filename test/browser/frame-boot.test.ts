@@ -1,5 +1,5 @@
 // The sealed reader frame in a real browser (docserver L3, Task 5; plan Reference §5 to §8; rows L3.B3 to L3.B11, and
-// the prototype's rows P1 to P11 under the L3 ids they map to). The assets are built in memory by
+// the prototype's rows P3 to P11 under the L3 ids they map to). The assets are built in memory by
 // scripts/build-frame.mjs, frameDocument verifies them against the committed manifest, and the srcdoc mounts in a
 // sandboxed iframe (`allow-scripts` only) of a parent page at https://docreader.test/ (frame-host-page.ts), under the
 // hash-only policy frameCsp() builds. Every nonce is 128 bits fresh from crypto.getRandomValues.
@@ -15,95 +15,51 @@
 // Playwright's frame access, never shipped. Clicks that must each cross the bridge are spaced past navigate's 250 ms
 // coalescing window (the outbox, src/frame-runtime/outbox.ts).
 //
-// Measurements are printed as `frame-measure:` lines (time from insertion to ready, the materialisation of the largest
-// corpus document, srcdoc lengths). The 2 MiB measurement row runs only with DOCREADER_MEASURE=1.
-import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Task 8 took the prototype's P1 and P2 (L3.B1 and its control, now test/browser/frame-csp.test.ts) and its two
+// measurement rows (now test/browser/frame-measure.test.ts), and moved the helpers this file shares with its own files
+// into frame-shared.ts.
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { buildFrame } from '../../scripts/build-frame.mjs';
 import { DOC_FIELDS, frameCsp, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import type { Frame } from 'playwright-core';
 import { openFrameHost, type FrameHost, type HostRecord, type InitHow } from './frame-host-page.js';
-import { browserFor, closeBrowsers, describeBrowsers, openDoc, ORIGIN, type BrowserName } from './harness.js';
-
-const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-/** The opt-in measurement rows (the 2 MiB document): DOCREADER_MEASURE=1. */
-const MEASURE = process.env['DOCREADER_MEASURE'] === '1';
-const CORPUS = path.join(ROOT, 'conformance', 'corpus');
+import {
+  corpusDocuments,
+  data,
+  DIAGRAMS,
+  freshNonce,
+  input,
+  loadFrame,
+  measure,
+  opsOf,
+  PLAIN,
+  refusals,
+  registering,
+  replaceScript,
+  sleep,
+  STALL_MS,
+  svgTexts,
+  WAIT_CAP_MS,
+  waitProgress,
+  withPolicy,
+} from './frame-shared.js';
+import { browserFor, closeBrowsers, describeBrowsers } from './harness.js';
 
 let assets: FrameAssets;
 let mermaidText = '';
 
 beforeAll(async () => {
-  const built = await buildFrame();
-  assets = { guard: built.files.guard.text, bootstrap: built.files.bootstrap.text, enhance: built.files.enhance.text, css: built.files.css.text };
-  mermaidText = built.files.mermaid.text;
+  const built = await loadFrame();
+  assets = built.assets;
+  mermaidText = built.mermaid;
 }, 120_000);
 
 afterAll(closeBrowsers);
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-function freshNonce(): string {
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-}
-
-function input(markdown: string): RenderInput {
-  const r = render(markdown);
-  if (r.outcome !== 'rendered') throw new Error(`did not render (${r.outcome})`);
-  return { result: { outcome: r.outcome, html: r.html, meta: { title: r.meta.title, frontList: r.meta.frontList } } };
-}
-
-const PLAIN = (): string => readFileSync(path.join(CORPUS, 'headings.md'), 'utf8');
-
-/** Every corpus document, by path. */
-function corpusFiles(dir = CORPUS): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? corpusFiles(path.join(dir, e.name)) : e.name.endsWith('.md') ? [path.join(dir, e.name)] : [],
-  );
-}
-
-/** The corpus document whose rendered html is longest. */
-function largest(): { file: string; markdown: string; html: number } {
-  let best = { file: '', markdown: '', html: -1 };
-  for (const f of corpusFiles()) {
-    const md = readFileSync(f, 'utf8');
-    const r = render(md);
-    if (r.outcome === 'rendered' && r.html.length > best.html) best = { file: path.relative(ROOT, f), markdown: md, html: r.html.length };
-  }
-  return best;
-}
+/** L3.B10's budget for its whole corpus walk (its test timeout is this plus a minute). */
+const B10_BUDGET_MS = 540_000;
 
 const srcdocOf = (markdown: string, nonce: string): string => frameDocument(input(markdown), { csp: frameCsp(), nonce, assets });
-
-const data = (rec: HostRecord, port = 'main'): unknown[] => rec.messages.filter((m) => m.port === port).map((m) => m.data);
-
-/** The frame's state, read through Playwright's frame handle. */
-const frameState = (host: FrameHost): Promise<{ compat: string; root: string | null; rooted: boolean; origin: string }> =>
-  host.frame().evaluate(() => {
-    const root = document.body.querySelector(':scope > article');
-    return {
-      compat: document.compatMode,
-      root: root === null ? null : root.localName,
-      rooted: root !== null && root.hasAttribute('data-docreader-root'),
-      origin: self.origin,
-    };
-  });
-
-/** The console's Content Security Policy messages that match `directive`. */
-const refusals = (host: FrameHost, directive: RegExp): string[] => host.cspConsole.filter((m) => directive.test(m));
-
-/** `srcdoc` with its policy `good` (written once, in the meta) replaced by `bad`. */
-function withPolicy(srcdoc: string, good: string, bad: string): string {
-  expect(bad).not.toBe(good);
-  expect(srcdoc.indexOf(good)).toBeGreaterThan(0);
-  expect(srcdoc.indexOf(good, srcdoc.indexOf(good) + 1)).toBe(-1);
-  return srcdoc.replace(good, bad);
-}
 
 /** A 1 by 1 GIF, for the guard fixture's image map (img-src allows data:). */
 const GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -142,10 +98,6 @@ const stopHandlers = (host: FrameHost, scope: string): Promise<void> =>
     [scope, STOPS] as const,
   );
 
-function measure(label: string, browser: BrowserName, values: Record<string, unknown>): void {
-  console.warn(`frame-measure: ${JSON.stringify({ label, browser, ...values })}`);
-}
-
 describeBrowsers((browser) => {
   let host: FrameHost;
 
@@ -169,52 +121,6 @@ describeBrowsers((browser) => {
     if (after.closeSupported) expect(after.closes).toEqual(['main']);
     return after;
   };
-
-  it('L3.B1 (P1): the plain corpus document readies with the nonce, one load, no violation, no request, no quirks, enhance ran', async () => {
-    await open();
-    try {
-      const nonce = freshNonce();
-      const srcdoc = srcdocOf(PLAIN(), nonce);
-      await host.mount(srcdoc, frameCsp());
-      const rec = await host.waitMessages(1, 10_000);
-      const first = rec.messages[0];
-      expect(first?.port).toBe('main');
-      expect(first?.data).toEqual({ t: 'ready', v: 1, nonce });
-      expect(Object.keys(first?.data as object)).toEqual(['t', 'v', 'nonce']);
-      await sleep(400);
-      const after = await host.record();
-      expect(after.loads).toHaveLength(1);
-      expect(after.messages).toHaveLength(1);
-      expect(after.windowMessages).toEqual([]);
-      expect(host.cspConsole).toEqual([]);
-      expect(host.errors).toEqual([]);
-      const state = await frameState(host);
-      expect(state).toEqual({ compat: 'CSS1Compat', root: 'article', rooted: true, origin: 'null' });
-      expect(host.requests.filter((r) => !r.main)).toEqual([]);
-      expect(host.requests.map((r) => r.url)).toEqual([`${ORIGIN}/`]);
-      measure('P1 plain', browser, { srcdocChars: srcdoc.length, readyMs: Math.round(first?.at ?? -1), loadMs: Math.round(after.loads[0] ?? -1) });
-    } finally {
-      await done();
-    }
-  });
-
-  it('L3.B1 control (P2): a policy without the bootstrap hash gives no port message in 3 s', async () => {
-    await open();
-    try {
-      const nonce = freshNonce();
-      const good = frameCsp();
-      const bad = good.replace(` ${FRAME_MANIFEST.bootstrap.csp}`, '');
-      await host.mount(withPolicy(srcdocOf(PLAIN(), nonce), good, bad), bad);
-      const rec = await host.waitMessages(1, 3000);
-      expect(rec.messages).toEqual([]);
-      expect(rec.loads).toHaveLength(1);
-      // The parent's violation channel hears the refusal, so P1's zero is a measurement and not a deaf collector.
-      expect(refusals(host, /script-src/)).not.toEqual([]);
-      measure('P2', browser, { cspConsole: host.cspConsole.length });
-    } finally {
-      await done();
-    }
-  });
 
   /** The plain srcdoc with one byte of the enhance script flipped after verification. */
   const flippedEnhance = (nonce: string): string => {
@@ -517,107 +423,7 @@ describeBrowsers((browser) => {
       }
     });
   }
-
-  it('measures: the largest corpus document, from insertion to ready and from DOMContentLoaded to the root', async () => {
-    await open({ measure: true });
-    try {
-      const big = largest();
-      const nonce = freshNonce();
-      const srcdoc = srcdocOf(big.markdown, nonce);
-      await host.mount(srcdoc, frameCsp());
-      const rec = await host.waitMessages(1, 20_000);
-      expect(data(rec)).toEqual([{ t: 'ready', v: 1, nonce }]);
-      const fr = await host.frameRecord();
-      expect(fr.dcl).not.toBeNull();
-      expect(fr.root).not.toBeNull();
-      measure('largest corpus document', browser, {
-        file: big.file,
-        htmlChars: big.html,
-        srcdocChars: srcdoc.length,
-        readyMs: Math.round(rec.messages[0]?.at ?? -1),
-        materialiseMs: Number(((fr.root ?? 0) - (fr.dcl ?? 0)).toFixed(2)),
-        insertionToDclMs: Math.round(fr.origin + (fr.dcl ?? 0) - rec.insertedAt),
-        rootToReadyMs: Math.round(rec.insertedAt + (rec.messages[0]?.at ?? 0) - (fr.origin + (fr.root ?? 0))),
-      });
-    } finally {
-      await done();
-    }
-  });
-
-  it.skipIf(!MEASURE)('measures (DOCREADER_MEASURE=1): a 2 MiB document built from the non-hostile corpus, from insertion to ready and DOMContentLoaded to the root', async () => {
-    await open({ measure: true });
-    try {
-      const parts = corpusFiles()
-        .filter((f) => !path.relative(CORPUS, f).split(path.sep).some((s) => s.startsWith('h-')))
-        // lists-tasks.md ends inside a list nested past the limit, which takes in everything after it.
-        .filter((f) => path.basename(f) !== 'lists-tasks.md')
-        .map((f) => readFileSync(f, 'utf8').replace(/^---[\s\S]*?\n---\n/, ''));
-      let md = '';
-      for (let i = 0; md.length < 2 * 1024 * 1024; i++) md += `\n\n${parts[i % parts.length] ?? ''}`;
-      const nonce = freshNonce();
-      const t0 = performance.now();
-      const srcdoc = srcdocOf(md, nonce);
-      const buildMs = performance.now() - t0;
-      await host.mount(srcdoc, frameCsp());
-      const rec = await host.waitMessages(1, 120_000);
-      expect(data(rec)).toEqual([{ t: 'ready', v: 1, nonce }]);
-      const fr = await host.frameRecord();
-      measure('2 MiB synthetic document', browser, {
-        markdownChars: md.length,
-        srcdocChars: srcdoc.length,
-        renderAndFrameDocumentMs: Math.round(buildMs),
-        readyMs: Math.round(rec.messages[0]?.at ?? -1),
-        materialiseMs: Number(((fr.root ?? 0) - (fr.dcl ?? 0)).toFixed(2)),
-        insertionToDclMs: Math.round(fr.origin + (fr.dcl ?? 0) - rec.insertedAt),
-        rootToReadyMs: Math.round(rec.insertedAt + (rec.messages[0]?.at ?? 0) - (fr.origin + (fr.root ?? 0))),
-        cspConsole: host.cspConsole.length,
-      });
-      // The same document enhanced in an ordinary page (the layout harness), for comparison: the frame's share of the
-      // time is what the two differ by.
-      const page = await openDoc(md, {}, { browser, enhance: false, csp: 'reader' });
-      try {
-        const t1 = performance.now();
-        await page.enhance();
-        measure('2 MiB synthetic document, ordinary page', browser, { enhanceMs: Math.round(performance.now() - t1) });
-      } finally {
-        await page.close();
-      }
-    } finally {
-      await done();
-    }
-  }, 240_000);
 });
-
-/** P7's document: one flowchart, one sequence diagram and one gantt. */
-const DIAGRAMS = `# Diagrams
-
-\`\`\`mermaid
-flowchart LR
-  A[Start] --> B{Choice}
-  B -->|yes| C[Done]
-  B -->|no| A
-\`\`\`
-*Figure 1. A flowchart.*
-
-\`\`\`mermaid
-sequenceDiagram
-  participant P as Parent
-  participant F as Frame
-  P->>F: hello
-  F-->>P: ready
-\`\`\`
-*Figure 2. A sequence.*
-
-\`\`\`mermaid
-gantt
-  title Plan
-  dateFormat YYYY-MM-DD
-  section Build
-  First :a1, 2026-01-05, 3d
-  Second :after a1, 2d
-\`\`\`
-*Figure 3. A gantt.*
-`;
 
 /** The reader's final drawing states (L2's `data-docreader-diagrams` once it leaves `drawing`). */
 const SETTLED_DIAGRAMS: readonly (string | null)[] = ['drawn', 'partial', 'failed'];
@@ -696,29 +502,6 @@ describeBrowsers((browser) => {
   }, 120_000);
 });
 
-/** The CSP hash source of a script's exact text. */
-const hashOf = (text: string): string => `'sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}'`;
-
-/**
- * `srcdoc` (a valid frameDocument output under `policy`) with the script `which` replaced by `text`, its hash re-pinned
- * in the meta: answers the new srcdoc and the policy that goes with it. Enhance is the script right after the style;
- * Mermaid the last one.
- */
-function replaceScript(srcdoc: string, policy: string, which: 'enhance' | 'mermaid', text: string): { srcdoc: string; policy: string } {
-  const open = which === 'enhance' ? srcdoc.indexOf('</style><script>') + '</style><script>'.length : srcdoc.lastIndexOf('<script>') + '<script>'.length;
-  const close = srcdoc.indexOf('</script>', open);
-  expect(open).toBeGreaterThan('<script>'.length);
-  expect(close).toBeGreaterThan(open);
-  const old = srcdoc.slice(open, close);
-  expect(hashOf(old)).toBe(FRAME_MANIFEST[which].csp);
-  const next = policy.replace(FRAME_MANIFEST[which].csp, hashOf(text));
-  return { srcdoc: withPolicy(srcdoc.slice(0, open) + text + srcdoc.slice(close), policy, next), policy: next };
-}
-
-/** A script that registers `api` under `name` on its own element, as the shipped scripts do. */
-const registering = (name: string, api: string): string =>
-  `document.currentScript.dispatchEvent(new CustomEvent('docserver:register',{bubbles:true,detail:Object.freeze({name:'${name}',api:Object.freeze(${api})})}));\n`;
-
 /** Wait until the frame's content root is enhanced (or `ms` pass). */
 const rooted = async (host: FrameHost, ms = 10_000): Promise<boolean> => {
   const until = Date.now() + ms;
@@ -728,15 +511,6 @@ const rooted = async (host: FrameHost, ms = 10_000): Promise<boolean> => {
     await sleep(50);
   }
 };
-
-/** The ops of `rec` on `port` after its ready, of the given kinds. */
-const opsOf = (rec: HostRecord, kinds: readonly string[], port = 'main'): unknown[] => data(rec, port).filter((m) => kinds.includes((m as { t: string }).t));
-
-/** The golden and hostile corpus documents (the generated inputs are the unit half's, test/frame-runtime.test.ts). */
-function corpusDocuments(): { id: string; markdown: string }[] {
-  const manifest = JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'manifest.json'), 'utf8')) as { id: string; kind: string }[];
-  return manifest.filter((e) => e.kind !== 'generated').map((e) => ({ id: e.id, markdown: readFileSync(path.join(CORPUS, `${e.id}.md`), 'utf8') }));
-}
 
 describeBrowsers((browser) => {
   let host: FrameHost;
@@ -748,17 +522,6 @@ describeBrowsers((browser) => {
     await host.close().catch(() => undefined);
   };
   const mermaidOn = (md: string, nonce: string): string => frameDocument(input(md), { csp: frameCsp(), nonce, assets: { ...assets, mermaid: mermaidText }, mermaid: {} });
-
-  /** The text each drawn figure's SVG shows (its labels; not its style element, whose selectors name a fresh id), in order. */
-  const svgTexts = (h: FrameHost): Promise<string[]> =>
-    h.frame().evaluate(() =>
-      Array.from(document.querySelectorAll('figure.mermaid-figure svg'), (svg) => {
-        const out: string[] = [];
-        const walk = document.createTreeWalker(svg, NodeFilter.SHOW_TEXT);
-        for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) if (n.parentElement?.closest('style') === null) out.push(n.nodeValue ?? '');
-        return out.join('|');
-      }),
-    );
 
   const CLOBBER = ['currentScript', 'body', 'parent', 'seed', 'bootstrap', 'docserver', 'docreader', 'enhance', 'mermaid', 'addEventListener', 'dispatchEvent', 'toString', 'JSON', 'DOMParser', 'CustomEvent', 'Symbol', '__proto__'];
 
@@ -1116,14 +879,29 @@ describeBrowsers((browser) => {
     const browserHandle = await browserFor(browser);
     const failed: string[] = [];
     let opens = 0;
+    // The row's own budget, inside its test timeout: every document's wait is capped by what is left, and a document
+    // the budget no longer reaches is named in `failed`, so a frame that hangs on every document is a red row naming
+    // them, never a test timeout (review finding S3).
+    const deadline = Date.now() + B10_BUDGET_MS;
     for (const d of corpusDocuments()) {
       const r = render(d.markdown);
       if (r.outcome !== 'rendered') continue;
+      const left = deadline - Date.now();
+      if (left < 15_000) {
+        failed.push(`${d.id}: not reached, the row's budget was spent`);
+        continue;
+      }
       const h = await openFrameHost(browserHandle);
       try {
         const nonce = freshNonce();
         await h.mount(frameDocument(input(d.markdown), { csp: frameCsp(), nonce, assets }), frameCsp());
-        const rec = await h.waitMessages(1, 20_000);
+        // Under load a document may take longer than a flat deadline; the wait fails only when the frame stops moving
+        // (waitProgress, frame-shared.ts), and a slow one is named in the log.
+        const { rec, gaveUp } = await waitProgress(h, 1, `L3.B10 ${browser} ${d.id}`, STALL_MS, Math.min(WAIT_CAP_MS, left - 10_000));
+        if (gaveUp) {
+          failed.push(`${d.id}: no message before the wait gave up, ${JSON.stringify(data(rec))}`);
+          continue;
+        }
         await sleep(100);
         const got = data(await h.record());
         // Ready first, and no error: a document the reader reports a hash or a store write for is still accepted.
@@ -1136,7 +914,7 @@ describeBrowsers((browser) => {
     }
     expect(failed).toEqual([]);
     expect(opens).toBeGreaterThan(0);
-  }, 300_000);
+  }, B10_BUDGET_MS + 60_000);
 
   const PLANTED: readonly (readonly [string, string])[] = [
     ['<script>', '<p>a</p><script>parent.postMessage(1, "*")</script>'],

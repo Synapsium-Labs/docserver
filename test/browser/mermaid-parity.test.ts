@@ -17,7 +17,11 @@
 // else is fetched.
 //
 // The outcome counts are pinned (how many draw, which fail and why), so a Mermaid move re-baselines this row on
-// purpose (Tasks 8 and 13).
+// purpose (Tasks 8 and 13). Task 8 re-ran it on the integrated build and holds that the two files drawn are the bytes
+// that ship: the classic file's sha256 is FRAME_MANIFEST's, the one frameDocument verifies, and the module's is
+// assets/assets.json's. v1 ships Mermaid 12.1.0 (ledger C93: Task 13's move to 12.2.0 is deferred past v1), so this
+// is the 12.1.0 baseline.
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +29,7 @@ import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { buildMermaid, bundleMermaidFrame, FRAME_OUT_FILE, OUT_FILE } from '../../scripts/build-mermaid.mjs';
 import { FONT_FALLBACK, MAX_EDGES, MAX_TEXT_SIZE, secureKeys, THEME_VARIABLES } from '../../src/enhance/diagrams.js';
+import { FRAME_MANIFEST } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import { browserFor, closeBrowsers, describeBrowsers, ORIGIN, POLICIES, type BrowserName } from './harness.js';
 
@@ -207,6 +212,15 @@ const FAILS: Readonly<Record<string, RegExp>> = {
   'mermaid-figures.md#7': NO_TYPE,
   'mermaid-figures.md#13': /^Parse error on line 1:\n---title: Kinds---\n/,
 };
+
+const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
+
+it('L3.B12: the two files drawn are the bytes that ship: the classic file is the manifest\'s, the module assets.json\'s', () => {
+  const listed = (JSON.parse(readFileSync(path.join(ROOT, 'assets', 'assets.json'), 'utf8')) as { files: { path: string; sha256: string }[] }).files;
+  expect(sha256(frameFile)).toBe(FRAME_MANIFEST.mermaid.sha256);
+  expect(listed.find((f) => f.path === FRAME_MANIFEST.mermaid.path)?.sha256).toBe(sha256(frameFile));
+  expect(listed.find((f) => f.path === OUT_FILE.replace(/^assets\//, ''))?.sha256).toBe(sha256(esmFile));
+});
 
 describeBrowsers((browser) => {
   it('L3.B12: the ES module and the classic frame file give equal SVG text for every corpus diagram', async () => {
