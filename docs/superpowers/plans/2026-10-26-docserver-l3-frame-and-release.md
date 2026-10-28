@@ -549,7 +549,7 @@ flowchart LR
 4. **attest** (id-token: write, attestations: write): `actions/attest-build-provenance` with `subject-path` the tarball.
 5. **publish** (`environment: npm-release`, operator approval; id-token: write, contents: read): download, re-check sha256 against SHA256SUMS; install an exact npm that supports trusted publishing, at least 14 days old; `npm publish ./<tarball> --provenance --access public`, `--tag next` for an rc. Authentication is OIDC trusted publishing; no `NODE_AUTH_TOKEN` or `NPM_TOKEN` exists anywhere.
 6. **github-release** (contents: write, this job only): `gh release create "$TAG" --verify-tag` with the tarball, SHA256SUMS, assets.json and the attestation bundle.
-7. **post-verify**, in a scratch directory: `npm install @synapsium-labs/docserver@$VERSION --ignore-scripts`; `npm audit signatures`; the registry `dist.integrity` equals the built sha512; `gh attestation verify <tgz> --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml`. These are the commands the first consumer's M8.16 runs; the README states them verbatim.
+7. **post-verify**, in a scratch directory: `npm install @synapsium-labs/docserver@$VERSION --ignore-scripts`; `npm audit signatures`; `npm pack @synapsium-labs/docserver@$VERSION` (the registry's own bytes, under the name the next two commands read); a `test` that the registry `dist.integrity` equals that tarball's sha512; `gh attestation verify <tgz> --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml`. These are the commands the first consumer's M8.16 runs; the README states them verbatim, five in all (amended in Task 12, ledger C98: the plan's four could not run as written, since nothing fetched the tarball and nothing compared the integrity).
 
 `package.json` for v1: `publishConfig: {access: 'public', provenance: true}`; `repository.url` exactly the GitHub repository (provenance compares it); `private` removed only in the v1 release PR.
 
@@ -942,7 +942,7 @@ flowchart LR
 - L3.W6 the attested file is the published file (same artifact name and path; the sha256 re-check);
 - L3.W7 verify-tag precedes every other job (`needs` chain), and runs the six checks of Reference §13 step 1, the environment check and the key-line check included;
 - L3.W8 every remote `uses:` is a full 40-hex sha with its tag in a trailing comment; the only local `uses:` is `./.github/workflows/ci.yml`, in the `test` job;
-- L3.W9 post-verify runs the four commands the README states, verbatim;
+- L3.W9 post-verify runs the five commands the README states, verbatim (ledger C98);
 - L3.W10 `.github/release-signers` holds no key line while `package.json` is `private`, and at least one `release-signer` key line once `private` is gone (`public-ready.test.ts`; Task 15 supplies the line), so a placeholder file cannot reach a tag;
 - L3.W11 dispatch mode (Reference §13): attest, publish, github-release and post-verify each carry the tag-push `if:` condition; verify-tag's tag-only checks are skipped on `workflow_dispatch` and its tag-free checks are not.
 Also: `public-ready.test.ts` pins `publishConfig`, `repository.url`, LICENSE (MIT), SECURITY.md, CODEOWNERS, THIRD-PARTY-NOTICES covering both Mermaid files and the four libraries, `fonts/OFL.txt` in `files`, and that `private` is still true (Task 15 flips that pin); `history-scan.test.ts` plants each shape class in a fixture repository made in a temporary directory and finds it, and never prints the matched text. Its fixtures also plant a hit only on a pull-request ref (`refs/pull/1/head`, not on any branch) and a hit only in an edit revision, a release note and a review comment (recorded `gh api` and GraphQL replies, fed to the scanner in place of the network, since tests open no socket); each is found.
@@ -962,7 +962,7 @@ Also: `public-ready.test.ts` pins `publishConfig`, `repository.url`, LICENSE (MI
 6. **The release PR** (task): merged by the coordinator after CI on both Node legs and both engines.
 7. **The signed tag** (operator): an annotated `v1.0.0` signed with the key in `.github/release-signers` (Q9), on `main`.
 8. **Approve publish** (operator) in the `npm-release` environment once build and attest are green.
-9. **Post-verify** (workflow): green, and its four commands re-run by hand from a scratch directory.
+9. **Post-verify** (workflow): green, and its five commands re-run by hand from a scratch directory.
 
 **Acceptance.** `npm view @synapsium-labs/docserver@1.0.0 dist.integrity` equals the built sha512; `gh attestation verify` passes with `--repo` and `--signer-workflow`; `npm audit signatures` passes in a fresh install; the GitHub release carries the tarball, SHA256SUMS, `assets.json` and the attestation bundle. The ledger records the landing.
 **Mutation rows.** None; the lane's rows are Task 14's. **Verify.** As acceptance, recorded in the ledger.

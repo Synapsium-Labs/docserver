@@ -10,9 +10,17 @@
 // dependencies, which a consumer's install brings (review 458, F7).
 // Then scripts/consumer-smoke.mjs installs the tarball offline (its dependencies linked from this checkout's
 // node_modules) and imports it by package name, exactly as CI's registry-installed smoke does; a second tarball
-// whose packed golden was changed must fail it, naming the case. npm runs offline here, with its update check off
+// whose packed golden was changed must fail it, naming the case. Since L3 Task 12 the tarball also holds ./frame,
+// ./host and ./highlight with their declarations, the bridge fixtures and the labelled frame mutants, and the smoke checks
+// the frame layer as a consumer gets it (its header lists what). npm runs offline here, with its update check off
 // and a throwaway cache, so the test touches no network. The smoke runs with --time-scale 10: test/corpus.test.ts
 // holds every maxMs at scale 1, and this run judges the package, not the machine.
+// A third tarball (L3 Task 12, reviews EV1 and EV2) carries one defect for each frame-layer check whose passing line
+// would print unchanged were the check's body gone: an assets.json that leaves an installed file out, a shipped
+// mutant that its own row's scan passes, a timer started at import, and a DOM name read at import, each of the last
+// two in a module no entry file is (dist/render/highlight.js, which only ./highlight reaches, and
+// dist/frame/protocol.js, which ./frame and ./host reach). The smoke must fail it, naming each defect, and print
+// every other line as the passing run does.
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import {
   appendFileSync,
@@ -48,10 +56,53 @@ const TARBALL = `${pkg.name.replace(/^@/, '').replace('/', '-')}-${pkg.version}.
 
 const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under strict, nodenext and skipLibCheck: false';
 
+/** The runtime exports of each L3 entry, as the smoke lists them (sorted). */
+const FRAME_API = [
+  'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_MANIFEST', 'FrameError',
+  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
+  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isFragmentId', 'mermaidGate',
+];
+const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'MAX_LINE_CHARS', 'MAX_WHOLE_BLOCK_CHARS', 'createHighlighter', 'resolveLanguage'];
+
+const INERT_LINE =
+  'consumer-smoke: @synapsium-labs/docserver/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
+const ASSETS_LINE =
+  'consumer-smoke: every one of the 13 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
+const SCANS_LINE =
+  "consumer-smoke: the M8.3, M8.4 and M8.8 scans pass on both srcdocs and on the clean template, and each of the 16 labelled frame mutants fails its own row's scan";
+
+/** Every line a passing smoke prints before its corpus line, in order. */
+const SMOKE_LINES = [
+  'consumer-smoke: installed the tarball offline',
+  STRICT_LINE,
+  'consumer-smoke: the frame and highlight declarations typecheck with no DOM library and no ambient types',
+  'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
+  'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
+  'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, setEnhancementPrefs',
+  'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
+  "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
+  'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
+  // the frame layer (L3 Task 12)
+  'consumer-smoke: the exports map is exactly ./assets/*, ./conformance, ./enhance, ./frame, ./highlight, ./host, ./package.json, ./render',
+  INERT_LINE,
+  `consumer-smoke: @synapsium-labs/docserver/frame exports exactly ${FRAME_API.join(', ')}`,
+  'consumer-smoke: @synapsium-labs/docserver/host exports exactly mountDocFrame',
+  `consumer-smoke: @synapsium-labs/docserver/highlight exports exactly ${HIGHLIGHT_API.join(', ')}`,
+  'consumer-smoke: deep imports of the frame, host and highlight builds and of ./frame-runtime are refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
+  ASSETS_LINE,
+  'consumer-smoke: frameDocument over mermaid-figures (with Mermaid) and headings (without), from the installed files and frameCsp(), inlines those files byte for byte, in order',
+  SCANS_LINE,
+  "consumer-smoke: the installed frame/reader.css and each srcdoc's style element hold the font notice with its OFL line",
+  'consumer-smoke: bridgeCases() loads the bridge fixtures of protocol 1',
+];
+
 /** The only places a packed file may live. */
 const ALLOWED = [
   /^dist\/(?:render|conformance|enhance)\/[A-Za-z]+(?:-[a-z]+)*\.(?:js|d\.ts)$/,
-  /^conformance\/(?:manifest|hostile|DEPARTURES)\.json$/,
+  // ./frame, ./host and ./highlight (L3 Task 12): their modules, the two generated ones and sha256 included.
+  /^dist\/(?:frame|host|highlight)\/[a-z][a-z0-9]*(?:-[a-z]+)*(?:\.generated)?\.(?:js|d\.ts)$/,
+  /^conformance\/(?:manifest|hostile|DEPARTURES|bridge-cases)\.json$/,
+  /^conformance\/frame-mutants\/[a-z-]+\.(?:html|json)$/,
   /^conformance\/(?:corpus|expected)\/[A-Za-z0-9/_-]+\.(?:md|html|meta\.json)$/,
   /^assets\/reader\.css$/,
   /^assets\/fonts\/[A-Za-z0-9._-]+\.(?:woff2|txt|md)$/,
@@ -74,6 +125,7 @@ let packedBytes = -1;
 const refusedPacks = new Map<string, SpawnSyncReturns<string>>();
 let smoke: SpawnSyncReturns<string> | null = null;
 let brokenSmoke: SpawnSyncReturns<string> | null = null;
+let defectiveSmoke: SpawnSyncReturns<string> | null = null;
 const untypedSmokes = new Map<string, SpawnSyncReturns<string>>();
 
 /** Each @types package a consumer needs, with the module whose declaration it supplies and who imports it. */
@@ -146,6 +198,25 @@ beforeAll(() => {
     untypedSmokes.set(name, runSmoke([tarball, '--deps-from', deps, '--time-scale', '10']));
   }
   writeFileSync(manifestPath, original);
+  // The same package with four defects, one per frame-layer check that a deleted body would leave silent (EV1, EV2).
+  const defects: [file: string, change: (text: string) => string][] = [
+    [path.join('assets', 'assets.json'), (t) => {
+      const m = JSON.parse(t) as { files: { path: string }[] };
+      m.files = m.files.filter((x) => x.path !== 'fonts/README.md');
+      return `${JSON.stringify(m, null, 2)}\n`;
+    }],
+    [path.join('conformance', 'frame-mutants', 'meta-appended.html'), () => readFileSync(path.join(stage, 'conformance', 'frame-mutants', 'clean.html'), 'utf8')],
+    [path.join('dist', 'render', 'highlight.js'), (t) => `setTimeout(() => undefined, 0);\n${t}`],
+    [path.join('dist', 'frame', 'protocol.js'), (t) => `void (typeof document);\n${t}`],
+  ];
+  const kept = defects.map(([file]) => [file, readFileSync(path.join(stage, file), 'utf8')] as const);
+  for (const [file, change] of defects) writeFileSync(path.join(stage, file), change(readFileSync(path.join(stage, file), 'utf8')));
+  const defective = path.join(work, 'defective');
+  mkdirSync(defective);
+  const defectivePack = npm(['pack', '--json', '--ignore-scripts', '--pack-destination', defective], stage);
+  for (const [file, text] of kept) writeFileSync(path.join(stage, file), text);
+  if (defectivePack.status !== 0) throw new Error(`npm pack failed: ${defectivePack.stderr}`);
+  defectiveSmoke = runSmoke([path.join(defective, packed.filename), '--deps-from', deps, '--time-scale', '10']);
   // The same package with one packed golden changed: its own corpus no longer passes.
   const broken = path.join(work, 'broken');
   mkdirSync(broken);
@@ -176,7 +247,7 @@ describe('npm pack', () => {
     expect(TARBALL).toBe('synapsium-labs-docserver-0.1.0.tgz');
   });
 
-  it('holds the three entries with their types, the corpus files, the licence, the readme, the assets and their notices', () => {
+  it('holds the six entries with their types, the corpus files, the licence, the readme, the assets and their notices', () => {
     for (const must of [
       'dist/render/index.js',
       'dist/render/index.d.ts',
@@ -184,6 +255,17 @@ describe('npm pack', () => {
       'dist/conformance/index.d.ts',
       'dist/enhance/index.js',
       'dist/enhance/index.d.ts',
+      // the three L3 entries (Task 12), the conformance entry's bridge fixtures and the labelled frame mutants
+      'dist/frame/index.js',
+      'dist/frame/index.d.ts',
+      'dist/frame/manifest.generated.js',
+      'dist/host/index.js',
+      'dist/host/index.d.ts',
+      'dist/highlight/index.js',
+      'dist/highlight/index.d.ts',
+      'conformance/bridge-cases.json',
+      'conformance/frame-mutants/index.json',
+      'conformance/frame-mutants/clean.html',
       'conformance/manifest.json',
       'conformance/hostile.json',
       'conformance/DEPARTURES.json',
@@ -246,25 +328,23 @@ describe('npm pack', () => {
     expect(packed.files.filter((f) => !ALLOWED.some((re) => re.test(f)))).toEqual([]);
     expect(packed.files.filter((f) => /^(?:conformance\/reference|scripts|src|test|docs|\.github)\//.test(f))).toEqual([]);
   });
+
+  it('ships no frame runtime module: its code ships only as the hashed scripts under assets/frame/', () => {
+    expect(packed.files.filter((f) => /frame-runtime/.test(f))).toEqual([]);
+  });
+
+  it('holds every labelled frame mutant its index.json lists', () => {
+    const index = JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'frame-mutants', 'index.json'), 'utf8')) as { mutants: { file: string }[] };
+    const want = index.mutants.map((m) => `conformance/frame-mutants/${m.file}`);
+    expect(want.length).toBe(16);
+    expect(want.filter((f) => !packed.files.includes(f))).toEqual([]);
+  });
 });
 
 describe('the packed package, imported by name', () => {
   it('passes the whole corpus through the consumer smoke', () => {
     expect(smoke?.stderr).toBe('');
-    expect(smoke?.stdout).toBe(
-      [
-        'consumer-smoke: installed the tarball offline',
-        STRICT_LINE,
-        'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
-        'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-        'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, setEnhancementPrefs',
-        'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
-        "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
-        'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-        'consumer-smoke: 84 of 84 cases passed',
-        '',
-      ].join('\n'),
-    );
+    expect(smoke?.stdout).toBe([...SMOKE_LINES, 'consumer-smoke: 84 of 84 cases passed', ''].join('\n'));
     expect(smoke?.status).toBe(0);
   });
 
@@ -283,19 +363,25 @@ describe('the packed package, imported by name', () => {
 
   it('fails, naming the case, when the packed corpus does not pass', () => {
     const lines = brokenSmoke?.stdout.split('\n') ?? [];
-    expect(lines.slice(0, 9)).toEqual([
-      'consumer-smoke: installed the tarball offline',
-      STRICT_LINE,
-      'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
-      'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-      'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, setEnhancementPrefs',
-      'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
-      "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
-      'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-      'consumer-smoke: 83 of 84 cases passed',
-    ]);
-    expect(lines[9]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
+    expect(lines.slice(0, SMOKE_LINES.length + 1)).toEqual([...SMOKE_LINES, 'consumer-smoke: 83 of 84 cases passed']);
+    expect(lines[SMOKE_LINES.length + 1]).toMatch(/^consumer-smoke: headings: html differs at offset \d+/);
     expect(brokenSmoke?.status).toBe(1);
+  });
+});
+
+describe('the packed package with a defect for each frame-layer check (reviews EV1, EV2)', () => {
+  it('fails, naming each defect, and prints every other line as the passing run does', () => {
+    const at = (line: string): number => SMOKE_LINES.indexOf(line);
+    const want: string[] = [...SMOKE_LINES];
+    // In the order the check prints them: the import probe, then assets.json, then the scans.
+    want.splice(at(INERT_LINE), 1,
+      'consumer-smoke: @synapsium-labs/docserver/highlight, imported alone in a fresh process, read setTimeout and added the globals none',
+      'consumer-smoke: @synapsium-labs/docserver/host, imported alone in a fresh process, read document and added the globals none');
+    want.splice(want.indexOf(ASSETS_LINE), 1, 'consumer-smoke: assets: fonts/README.md is installed but not listed in assets.json');
+    want.splice(want.indexOf(SCANS_LINE), 1, 'consumer-smoke: scans: meta-appended.html passes the M8.3 scan it must fail');
+    expect(defectiveSmoke?.stdout).toBe([...want, 'consumer-smoke: 84 of 84 cases passed', ''].join('\n'));
+    expect(defectiveSmoke?.stderr).toBe('');
+    expect(defectiveSmoke?.status).toBe(1);
   });
 });
 

@@ -14,6 +14,12 @@
 // policy would break. Controls: the same page policy admits a document without Mermaid (ready, no error), and with no
 // page policy the on-request document readies with no error and no violation.
 //
+// The same page policy and an aligned table (L3 Task 12, review S3): a cell's alignment is a `style` attribute, which
+// no stylesheet hash admits, so the README's Hosting section says the stylesheet hash serves documents with neither
+// Mermaid nor an aligned table. The row holds the frame to its promise on both engines, never partly working: either
+// ready then error boot, or ready with every cell aligned as written; on Chromium, measured 2026-10-28, it is the
+// first. Its control, with no page policy, readies with every cell aligned.
+//
 // The jsdom rows are test/enhance-mermaid-on-request.test.ts.
 import { createHash } from 'node:crypto';
 import type { Page } from 'playwright-core';
@@ -249,6 +255,32 @@ describeBrowsers((browser) => {
       expect(data(await host.record())).toEqual([{ t: 'ready', v: 1, nonce }]);
     } finally {
       await host.close();
+    }
+  }, 120_000);
+
+  it('frame, an aligned table, under the same host page policy: never partly working (ready then error boot, or every cell aligned); on Chromium ready then error boot. Control: no page policy aligns every cell', async () => {
+    const TABLE = ['# Aligned', '', '| Left | Right | Centre |', '|:--|--:|:-:|', '| a | b | c |', ''].join('\n');
+    const WANT = ['left', 'right', 'center', 'left', 'right', 'center'];
+    const cells = (host: FrameHost): Promise<string[]> =>
+      host.frame().evaluate(() => Array.from(document.querySelectorAll('article th, article td'), (c) => getComputedStyle(c).textAlign));
+    for (const policy of [hashOnlyStyle(), undefined]) {
+      const { host, nonce } = await mounted(TABLE, false, policy);
+      try {
+        await host.waitMessages(1, 30_000);
+        await sleep(400);
+        const messages = data(await host.record());
+        const aligned = await cells(host);
+        if (policy === undefined) {
+          expect(messages).toEqual([{ t: 'ready', v: 1, nonce }]);
+          expect(aligned).toEqual(WANT);
+          continue;
+        }
+        const failed = [{ t: 'ready', v: 1, nonce }, { t: 'error', why: 'boot' }];
+        if (browser === 'chromium') expect(messages).toEqual(failed);
+        else expect(JSON.stringify(messages) === JSON.stringify(failed) || JSON.stringify(aligned) === JSON.stringify(WANT), JSON.stringify({ messages, aligned })).toBe(true);
+      } finally {
+        await host.close();
+      }
     }
   }, 120_000);
 

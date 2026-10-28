@@ -78,8 +78,29 @@ describe('package.json: the types the packed declarations import', () => {
 });
 
 describe('package.json: exports keys', () => {
-  it('exposes exactly ./render, ./conformance, ./enhance, ./assets/* and ./package.json', () => {
-    expect(Object.keys(pkg.exports).sort()).toEqual(['./assets/*', './conformance', './enhance', './package.json', './render']);
+  it('exposes exactly ./render, ./conformance, ./enhance, ./frame, ./host, ./highlight, ./assets/* and ./package.json', () => {
+    expect(Object.keys(pkg.exports).sort()).toEqual([
+      './assets/*',
+      './conformance',
+      './enhance',
+      './frame',
+      './highlight',
+      './host',
+      './package.json',
+      './render',
+    ]);
+  });
+
+  it('./frame, ./host and ./highlight (docserver L3, Task 12; plan Reference §12) each name their types first and their ESM build second', () => {
+    for (const entry of ['frame', 'host', 'highlight']) {
+      const value = pkg.exports[`./${entry}`];
+      expect(value, entry).toEqual({ types: `./dist/${entry}/index.d.ts`, import: `./dist/${entry}/index.js` });
+      expect(Object.keys(value as object), entry).toEqual(['types', 'import']);
+    }
+  });
+
+  it('exports no frame runtime: its scripts ship only as the hashed files under ./assets/*', () => {
+    expect(Object.keys(pkg.exports).filter((k) => k.includes('runtime'))).toEqual([]);
   });
 
   it("the README's exports sentence names exactly those keys", () => {
@@ -98,6 +119,11 @@ describe('package.json: exports keys', () => {
 
   it('ships the assets directory', () => {
     expect(pkg.files).toContain('assets');
+  });
+
+  it('ships the bridge fixtures and the labelled frame mutants (plan Reference §12)', () => {
+    expect(pkg.files).toContain('conformance/bridge-cases.json');
+    expect(pkg.files).toContain('conformance/frame-mutants');
   });
 
   it('each code entry names its types first and its ESM build second', () => {
@@ -138,14 +164,21 @@ describe('package.json: identity', () => {
     );
   });
 
-  it('the package build leaves src/host out until Task 12 exports ./host (it would emit dist/host and dist/frame)', () => {
-    const cfg = readJson('tsconfig.build.json') as { exclude: string[] };
-    expect(cfg.exclude).toContain('src/host');
+  // Until Task 12 exported them, these two rows pinned src/host and src/highlight OUT of the build (ledger C88(6),
+  // C92(3)); with ./frame, ./host and ./highlight exported they are in it, and only the frame runtime stays out: its
+  // code ships as the hashed scripts under assets/frame/, never as a module a consumer could import.
+  it('the package build includes src/frame and src/host, which ./frame and ./host export (Task 12), and leaves src/frame-runtime out', () => {
+    const cfg = readJson('tsconfig.build.json') as { include: string[]; exclude: string[] };
+    expect(cfg.include).toEqual(['src']);
+    expect(cfg.exclude).not.toContain('src/frame');
+    expect(cfg.exclude).not.toContain('src/host');
+    expect(cfg.exclude).toContain('src/frame-runtime');
   });
 
-  it('the package build leaves src/highlight out until Task 12 exports ./highlight (it would emit dist/highlight)', () => {
+  it('the package build includes src/highlight, which ./highlight exports (Task 12); it excludes only the tests and the frame runtime', () => {
     const cfg = readJson('tsconfig.build.json') as { exclude: string[] };
-    expect(cfg.exclude).toContain('src/highlight');
+    expect(cfg.exclude).not.toContain('src/highlight');
+    expect(cfg.exclude).toEqual(['test', 'src/frame-runtime']);
   });
 });
 

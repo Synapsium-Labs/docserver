@@ -28,6 +28,18 @@
       "types": "./dist/enhance/index.d.ts",
       "import": "./dist/enhance/index.js"
     },
+    "./frame": {
+      "types": "./dist/frame/index.d.ts",
+      "import": "./dist/frame/index.js"
+    },
+    "./host": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
+    },
+    "./highlight": {
+      "types": "./dist/highlight/index.d.ts",
+      "import": "./dist/highlight/index.js"
+    },
     "./assets/*": "./assets/*",
     "./package.json": "./package.json"
   },
@@ -40,6 +52,8 @@
     "conformance/expected",
     "conformance/hostile.json",
     "conformance/DEPARTURES.json",
+    "conformance/bridge-cases.json",
+    "conformance/frame-mutants",
     "LICENSE",
     "README.md"
   ],

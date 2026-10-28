@@ -1,7 +1,8 @@
 // The library's own srcdoc scans and the labelled srcdoc mutants (docserver L3, Task 7; plan Reference §2 and §3; the
 // first consumer's rows M8.3, M8.4 and M8.8). Shared by test/frame-document.test.ts, which runs the scans on real
 // frameDocument output and checks the committed clean template against it, and test/frame-mutants.test.ts, which checks
-// every committed mutant against the clean template and its row's scan. Not a test file itself.
+// every committed mutant against the clean template and its row's scan. Not a test file itself. The scans are
+// scripts/frame-scans.mjs's (Task 12), re-exported below; the consumer smoke runs them too.
 //
 // The three scans, each answering its problems (an empty list passes):
 // - scanPrefix (M8.3, row L3.M1's checks): the string starts literally with the CSP meta; the head holds exactly the
@@ -19,102 +20,12 @@
 // and the files under assets/). Every other file is clean.html with one defect, made by MUTANTS below; index.json names
 // each file's row. With UPDATE_FRAME_MUTANTS=1 (exactly), test/frame-document.test.ts writes clean.html and
 // test/frame-mutants.test.ts writes every mutant from it.
-import { parse, type DefaultTreeAdapterMap } from 'parse5';
+import { META_PREFIX, type Row } from '../scripts/frame-scans.mjs';
 
-type Node = DefaultTreeAdapterMap['node'];
-export type Element = DefaultTreeAdapterMap['element'];
-
-export const isElement = (n: Node): n is Element => 'tagName' in n;
-export const attr = (e: Element, name: string): string | null => e.attrs.find((a) => a.name === name)?.value ?? null;
-export const textOf = (e: Element): string => e.childNodes.map((c) => ('value' in c && c.nodeName === '#text' ? c.value : '')).join('');
-
-/** The head, the body and every element of a srcdoc, as parse5 builds them. */
-export function tree(srcdoc: string): { head: Element; body: Element; all: Element[] } {
-  const doc = parse(srcdoc);
-  const html = doc.childNodes.find(isElement);
-  if (html === undefined) throw new Error('no html element');
-  const [head, body] = html.childNodes.filter(isElement);
-  if (head === undefined || body === undefined) throw new Error('no head or body');
-  const all: Element[] = [];
-  const walk = (n: Node): void => {
-    if (isElement(n)) all.push(n);
-    if ('childNodes' in n) for (const c of n.childNodes) walk(c);
-  };
-  walk(doc);
-  return { head, body, all };
-}
-
-export const META_PREFIX = '<meta http-equiv="Content-Security-Policy" content="';
-
-/** An element's shape: its tag and every attribute name, sorted, with the value of `type` and `http-equiv`. */
-function shapeOf(e: Element): string {
-  const attrs = e.attrs.map((a) => (a.name === 'type' || a.name === 'http-equiv' ? `${a.name}=${a.value}` : a.name)).sort();
-  return attrs.length === 0 ? e.tagName : `${e.tagName}[${attrs.join(' ')}]`;
-}
-
-const SKELETON = ['meta[content http-equiv=Content-Security-Policy]', 'script', 'script[type=application/json]', 'script', 'style', 'script'];
-
-/** M8.3: the prefix and the skeleton (Reference §2). */
-export function scanPrefix(srcdoc: string): string[] {
-  const out: string[] = [];
-  if (!srcdoc.startsWith(META_PREFIX)) out.push('the string does not start with the CSP meta');
-  const { head, body, all } = tree(srcdoc);
-  for (const n of head.childNodes) if (!isElement(n)) out.push(`a ${n.nodeName} node in the head`);
-  const shape = head.childNodes.filter(isElement).map(shapeOf);
-  const want = shape.length === SKELETON.length + 1 ? [...SKELETON, 'script'] : SKELETON;
-  if (JSON.stringify(shape) !== JSON.stringify(want)) out.push(`the head holds ${JSON.stringify(shape)}, not ${JSON.stringify(want)} (and an optional Mermaid script)`);
-  if (body.childNodes.length > 0) out.push(`the body holds ${String(body.childNodes.length)} nodes`);
-  for (const e of all) if (attr(e, 'id') !== null) out.push(`a ${e.tagName} carries an id`);
-  return out;
-}
-
-/** Attributes that load or name a URL. */
-const URL_ATTRS = ['src', 'href', 'srcset', 'xlink:href', 'action', 'formaction', 'poster', 'data', 'background', 'ping'];
-
-/** M8.4: no URL outside the script bodies (Reference §2's "never emitted"). */
-export function scanUrls(srcdoc: string): string[] {
-  const out: string[] = [];
-  for (const e of tree(srcdoc).all) {
-    for (const a of e.attrs) if (URL_ATTRS.includes(a.name)) out.push(`a ${e.tagName} carries ${a.name}="${a.value}"`);
-    if (e.tagName === 'link' || e.tagName === 'base') out.push(`a ${e.tagName} element`);
-    if (e.tagName === 'style') {
-      const css = textOf(e);
-      if (/@import/i.test(css)) out.push('an @import in the stylesheet');
-      const urls = css.match(/url\(/gi)?.length ?? 0;
-      const data = css.match(/url\(data:/gi)?.length ?? 0;
-      if (urls !== data) out.push(`${String(urls - data)} url( in the stylesheet that is not url(data:`);
-    }
-  }
-  return out;
-}
-
-/** M8.8: the seed's placement and its serialisation. */
-export function scanSeed(srcdoc: string): string[] {
-  const out: string[] = [];
-  const kids = tree(srcdoc).head.childNodes.filter(isElement);
-  const seeds = kids.filter((e) => e.tagName === 'script' && attr(e, 'type') !== null);
-  if (seeds.length !== 1) return [`${String(seeds.length)} typed scripts in the head, not one seed`];
-  const seed = seeds[0] as Element;
-  if (attr(seed, 'type') !== 'application/json' || seed.attrs.length !== 1) out.push(`the seed is ${shapeOf(seed)}`);
-  const at = kids.indexOf(seed);
-  const next = kids[at + 1];
-  const prev = kids[at - 1];
-  if (next === undefined || next.tagName !== 'script' || next.attrs.length !== 0) out.push('the element after the seed is not the bootstrap');
-  if (prev === undefined || prev.tagName !== 'script' || prev.attrs.length !== 0) out.push('the element before the seed is not the guard');
-  const text = textOf(seed);
-  if (text.includes('<')) out.push('the seed text holds a "<"');
-  if (/[\u2028\u2029]/.test(text)) out.push('the seed text holds a raw U+2028 or U+2029');
-  try {
-    const v: unknown = JSON.parse(text);
-    if (typeof v !== 'object' || v === null || Array.isArray(v)) out.push('the seed is not a JSON object');
-  } catch {
-    out.push('the seed text is not JSON');
-  }
-  return out;
-}
-
-export type Row = 'M8.3' | 'M8.4' | 'M8.8';
-export const SCANS: Readonly<Record<Row, (srcdoc: string) => string[]>> = { 'M8.3': scanPrefix, 'M8.4': scanUrls, 'M8.8': scanSeed };
+// The scans themselves live in scripts/frame-scans.mjs since L3 Task 12, so the packed-consumer smoke runs the same
+// implementation on an installed tarball's output and mutants; they are re-exported here unchanged.
+export { attr, isElement, META_PREFIX, SCANS, scanPrefix, scanSeed, scanUrls, textOf, tree } from '../scripts/frame-scans.mjs';
+export type { Element, Row } from '../scripts/frame-scans.mjs';
 
 // -- the clean template --
 
