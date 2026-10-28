@@ -24,12 +24,13 @@
 //
 // At DOMContentLoaded: the register listener goes; with no enhance registered (the browser refused its script: hash
 // drift) the frame is FAILED('assets'), and a seed that asks for Mermaid without a registered Mermaid API holding
-// initialize and run is FAILED('mermaid'). Otherwise the seed's html is materialised (content.ts: an inert parse, the
-// closed vocabulary check, the image rewrite) into an `article` root appended to the body, and enhance() runs on it
-// with the frame's adapters (adapters.ts: the enhance callbacks over the outbox, each only when the seed's bridge
-// allows its op). A refusal of the content, enhance's rejection, or a throw, is FAILED('render'). Enhance's `mermaid`
-// option carries the seed's caps, secure keys and `draw` (adapters.ts, enhanceMermaid). In 'auto' Mermaid mode, ready
-// then waits until the root's `data-docreader-diagrams` leaves `drawing` (a failed or partial drawing is not an error);
+// initialize and render (the functions the reader calls, ledger C95(1)) is FAILED('mermaid'). Otherwise the seed's
+// html is materialised (content.ts: an inert parse, the closed vocabulary check, the image rewrite) into an `article`
+// root appended to the body, and enhance() runs on it with the frame's adapters (adapters.ts: the enhance callbacks
+// over the outbox, each only when the seed's bridge allows its op). A refusal of the content, enhance's rejection, or
+// a throw, is FAILED('render'). Enhance's `mermaid` option carries the seed's caps, secure keys and `draw`
+// (adapters.ts, enhanceMermaid). In 'auto' Mermaid mode, ready then waits until the root's `data-docreader-diagrams`
+// leaves `drawing` (a failed or partial drawing is not an error);
 // in 'on-request' mode nothing draws before ready, so it does not wait (waitsForDrawing; FD13); instead it asks for
 // inline style itself (styles.ts, probesInlineStyle), as a drawing will on a tap, so an inherited policy that blocks it
 // raises its violation before ready (fix round, review S1; Reference §11.5, ruling R7). Then the face probe (fonts.ts):
@@ -332,7 +333,7 @@ interface EnhanceApi {
         fail('mermaid');
         return;
       }
-      if (typeof mermaidModule['initialize'] !== 'function' || typeof mermaidModule['run'] !== 'function') {
+      if (typeof mermaidModule['initialize'] !== 'function' || typeof mermaidModule['render'] !== 'function') {
         fail('mermaid');
         return;
       }

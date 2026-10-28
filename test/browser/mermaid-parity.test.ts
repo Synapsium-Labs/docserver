@@ -5,7 +5,9 @@
 //
 // Every diagram of the corpus (each `pre.mermaid` that render() emits for a conformance/corpus document) is drawn once
 // with each build, in a page of its own, with the same configuration and the same render id, and the SVG text each
-// gives (or the message each fails with) must be equal. The configuration is the reader's, as src/enhance/diagrams.ts
+// gives (or the message each fails with) must be equal. The render id is the reader's form (src/enhance/diagrams.ts:
+// DRAWING_ID_PREFIX, its U+00B7 included, then `mermaid-` and a number; ledger C95(1)), so both builds are held equal on
+// the names the reader draws under. The configuration is the reader's, as src/enhance/diagrams.ts
 // exports it (start-on-load off, the `strict` security level, error rendering suppressed, the dagre layout, the text
 // and edge caps, the secure keys, the base theme, its font and theme variables); its dompurify lists are not exported
 // and stay at Mermaid's defaults on both sides. The clock is fixed at one instant in both pages, so nothing
@@ -17,14 +19,19 @@
 // else is fetched.
 //
 // The outcome counts are pinned (how many draw, which fail and why), so a Mermaid move re-baselines this row on
-// purpose (Tasks 8 and 13).
+// purpose (Tasks 8 and 13). Task 8 re-ran it on the integrated build and holds that the two files drawn are the bytes
+// that ship: the classic file's sha256 is FRAME_MANIFEST's, the one frameDocument verifies, and the module's is
+// assets/assets.json's. v1 ships Mermaid 12.1.0 (ledger C93: Task 13's move to 12.2.0 is deferred past v1), so this
+// is the 12.1.0 baseline.
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { buildMermaid, bundleMermaidFrame, FRAME_OUT_FILE, OUT_FILE } from '../../scripts/build-mermaid.mjs';
-import { FONT_FALLBACK, MAX_EDGES, MAX_TEXT_SIZE, secureKeys, THEME_VARIABLES } from '../../src/enhance/diagrams.js';
+import { DRAWING_ID_PREFIX, FONT_FALLBACK, MAX_EDGES, MAX_TEXT_SIZE, secureKeys, THEME_VARIABLES } from '../../src/enhance/diagrams.js';
+import { FRAME_MANIFEST } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import { browserFor, closeBrowsers, describeBrowsers, ORIGIN, POLICIES, type BrowserName } from './harness.js';
 
@@ -169,20 +176,20 @@ async function drawAll(browser: BrowserName, kind: 'module' | 'classic'): Promis
     await page.waitForFunction(() => document.documentElement.hasAttribute('data-ready'), null, { timeout: 45_000 });
     const ready = await page.evaluate(() => document.documentElement.getAttribute('data-ready'));
     const drawn = await page.evaluate(
-      async ({ sources, config }) => {
+      async ({ sources, config, prefix }) => {
         const api = (window as unknown as { __mermaid: { initialize(c: unknown): void; render(id: string, text: string): Promise<{ svg: string }> } }).__mermaid;
         const out: ({ svg: string } | { error: string })[] = [];
         for (let i = 0; i < sources.length; i++) {
           api.initialize(structuredClone(config));
           try {
-            out.push({ svg: (await api.render(`parity-${String(i)}`, sources[i] ?? '')).svg });
+            out.push({ svg: (await api.render(`${prefix}mermaid-${String(i)}`, sources[i] ?? '')).svg });
           } catch (e) {
             out.push({ error: String((e as { message?: unknown } | null)?.message ?? e) });
           }
         }
         return out;
       },
-      { sources: diagrams.map((d) => d.source), config: CONFIG },
+      { sources: diagrams.map((d) => d.source), config: CONFIG, prefix: DRAWING_ID_PREFIX },
     );
     return { ready, drawn, aborted: [...aborted], missing: [...missing] };
   } finally {
@@ -208,6 +215,15 @@ const FAILS: Readonly<Record<string, RegExp>> = {
   'mermaid-figures.md#13': /^Parse error on line 1:\n---title: Kinds---\n/,
 };
 
+const sha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
+
+it('L3.B12: the two files drawn are the bytes that ship: the classic file is the manifest\'s, the module assets.json\'s', () => {
+  const listed = (JSON.parse(readFileSync(path.join(ROOT, 'assets', 'assets.json'), 'utf8')) as { files: { path: string; sha256: string }[] }).files;
+  expect(sha256(frameFile)).toBe(FRAME_MANIFEST.mermaid.sha256);
+  expect(listed.find((f) => f.path === FRAME_MANIFEST.mermaid.path)?.sha256).toBe(sha256(frameFile));
+  expect(listed.find((f) => f.path === OUT_FILE.replace(/^assets\//, ''))?.sha256).toBe(sha256(esmFile));
+});
+
 describeBrowsers((browser) => {
   it('L3.B12: the ES module and the classic frame file give equal SVG text for every corpus diagram', async () => {
     expect(diagrams.length).toBe(29);
@@ -231,10 +247,10 @@ describeBrowsers((browser) => {
     }));
     expect(Object.keys(failed).sort()).toEqual(Object.keys(FAILS).sort());
     for (const [label, re] of Object.entries(FAILS)) expect(failed[label], label).toMatch(re);
-    // A drawing is a real SVG: each holds its render id.
+    // A drawing is a real SVG: each holds its render id, the reader's prefix and its dot included.
     diagrams.forEach((d, i) => {
       const r = esm.drawn[i];
-      if (r !== undefined && 'svg' in r) expect(r.svg, d.label).toMatch(new RegExp(`^<svg [^>]*id="parity-${String(i)}"`));
+      if (r !== undefined && 'svg' in r) expect(r.svg, d.label).toMatch(new RegExp(`^<svg [^>]*id="${DRAWING_ID_PREFIX}mermaid-${String(i)}"`));
     });
   }, 240_000);
 });

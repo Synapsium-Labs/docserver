@@ -12,16 +12,23 @@
 //      is given the configuration once, through its queue: stock Mermaid listens for the window's load event and,
 //      while its start-on-load is on (its default), draws every `.mermaid` of the document then, with its own defaults
 //      and into the document's own `pre`; the package's file has it off already;
-//   3. a module whose default export (or which itself) has Mermaid's `initialize` and `run` is Mermaid's; anything
-//      else, a rejection included, leaves every figure to its fallback, with the load note;
+//   3. a module whose default export (or which itself) has Mermaid's `initialize` and `render` is Mermaid's; anything
+//      else (one with `run` and no `render` too), a rejection included, leaves every figure to its fallback, with the
+//      load note;
 //   4. after a frame, the figures near the viewport (less than NEAR screens away) are drawn first, in document order;
 //      then, after a timeout of 0, the rest, nearest first (each distance measured then);
 //   5. each figure is one call, serialised in one queue per Mermaid module across every root of the page (a module's
-//      configuration is global to it): a chrome `pre.mermaid` holding the source's text goes in right after the
-//      document's own `pre` (which is never written into, so it never gets Mermaid's `data-processed`), or first in
-//      the figure when the host has moved that `pre` out of it, then `initialize(config)` and `run({ nodes: [that
-//      pre], suppressErrors: true })`, unless initialize destroyed the instance. No id is looked up: the drawing is the
-//      svg Mermaid put in that node;
+//      configuration is global to it): a chrome `pre.mermaid` holding the source's text, marked `data-processed` as
+//      Mermaid marks what it draws, goes in right after the document's own `pre` (which is never written into, so it
+//      never gets that mark), or first in the figure when the host has moved that `pre` out of it, then
+//      `initialize(config)` and the drawing, unless initialize destroyed the instance. The drawing is what Mermaid's
+//      `run({ nodes: [that pre], suppressErrors: true })` does, step by step, with one change: the reader names it
+//      (drawingId, below). Mermaid's `render(id, text, that pre)` draws the source's text prepared as run() prepares
+//      it (mermaidText); the SVG text it answers goes into that pre through an inert parse (env.parseHtml, the
+//      window's DOMParser; run() writes innerHTML, which the reader never names), and its `bindFunctions`, when it
+//      has one, is called with that pre. A rejection, or a throw of bindFunctions, is kept from the page as run()
+//      keeps it with suppressErrors (the pre then holds what Mermaid left in it). No id is looked up: the drawing is
+//      the svg in that node;
 //   6. a figure is drawn when its chrome `pre` holds an svg that is not Mermaid's error drawing: the figure takes the
 //      journaled class `drawn`, the svg `role="img"` and an `aria-label` ("Figure N. " and the caption, else the
 //      drawing's own title, else the first line of its source), and the figure `--fig-w`, the drawing's own width
@@ -40,6 +47,21 @@
 // then `drawn` or `failed`. The first tap calls load() once, after which steps 2, 3, 5 and 6 run for the tapped figure
 // alone, through the same queue, so a second tap waits (its button `aria-busy`) until the draw before it settles, and a
 // failure is that figure's only (onRequest, below).
+//
+// The drawing's name (docserver L3, Task 8; ledger C95(1); plan risk R3, row L3.B14). Mermaid writes a drawing's
+// name into the svg's id, into every id it derives for the drawing (`<name>-…` markers, gradients, clip paths and
+// nodes, and the working elements `d<name>` and `i<name>`), into the selectors of the drawing's stylesheet
+// (`#<name> …`) and into the `url(#…)` references between them, and while it draws it looks the name up in the whole
+// document (`[id="<name>"]`, `#d<name>`). Its run() names each drawing `mermaid-<Date.now()>` and takes no name, and an
+// authored anchor holding that name took the drawing, lost its `d…` twin to Mermaid's cleanup, and took the drawing's
+// references (measured on Chromium, task-8.md). So the reader calls render() with a name of its own, drawingId():
+// DRAWING_ID_PREFIX, then `mermaid-` and a number this copy of the library counts up. The prefix holds U+00B7 MIDDLE DOT,
+// which render() never writes into an id: not an anchor (`<!-- id:X -->` takes `[A-Za-z0-9_-]`), not a heading slug
+// (letters, numbers, `_`, `-` and CJK ideographs; the dot is punctuation, `Po`), not a footnote's id (`fn` and
+// `fnref` with digits and `:`), so no document can author an id that meets a drawing's. CSS takes the dot unescaped in
+// an id selector (an ident code point in CSS Syntax 3, as every code point from U+0080 was before), and an SVG takes it
+// in `url(#…)`; L3.B14p (test/browser/frame-mermaid.test.ts) holds both on each engine CI runs. The full-screen
+// copy rebinds these ids too (journal.ts, cloneSvg).
 //
 // The configuration (§3.4), passed to initialize() before every run, so another root's never applies: startOnLoad
 // false, securityLevel 'strict' (no click handler is bound, labels are sanitised), suppressErrorRendering, the layout
@@ -200,7 +222,53 @@ export function secureKeys(): readonly string[] {
 /** Mermaid's API, as the reader uses it. */
 interface MermaidApi {
   initialize(config: Record<string, unknown>): unknown;
-  run(options: { readonly nodes: readonly HTMLElement[]; readonly suppressErrors: boolean }): unknown;
+  /** Draw `text` under the name `id`, in `container`: answers (a promise of) the SVG text and its bindFunctions. */
+  render(id: string, text: string, container: Element): unknown;
+}
+
+/**
+ * What every drawing's name starts with: `docreader`, then U+00B7 MIDDLE DOT, a code point render() never writes into
+ * an id (header, "The drawing's name"; test/enhance-diagrams.test.ts holds it).
+ */
+export const DRAWING_ID_PREFIX = 'docreader\u00b7';
+
+/** How many drawings this copy of the library has named: each takes the next number. */
+let drawingCount = 0;
+
+/** The next drawing's name: the prefix, then `mermaid-` and a number never handed out before by this copy. */
+function drawingId(): string {
+  const n = drawingCount;
+  drawingCount += 1;
+  return `${DRAWING_ID_PREFIX}mermaid-${String(n)}`;
+}
+
+/**
+ * ts-dedent 2.3.0's `dedent` of one string, as Mermaid 12.1.0's run() calls it: a final line break and the blanks after
+ * it go; then every line loses the smallest indentation of the lines after a line break (a blank-only line's count, a
+ * line that starts with text counts 0); then one line break at the start goes. The smallest is found by a loop where
+ * the package spreads the counts into Math.min (the same number).
+ */
+function dedent(text: string): string {
+  let s = text.replace(/\r?\n([\t ]*)$/, '');
+  const indents = s.match(/\n([\t ]+|(?!\s).)/g);
+  if (indents !== null) {
+    let min = Number.POSITIVE_INFINITY;
+    for (const m of indents) min = Math.min(min, m.match(/[\t ]/g)?.length ?? 0);
+    s = s.replace(new RegExp(`\n[\t ]{${String(min)}}`, 'g'), '\n');
+  }
+  return s.replace(/^\r?\n/, '');
+}
+
+/**
+ * A source's text as Mermaid 12.1.0's run() hands it to render(): run() reads the pre's innerHTML and decodes its
+ * entities (utils' entityDecode), which gives back the text a pre holding only that text was made with; then dedent,
+ * trim, and every `<br>`, `<br/>` or `<br />` (any case) written `<br/>`. test/enhance-diagrams.test.ts holds the
+ * equality with run()'s own steps.
+ */
+export function mermaidText(text: string): string {
+  return dedent(text)
+    .trim()
+    .replace(/<br\s*\/?>/gi, '<br/>');
 }
 
 /** One figure to draw. */
@@ -286,11 +354,14 @@ function noteTip(ctx: FeatureContext, doc: Document, had: Element | null, drawin
   });
 }
 
-/** Whether `v` has Mermaid's initialize and run. */
+/**
+ * Whether `v` has Mermaid's initialize and render, the two calls the reader makes. A module without render (one with
+ * run alone included) is not Mermaid's: every figure keeps its fallback.
+ */
 function isApi(v: unknown): v is MermaidApi {
   if ((typeof v !== 'object' && typeof v !== 'function') || v === null) return false;
-  const m = v as { initialize?: unknown; run?: unknown };
-  return typeof m.initialize === 'function' && typeof m.run === 'function';
+  const m = v as { initialize?: unknown; render?: unknown };
+  return typeof m.initialize === 'function' && typeof m.render === 'function';
 }
 
 /** Mermaid's API in what the host's load() answered: its default export, or the module itself; else null. */
@@ -441,31 +512,50 @@ function finish(ctx: FeatureContext, f: Fig, svg: SVGSVGElement | null, why: Why
 }
 
 /**
- * One call, inside the module's queue: the chrome pre beside the source, initialize, run. Answers the chrome pre
- * (whatever Mermaid left in it), or null when the instance is no longer live and nothing was asked.
+ * Put what render() answered into `drawing`, as run() does after its render: the SVG text in place of whatever the pre
+ * holds (run() writes innerHTML; here an inert parse, env.parseHtml), then bindFunctions(drawing) when there is one.
+ * An answer without SVG text, or a window without a parser, leaves the pre as Mermaid left it. A throw (of
+ * bindFunctions, or of a getter of the answer's) is the caller's to keep from the page.
+ */
+function place(ctx: FeatureContext, drawing: HTMLElement, out: unknown): void {
+  if ((typeof out !== 'object' && typeof out !== 'function') || out === null) return;
+  const { svg, bindFunctions } = out as { svg?: unknown; bindFunctions?: unknown };
+  if (typeof svg !== 'string') return;
+  const nodes = ctx.env.parseHtml(svg);
+  if (nodes === null) return;
+  drawing.replaceChildren(...nodes);
+  if (typeof bindFunctions === 'function') (bindFunctions as (el: Element) => unknown)(drawing);
+}
+
+/**
+ * One call, inside the module's queue: the chrome pre beside the source, initialize, then the drawing as run() makes it
+ * (header, step 5), under a name of the reader's (drawingId). Answers the chrome pre (whatever Mermaid left in it), or
+ * null when the instance is no longer live and nothing was asked.
  */
 async function call(ctx: FeatureContext, api: MermaidApi, config: () => Record<string, unknown>, f: Fig): Promise<HTMLElement | null> {
   if (!ctx.live()) return null;
   const doc = ctx.root.ownerDocument;
-  const drawing = chrome(doc, 'pre', { className: 'mermaid', text: f.text });
+  // Marked as run() marks a node it draws, before it reads the node's text.
+  const drawing = chrome(doc, 'pre', { className: 'mermaid', text: f.text, attrs: { 'data-processed': 'true' } });
   let had: Element | null = null;
-  let running: unknown;
+  let rendering: unknown;
   try {
-    running = ctx.operate(() => {
+    rendering = ctx.operate(() => {
       ctx.journal.insert(drawing, f.entry.figure, besideSource(f, true));
       had = tooltipIn(doc);
       api.initialize(config());
-      if (!ctx.live()) return undefined; // initialize destroyed the instance: its run is never called
-      return { run: api.run({ nodes: [drawing], suppressErrors: true }) };
+      if (!ctx.live()) return undefined; // initialize destroyed the instance: its drawing is never asked for
+      return { out: api.render(drawingId(), mermaidText(f.text), drawing) };
     });
   } catch {
     return drawing; // a throw of the module's: the drawing is what it left, checked by the caller
   }
-  if (running === undefined) return null;
+  if (rendering === undefined) return null;
   try {
-    await (running as { run: unknown }).run;
+    place(ctx, drawing, await (rendering as { out: unknown }).out);
   } catch {
-    // a rejection: the drawing is checked by the caller
+    // A rejection, or a throw of bindFunctions: kept from the page, as run() keeps it with suppressErrors. The drawing
+    // is checked by the caller.
   }
   noteTip(ctx, doc, had, drawing);
   return drawing;

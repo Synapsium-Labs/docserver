@@ -17,7 +17,10 @@
 //     'loadingdone' and asks again, within the same bound, so it never answers true on the fallback faces
 //     (docserver L2, Task 7b: relayout's fonts trigger, LD5);
 //   - a root in a document with no window (one a DOMParser made) gets an env all the same: nothing is scheduled or
-//     heard, sizes read 0, media queries and lookups answer false or null, and nothing throws.
+//     heard, sizes read 0, media queries and lookups answer false or null, and nothing throws;
+//   - parseHtml(markup) is the reader's one HTML parse: the window's DOMParser, inert, its body's nodes answered for the
+//     caller to adopt (the diagrams feature's drawing, docserver L3 Task 8, ledger C95). It is here because DOMParser
+//     belongs to the root's window, which only this module reaches.
 // Reads are live: each call asks the window then, so a host or a test that changes the window is seen at once.
 //
 // Import-inert: declarations only; createEnv runs when the lifecycle builds an instance.
@@ -98,6 +101,13 @@ export interface Env {
   elementFromPoint(x: number, y: number): Element | null;
   /** A computed style value of an element inside the root (a custom property included); '' otherwise. */
   computed(el: Element, prop: string): string;
+  /**
+   * An inert parse of `markup` as HTML, by the window's DOMParser: no script runs and nothing loads in the parsed
+   * document. Answers the nodes of its body, still in that document (appending one adopts it), or null where the window
+   * has no DOMParser. Its one caller is the diagrams feature, which inserts the SVG text Mermaid's render() answers this
+   * way rather than by innerHTML (docserver L3, Task 8; ledger C95).
+   */
+  parseHtml(markup: string): readonly Node[] | null;
 }
 
 /** The instance's operation: runs `fn`, or does nothing and answers undefined once not live. */
@@ -490,6 +500,12 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
     computed: (el, prop) => {
       if (view === null || typeof view.getComputedStyle !== 'function' || !root.contains(el)) return '';
       return view.getComputedStyle(el).getPropertyValue(prop).trim();
+    },
+
+    parseHtml: (markup) => {
+      const Parser = view === null ? undefined : view.DOMParser;
+      if (typeof Parser !== 'function') return null;
+      return Array.from(new Parser().parseFromString(markup, 'text/html').body.childNodes);
     },
   };
   registerFrameQueue(root, env, journal, live);

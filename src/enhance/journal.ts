@@ -37,8 +37,11 @@ const STYLE_VALUE_MAX = 200;
 /** A style value that could load a resource (a url() or an image function), escape a character, or end its declaration. */
 const STYLE_VALUE_REFUSED = /[\\;{}]|(?:url|src|image|image-set|cross-fade|element|paint)\s*\(/i;
 const ROOT_ISSUED_ID = /^docreader\.\d+\.[a-z][a-z0-9-]*(?:\.\d+)?$/;
-const LOCAL_URL = /^url\(\s*(?:['"])?#([A-Za-z][\w:.-]*)(?:['"])?\s*\)$/i;
-const LOCAL_HREF = /^#([A-Za-z][\w:.-]*)$/;
+// A local reference's id: after its first letter, ASCII word characters, `:`, `.`, `-` and every code point from
+// U+0080 (a CSS ident code point), since a drawing's name holds DRAWING_ID_PREFIX's U+00B7 and every id Mermaid
+// derives from it does too (ledger C95(1); review T8b-C1). A surrogate pair is two code units in that range.
+const LOCAL_URL = /^url\(\s*(?:['"])?#([A-Za-z][\w:.\u0080-\uffff-]*)(?:['"])?\s*\)$/i;
+const LOCAL_HREF = /^#([A-Za-z][\w:.\u0080-\uffff-]*)$/;
 
 /** An element with an inline style: HTML, SVG or MathML. */
 export type Styled = Element & ElementCSSInlineStyle;
@@ -182,7 +185,9 @@ function mappedStyleText(value: string, ids: ReadonlyMap<string, string>): strin
       out += mappedUrl(token, ids);
       at += token.length;
     } else if (selector && ch === '#') {
-      const escaped = /^#((?:[A-Za-z0-9_-]+|\\.)+)/.exec(value.slice(at));
+      // A selector's id: CSS ident code points (ASCII letters, digits, `_`, `-`, and every code point from U+0080, the
+      // drawing name's U+00B7 among them) or an escape.
+      const escaped = /^#((?:[A-Za-z0-9_\u0080-\uffff-]+|\\.)+)/.exec(value.slice(at));
       const id = escaped?.[1]?.replace(/\\(.)/g, '$1');
       const next = id === undefined ? undefined : ids.get(id);
       if (escaped !== null && next !== undefined) {
