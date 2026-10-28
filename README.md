@@ -4,7 +4,7 @@ One shared renderer for spec and plan documents written in Markdown. It turns Ma
 
 It is pure. It does no network, storage, auth, git or hosting. Each product that uses it brings its own transport, login, content source and hosting, and pins one exact version.
 
-**Status:** the render and conformance entries are delivered. L2 navigation, reader state, editorial and review layout features are implemented in this working tree; diagram tools are still completing. Final L2 browser, consumer, parity and whole-branch acceptance remains pending. L3 owns frame construction, host mounting, the asset manifest and release work.
+**Status:** `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. The release lane (`.github/workflows/release.yml`) is in place, but nothing is published yet: version 1.0.0 waits on the release steps that are the maintainers' own (the repository's visibility, the npm trusted publisher, the protected `npm-release` environment, the tag-signing key and the signed tag). Until then the package is private.
 
 ## What it holds
 

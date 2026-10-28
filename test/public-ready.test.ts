@@ -13,12 +13,24 @@
 // where a .git exists, a case checks that the scratch list hides no tracked path. The root-level skips apply at
 // the root only: a nested directory of the same name is scanned. Its own synthetic positives are built at run
 // time, so this file holds none of them literally and is scanned like any other.
+//
+// The shapes themselves live in scripts/public-shapes.mjs (docserver L3, Task 14), so this tree test and the history
+// scan (scripts/history-scan.mjs, which reads every object of the history and every GitHub text before the repository
+// goes public) look for one list of shapes, never two that drift apart.
+//
+// L3 Task 14 adds the release files' pins: package.json's publishConfig and exact repository URL (npm provenance
+// compares it), the MIT LICENSE, SECURITY.md, .github/CODEOWNERS, THIRD-PARTY-NOTICES covering both Mermaid files and
+// the four runtime libraries, the font licence in the packed files, .github/release-signers (L3.W10: no key line while
+// the package is private, at least one `release-signer` key line once it is not), and the one pin that the package is
+// still private, which Task 15 flips in the v1 release PR.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { DEPENDENCY_NOTICES_BEGIN, NOTICES_BEGIN, dependencyNoticesSection, dependencyPackages, readDependencyNoticesSection, readNoticesSection } from '../scripts/build-mermaid.mjs';
+import { findShapes } from '../scripts/public-shapes.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -60,52 +72,9 @@ function scannedFiles(dir = ROOT, root = ROOT): string[] {
   return out.sort();
 }
 
-/** Mail domains reserved for examples and tests (RFC 2606, RFC 6761), and noreply addresses. */
-function allowedMail(local: string, domain: string): boolean {
-  const d = domain.toLowerCase();
-  if (local.toLowerCase() === 'noreply' || d === 'users.noreply.github.com') return true;
-  if (/(?:^|\.)example\.(?:com|net|org)$/.test(d)) return true;
-  return /\.(?:example|invalid|test|localhost)$/.test(d);
-}
-
-/** True for a dotted quad in 10/8, 172.16/12, 192.168/16 or 100.64/10. */
-function privateAddress(octets: readonly number[]): boolean {
-  const [a = -1, b = -1] = octets;
-  if (octets.some((n) => n > 255)) return false;
-  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
-}
-
-const CHECKS: readonly { name: string; re: RegExp; keep?: (m: RegExpExecArray) => boolean }[] = [
-  { name: 'home or mount path', re: /(?<![\w.~-])(?:\/home\/|\/Users\/|\/root\/|\/mnt\/|\/data\/|~\/|[A-Za-z]:\\Users\\)/g },
-  { name: 'private host suffix', re: /\b[A-Za-z0-9-]+\.(?:ts\.net|local|internal|lan)\b/g },
-  {
-    name: 'private address',
-    re: /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\.?\d)/g,
-    keep: (m) => privateAddress(m.slice(1, 5).map(Number)),
-  },
-  {
-    name: 'e-mail address',
-    re: /([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b/g,
-    keep: (m) => !allowedMail(m[1] ?? '', m[2] ?? ''),
-  },
-  {
-    name: 'credential',
-    re: /\b(?:gh[oprsu]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|npm_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
-  },
-];
-
-/** Every private-looking match in a text, as "line: kind: match". */
+/** Every private-looking match in a text, as "line: kind: match" (the shapes are scripts/public-shapes.mjs's). */
 function scanText(text: string): string[] {
-  const out: string[] = [];
-  const lines = text.split('\n');
-  lines.forEach((line, i) => {
-    for (const c of CHECKS) {
-      for (const m of line.matchAll(c.re)) {
-        if (c.keep === undefined || c.keep(m as RegExpExecArray)) out.push(`${i + 1}: ${c.name}: ${m[0]}`);
-      }
-    }
-  });
-  return out;
+  return findShapes(text).map((f) => `${String(f.line)}: ${f.shape}: ${f.match}`);
 }
 
 /** Join pieces at run time, so this file never holds a positive literally. */
@@ -255,5 +224,164 @@ describe('public-ready: the tree', () => {
   it('no file holds a home path, a private host or address, a personal e-mail address or a credential', () => {
     const found = scannedFiles().flatMap((f) => scanText(readFileSync(path.join(ROOT, f), 'utf8')).map((s) => `${f}:${s}`));
     expect(found).toEqual([]);
+  });
+});
+
+// ───────── the release files (L3 Task 14) ─────────
+
+const readRoot = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
+/** Every TypeScript and JavaScript source under test/, at any depth, as a path from the root, sorted. */
+function testSources(dir = 'test'): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) out.push(...testSources(rel));
+    else if (/\.(?:[cm]?ts|[cm]?js)$/.test(e.name)) out.push(rel);
+  }
+  return out.sort();
+}
+/**
+ * True when a text asserts on a `private` field: a `.private` or `['private']` read handed to an assertion, a
+ * `toHaveProperty('private', …)`, or a `toMatchObject` naming `private`. Read as text, a comment counts too.
+ */
+function pinsPrivate(text: string): boolean {
+  const read = /(?:\?\.|\.)private\b|\[\s*['"]private['"]\s*\]/;
+  return text.split('\n').some(
+    (l) =>
+      (read.test(l) && /\)\s*(?:\.not)?\s*\.to[A-Z]\w*\(/.test(l) && /\bexpect\s*\(/.test(l)) ||
+      /toHaveProperty\(\s*['"]private['"]/.test(l) ||
+      /toMatchObject\([^)]*\bprivate\s*:/.test(l),
+  );
+}
+const manifest = JSON.parse(readRoot('package.json')) as {
+  private?: unknown;
+  license?: unknown;
+  files?: unknown;
+  publishConfig?: unknown;
+  repository?: unknown;
+  dependencies?: Record<string, string>;
+};
+
+/** A key line of .github/release-signers (ssh-keygen's allowed-signers format): the principal, optional options, a key type and a key. */
+const KEY_LINE = /^release-signer\s+(?:\S+\s+)?\S+\s+[A-Za-z0-9+/]+={0,2}(?:\s.*)?$/;
+
+/**
+ * Why a signers file may not stand beside a package that is (or is not) private (L3.W10): the header names the
+ * principal; while private, the file holds no key line (the key line is the operator's, Q9, and lands in the v1 release
+ * PR with the flip of `private`); once not private, it holds at least one key line, and every line that is not a
+ * comment is a `release-signer` key line. Empty when it may.
+ */
+function signersProblems(text: string, isPrivate: boolean): string[] {
+  const lines = text.split('\n');
+  const comments = lines.filter((l) => /^\s*#/.test(l));
+  const keys = lines.filter((l) => !/^\s*(?:#|$)/.test(l));
+  const out: string[] = [];
+  if (!comments.some((l) => /\brelease-signer\b/.test(l))) out.push('the header does not name the principal release-signer');
+  if (isPrivate && keys.length > 0) out.push('a key line while the package is private');
+  if (!isPrivate && keys.length === 0) out.push('no key line once the package is public');
+  for (const k of keys) if (!KEY_LINE.test(k)) out.push(`not a release-signer key line: line ${String(lines.indexOf(k) + 1)}`);
+  return out;
+}
+
+describe('public-ready: the release files (L3 Task 14)', () => {
+  it('package.json is still private: Task 15 flips this pin, and only this one, in the v1 release PR', () => {
+    expect(manifest.private).toBe(true);
+  });
+
+  it('this file holds the only pin of package.json\'s private field among the tests, so Task 15 flips exactly one', () => {
+    const files = testSources();
+    expect(files).toContain('test/public-ready.test.ts');
+    expect(files.filter((f) => f.startsWith('test/browser/')).length).toBeGreaterThan(0);
+    expect(files.filter((f) => pinsPrivate(readRoot(f)))).toEqual(['test/public-ready.test.ts']);
+  });
+
+  it('control: the pin scan finds a private pin in every assertion form, and walks every directory under test/', () => {
+    const subject = ['manifest', 'pkg', 'json'];
+    const forms = [
+      (o: string) => `expect(${o}.private).toBe(true)`,
+      (o: string) => `expect(${o}.private).toEqual(true)`,
+      (o: string) => `expect(${o}.private).toStrictEqual(true)`,
+      (o: string) => `expect(${o}.private).not.toBe(false)`,
+      (o: string) => `expect(${o}['private']).toBe(true)`,
+      (o: string) => `expect(${o}["private"] ).toEqual(true)`,
+      (o: string) => `expect(${o}).toHaveProperty('private', true)`,
+      (o: string) => `expect(${o}).toMatchObject({ private: true })`,
+      (o: string) => `expect(${o}?.private).toBeTruthy()`,
+    ];
+    for (const o of subject) for (const f of forms) expect([f(o), pinsPrivate(f(o))]).toEqual([f(o), true]);
+    for (const clean of ['const pkg = { private: true };', "packageDir({ version: '1.0.0', private: value }, '1.0.0')", 'expect(manifest.version).toBe(1)']) {
+      expect([clean, pinsPrivate(clean)]).toEqual([clean, false]);
+    }
+  });
+
+  it('publishes for the public, with provenance, from exactly this repository (npm compares the provenance to repository.url)', () => {
+    expect(manifest.publishConfig).toEqual({ access: 'public', provenance: true });
+    expect(manifest.repository).toEqual({ type: 'git', url: 'git+https://github.com/Synapsium-Labs/docserver.git' });
+  });
+
+  it('is MIT: the package says so and LICENSE is the MIT licence', () => {
+    expect(manifest.license).toBe('MIT');
+    const licence = readRoot('LICENSE');
+    expect(licence.split('\n')[0]).toBe('MIT License');
+    expect(licence).toContain('Permission is hereby granted, free of charge, to any person obtaining a copy');
+  });
+
+  it('SECURITY.md sends a vulnerability to a private advisory, never a public issue', () => {
+    const security = readRoot('SECURITY.md');
+    expect(security).toContain('https://github.com/Synapsium-Labs/docserver/security/advisories/new');
+    expect(security).toMatch(/do not open a public issue/i);
+  });
+
+  it('.github/CODEOWNERS asks a code owner to review the workflows and signers, the assets, the frame and the host', () => {
+    const rules = readRoot('.github/CODEOWNERS')
+      .split('\n')
+      .filter((l) => !/^\s*(?:#|$)/.test(l))
+      .map((l) => l.trim().split(/\s+/));
+    expect(rules.map((r) => r[0])).toEqual(['/.github/', '/assets/', '/src/frame*', '/src/host/']);
+    expect(rules.filter((r) => r.length < 2 || !r.slice(1).every((o) => /^@[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(o)))).toEqual([]);
+  });
+
+  it('ships the font licence: assets/ is in files, and assets.json lists fonts/OFL.txt', () => {
+    expect(manifest.files).toContain('assets');
+    expect((manifest.files as string[]).filter((f) => f.startsWith('!'))).toEqual([]);
+    const assets = JSON.parse(readRoot('assets/assets.json')) as { files: { path: string }[] };
+    expect(assets.files.map((f) => f.path)).toContain('fonts/OFL.txt');
+    expect(readRoot('assets/fonts/OFL.txt')).toContain('SIL OPEN FONT LICENSE Version 1.1');
+  });
+
+  it('THIRD-PARTY-NOTICES covers both Mermaid files, under one heading and in the generated section', () => {
+    const text = readRoot('THIRD-PARTY-NOTICES');
+    expect(text).toContain('\nMermaid (assets/mermaid/mermaid.mjs and assets/mermaid/mermaid.frame.js)\n');
+    const section = readNoticesSection(text) ?? '';
+    expect(section.startsWith(NOTICES_BEGIN)).toBe(true);
+    expect(section).toContain('assets/mermaid/mermaid.mjs and assets/mermaid/mermaid.frame.js are Mermaid 12.1.0');
+  });
+
+  it('THIRD-PARTY-NOTICES lists the four runtime libraries, highlight.js, markdown-it, markdown-it-footnote and js-yaml, each with its version, licence and licence text', () => {
+    const packages = dependencyPackages(ROOT);
+    expect(packages.map((p) => p.name)).toEqual(['highlight.js', 'js-yaml', 'markdown-it', 'markdown-it-footnote']);
+    expect(packages.map((p) => p.name)).toEqual(Object.keys(manifest.dependencies ?? {}).filter((n) => !n.startsWith('@types/')).sort());
+    const text = readRoot('THIRD-PARTY-NOTICES');
+    expect(readDependencyNoticesSection(text)).toBe(dependencyNoticesSection(packages));
+    expect(text.indexOf(DEPENDENCY_NOTICES_BEGIN)).toBeGreaterThan(text.indexOf(NOTICES_BEGIN));
+    for (const p of packages) {
+      expect(p.version).toBe(manifest.dependencies?.[p.name]);
+      expect(text).toContain(`${p.name} ${p.version} (${p.licence})`);
+    }
+  });
+
+  it('L3.W10: .github/release-signers names the principal and holds no key line while the package is private', () => {
+    expect(signersProblems(readRoot('.github/release-signers'), manifest.private === true)).toEqual([]);
+  });
+
+  it('L3.W10: the rule refuses a key line while private, and once public refuses a file with no key line or a foreign principal', () => {
+    const header = '# Principal: release-signer.\n';
+    const key = 'release-signer ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixtureKeyMaterialOnlyForTests0000000000 fixture\n';
+    expect(signersProblems(header, true)).toEqual([]);
+    expect(signersProblems(`${header}${key}`, false)).toEqual([]);
+    expect(signersProblems(`${header}${key}`, true)).toEqual(['a key line while the package is private']);
+    expect(signersProblems(header, false)).toEqual(['no key line once the package is public']);
+    expect(signersProblems(`${header}${key.replace('release-signer', 'someone-else')}`, false)).toEqual(['not a release-signer key line: line 2']);
+    expect(signersProblems(`# no principal\n${key}`, false)).toEqual(['the header does not name the principal release-signer']);
   });
 });
