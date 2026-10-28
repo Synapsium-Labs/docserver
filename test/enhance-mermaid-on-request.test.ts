@@ -73,42 +73,40 @@ afterEach(async () => {
 const wordOf = (text: string): string => /\n\s*(\S+)/.exec(text)?.[1] ?? text;
 
 interface Fake {
-  readonly api: { initialize(config: Record<string, unknown>): void; run(o: { nodes: readonly HTMLElement[] }): Promise<void> };
-  /** `run <word>` as each run starts, `done <word>` as it finishes. */
+  readonly api: { initialize(config: Record<string, unknown>): void; render(id: string, text: string, container: Element): Promise<{ svg: string }> };
+  /** `run <word>` as each drawing starts, `done <word>` as it finishes. */
   readonly log: string[];
-  /** Hold every run until release(). */
+  /** Hold every drawing until release(). */
   hold: boolean;
   release(): boolean;
 }
 
-/** A fake Mermaid: each run draws an svg into its node (or, for a word in `fail`, Mermaid's error drawing). */
+/**
+ * A fake Mermaid: each render empties its container and answers an svg's text (or, for a word in `fail`, Mermaid's error
+ * drawing), which the reader puts in that container.
+ */
 function fakeMermaid(fail: readonly string[] = []): Fake {
   const log: string[] = [];
   const held: (() => void)[] = [];
   const fake: Fake = {
     api: {
       initialize() {},
-      run(o) {
-        const node = o.nodes[0] as HTMLElement;
-        const text = node.textContent ?? '';
+      render(id, text, container) {
         const word = wordOf(text);
         log.push(`run ${word}`);
-        const finish = (): void => {
-          node.textContent = '';
+        container.textContent = '';
+        const finish = (): { svg: string } => {
           const svg = document.createElementNS(SVG_NS, 'svg');
+          svg.setAttribute('id', id);
           svg.setAttribute('viewBox', '0 0 300 120');
           if (fail.includes(word)) svg.setAttribute('aria-roledescription', 'error');
-          node.append(svg);
           log.push(`done ${word}`);
+          return { svg: svg.outerHTML };
         };
-        if (!fake.hold) {
-          finish();
-          return Promise.resolve();
-        }
-        return new Promise<void>((resolve) => {
+        if (!fake.hold) return Promise.resolve(finish());
+        return new Promise<{ svg: string }>((resolve) => {
           held.push(() => {
-            finish();
-            resolve();
+            resolve(finish());
           });
         });
       },

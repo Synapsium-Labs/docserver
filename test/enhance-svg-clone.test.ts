@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
+import { DRAWING_ID_PREFIX } from '../src/enhance/diagrams.js';
 import { createJournal } from '../src/enhance/journal.js';
 
 const ids = new Map([
@@ -93,6 +94,40 @@ describe('journal SVG clone', () => {
     expect(style).toContain('#docreader\\.2\\.figure\\.2.hot');
     expect(style).toContain('#docreader\\.2\\.figure\\.2:hover');
     expect(style).toContain('url(#docreader.2.figure.1)');
+  });
+
+  it("rebinds a drawing named with the reader's prefix: its own stylesheet, url(#…) and href references move to the copy", () => {
+    // Since ledger C95(1) every drawing is named DRAWING_ID_PREFIX, then `mermaid-<n>`: the name, and every id
+    // Mermaid derives from it, holds U+00B7, a non-ASCII CSS ident code point (task-8.md, review T8b-C1).
+    const name = `${DRAWING_ID_PREFIX}mermaid-0`;
+    const source = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    source.setAttribute('id', name);
+    source.innerHTML = `<style>#${name}{font-family:serif;}#${name} .node rect{fill:#f3f0e9;}#${name} .marker{fill:url(#${name}_grad);}</style><defs><marker id="${name}_flowchart-v2-pointEnd"><path/></marker><linearGradient id="${name}_grad"/></defs><g class="node" id="${name}-flowchart-A-0"><rect/></g><path class="marker" marker-end="url(#${name}_flowchart-v2-pointEnd)" style="stroke: url(#${name}_grad)"/><use href="#${name}-flowchart-A-0"/>`;
+    const map = new Map([
+      [name, 'docreader.1.figure'],
+      [`${name}_flowchart-v2-pointEnd`, 'docreader.1.figure.1'],
+      [`${name}_grad`, 'docreader.1.figure.2'],
+      [`${name}-flowchart-A-0`, 'docreader.1.figure.3'],
+    ]);
+    const before = source.outerHTML;
+    const { journal } = createJournal(() => true, (fn) => fn());
+
+    const clone = journal.cloneSvg(source, map);
+    const style = clone.querySelector('style')?.textContent ?? '';
+    const path = clone.querySelector('path.marker') as SVGPathElement;
+
+    expect(clone.id).toBe('docreader.1.figure');
+    expect(style).toBe('#docreader\\.1\\.figure{font-family:serif;}#docreader\\.1\\.figure .node rect{fill:#f3f0e9;}#docreader\\.1\\.figure .marker{fill:url(#docreader.1.figure.2);}');
+    expect(path.getAttribute('marker-end')).toBe('url(#docreader.1.figure.1)');
+    expect(path.style.getPropertyValue('stroke')).toMatch(/^url\(["']?#docreader\.1\.figure\.2["']?\)$/);
+    expect(clone.querySelector('use')?.getAttribute('href')).toBe('#docreader.1.figure.3');
+    // Nothing in the copy still names the drawing: every reference resolves inside the copy.
+    expect(clone.outerHTML).not.toContain('·');
+    const inside = new Set([clone.id, ...Array.from(clone.querySelectorAll('[id]'), (el) => el.id)]);
+    const refs = [...clone.outerHTML.matchAll(/url\(\s*(?:["']|&quot;)?#([^"')\s&]+)|href="#([^"]+)"/g)].map((m) => m[1] ?? m[2] ?? '');
+    expect(refs.length).toBeGreaterThanOrEqual(4);
+    expect(refs.filter((ref) => !inside.has(ref))).toEqual([]);
+    expect(source.outerHTML).toBe(before);
   });
 
   it('refuses an initially nonlive clone without calling cloneNode', () => {

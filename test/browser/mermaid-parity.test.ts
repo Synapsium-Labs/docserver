@@ -5,7 +5,9 @@
 //
 // Every diagram of the corpus (each `pre.mermaid` that render() emits for a conformance/corpus document) is drawn once
 // with each build, in a page of its own, with the same configuration and the same render id, and the SVG text each
-// gives (or the message each fails with) must be equal. The configuration is the reader's, as src/enhance/diagrams.ts
+// gives (or the message each fails with) must be equal. The render id is the reader's form (src/enhance/diagrams.ts:
+// DRAWING_ID_PREFIX, its U+00B7 included, then `mermaid-` and a number; ledger C95(1)), so both builds are held equal on
+// the names the reader draws under. The configuration is the reader's, as src/enhance/diagrams.ts
 // exports it (start-on-load off, the `strict` security level, error rendering suppressed, the dagre layout, the text
 // and edge caps, the secure keys, the base theme, its font and theme variables); its dompurify lists are not exported
 // and stay at Mermaid's defaults on both sides. The clock is fixed at one instant in both pages, so nothing
@@ -28,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { buildMermaid, bundleMermaidFrame, FRAME_OUT_FILE, OUT_FILE } from '../../scripts/build-mermaid.mjs';
-import { FONT_FALLBACK, MAX_EDGES, MAX_TEXT_SIZE, secureKeys, THEME_VARIABLES } from '../../src/enhance/diagrams.js';
+import { DRAWING_ID_PREFIX, FONT_FALLBACK, MAX_EDGES, MAX_TEXT_SIZE, secureKeys, THEME_VARIABLES } from '../../src/enhance/diagrams.js';
 import { FRAME_MANIFEST } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import { browserFor, closeBrowsers, describeBrowsers, ORIGIN, POLICIES, type BrowserName } from './harness.js';
@@ -174,20 +176,20 @@ async function drawAll(browser: BrowserName, kind: 'module' | 'classic'): Promis
     await page.waitForFunction(() => document.documentElement.hasAttribute('data-ready'), null, { timeout: 45_000 });
     const ready = await page.evaluate(() => document.documentElement.getAttribute('data-ready'));
     const drawn = await page.evaluate(
-      async ({ sources, config }) => {
+      async ({ sources, config, prefix }) => {
         const api = (window as unknown as { __mermaid: { initialize(c: unknown): void; render(id: string, text: string): Promise<{ svg: string }> } }).__mermaid;
         const out: ({ svg: string } | { error: string })[] = [];
         for (let i = 0; i < sources.length; i++) {
           api.initialize(structuredClone(config));
           try {
-            out.push({ svg: (await api.render(`parity-${String(i)}`, sources[i] ?? '')).svg });
+            out.push({ svg: (await api.render(`${prefix}mermaid-${String(i)}`, sources[i] ?? '')).svg });
           } catch (e) {
             out.push({ error: String((e as { message?: unknown } | null)?.message ?? e) });
           }
         }
         return out;
       },
-      { sources: diagrams.map((d) => d.source), config: CONFIG },
+      { sources: diagrams.map((d) => d.source), config: CONFIG, prefix: DRAWING_ID_PREFIX },
     );
     return { ready, drawn, aborted: [...aborted], missing: [...missing] };
   } finally {
@@ -245,10 +247,10 @@ describeBrowsers((browser) => {
     }));
     expect(Object.keys(failed).sort()).toEqual(Object.keys(FAILS).sort());
     for (const [label, re] of Object.entries(FAILS)) expect(failed[label], label).toMatch(re);
-    // A drawing is a real SVG: each holds its render id.
+    // A drawing is a real SVG: each holds its render id, the reader's prefix and its dot included.
     diagrams.forEach((d, i) => {
       const r = esm.drawn[i];
-      if (r !== undefined && 'svg' in r) expect(r.svg, d.label).toMatch(new RegExp(`^<svg [^>]*id="parity-${String(i)}"`));
+      if (r !== undefined && 'svg' in r) expect(r.svg, d.label).toMatch(new RegExp(`^<svg [^>]*id="${DRAWING_ID_PREFIX}mermaid-${String(i)}"`));
     });
   }, 240_000);
 });

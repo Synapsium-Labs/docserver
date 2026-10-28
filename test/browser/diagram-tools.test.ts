@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { Page } from 'playwright-core';
 import { build } from 'esbuild';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { THEME_VARIABLES } from '../../src/enhance/diagrams.js';
 import { closeBrowsers, describeBrowsers, openDoc } from './harness.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -362,6 +363,62 @@ describeBrowsers((browser) => {
       } finally {
         await doc.close();
       }
+    }
+  });
+
+  // A real drawing is named DRAWING_ID_PREFIX, then `mermaid-<n>` (ledger C95(1)), so its stylesheet, markers and
+  // references all hold U+00B7. The full-screen copy must carry them over to its own ids: its theme rules match the
+  // copy, and every url(#…) and href in it resolves inside it (review T8b-C1).
+  it("rebinds a real drawing's own stylesheet and references to its fullscreen copy, under the reader's drawing name", async () => {
+    const markdown = ['# Theme copy', '', '```mermaid', 'flowchart LR', '  A[Start] --> B[Stop]', '```', '', '*Figure 1. Theme.*'].join('\n');
+    const doc = await openDoc(markdown, { mermaid: {} }, { browser, csp: 'reader' });
+    try {
+      await doc.page.getByRole('button', { name: 'Full screen' }).click();
+      const got = await doc.page.evaluate(() => {
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const source = root.querySelector('figure > pre[data-docreader-chrome] > svg') as SVGSVGElement;
+        const clone = root.querySelector('.fig-overlay.open svg') as SVGSVGElement;
+        const inside = new Set([clone.id, ...Array.from(clone.querySelectorAll('[id]'), (el) => el.id)]);
+        const refs: string[] = [];
+        const urls = (text: string): void => {
+          for (const m of text.matchAll(/url\(\s*["']?#([^"')\s]+)/g)) refs.push(m[1] ?? '');
+        };
+        for (const el of [clone, ...Array.from(clone.querySelectorAll('*'))]) {
+          for (const attr of Array.from(el.attributes)) {
+            urls(attr.value);
+            if (attr.localName === 'href' && attr.value.startsWith('#')) refs.push(attr.value.slice(1));
+          }
+        }
+        const styleText = Array.from(clone.querySelectorAll('style'), (s) => s.textContent ?? '').join('');
+        urls(styleText);
+        const fill = (svg: SVGSVGElement): string | null => {
+          const rect = svg.querySelector('g.node rect');
+          return rect === null ? null : getComputedStyle(rect).fill;
+        };
+        return {
+          dotted: source.id.includes('·'),
+          refs: refs.length,
+          outside: refs.filter((ref) => !inside.has(ref)),
+          styleNamesCopy: styleText.includes(`#${CSS.escape(clone.id)}`),
+          styleNamesSource: styleText.includes(source.id),
+          sourceFill: fill(source),
+          cloneFill: fill(clone),
+        };
+      });
+      const rgb = (hex: string): string => `rgb(${[1, 3, 5].map((i) => String(Number.parseInt(hex.slice(i, i + 2), 16))).join(', ')})`;
+      expect(got).toEqual({
+        dotted: true,
+        refs: expect.any(Number) as number,
+        outside: [],
+        styleNamesCopy: true,
+        styleNamesSource: false,
+        sourceFill: rgb(THEME_VARIABLES.primaryColor),
+        cloneFill: rgb(THEME_VARIABLES.primaryColor),
+      });
+      expect(got.refs).toBeGreaterThan(0);
+      expect(await doc.violations()).toEqual([]);
+    } finally {
+      await doc.close();
     }
   });
 

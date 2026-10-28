@@ -203,8 +203,8 @@ async function enhanceWith(page: Page, module: 'never-loads' | 'never-draws'): P
   await page.evaluate(async (m) => {
     const w = window as unknown as { __dg: { enhance(root: HTMLElement, o: unknown): Promise<void> } };
     const root = document.querySelector('main[data-harness-root]') as HTMLElement;
-    // never-draws: Mermaid's API whose run never settles, so the drawing stays where it is while Mermaid draws.
-    const api = { initialize: () => undefined, run: () => new Promise(() => undefined) };
+    // never-draws: Mermaid's API whose render never settles, so the drawing stays where it is while Mermaid draws.
+    const api = { initialize: () => undefined, render: () => new Promise(() => undefined) };
     const load = m === 'never-loads' ? () => new Promise(() => undefined) : () => Promise.resolve({ default: api });
     await w.__dg.enhance(root, { mermaid: { load } });
     await document.fonts.ready;

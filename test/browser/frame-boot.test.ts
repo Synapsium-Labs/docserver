@@ -739,6 +739,43 @@ describeBrowsers((browser) => {
     }
   }, 120_000);
 
+  // Since ledger C95(1) the reader draws through render(), never run(), so the frame's shape check asks for the
+  // functions the reader calls: initialize and render (Reference §6, amended; review T8b-C2). An API with run and no
+  // render is one the reader cannot use: the frame fails it whole, as it does a missing Mermaid.
+  it('L3.B6b: a Mermaid script replaced by one that registers an API with initialize and run but no render (its hash re-pinned) gives ready, then error mermaid', async () => {
+    await open();
+    try {
+      const nonce = freshNonce();
+      const fake = replaceScript(mermaidOn(DIAGRAMS, nonce), frameCsp(), 'mermaid', registering('mermaid', '{initialize(){},run(){return Promise.resolve();}}'));
+      await host.mount(fake.srcdoc, fake.policy);
+      const rec = await host.waitMessages(2, 30_000);
+      expect(data(rec)).toEqual([{ t: 'ready', v: 1, nonce }, { t: 'error', why: 'mermaid' }]);
+      expect(host.cspConsole).toEqual([]);
+      expect((await host.record()).loads).toHaveLength(1);
+    } finally {
+      await done();
+    }
+  }, 120_000);
+
+  // The other direction: the shape check asks for nothing the reader does not call. An API with initialize and render
+  // and no run passes the boot; its render refuses, so every figure fails on its own (B6's `failed`, no error).
+  it('L3.B6b: a Mermaid script replaced by one that registers an API with initialize and render but no run (its hash re-pinned) gives ready and no error, every figure failed', async () => {
+    await open();
+    try {
+      const nonce = freshNonce();
+      const fake = replaceScript(mermaidOn(DIAGRAMS, nonce), frameCsp(), 'mermaid', registering('mermaid', "{initialize(){},render(){return Promise.reject(new Error('no drawing'));}}"));
+      await host.mount(fake.srcdoc, fake.policy);
+      expect(data(await host.waitMessages(1, 30_000))).toEqual([{ t: 'ready', v: 1, nonce }]);
+      await sleep(300);
+      expect(data(await host.record())).toEqual([{ t: 'ready', v: 1, nonce }]);
+      expect(await host.frame().evaluate(() => document.body.querySelector(':scope > article')?.getAttribute('data-docreader-diagrams') ?? null)).toBe('failed');
+      expect(host.cspConsole).toEqual([]);
+      expect((await host.record()).loads).toHaveLength(1);
+    } finally {
+      await done();
+    }
+  }, 120_000);
+
   it('L3.B7: protocol-relative, target=_blank, area and SVG links, before enhance, keep the frame on its one load', async () => {
     const fixture = [
       '<p><a href="//example.com/p">protocol-relative</a></p>',

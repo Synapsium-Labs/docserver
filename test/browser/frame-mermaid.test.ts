@@ -8,19 +8,24 @@
 //           other kinds the frame's Mermaid draws (frame-shared.ts's KINDS), each figure is drawn alone and every id
 //           inside its SVG collected (the SVG's own, its markers, gradients, clip paths and node ids), with the two
 //           ids Mermaid gives its working elements while it draws (`d` and `i` before the SVG's id). The document is
-//           then drawn again with an anchor for each of those ids ahead of the figure (render()'s `<!-- id:X -->`, whose
-//           grammar covers every id a heading slug can produce too). Mermaid 12.1.0's run() names every drawing
-//           `mermaid-<Date.now()>` (its InitIDGenerator) and every other id of the drawing begins with that name, so
-//           on the page's own clock the anchored drawing would get new ids and the anchors could not meet them. The
-//           row fixes the page's clock (Playwright's page clock, which reaches every frame of the page; its one
-//           instrumentation) so both drawings get the same ids, and asserts that they do: the drawing is named
-//           `mermaid-<NOW>` and its own names are among the anchors. Asserted per case, whatever the ids do: ready with
-//           the right nonce and nothing else, no violation, no request, one load. The plan's criterion (the figure
-//           draws with the same SVG text, every reference inside the SVG (a `url(#…)` in an attribute or its style
-//           element, an `href="#…"`, an aria-labelledby or aria-describedby) resolves as it did in the clean drawing,
-//           and every anchor stays) is its own row, KNOWN RED (`it.fails`) until the coordinator rules on the id
-//           prefix: measured 2026-10-28 on Chromium, every case is damaged (docs/superpowers/plans/l3-mutations/
-//           task-8.md).
+//           then drawn again with an anchor ahead of the figure (render()'s `<!-- id:X -->`, whose grammar covers every
+//           id a heading slug can produce too) for each collected id the grammar admits, and for each collected id's
+//           twins: the id with the drawing's name replaced by the name Mermaid 12.1.0's run() gives a drawing on this
+//           clock (`mermaid-<Date.now()>`), and by the drawing's name without the reader's prefix (the name a drawing
+//           would carry without it, which is also what Mermaid's deterministicIds gives: `mermaid-<n>`). The reader
+//           names each drawing itself, `docreader·mermaid-<n>` (src/enhance/diagrams.ts, DRAWING_ID_PREFIX; ledger
+//           C95(1)), so no anchor can hold a drawing's id and the anchors that come closest are those twins. The row
+//           fixes the page's clock (Playwright's page clock, which reaches every frame of the page; its one
+//           instrumentation), asserts that the frame reads it, and that every twin of the drawing's own three names is
+//           in the anchor grammar, so the row cannot pass by missing: drop the prefix and an anchor holds the drawing's
+//           name (the mutation row). Asserted per case, whatever the ids do: ready with the right nonce and nothing
+//           else, no violation, no request, one load. The plan's criterion is the next row: the figure draws with the
+//           same SVG text, every reference inside the SVG (a `url(#…)` in an attribute or its style element, an
+//           `href="#…"`, an aria-labelledby or aria-describedby) resolves as it did in the clean drawing, and every
+//           anchor stays. Before the prefix it was red in every case (measured 2026-10-28 on Chromium, task-8.md).
+//   L3.B14p The prefix's code point in each engine: in the frame, under frameCsp(), a drawing's id (U+00B7 in it) finds
+//           the drawing as an unescaped CSS id selector, the drawing's own stylesheet (`#<id> …` rules) styles it, and
+//           a `url(#…)` naming an element whose id holds the dot resolves (a clip path that clips a hit test).
 //   L3.B15  The spec's hostile Mermaid cases (the Level 2 cases of conformance/layout/diagrams/): an init directive
 //           whose themeCSS holds `position: fixed`, a click directive with a call and a script link, HTML labels, and
 //           diagrams over maxTextSize and over maxEdges, both at the ceilings a host cannot raise (MERMAID_LIMIT_CEILINGS,
@@ -35,6 +40,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse, type DefaultTreeAdapterMap } from 'parse5';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { DRAWING_ID_PREFIX, THEME_VARIABLES } from '../../src/enhance/diagrams.js';
 import { frameCsp, MERMAID_LIMIT_CEILINGS, type FrameAssets, type FrameOptions } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import { openFrameHost, type FrameHost } from './frame-host-page.js';
@@ -160,19 +166,23 @@ describeBrowsers((browser) => {
     readonly damaged: Record<string, Damage>;
     readonly cases: number;
     readonly collected: number;
+    /** Collected ids the anchor grammar admits (anchored as they are). */
     readonly anchored: number;
+    /** Collected ids the anchor grammar refuses: every id holding the drawing's name, the prefix's dot in it. */
     readonly unproducible: number;
+    /** Twins anchored: run()'s name and the prefix-less name in place of the drawing's. */
+    readonly twins: number;
     readonly timed: number;
     readonly untimed: readonly string[];
+    readonly names: readonly string[];
   }
 
   /**
-   * Run every B14 case with the frame's clock fixed at NOW, so the anchored drawing gets the clean drawing's ids and
-   * every anchor meets the id it names. The parts that hold whatever the ids do are asserted here, per case: the frame's
-   * clock reads NOW in both mounts, the drawing is named `mermaid-<NOW>`, its own three names are among the anchors (so
-   * the collision is certain, never left to the clock), and the anchored mount readies with its nonce and nothing else,
-   * with no violation, no request and one load. The drawing's text, its references and the anchors are measured and
-   * answered, for the plan's criterion (the next row).
+   * Run every B14 case with the frame's clock fixed at NOW. The parts that hold whatever the ids do are asserted here,
+   * per case: the frame's clock reads NOW in both mounts; the twins of the drawing's own three names (its name, `d` and
+   * `i` before it) are in the anchor grammar and among the anchors, so the row cannot pass by missing; and the anchored
+   * mount readies with its nonce and nothing else, with no violation, no request and one load. The drawing's text, its
+   * references and the anchors are measured and answered, for the plan's criterion (the next row).
    */
   const runB14 = async (): Promise<B14> => {
     const handle = await browserFor(browser);
@@ -182,8 +192,10 @@ describeBrowsers((browser) => {
     let collected = 0;
     let anchored = 0;
     let unproducible = 0;
+    let twinCount = 0;
     let timed = 0;
     const untimed: string[] = [];
+    const names: string[] = [];
     for (const [label, source] of cases) {
       const md = fence(source, 'Figure 1. One diagram.');
       const mount = async (doc: string): Promise<{ host: FrameHost; nonce: string }> => {
@@ -207,21 +219,32 @@ describeBrowsers((browser) => {
       }
       expect(clean, `${label}: the clean drawing`).not.toBeNull();
       if (clean === null || clean === undefined) continue;
-      expect(clean.svgId, `${label}: the drawing's name`).toBe(`mermaid-${String(NOW)}`);
+      names.push(clean.svgId);
       // Mermaid's own drawing may name a reference it never defines (the sequence diagram's style names a gradient);
       // none of its references may leave the SVG.
       expect(Object.entries(clean.refs).filter(([, w]) => w === 'outside'), `${label}: the clean drawing's own references`).toEqual([]);
       const ids = [...new Set([...clean.ids, `d${clean.svgId}`, `i${clean.svgId}`])];
       const producible = ids.filter((id) => ANCHOR.test(id));
-      // The row cannot pass by missing: the anchors name the drawing itself and its two working elements, which the
-      // anchored mount, on the same fixed clock, gives the same names.
-      expect([clean.svgId, `d${clean.svgId}`, `i${clean.svgId}`].filter((id) => !producible.includes(id)), `${label}: the drawing's own names anchored`).toEqual([]);
+      // Each id's twins: the drawing's name in it replaced by run()'s name on this clock, and by itself without the
+      // reader's prefix.
+      const bare = clean.svgId.split(DRAWING_ID_PREFIX).join('');
+      const twinsOf = (id: string): string[] => (id.includes(clean.svgId) ? [id.split(clean.svgId).join(`mermaid-${String(NOW)}`), id.split(clean.svgId).join(bare)] : []);
+      const twins = [...new Set(ids.flatMap(twinsOf))].filter((id) => !producible.includes(id));
+      // The row cannot pass by missing: the twins of the drawing's own three names are anchors.
+      const own = [clean.svgId, `d${clean.svgId}`, `i${clean.svgId}`].flatMap(twinsOf);
+      expect(own.length, `${label}: the drawing's own names' twins`).toBe(6);
+      expect(own.filter((id) => !ANCHOR.test(id)), `${label}: the drawing's own names' twins in the anchor grammar`).toEqual([]);
+      // No id slips through: every id the anchor grammar refuses names the drawing, so it is anchored as its twins
+      // (review E2: an id outside the grammar that did not name the drawing would be neither anchored nor twinned).
+      expect(ids.filter((id) => !ANCHOR.test(id) && !id.includes(clean.svgId)), `${label}: ids outside the anchor grammar that do not name the drawing`).toEqual([]);
+      const anchorIds = [...producible, ...twins.filter((id) => ANCHOR.test(id))];
       collected += ids.length;
       anchored += producible.length;
       unproducible += ids.length - producible.length;
+      twinCount += anchorIds.length - producible.length;
       timed += ids.filter((id) => id.includes(clean.svgId)).length;
       untimed.push(...ids.filter((id) => !id.includes(clean.svgId)).map((id) => `${label}: ${id}`));
-      const anchors = producible.map((id) => `<!-- id:${id} -->\n\nAn anchor named ${id}.\n`).join('\n');
+      const anchors = anchorIds.map((id) => `<!-- id:${id} -->\n\nAn anchor named ${id}.\n`).join('\n');
       const second = await mount(`# Collide\n\n${anchors}\n${md}`);
       try {
         const rec = await second.host.record();
@@ -229,7 +252,7 @@ describeBrowsers((browser) => {
         const kept = await second.host.frame().evaluate((xs) => xs.filter((id) => {
           const el = document.getElementById(id);
           return el !== null && el.closest('figure') === null;
-        }), producible);
+        }), anchorIds);
         // Whatever the ids do: one ready with this mount's nonce and nothing else, no violation, no request, one load.
         expect({ label, messages: data(rec), violations: second.host.cspConsole.length, leaks: second.host.requests.filter((r) => !r.main).length, loads: rec.loads.length }).toEqual({
           label,
@@ -244,19 +267,19 @@ describeBrowsers((browser) => {
           // Every reference resolves as it did in the clean drawing: inside the SVG, or (Mermaid's own dangling one) to
           // nothing; never to an authored element.
           moved: drawn === null || drawn === undefined ? null : movedRefs(clean, drawn),
-          lostAnchors: producible.filter((id) => !kept.includes(id)),
+          lostAnchors: anchorIds.filter((id) => !kept.includes(id)),
         };
         if (!(damage.drawn && damage.sameText && damage.moved?.length === 0 && damage.lostAnchors.length === 0)) damaged[label] = damage;
       } finally {
         await second.host.close();
       }
     }
-    return { damaged, cases: cases.length, collected, anchored, unproducible, timed, untimed };
+    return { damaged, cases: cases.length, collected, anchored, unproducible, twins: twinCount, timed, untimed, names };
   };
 
   let b14: B14 | undefined;
 
-  it("L3.B14 (measurement row): an anchor for every id of each diagram kind's drawing, the frame's clock fixed so the anchored drawing gets the same ids: every anchor meets its id, and the frame still readies with no violation, no request and one load", async () => {
+  it("L3.B14 (measurement row): an anchor for every id of each diagram kind's drawing the grammar admits and for each id's twins (run()'s name, the prefix-less name), the frame's clock fixed: the frame still readies with no violation, no request and one load", async () => {
     const got = await runB14();
     b14 = got;
     const damage = Object.values(got.damaged);
@@ -264,30 +287,109 @@ describeBrowsers((browser) => {
     figure('L3.B14', browser, 'idsCollected', got.collected);
     figure('L3.B14', browser, 'idsAnchored', got.anchored);
     figure('L3.B14', browser, 'idsOutsideAnchorGrammar', got.unproducible);
-    figure('L3.B14', browser, 'idsNamingTheDrawingsTime', got.timed);
+    figure('L3.B14', browser, 'twinsAnchored', got.twins);
+    figure('L3.B14', browser, 'idsNamingTheDrawing', got.timed);
     figure('L3.B14', browser, 'casesDamaged', damage.length);
     figure('L3.B14', browser, 'casesDrawingTaken', damage.filter((d) => !d.sameText).length);
     figure('L3.B14', browser, 'anchorsRemoved', damage.reduce((n, d) => n + d.lostAnchors.length, 0));
     figure('L3.B14', browser, 'referencesTaken', damage.reduce((n, d) => n + (d.moved?.filter((m) => m.endsWith('-> outside')).length ?? 0), 0));
     console.warn(`frame-measure: ${JSON.stringify({ label: 'L3.B14 ids not naming the drawing', browser, ids: got.untimed })}`);
+    console.warn(`frame-measure: ${JSON.stringify({ label: 'L3.B14 drawing names', browser, names: got.names })}`);
     console.warn(`frame-measure: ${JSON.stringify({ label: 'L3.B14 damage', browser, damaged: got.damaged })}`);
-    expect(got.unproducible).toBe(0);
-    expect(got.anchored).toBe(got.collected);
+    expect(got.names).toHaveLength(got.cases);
+    // Every id that is not the drawing's own is anchored as it is; each holding the drawing's name is anchored as twins:
+    // the ids outside the anchor grammar are exactly those naming the drawing (asserted per case in runB14).
+    expect(got.unproducible).toBe(got.timed);
+    expect(got.twins).toBeGreaterThanOrEqual(2 * got.timed);
   }, 900_000);
 
-  // The plan's criterion for L3.B14, on what the row above measured. KNOWN RED, AWAITING THE COORDINATOR'S RULING
-  // (Task 8 review finding T8-C1): Mermaid 12.1.0 names each drawing `mermaid-<Date.now()>` and looks that name up in
-  // the whole document while it draws, so an authored anchor that names the drawing's millisecond takes the drawing,
-  // loses its own `d…` twin, and takes marker and gradient references (measured 2026-10-28 on Chromium: 14 of 14 cases;
-  // docs/superpowers/plans/l3-mutations/task-8.md). The plan's answer is an id prefix render() cannot emit, and the
-  // ruling picks how. `it.fails` keeps the red visible without failing CI: when the fix lands this row passes, which
-  // vitest reports as a failure, and the row becomes a plain `it` with the fix's own mutation row.
-  it.fails('L3.B14 (KNOWN RED, awaiting the ruling on the id prefix): every diagram draws with SVG text equal to the clean one, every reference resolves as in the clean drawing, and every anchor stays', () => {
-    // With nothing measured (the row above red, or this row run alone) this body passes, which `it.fails` reports as
-    // red: the row is never green without a measurement behind it.
-    if (b14 === undefined) return;
-    expect(b14.damaged).toEqual({});
+  // The plan's criterion for L3.B14, on what the row above measured. Mermaid 12.1.0's run() names each drawing
+  // `mermaid-<Date.now()>` and looks that name up in the whole document while it draws, so an authored anchor naming
+  // the drawing's millisecond took the drawing, lost its own `d…` twin, and took marker and gradient references
+  // (measured 2026-10-28 on Chromium: 14 of 14 cases, then KNOWN RED). Ledger C95(1): the reader draws through
+  // render() under a name with a prefix render() cannot emit, so this row is plain; its mutation row drops the prefix.
+  it('L3.B14: every diagram draws with SVG text equal to the clean one, every reference resolves as in the clean drawing, and every anchor stays', () => {
+    // Never green without a measurement behind it: the row above must have run.
+    expect(b14, 'the measurement row ran').toBeDefined();
+    expect(b14?.damaged).toEqual({});
   });
+
+  it("L3.B14p: the prefix's code point in the frame: a drawing's id finds it as an unescaped id selector, its own stylesheet styles it, and a url(#…) naming an id with the dot resolves", async () => {
+    const host = await openFrameHost(await browserFor(browser));
+    try {
+      const nonce = freshNonce();
+      await host.mount(srcdocFor(withMermaid(), `# One\n\n${fence('flowchart LR\n  A[Start] --> B[Stop]', 'Figure 1. One.')}`, nonce, { mermaid: {} }), frameCsp());
+      await waitProgress(host, 1, `L3.B14p ${browser}`);
+      await sleep(200);
+      expect({ messages: data(await host.record()), violations: host.cspConsole }).toEqual({ messages: [readyOf(nonce)], violations: [] });
+      const got = await host.frame().evaluate((prefix) => {
+        const svg = document.querySelector('figure.mermaid-figure svg');
+        if (svg === null) return null;
+        const id = svg.id;
+        const rect = svg.querySelector('g.node rect');
+        // From the parent's side: a square clipped to its top-left 10 px by url(#…) naming a clip path whose id holds
+        // the dot, and beside it the control, the same square unclipped (so a miss is the clip's, not the hit test's).
+        const ns = 'http://www.w3.org/2000/svg';
+        const probe = document.createElementNS(ns, 'svg');
+        probe.setAttribute('width', '300');
+        probe.setAttribute('height', '100');
+        const clip = document.createElementNS(ns, 'clipPath');
+        clip.id = `${prefix}probe-clip`;
+        const small = document.createElementNS(ns, 'rect');
+        small.setAttribute('width', '10');
+        small.setAttribute('height', '10');
+        clip.append(small);
+        probe.append(clip);
+        const square = (x: number, ref: string | null): SVGRectElement => {
+          const r = document.createElementNS(ns, 'rect');
+          r.setAttribute('x', String(x));
+          r.setAttribute('width', '100');
+          r.setAttribute('height', '100');
+          if (ref !== null) r.setAttribute('clip-path', `url(#${ref})`);
+          probe.append(r);
+          return r;
+        };
+        const clipped = square(0, `${prefix}probe-clip`);
+        const control = square(150, null);
+        clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
+        document.body.prepend(probe);
+        probe.scrollIntoView();
+        const at = (el: Element, dx: number, dy: number): boolean => {
+          const b = probe.getBoundingClientRect();
+          return document.elementFromPoint(b.left + dx, b.top + dy) === el;
+        };
+        const out = {
+          id,
+          dot: id.includes('\u00b7'),
+          selector: document.querySelector(`#${id}`) === svg,
+          working: document.querySelectorAll(`#d${id}, #i${id}`).length,
+          ownRule: Array.from(svg.querySelectorAll('style'), (st) => st.textContent ?? '').some((t) => t.includes(`#${id} `)),
+          fill: rect === null ? null : getComputedStyle(rect).fill,
+          clippedInside: at(clipped, 5, 5),
+          clippedOutside: at(clipped, 50, 50),
+          controlOutside: at(control, 200, 50),
+        };
+        probe.remove();
+        return out;
+      }, DRAWING_ID_PREFIX);
+      const rgb = (hex: string): string => `rgb(${[1, 3, 5].map((i) => String(Number.parseInt(hex.slice(i, i + 2), 16))).join(', ')})`;
+      expect(got).toEqual({
+        id: `${DRAWING_ID_PREFIX}mermaid-0`,
+        dot: true,
+        selector: true,
+        working: 0,
+        ownRule: true,
+        // The drawing's own `#<id> .node rect` rule gives the warm theme's node fill; without it, the fill is black.
+        fill: rgb(THEME_VARIABLES.primaryColor),
+        clippedInside: true,
+        clippedOutside: false,
+        controlOutside: true,
+      });
+      figure('L3.B14p', browser, 'drawingId', JSON.stringify(got?.id ?? null));
+    } finally {
+      await host.close();
+    }
+  }, 180_000);
 
   it('L3.B15: the hostile Mermaid cases under frameCsp(): no injected style, no handler, zero violations, ready with no error, each over-limit diagram shown as its source', async () => {
     const handle = await browserFor(browser);
