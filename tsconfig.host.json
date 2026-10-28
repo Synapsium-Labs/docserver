@@ -3,8 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": []
+    "types": ["node"]
   },
-  "include": ["src/host"],
+  "include": ["src/host", "src/types/markdown-it-footnote.d.ts", "test/host-*.test.ts"],
   "exclude": []
 }

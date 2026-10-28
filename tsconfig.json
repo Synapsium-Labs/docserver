@@ -17,5 +17,5 @@
     "noEmit": true
   },
   "include": ["src", "test", "vitest.config.ts"],
-  "exclude": ["src/enhance", "src/frame-runtime", "test/enhance-*.test.ts", "test/frame-runtime.test.ts", "test/browser"]
+  "exclude": ["src/enhance", "src/frame-runtime", "src/host", "test/enhance-*.test.ts", "test/frame-runtime.test.ts", "test/host-*.test.ts", "test/browser"]
 }
