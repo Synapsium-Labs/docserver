@@ -998,7 +998,7 @@ Also: `public-ready.test.ts` pins `publishConfig`, `repository.url`, LICENSE (MI
 
 **Acceptance tests** (`test/ci-workflow.test.ts`):
 - L3.CI1: the apt step exists, precedes the install, and sets the three values;
-- L3.CI2: the install step's command is `INSTALL`, wrapped in a loop of exactly two attempts under `timeout`, with `timeout-minutes` set; the job timeout is 45;
+- L3.CI2: the install step's command is `INSTALL`, wrapped in a loop of exactly two attempts under `timeout`, with `timeout-minutes` set; the job timeout is 45 (75 since 2026-10-28, ledger C100: the suite step alone grew to 36.4 minutes, so the install step's worst case and the suite no longer fit in 45);
 - L3.CI3: the cache step precedes the install, its path is the Playwright browser directory, and its key embeds the `playwright-core` version from `package.json` (the test reads both);
 - L3.CI4: every remote `uses:` (`owner/repo[/path]@ref`) is a 40-hex sha with its tag in a trailing comment, and `ci.yml` holds no local `./` `uses:`.
 

@@ -11,7 +11,7 @@
 // L3 Task 17 hardens that install against a stalling package mirror (rows L3.CI1 to L3.CI4): apt retries and
 // short timeouts, a browser cache keyed on the runner (its OS, its architecture and its OS release, which together
 // pick the browser builds playwright-core downloads) and the pinned playwright-core, at most two bounded install
-// attempts inside a step timeout, a 45-minute job, and every remote action pinned by full commit sha with its tag
+// attempts inside a step timeout, a 75-minute job (45 until the suite outgrew it), and every remote action pinned by full commit sha with its tag
 // in a trailing comment (release.yml reuses this workflow, so it holds no local `uses:`). The three shell steps
 // that carry those rules are run here, in bash as GitHub runs a `run:` step (`bash -e`), with fake `sudo`, `tee`
 // and `npx` first on PATH, and the version step reading a fixture in place of /etc/os-release, so their behaviour is
@@ -319,10 +319,17 @@ describe('ci.yml: the test job', () => {
     expect(Object.keys(jobs)).toEqual(['test']);
   });
 
-  it('runs on Node 22 and 24, both legs to the end, within 45 minutes (L3.CI2: two install attempts and the suite fit)', () => {
+  it('runs on Node 22 and 24, both legs to the end, within 75 minutes (L3.CI2: two install attempts and the suite fit)', () => {
     expect(test.name).toBe('test (${{ matrix.node }})');
     expect(test['runs-on']).toBe('ubuntu-latest');
-    expect(test['timeout-minutes']).toBe(45);
+    expect(test['timeout-minutes']).toBe(75);
+    // The budget, measured: the suite step took 35.5 and 36.4 minutes on the two legs of the CI run that landed Task
+    // 14 (2026-10-28), and every other step about 3 minutes together. The job must hold the install step's worst case
+    // (its own timeout, two stalled attempts) plus that suite with a quarter of headroom, so a stalling mirror is never
+    // what fails the job.
+    const SUITE_MEASURED_MIN = 36.4;
+    const OTHER_STEPS_MIN = 3;
+    expect((install?.['timeout-minutes'] ?? Infinity) + Math.ceil(SUITE_MEASURED_MIN * 1.25) + OTHER_STEPS_MIN).toBeLessThanOrEqual(test['timeout-minutes'] ?? 0);
     expect(test.strategy?.['fail-fast']).toBe(false);
     expect(test.strategy?.matrix?.node).toEqual([22, 24]);
   });

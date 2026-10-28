@@ -54,7 +54,9 @@ jobs:
   test:
     name: test (${{ matrix.node }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The install step's worst case (22 minutes, two stalled attempts) plus the suite (36.4 minutes measured on
+    # 2026-10-28) with a quarter of headroom; test/ci-workflow.test.ts holds the sum.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
