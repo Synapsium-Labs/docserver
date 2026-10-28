@@ -10,8 +10,9 @@
 // channel's own end by name, so a row can answer the frame on it (`send`: prefs, a changes.result). It is a test page,
 // not `./host`: its window `message` listener only records strays.
 //
-// The parent page has no policy of its own: a srcdoc frame inherits its embedder's policy container, so a strict one
-// here would also bind the frame (design R7; the plan's HB rows measure that).
+// The parent page has no policy of its own unless a row asks for one (`PageHow.policy`, sent as the page's
+// Content-Security-Policy header): a srcdoc frame inherits its embedder's policy container, so a strict one here also
+// binds the frame (design R7; the plan's HB rows measure that, and Task 16's on-request row its inline-style half).
 //
 // CSP violations are collected from the parent's side only (brief amendment 4): every console message of the page or
 // any of its frames that names a Content Security Policy is kept in `cspConsole`. On Chromium Playwright's console
@@ -69,6 +70,12 @@ export interface InitHow {
   readonly observeDiagrams?: boolean;
   readonly diagramsAtReady?: boolean;
   readonly stepWallClock?: boolean;
+}
+
+/** How the host page itself is served. */
+export interface PageHow {
+  /** The page's own Content-Security-Policy header; absent, the page has none. */
+  readonly policy?: string;
 }
 
 /** How the page builds the iframe. */
@@ -261,8 +268,8 @@ export interface FrameHost {
   close(): Promise<void>;
 }
 
-/** Open the host page in a fresh context of `browser`. */
-export async function openFrameHost(browser: Browser, how: InitHow = {}): Promise<FrameHost> {
+/** Open the host page in a fresh context of `browser`, served with `served.policy` as its own policy when given. */
+export async function openFrameHost(browser: Browser, how: InitHow = {}, served: PageHow = {}): Promise<FrameHost> {
   const context: BrowserContext = await browser.newContext({
     viewport: { width: 1200, height: 900 },
     deviceScaleFactor: 1,
@@ -285,7 +292,9 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}): Promis
     requests.push({ url: req.url(), main });
     const url = new URL(req.url());
     if (url.origin === ORIGIN && url.pathname === '/') {
-      await route.fulfill({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, body: PAGE });
+      const headers: Record<string, string> = { 'content-type': 'text/html; charset=utf-8' };
+      if (served.policy !== undefined) headers['content-security-policy'] = served.policy;
+      await route.fulfill({ status: 200, headers, body: PAGE });
     } else if (url.origin === ORIGIN) {
       await route.fulfill({ status: 404, body: '' });
     } else {

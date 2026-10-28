@@ -90,7 +90,7 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
     };
     const n = normalizeOptions(options);
     expect([n.posKey, n.keyboard, n.chrome, n.rules, n.initialHash]).toEqual(['project-a:specs:x.md#pos', false, { bar: false, rail: true, settings: true }, true, '2-design']);
-    expect(n.mermaid).toEqual({ maxTextSize: 20_000, maxEdges: 300, secure: ['look', 'handDrawnSeed'] });
+    expect(n.mermaid).toEqual({ maxTextSize: 20_000, maxEdges: 300, secure: ['look', 'handDrawnSeed'], draw: 'auto' });
     for (const [name, fn] of Object.entries(fns)) expect(n.callbacks[name as HostCallback]).toEqual({ fn, self: options });
     expect(n.callbacks.mermaid).toEqual({ fn: load, self: options.mermaid });
     expect(n.info).toEqual({ title: undefined, frontList: undefined, sha: SHA40, draft: true, commits: [entry()], only: SHA64 });
@@ -114,7 +114,7 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
   it('chrome fields default to true one by one; a mermaid object without limits leaves them to the library', () => {
     expect(normalizeOptions({ chrome: {} }).chrome).toEqual({ bar: true, rail: true, settings: true });
     expect(normalizeOptions({ chrome: { settings: false } }).chrome).toEqual({ bar: true, rail: true, settings: false });
-    expect(normalizeOptions({ mermaid: { load } }).mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [] });
+    expect(normalizeOptions({ mermaid: { load } }).mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [], draw: 'auto' });
   });
 
   it('what features read is frozen: chrome, the mermaid limits and keys, commits and their entries', () => {
@@ -706,7 +706,7 @@ describe('host: the lifecycle wires it to the instance', () => {
     expect(ctx.host.present.names).toEqual(['copy', 'onLink', 'mermaid']);
     expect(Object.keys(ctx.options).sort()).toEqual(['chrome', 'folds', 'info', 'initialHash', 'keyboard', 'mermaid', 'namespace', 'posKey', 'prefs', 'rules', 'signal', 'storage', 'storageKey', 'vocabulary']);
     expect(Object.values(ctx.options).some((v) => typeof v === 'function')).toBe(false);
-    expect(ctx.options.mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [] });
+    expect(ctx.options.mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [], draw: 'auto' });
   });
 
   it('a callback is called as a method of the options object', async () => {

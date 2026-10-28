@@ -20,7 +20,7 @@ const REQUIRED_CHROME_CLASSES = [
   'cm-days-wrap', 'cm-group', 'cm-hint', 'cm-item', 'cm-lab', 'cm-main', 'cm-more',
   'cm-n', 'cm-only', 'cm-s', 'cm-st', 'cm-t', 'cn', 'cnt', 'count', 'ct-caret',
   'ct-label', 'dn-dot', 'dn-ring', 'doc-facts', 'doc-progress', 'doc-toc', 'dot',
-  'eyebrow', 'fact', 'facts-body', 'fig-error', 'fig-no', 'fig-overlay', 'fig-src',
+  'eyebrow', 'fact', 'facts-body', 'fig-error', 'fig-no', 'fig-overlay', 'fig-render', 'fig-render-btn', 'fig-src',
   'fn-m', 'fn-s', 'fn-t', 'fo-bar', 'fo-btns', 'fo-cap', 'fo-stage', 'fold-note',
   'fs-k', 'gt', 'h-anchor', 'h-ctl', 'h-fold', 'hide', 'ic', 'item-arrow',
   'item-link', 'ix', 'ix-group', 'jk', 'jt', 'jump', 'jump-btn', 'jump-hint', 'kb',

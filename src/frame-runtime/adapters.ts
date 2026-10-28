@@ -22,9 +22,15 @@
 //   docreader:pos:doc           doc:pos
 //   docreader:doc:doc:<name>    doc:<name>, <name> a DOC_FIELDS member other than pos
 //   anything else               dropped, never sent
+//
+// Mermaid (docserver L3, Task 16): enhanceMermaid() is enhance's `mermaid` option from the seed's (its caps when given,
+// its secure keys and its `draw`, passed through unchanged) with a load() that answers the registered API; and
+// waitsForDrawing() is the ready rule: ready waits for the first full pass only in 'auto' mode (FD13, FD18); and
+// probesInlineStyle() says when the bootstrap asks for inline style before ready instead: in 'on-request' mode, whose
+// first drawing comes after ready (styles.ts; fix round, review S1; Reference §11.5, ruling R7).
 import { isFragmentId } from '../frame/fragment.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey } from '../frame/protocol.js';
-import type { Seed } from '../frame/seed.js';
+import type { Seed, SeedMermaid } from '../frame/seed.js';
 import type { ChangesAnswer, Outbox } from './outbox.js';
 
 /** L2's namespace, storage key and position key inside the frame (FD7: no document identity in the frame). */
@@ -141,4 +147,31 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
       : {}),
     link: navigate,
   };
+}
+
+/** enhance's `mermaid` option for a frame whose seed asks for Mermaid: the seed's settings, `draw` included, and the API. */
+export function enhanceMermaid(
+  m: SeedMermaid,
+  api: object,
+): { maxTextSize?: number; maxEdges?: number; secure: readonly string[]; draw: SeedMermaid['draw']; load: () => Promise<unknown> } {
+  return {
+    ...(m.maxTextSize === undefined ? {} : { maxTextSize: m.maxTextSize }),
+    ...(m.maxEdges === undefined ? {} : { maxEdges: m.maxEdges }),
+    secure: m.secure,
+    draw: m.draw,
+    load: () => Promise.resolve(api),
+  };
+}
+
+/** Whether ready waits for Mermaid's first full pass: only with Mermaid on in 'auto' mode; never on request (FD13). */
+export function waitsForDrawing(m: SeedMermaid | null): boolean {
+  return m !== null && m.draw === 'auto';
+}
+
+/**
+ * Whether the bootstrap asks for inline style before ready (styles.ts): only with Mermaid on and drawn on request, where
+ * Mermaid's own first request for it comes on a tap, after ready (fix round, review S1; ruling R7).
+ */
+export function probesInlineStyle(m: SeedMermaid | null): boolean {
+  return m !== null && m.draw === 'on-request';
 }
