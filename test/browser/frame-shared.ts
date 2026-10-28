@@ -233,7 +233,7 @@ const EMPTY: HostRecord = { messages: [], loads: [], closes: [], windowMessages:
  * the wait's control row in frame-csp.test.ts pins it). Nothing is retried: a document gets one mount. A wait that ran
  * past `stallMs`, or gave up, is printed as a `frame-wait:` line, so a slow document stays visible in the log.
  */
-export async function waitProgress(host: FrameHost, n: number, label: string, stallMs = STALL_MS, capMs = WAIT_CAP_MS, busyMs = BUSY_MS): Promise<Waited> {
+export async function waitProgress(host: Pick<FrameHost, 'record' | 'frame'>, n: number, label: string, stallMs = STALL_MS, capMs = WAIT_CAP_MS, busyMs = BUSY_MS): Promise<Waited> {
   const start = Date.now();
   let rec: HostRecord | null = null;
   let lastRec = '';

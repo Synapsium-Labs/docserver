@@ -50,13 +50,23 @@ const portsOf = (n: number): readonly unknown[] => Array.from({ length: n }, () 
 const FRAME_TO_PARENT = CASES.messages.filter((c) => c.direction === 'frame-to-parent');
 
 describe('tsconfig.host.json: ./host typechecks in its own DOM project (Reference §12)', () => {
-  it('extends the base, includes src/host alone, has the DOM lib and no ambient types', () => {
+  // Task 10 (ledger C88(6)) moved src/host and its tests out of the root project, which has no DOM library, into this
+  // one; the tests need Node's types, so the project has them, and test/host-walls.test.ts compiles src/host alone with
+  // the DOM library and no ambient types, so the library still uses no Node API.
+  it('extends the base, includes src/host and its tests, has the DOM lib and Node types for the tests', () => {
     const cfg = JSON.parse(readText('tsconfig.host.json')) as { extends: string; compilerOptions: Record<string, unknown>; include: string[]; exclude?: string[] };
     expect(cfg.extends).toBe('./tsconfig.json');
-    expect(cfg.include).toEqual(['src/host']);
+    expect(cfg.include).toEqual(['src/host', 'src/types/markdown-it-footnote.d.ts', 'test/host-*.test.ts']);
     expect(cfg.exclude).toEqual([]);
     expect(cfg.compilerOptions['lib']).toEqual(['ES2022', 'DOM', 'DOM.Iterable']);
-    expect(cfg.compilerOptions['types']).toEqual([]);
+    expect(cfg.compilerOptions['types']).toEqual(['node']);
+  });
+
+  it('the root project leaves src/host and its tests out (its library has no DOM)', () => {
+    const cfg = JSON.parse(readText('tsconfig.json')) as { compilerOptions: Record<string, unknown>; exclude: string[] };
+    expect(cfg.compilerOptions['lib']).toEqual(['ES2022']);
+    expect(cfg.exclude).toContain('src/host');
+    expect(cfg.exclude).toContain('test/host-*.test.ts');
   });
 });
 
