@@ -1,0 +1,11 @@
+# Code owners (docserver L3, Task 14). A change under any path below needs a code owner's review before it merges,
+# once branch protection requires code-owner review. They are the paths a release trusts most: the workflows and the
+# release signers file (.github/), the shipped assets and their manifest (assets/), the sealed reader frame and its
+# runtime (src/frame*, which matches src/frame/ and src/frame-runtime/), and the host helper that mounts it (src/host/).
+# The owner is the organisation's `maintainers` team. GitHub ignores a rule whose owner it cannot resolve, so that team
+# must exist with write access to this repository before a ruleset requires code-owner review (a maintainers' step,
+# taken with the rulesets at the v1 release).
+/.github/ @Synapsium-Labs/maintainers
+/assets/ @Synapsium-Labs/maintainers
+/src/frame* @Synapsium-Labs/maintainers
+/src/host/ @Synapsium-Labs/maintainers

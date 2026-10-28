@@ -1,0 +1,11 @@
+# Allowed signers for release tags (ssh-keygen's allowed-signers format; docserver L3, Task 14).
+#
+# Principal: release-signer. The release workflow (.github/workflows/release.yml, its verify-tag job) runs
+#   git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile=.github/release-signers verify-tag "$TAG"
+# against main's copy of this file, and refuses a tag unless the file holds at least one key line for this principal:
+#   release-signer <key type> <public key> [comment]
+#
+# This file holds no key line yet. The key line is the operator's, supplied for the v1 release; it lands in the v1
+# release pull request, beside the change that makes the package public, and never earlier.
+# test/public-ready.test.ts (L3.W10) holds that rule: no key line while package.json is private, at least one
+# release-signer key line once it is not.

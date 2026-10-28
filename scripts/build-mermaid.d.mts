@@ -1,6 +1,6 @@
 // Types for scripts/build-mermaid.mjs, which runs under plain Node and is imported by test/mermaid-bundle.test.ts,
-// test/mermaid-frame.test.ts, test/browser/mermaid-file.test.ts, test/browser/mermaid-parity.test.ts and
-// scripts/build-frame.mjs.
+// test/mermaid-frame.test.ts, test/browser/mermaid-file.test.ts, test/browser/mermaid-parity.test.ts,
+// test/public-ready.test.ts and scripts/build-frame.mjs.
 import type { Metafile } from 'esbuild';
 
 /** What one build gives. */
@@ -59,6 +59,10 @@ export declare const FREE_DEFINES: Readonly<Record<string, string>>;
 export declare const SHARED_OPTIONS: Readonly<Record<string, unknown>>;
 export declare const NOTICES_BEGIN: string;
 export declare const NOTICES_END: string;
+export declare const NOTICES_HEADING: string;
+export declare const DEPENDENCY_NOTICES_BEGIN: string;
+export declare const DEPENDENCY_NOTICES_END: string;
+export declare const DEPENDENCY_NOTICES_HEADING: string;
 export declare const NO_LICENCE_FIELD: string;
 export declare const EMBEDDED: readonly EmbeddedPackage[];
 export declare function buildMermaid(options?: { root?: string }): Promise<Built>;
@@ -71,3 +75,9 @@ export declare function embeddedMarkers(metafile: Metafile, root?: string): Embe
 export declare function noticesSection(packages: readonly BundledPackage[]): string;
 export declare function readNoticesSection(text: string): string | null;
 export declare function withNoticesSection(text: string, section: string): string;
+export declare function mergeMetafiles(...metafiles: readonly Metafile[]): Metafile;
+/** The runtime libraries (L3 Task 14), as the second generated section lists them; `dir` is node_modules/<name>. */
+export declare function dependencyPackages(root?: string): BundledPackage[];
+export declare function dependencyNoticesSection(packages: readonly BundledPackage[]): string;
+export declare function readDependencyNoticesSection(text: string): string | null;
+export declare function withDependencyNoticesSection(text: string, section: string): string;

@@ -17,6 +17,9 @@
 // and `npx` first on PATH, and the version step reading a fixture in place of /etc/os-release, so their behaviour is
 // measured rather than their text only.
 //
+// L3 Task 14 adds `on: workflow_call`, with no inputs and no secrets: the release workflow's test job runs this
+// workflow at the tag's commit, the whole suite on both Node legs and both browsers, unchanged by the call.
+//
 // Task 17's follow-up (rows L3.CI5 to L3.CI7) answers a measured failure: the browser cache hit, but the system
 // libraries `--with-deps` installs were downloaded again on every job, from a mirror that stalled; attempt 1 timed out,
 // and its `sudo apt-get` outlived the timeout and held the dpkg lock until attempt 2 gave up waiting for it. So apt's
@@ -67,6 +70,7 @@ interface Job {
 interface Workflow {
   on?: Record<string, unknown>;
   permissions?: unknown;
+  concurrency?: unknown;
   jobs?: Record<string, Job>;
 }
 
@@ -289,9 +293,24 @@ describe('ci.yml: permissions', () => {
 });
 
 describe('ci.yml: triggers', () => {
-  it('runs on pushes to main, on pull requests and by hand', () => {
-    expect(Object.keys(wf.on ?? {}).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch']);
+  it('runs on pushes to main, on pull requests, by hand, and when the release workflow calls it', () => {
+    expect(Object.keys(wf.on ?? {}).sort()).toEqual(['pull_request', 'push', 'workflow_call', 'workflow_dispatch']);
     expect(wf.on?.['push']).toEqual({ branches: ['main'] });
+  });
+
+  it('L3 Task 14: a call takes no inputs and no secrets, so the release runs exactly what a push runs', () => {
+    expect(Object.hasOwn(wf.on ?? {}, 'workflow_call')).toBe(true);
+    expect(wf.on?.['workflow_call']).toBeNull();
+  });
+  it("L3 Task 14: a called run has a concurrency group of its own, so a release never queues behind, or is cancelled by, main's own CI", () => {
+    // In a called workflow the github context is the caller's: github.ref is the release's ref (refs/heads/main on a
+    // dry run) and github.workflow its name. Keyed on the workflow too, the release's call never shares main's group,
+    // where a newer pending run cancels an older pending one; pushes and pull requests keep one group per ref, and
+    // only a pull request cancels the run it replaces.
+    expect(wf.concurrency).toEqual({
+      group: 'ci-${{ github.workflow }}-${{ github.ref }}',
+      'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
+    });
   });
 });
 

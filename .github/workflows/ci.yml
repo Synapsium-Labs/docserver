@@ -32,17 +32,22 @@ name: ci
 # that moves an asset's hash without its rebuilt manifests is red. npm pack runs the prepack check
 # (scripts/verify-assets.mjs: every byte under assets/ is the one assets/assets.json names), and the smoke installs
 # the tarball whose name npm pack --json gives, never a name spelled from the version.
+# The release workflow (release.yml) runs this workflow as its test job, through workflow_call with no inputs and no
+# secrets, at the tag's commit: the same steps as a push, on both Node legs, under the token the caller grants it.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
+# In a called run the github context is the caller's, so the group names the calling workflow too: the release's call
+# (github.ref refs/heads/main on its dry run) never shares main's own group, where a newer pending run would cancel it.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

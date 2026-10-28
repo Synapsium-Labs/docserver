@@ -1,0 +1,389 @@
+name: release
+
+# The release lane (docserver L3, Task 14; plan Reference §13, FD21). A signed annotated tag vX.Y.Z (or vX.Y.Z-rc.N)
+# on main starts it. One tarball is built, attested, published and verified; nothing is rebuilt after `build`:
+#
+#   verify-tag      the tag, fetched as it stands, still names the pushed commit that every job checks out; it is an
+#                   annotated object, signed by a `release-signer` key line of .github/release-signers (main's copy),
+#                   equal to v + package.json's version (which equals assets.json's), on main; package.json is no
+#                   longer private; the npm-release environment holds its protection rules
+#   test            ci.yml at the same commit, through workflow_call: the full suite on both Node legs and both browsers,
+#                   the frame build's --check, the ratchet and the packed-consumer smoke
+#   build           exact Node 22, `npm ci`, `npm audit signatures`, the build and its checks, then `npm pack --json`
+#                   twice, each in a clean copy of the commit built from scratch, the two tarballs equal by sha256; the
+#                   smoke on that tarball; SHA256SUMS and the sha512 integrity; the tarball, SHA256SUMS and assets.json
+#                   uploaded as the `release` artifact
+#   attest          a build provenance attestation of that tarball (its own job: id-token and attestations write)
+#   publish         behind the `npm-release` environment, which the operator approves: the same tarball, re-checked
+#                   against SHA256SUMS and build's own sha256, published with provenance through npm trusted publishing
+#                   (OIDC); no npm token exists anywhere
+#   github-release  the GitHub release of the tag, carrying the tarball, SHA256SUMS, assets.json and the attestation
+#   post-verify     the README's five Release verification commands, verbatim, in a scratch directory
+#
+# A `workflow_dispatch` run is a dry run (it exists once this file is on the default branch): there is no tag, so
+# verify-tag runs only its tag-free checks (package.json's version equals assets.json's; .github/release-signers is
+# main's copy), test and build run in full, and attest, publish, github-release and post-verify are skipped by their
+# tag-push condition. attest never runs while the repository is private, since the tag comes after the flip.
+#
+# The top-level token grants nothing; each job asks for its own permissions. The test job must grant what ci.yml
+# declares, because a called workflow can only narrow its caller's grant. id-token: write is in attest and publish
+# only, contents: write in github-release only. Every expression a script needs reaches it through env, never
+# interpolated into the script. Every remote action is pinned by full commit sha, its release tag in the trailing
+# comment; the one local `uses:` is ci.yml. test/release-workflow.test.ts reads this file and runs its checks.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # The environment check reads the npm-release environment and its deployment policies through the REST API,
+      # which a fine-grained token reads with the Actions read permission.
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: package.json's version equals assets.json's version
+        id: version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          assets="$(node -p "require('./assets/assets.json').version")"
+          if [ "$version" != "$assets" ]; then
+            echo "::error::package.json's version ${version} is not assets.json's version ${assets}"
+            exit 1
+          fi
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            prerelease=true
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            prerelease=false
+          else
+            echo "::error::package.json's version ${version} is not a release version (X.Y.Z or X.Y.Z-rc.N)"
+            exit 1
+          fi
+          printf '%s\n' "version=$version" "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+      - name: .github/release-signers equals main's copy
+        run: |
+          git show origin/main:.github/release-signers > "${RUNNER_TEMP:?}/release-signers"
+          cmp -- "$RUNNER_TEMP/release-signers" .github/release-signers
+      - name: the pushed ref names a release tag, fetched as the object it is
+        id: tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          [[ "${REF:?}" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?)$ ]] || {
+            echo "::error::${REF} is not a release tag"
+            exit 1
+          }
+          tag="${BASH_REMATCH[1]}"
+          git fetch --no-tags --force origin "+refs/tags/${tag}:refs/tags/${tag}"
+          # The tag as fetched now must still name the pushed commit, the one this checkout holds and test and build
+          # check out: a tag moved (or deleted and pushed again) after this run was queued would otherwise have its
+          # signature checked on one commit while another is tested, packed, attested and published. GITHUB_SHA is
+          # peeled too, so the comparison holds whether GitHub gives the commit or the tag object.
+          pushed="$(git rev-parse --verify "${GITHUB_SHA:?}^{commit}")"
+          commit="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+          head="$(git rev-parse --verify HEAD)"
+          if [ -z "$pushed" ] || [ "$commit" != "$pushed" ] || [ "$head" != "$pushed" ]; then
+            echo "::error::the tag ${tag} names ${commit:-no commit} and the checkout is ${head:-no commit}, but the pushed commit is ${pushed:-unknown}"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: 1. the tag is an annotated tag object
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: test "$(git cat-file -t "refs/tags/${TAG:?}")" = tag
+      - name: 2. the tag is signed by a release-signer key line of the signers file
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          keys="$(grep -Ev '^[[:space:]]*(#|$)' .github/release-signers || true)"
+          if [ -z "$keys" ]; then
+            echo "::error::.github/release-signers holds no key line: the operator's line for release-signer lands before a tag"
+            exit 1
+          fi
+          if printf '%s\n' "$keys" | grep -Evq '^release-signer[[:space:]]+([^[:space:]]+[[:space:]]+)?[^[:space:]]+[[:space:]]+[A-Za-z0-9+/]+={0,2}([[:space:]].*)?$'; then
+            echo "::error::every key line of .github/release-signers names the principal release-signer, then a key"
+            exit 1
+          fi
+          git -c gpg.format=ssh -c gpg.ssh.allowedSignersFile=.github/release-signers verify-tag "$TAG"
+      - name: 3. the tag is v + package.json's version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: test "${TAG:?}" = "v${VERSION:?}"
+      - name: 4. the tag is on main
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: git merge-base --is-ancestor "refs/tags/${TAG:?}" origin/main
+      - name: 5. package.json is not private
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          node -e "if (Object.hasOwn(require('./package.json'), 'private')) { console.error('::error::package.json still carries private'); process.exit(1); }"
+      - name: 6. the npm-release environment needs a reviewer, prevents self-review and deploys v* tags only
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO:?}/environments/npm-release" > "${RUNNER_TEMP:?}/environment.json"
+          gh api "repos/${REPO}/environments/npm-release/deployment-branch-policies" > "$RUNNER_TEMP/policies.json"
+          node - "$RUNNER_TEMP/environment.json" "$RUNNER_TEMP/policies.json" <<'EOF'
+          const { readFileSync } = require('node:fs');
+          const [env, policies] = process.argv.slice(2).map((f) => JSON.parse(readFileSync(f, 'utf8')));
+          const rules = Array.isArray(env?.protection_rules) ? env.protection_rules : [];
+          const reviewers = rules.filter((r) => r?.type === 'required_reviewers');
+          const deployment = env?.deployment_branch_policy;
+          const list = Array.isArray(policies?.branch_policies) ? policies.branch_policies : [];
+          const failures = [];
+          if (reviewers.length !== 1 || !Array.isArray(reviewers[0].reviewers) || reviewers[0].reviewers.length === 0) failures.push('no required reviewer');
+          if (reviewers.length !== 1 || reviewers[0].prevent_self_review !== true) failures.push('self-review is not prevented');
+          if (deployment?.custom_branch_policies !== true || deployment?.protected_branches !== false) failures.push('deployments are not limited to named refs');
+          if (list.length !== 1 || list[0]?.name !== 'v*' || list[0]?.type !== 'tag') failures.push('the deployment policy is not exactly the tag pattern v*');
+          for (const f of failures) console.error(`::error::npm-release environment: ${f}`);
+          process.exit(failures.length === 0 ? 0 : 1);
+          EOF
+
+  test:
+    needs: [verify-tag]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: [verify-tag, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+      integrity: ${{ steps.pack.outputs.integrity }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.3
+      - run: npm ci --no-audit --no-fund
+      - run: npm audit signatures
+      - run: npm run build
+      - run: node scripts/build-frame.mjs --check
+      - run: git diff --exit-code
+      - name: pack twice, from two clean copies, and compare
+        id: pack
+        run: |
+          release="${RUNNER_TEMP:?}/release"
+          mkdir -p -- "$release"
+          for copy in a b; do
+            dir="$RUNNER_TEMP/copy-$copy"
+            mkdir -p -- "$dir" "$RUNNER_TEMP/pack-$copy"
+            git archive --format=tar HEAD | tar -x -C "$dir"
+            (cd "$dir" && npm ci --no-audit --no-fund && npm run build && npm pack --json --pack-destination "$RUNNER_TEMP/pack-$copy" > "$RUNNER_TEMP/pack-$copy.json")
+          done
+          field() { node -e 'const [p] = JSON.parse(require("node:fs").readFileSync(process.argv[2], "utf8")); process.stdout.write(String(p[process.argv[1]]))' "$1" "$2"; }
+          name_a="$(field filename "$RUNNER_TEMP/pack-a.json")"
+          name_b="$(field filename "$RUNNER_TEMP/pack-b.json")"
+          [[ "$name_a" =~ ^[a-z0-9][a-z0-9._-]*\.tgz$ ]]
+          test "$name_a" = "$name_b"
+          sha_a="$(sha256sum -- "$RUNNER_TEMP/pack-a/$name_a" | cut -d ' ' -f 1)"
+          sha_b="$(sha256sum -- "$RUNNER_TEMP/pack-b/$name_b" | cut -d ' ' -f 1)"
+          test "$sha_a" = "$sha_b"
+          cp -- "$RUNNER_TEMP/pack-a/$name_a" "$release/$name_a"
+          integrity="sha512-$(openssl dgst -sha512 -binary "$release/$name_a" | openssl base64 -A)"
+          test "$integrity" = "$(field integrity "$RUNNER_TEMP/pack-a.json")"
+          (cd "$release" && sha256sum -- "$name_a" > SHA256SUMS)
+          cp -- assets/assets.json "$release/assets.json"
+          printf '%s\n' "tarball=$name_a" "sha256=$sha_a" "integrity=$integrity" >> "$GITHUB_OUTPUT"
+      - name: consumer smoke on the packed tarball
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: node scripts/consumer-smoke.mjs "${RUNNER_TEMP:?}/release/${TARBALL:?}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 30
+
+  attest:
+    needs: [verify-tag, build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: the downloaded tarball is the one build packed
+        working-directory: release
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          sha256sum --check --strict -- SHA256SUMS
+          test "$(sha256sum -- "${TARBALL:?}" | cut -d ' ' -f 1)" = "${SHA256:?}"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
+        with:
+          subject-path: release/${{ needs.build.outputs.tarball }}
+      - name: the attestation bundle, named for the tarball
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: |
+          mkdir -p attestation
+          cp -- "${BUNDLE:?}" "attestation/${TARBALL:?}.sigstore.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: attestation
+          path: attestation/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [verify-tag, build, attest]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-release
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: the downloaded tarball is the one build packed
+        working-directory: release
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          sha256sum --check --strict -- SHA256SUMS
+          test "$(sha256sum -- "${TARBALL:?}" | cut -d ' ' -f 1)" = "${SHA256:?}"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.3
+      - name: npm 11.21.0, which publishes through trusted publishing
+        run: |
+          npm install --global --no-audit --no-fund npm@11.21.0
+          test "$(npm --version)" = 11.21.0
+      - name: publish the tarball with provenance
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          PRERELEASE: ${{ needs.verify-tag.outputs.prerelease }}
+        run: |
+          case "${PRERELEASE:?}" in
+            true) npm publish "./release/${TARBALL:?}" --provenance --access public --tag next ;;
+            false) npm publish "./release/${TARBALL:?}" --provenance --access public ;;
+            *) echo "::error::prerelease is ${PRERELEASE}, not true or false"; exit 1 ;;
+          esac
+
+  github-release:
+    needs: [verify-tag, build, attest, publish]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: the downloaded tarball is the one build packed
+        working-directory: release
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          sha256sum --check --strict -- SHA256SUMS
+          test "$(sha256sum -- "${TARBALL:?}" | cut -d ' ' -f 1)" = "${SHA256:?}"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: attestation
+          path: release
+      - name: create the GitHub release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          PRERELEASE: ${{ needs.verify-tag.outputs.prerelease }}
+        run: |
+          [[ "${TAG:?}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]
+          flags=()
+          case "${PRERELEASE:?}" in
+            true) flags+=(--prerelease) ;;
+            false) ;;
+            *) echo "::error::prerelease is ${PRERELEASE}, not true or false"; exit 1 ;;
+          esac
+          gh release create "$TAG" --verify-tag --repo "$REPO" --title "$TAG" \
+            --notes "The changes are in CHANGELOG.md at this tag. Verify the tarball as the README's Release verification section says." \
+            "${flags[@]}" -- "$TARBALL" SHA256SUMS assets.json "$TARBALL.sigstore.json"
+
+  post-verify:
+    needs: [verify-tag, github-release]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.3
+      - name: a scratch directory, once the registry serves the version
+        env:
+          VERSION: ${{ needs.verify-tag.outputs.version }}
+        run: |
+          mkdir -p -- "${RUNNER_TEMP:?}/post-verify"
+          for attempt in $(seq 1 20); do
+            if npm view "@synapsium-labs/docserver@${VERSION:?}" version > /dev/null 2>&1; then exit 0; fi
+            echo "the registry does not serve ${VERSION} yet (attempt ${attempt} of 20)"
+            sleep 30
+          done
+          echo "::error::the registry did not serve ${VERSION} within 10 minutes"
+          exit 1
+      - name: the consumer's verification commands (README, Release verification)
+        working-directory: ${{ runner.temp }}/post-verify
+        env:
+          VERSION: ${{ needs.verify-tag.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm install @synapsium-labs/docserver@$VERSION --ignore-scripts
+          npm audit signatures
+          npm pack @synapsium-labs/docserver@$VERSION
+          test "$(npm view @synapsium-labs/docserver@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-docserver-$VERSION.tgz | openssl base64 -A)"
+          gh attestation verify synapsium-labs-docserver-$VERSION.tgz --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml

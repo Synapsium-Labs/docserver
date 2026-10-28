@@ -15,6 +15,10 @@
     "type": "git",
     "url": "git+https://github.com/Synapsium-Labs/docserver.git"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     "./render": {
       "types": "./dist/render/index.d.ts",

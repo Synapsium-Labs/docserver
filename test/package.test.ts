@@ -11,7 +11,6 @@ const readJson = (rel: string): unknown => JSON.parse(readText(rel));
 type Deps = Record<string, string>;
 interface Manifest {
   name: string;
-  private: boolean;
   type: string;
   license: string;
   sideEffects: boolean | string[];
@@ -140,9 +139,10 @@ describe('package.json: exports keys', () => {
 });
 
 describe('package.json: identity', () => {
-  it('is the private, MIT, ESM package @synapsium-labs/docserver', () => {
+  // Whether the package is private is pinned once, in test/public-ready.test.ts (L3 Task 14), so the v1 release PR
+  // flips exactly one pin.
+  it('is the MIT, ESM package @synapsium-labs/docserver', () => {
     expect(pkg.name).toBe('@synapsium-labs/docserver');
-    expect(pkg.private).toBe(true);
     expect(pkg.type).toBe('module');
     expect(pkg.license).toBe('MIT');
   });
