@@ -17,13 +17,18 @@
 // from a spec (hostile.ts), and only its verdict and the oracle judge it. A verdict with a `scan` arm also
 // judges scanRefs, so pass it: runCorpus(render, { scanRefs }). On a slower machine, `timeScale` multiplies
 // every verdict's maxMs; it never changes a committed verdict.
+//
+// bridgeCases() (docserver L3, Task 12) reads conformance/bridge-cases.json the same way: the bridge between the sealed
+// reader frame and its parent, protocol 1, as fixtures a consumer runs its own parser of the wire against (bridge.ts).
 import { readFileSync } from 'node:fs';
 import type { RenderOptions, RenderResult, ScanRefsOptions, ScanRefsResult } from '../render/types.js';
+import { parseBridgeCases, type BridgeCases } from './bridge.js';
 import { buildInput, crossCheck, parseHostile, sumInputSizes, type InputSpec } from './hostile.js';
 import { normaliseForCompare } from './normalise.js';
 import { checkOutputSafety } from './oracle.js';
 import { evaluateVerdict, type Verdict, type VerdictContext } from './verdict.js';
 
+export type { BridgeCases, BridgeFill, BridgeMessageCase, BridgeSequence, BridgeStep } from './bridge.js';
 export { buildInput, inputSize, MAX_INPUT_BYTES } from './hostile.js';
 export type { InputPart, InputSpec } from './hostile.js';
 export { normaliseForCompare } from './normalise.js';
@@ -213,4 +218,12 @@ export function runCorpus(render: RenderFn, o: RunCorpusOptions = {}): CorpusRun
   const results = cases.map((c) => checkCase(c, render, o));
   const passed = results.filter((r) => r.ok).length;
   return { ok: results.length > 0 && passed === results.length, total: results.length, passed, results };
+}
+
+/**
+ * The shipped bridge fixtures, conformance/bridge-cases.json, read fresh on each call (so a caller that edits one copy
+ * never moves the next). Throws on a file this version cannot load: another protocol, or a part missing.
+ */
+export function bridgeCases(): BridgeCases {
+  return parseBridgeCases(readText('bridge-cases.json'));
 }

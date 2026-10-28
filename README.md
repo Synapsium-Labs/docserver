@@ -15,9 +15,12 @@ It is pure. It does no network, storage, auth, git or hosting. Each product that
 | The rich layout over a rendered document: lifecycle, host adapters, reader prefs, navigation, reading position, state, editorial and index views, menus, comparison UI and read marks | `@synapsium-labs/docserver/enhance`: `enhance()`, `destroyEnhancement()`, `goToHash()`, `setEnhancementPrefs()`, `EnhanceError` | L2 implementation; final acceptance pending |
 | The layout stylesheet and package fonts | `@synapsium-labs/docserver/assets/*`: `assets/reader.css`, `assets/fonts/` | L2 implementation; final acceptance pending |
 | Self-hosted Mermaid and diagram controls | `@synapsium-labs/docserver/assets/mermaid/*` through `mermaid.load()` | Still completing; final behavioral verification pending |
-| A sandboxed-frame document builder, a host helper and asset manifest | `frameDocument()`, `mountDocFrame()`, `assets.json` | L3 |
+| The sealed reader frame's document builder, its policy and the bridge's protocol (pure) | `@synapsium-labs/docserver/frame`: `frameDocument()`, `frameCsp()`, `checkFrameCsp()`, `mermaidGate()` | L3 |
+| A reference parent that mounts the frame for other viewers | `@synapsium-labs/docserver/host`: `mountDocFrame()` | L3 |
+| The code highlighter `render()` uses, for a host that colours code itself | `@synapsium-labs/docserver/highlight`: `createHighlighter()` | L3 |
+| The frame's hashed scripts and stylesheet, and the manifest of every asset | `@synapsium-labs/docserver/assets/*`: `assets/frame/`, `assets/mermaid/mermaid.frame.js`, `assets/assets.json` | L3 |
 
-The package exports exactly `./render`, `./conformance`, `./enhance`, `./assets/*` and `./package.json`; nothing else is importable.
+The package exports exactly `./render`, `./conformance`, `./enhance`, `./frame`, `./host`, `./highlight`, `./assets/*` and `./package.json`; nothing else is importable.
 
 ## Rendering: `./render`
 
@@ -58,10 +61,11 @@ Unless the outcome is `'rendered'`, `meta` is a frozen empty meta. Every string 
 | `maxBytes` | `DEFAULT_MAX_BYTES`, 4194304 (4 MiB) | UTF-8 byte cap on the input. Counting stops at the cap, so measuring an oversized input costs no more than the cap. It bounds the input only; `maxHtmlBytes` bounds the html. |
 | `maxHtmlBytes` | 16777216 (16 MiB, four times `DEFAULT_MAX_BYTES`) | UTF-8 byte cap on the html. An input under `maxBytes` can still expand far past it (a reference definition with a long URL, used many times, repeats the URL at each use), so the html is counted as it is rendered and the render stops at the first piece that would pass the cap, with outcome `'output-over-limit'`. No ordinary document comes near the default. |
 | `lineAttrs` | `true` | Put `data-line="a-b"` (the block's source lines) on block elements. |
+| `highlight` | `true` | Colour code fences with highlight.js. With `false` every fence keeps its wrapper, its `data-line` and its `language-NAME` class and holds the code as escaped text, with no span; nothing else changes. Any value but a boolean is a TypeError. A host that colours code itself does it with `./highlight`, which gives `render()`'s own markup. |
 
 Memory is linear in the size of the input (a document of nothing but short links took about 200 times its size), so size `maxBytes` to your heap and your worker's limit. Raising `maxHtmlBytes` removes the output bound that protects you from an input that expands past it, so raise it only for input you trust.
 
-**`scanRefs(markdown, options?)`** parses without rendering and returns `{ outcome, images, imagesTruncated, mermaid }`: the distinct image sources `render()` would emit, in order and at most `maxImages` (default `DEFAULT_MAX_IMAGES`, 512) with `imagesTruncated` saying whether more exist, and the count and UTF-8 sizes (largest and total) of the Mermaid fences `render()` would turn into figures. It takes the same `maxBytes`, and its `outcome` is `'over-limit'` exactly when `render()`'s would be. The images and figures it lists are those of a successful render: when `render()` ends `'output-over-limit'` or `'failed'` it shows the escaped source and none of them.
+**`scanRefs(markdown, options?)`** parses without rendering and returns `{ outcome, images, imagesTruncated, mermaid }`: the distinct image sources `render()` would emit, in order and at most `maxImages` (default `DEFAULT_MAX_IMAGES`, 512) with `imagesTruncated` saying whether more exist, and the count and sizes of the Mermaid fences `render()` would turn into figures: the largest and the total in UTF-8 bytes (`largestBytes`, `totalBytes`) and in UTF-16 code units (`largestChars`, `totalChars`, the unit `mermaidGate()` reads). It takes the same `maxBytes`, and its `outcome` is `'over-limit'` exactly when `render()`'s would be. The images and figures it lists are those of a successful render: when `render()` ends `'output-over-limit'` or `'failed'` it shows the escaped source and none of them.
 
 ### What it renders
 
@@ -208,6 +212,238 @@ This is an implementation map, not final acceptance evidence. Task 23's dedicate
 | Classic variants, sibling-link rewrites and auto-bootstrap are absent | `src/enhance/index.ts`, `src/enhance/nav.ts` | `test/enhance-walls.test.ts`, `test/enhance-scrub.test.ts` |
 | Hosted-font allowances and ready gates are not part of the library | `assets/reader.css`, `src/enhance/relayout.ts` | `test/enhance-styles.test.ts`, `test/enhance-relayout-baseline.test.ts` |
 
+## Hosting on your own origin
+
+A host that runs `./enhance` in its own page, rather than in the sealed frame, hands the reader adapters, never URLs: the library holds no URL of its own and never fetches. An older viewer's URL options each become an adapter. The recipes below map each one, with neutral `https://example.test/` URLs; each is a complete TypeScript module, typed by `EnhanceOptions` (the docs test typechecks every one under the strict settings).
+
+```ts
+// mermaidUrl → mermaid.load
+import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+
+// The host serves the package's own assets/mermaid/mermaid.mjs from its origin; its start-on-load is off.
+const mermaidUrl = 'https://example.test/static/docserver/mermaid/mermaid.mjs';
+
+export const options: EnhanceOptions = {
+  mermaid: { load: () => import(mermaidUrl) },
+};
+```
+
+```ts
+// resolveLink → onLink
+import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+
+declare function resolveLink(href: string): string | null; // the host's old resolver: a link as written, to its page
+declare function goTo(url: string, newTab: boolean): void; // the host's own router
+
+export const options: EnhanceOptions = {
+  onLink: (href, how) => {
+    const url = resolveLink(href);
+    if (url !== null) goTo(url, how.newTab);
+  },
+};
+```
+
+```ts
+// changesUrl → changes
+import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+
+const changesUrl = 'https://example.test/api/changes';
+const docPath = 'specs/example.md';
+
+export const options: EnhanceOptions = {
+  // The host's own endpoint answers { changed: [from, to][], removedAfter?: number[] } for the changes since `sha`.
+  changes: async (sha) => {
+    const r = await fetch(`${changesUrl}?path=${encodeURIComponent(docPath)}&since=${encodeURIComponent(sha)}`);
+    return r.ok ? r.json() : null;
+  },
+};
+```
+
+```ts
+// bar → chrome.bar
+import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+
+// The host keeps its own bar above the document, so the reader builds none; its rail and settings menu stay.
+export const options: EnhanceOptions = {
+  chrome: { bar: false },
+};
+```
+
+```ts
+// issue-tracker base → itemLink
+import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+
+const trackerBase = 'https://example.test/issues/';
+
+export const options: EnhanceOptions = {
+  vocabulary: { itemFields: ['Tracker'] }, // itemLink is called only for the keys these byline fields name
+  itemLink: (key) => `${trackerBase}${encodeURIComponent(key)}`,
+};
+```
+
+The same options, for a viewer that mounts the frame with `./host` instead, map to its `HostAdapters` (below): `onLink`, `changes`, `openVersion` and `mermaidDraw`.
+
+| Old option | `./enhance` in the host's page | `./host`'s `HostAdapters` |
+|---|---|---|
+| `mermaidUrl` | `mermaid.load()` | `assets.mermaid`, the text of `assets/mermaid/mermaid.frame.js`, and `mermaidDraw` (`'auto'` or `'on-request'`) |
+| `resolveLink` | `onLink(href, how)` | `onLink(link)`, with the link already classified (a `HostLink`: `fragment`, `relative` or `external`) |
+| `changesUrl` | `changes(sha)` | `changes(sha)`, answering `{ ranges, removedAfter? }` or `null` |
+| `bar` | `chrome.bar` | `features.chrome.bar` |
+| issue-tracker base | `itemLink(key)` | none: `itemLink` answers at once and cannot cross the bridge |
+| version pages | `openVersion({ sha, only })` | `openVersion({ sha?, only? })` |
+
+**Mermaid in the host's page.** The module `load()` resolves with (its default export, or the module itself) must offer `initialize` and `render`, the two calls the reader makes; one without them leaves every figure to its source, with a note. Serve the package's own `assets/mermaid/mermaid.mjs`, and never load a stock Mermaid with its start-on-load on: stock Mermaid draws every `.mermaid` element of the page when the window loads, with its own defaults and into the document's own nodes; the package's own Mermaid files have it off. The reader names each drawing it asks Mermaid for with a counter that is per copy of the library, so a page that bundles `./enhance` twice (two builds of the host's code, say) can issue the same drawing name twice, and the two drawings then take each other's ids: load one copy of `./enhance` per page. The frame holds one copy, so it cannot.
+
+## Framing: `./frame`
+
+`./frame` builds the sealed reader frame's document as one string, for an `<iframe sandbox="allow-scripts" srcdoc>`. It is pure: no DOM, no clock, no randomness, no I/O, and it fetches nothing. The host reads the asset files and passes their texts; `frameDocument` checks each against the manifest it was built with.
+
+```ts
+import { frameCsp, frameDocument, FrameError, mermaidGate } from '@synapsium-labs/docserver/frame';
+import { render, scanRefs } from '@synapsium-labs/docserver/render';
+
+const result = render(markdown);
+const scan = scanRefs(markdown);
+const gate = mermaidGate(scan.mermaid); // in UTF-16 code units; caps may only tighten
+try {
+  const srcdoc = frameDocument(
+    { result, scan },
+    {
+      csp: frameCsp(),
+      nonce, // 32 lower-case hex digits, fresh for every mount: 16 bytes of crypto.getRandomValues
+      assets, // { guard, bootstrap, enhance, css, mermaid }: the texts of the files below, read by the host
+      mermaid: gate.inline ? { maxTextSize: gate.maxTextSize } : null,
+    },
+  );
+  showInSandboxedFrame(srcdoc, frameCsp());
+} catch (e) {
+  if (e instanceof FrameError) showPlainView(e.code); // never a partly working frame
+  else throw e;
+}
+```
+
+**The srcdoc.** One line, with no whitespace or comment between elements, that starts literally with the CSP meta: `<meta http-equiv="Content-Security-Policy" content="…">`, then the click guard (`frame/guard.js`), the seed (`<script type="application/json">`, the document and the frame's settings as escaped JSON), the bootstrap (`frame/bootstrap.js`), the style (`frame/reader.css`, the package's fonts inlined as `data:` URLs), `enhance.js` (`frame/enhance.js`, the layout) and, only when `mermaid` is not `null`, `mermaid.frame.js` (`mermaid/mermaid.frame.js`). Every script and style body is the asset's exact text. There is no doctype and no html, head or body tag: everything lands in the implied head, and a srcdoc document is never in quirks mode. The rendered html travels only as escaped text in the seed: no `<`, `>`, `&`, U+2028 or U+2029 appears there raw, so it cannot end its element. The bootstrap reads the seed as the element just before its own script (never by id), and at DOMContentLoaded parses the html once, inertly, checks it against `render()`'s closed vocabulary (refusing the whole document over any element or attribute outside it), and runs the layout on it. Nothing in the srcdoc loads a URL: no `src`, `href`, `<link>`, `<base>` or `@import`, and the only `url(` is a font's `data:` URL.
+
+**The policy.** `frameCsp()` is the canonical frame policy: `default-src 'none'`, a `script-src` of the four scripts' hashes (Mermaid's included whether or not a document inlines it, so a host's policy is one constant per version), `style-src 'unsafe-inline' data:`, `font-src data:`, `img-src data:`, `base-uri 'none'` and `form-action 'none'`. Set it on the iframe's `csp` attribute as well where the engine has one. `checkFrameCsp(csp, requiredHashes)` answers `{ ok: true }` or `{ ok: false, why }`, `why` one of `CSP_REFUSALS`: a policy is accepted only when it is no wider than this one and holds every required hash. `FRAME_MANIFEST` lists the five frame assets with their paths, sha256, bytes, UTF-16 lengths and hash sources; `assets/assets.json` lists every file under `assets/` with its sha256, bytes and kind, and a script's hash source. Every hash move is a minor release: re-pin the policy then.
+
+**Refusals.** `frameDocument` throws a `FrameError` whose `code` says why; a host shows its own view of the document instead.
+
+| Code | When |
+|---|---|
+| `not-rendered` | The document did not render: `result.outcome` is `'over-limit'`, `'output-over-limit'` or `'failed'`. |
+| `invalid-input` | A value outside its grammar or cap: lang, an image ref or data URL, a store key or value, a commit sha, prefs, features, `mermaid.draw`, Mermaid's `maxTextSize` over 50000 or `maxEdges` over 500 (`MERMAID_LIMIT_CEILINGS`), a `maxSrcdocChars` over its default. An `initialHash` outside the fragment grammar is not refused: it is seeded as `null`. |
+| `nonce` | The nonce is not 32 lower-case hex digits. |
+| `asset-mismatch` | An asset is not a string, or its sha256 is not the manifest's. |
+| `unsafe-asset` | An asset breaks the byte rules: a script holding `<script`, `</script`, NUL, CR or a BOM, a stylesheet holding `</style`, `@import` or a `url(` that is not a font's `data:` URL. Checked before the hash, so a planted CR reads `unsafe-asset`. |
+| `csp` | The policy fails `checkFrameCsp`, or lacks the hash of a script it is about to inline. |
+| `missing-asset` | `mermaid` is not `null` and `assets.mermaid` is absent. |
+| `too-large` | The html, as the seed carries it, is over `SEED_HTML_MAX_CHARS`, or the whole srcdoc is over `maxSrcdocChars`. |
+
+**Caps.** `SEED_HTML_MAX_CHARS`, 57265090, bounds the html as the seed carries it (escaped), in UTF-16 code units: the spec's 2 MiB document cap times the largest ratio of escaped html to markdown bytes over the golden corpus (27.3061, on `nesting-limit.md`), so no legal document is refused. `MAX_SRCDOC_CHARS_DEFAULT` adds to it the five assets' lengths, the 5 MiB image budget in base64, the seed's other fields at their caps and the skeleton (about 114.6 million characters at this version; it moves with every asset). `maxSrcdocChars` may only lower it: a host that measures its own documents sets it lower. Images reach the frame only as `data:` URLs in `images` (at most 512, refs of at most 2048 code units), keyed by the `src` exactly as `scanRefs()` lists it.
+
+**Mermaid.** `mermaidGate(counts, caps?)` decides whether to inline `mermaid.frame.js` at all, from `scanRefs().mermaid`'s code-unit counts: Mermaid comes in for a document with at least one fence and at most `MERMAID_GATE_DEFAULTS`' 24 fences and 131072 code units in all, and the per-fence cap (16384) travels as `maxTextSize`, so only a longer fence shows as its source. Caps above the defaults are a RangeError: caps only tighten. With `mermaid: null` every figure shows its source. `mermaid.draw` is `'auto'` (the default: every figure is drawn before the frame says it is ready) or `'on-request'` (a figure is drawn only when a reader taps its Render button, so nothing draws before ready).
+
+`./frame` also exports the bridge's protocol (`BRIDGE_PROTOCOL`, `SEED_SCHEMA`, `BRIDGE_LIMITS`, `OP_KEYS`, `ERROR_WHY`, `PREF_KEYS`, `DOC_FIELDS`, `FRAGMENT_ID_GRAMMAR`, `isFragmentId()`; see the bridge, below) and its types: `RenderInput`, `FrameOptions`, `FrameAssets`, `FrameFeatures`, `FramePrefs`, `FrameErrorCode`, `BridgeStoreKey`, `ErrorWhy`, `FrameToParent`, `ParentToFrame` and `CspRefusal`. Its declarations name no DOM type, so a worker or a server builds a srcdoc with no DOM library.
+
+## Hosting: `./host`
+
+`mountDocFrame(el, { document, adapters })` is the reference parent of the frame, for viewers that do not speak the bridge themselves. It mounts the frame into `el`, speaks the bridge with it, and hands every effect to the host's adapters. Importing `./host` touches no DOM, starts no timer and keeps no state; only a mount does.
+
+```ts
+import { mountDocFrame } from '@synapsium-labs/docserver/host';
+
+const frame = mountDocFrame(container, {
+  document: { result, scan }, // render() and scanRefs() of the document
+  adapters: {
+    assets, // the texts of the frame files, read by the host
+    watchdogMs: 20_000,
+    store: localStorage,
+    docKey: 'specs/example.md',
+    onLink: (link) => routeTo(link),
+    onFallback: (reason) => showPlainView(reason),
+  },
+});
+frame.setPrefs({ theme: 'dark' });
+frame.update(next); // a full remount for another document or version
+frame.destroy();
+```
+
+A mount checks the adapters (own data properties only; an unknown key or a bad value throws a `TypeError` or `RangeError` before any iframe exists), runs the Mermaid gate, makes a fresh 128-bit nonce, builds the srcdoc under `frameCsp()`, and creates a new iframe with `sandbox` exactly `allow-scripts`, `referrerpolicy="no-referrer"`, the `csp` attribute and its `title`, all before insertion, inserts it and focuses it (unless `focus` is `false`). Its first load gets one `hello` with one port, and the watchdog runs from insertion to a valid `ready`. A refusal by `frameDocument` calls `onFallback` once and creates no iframe. `./host` never navigates, never opens a window, never touches the clipboard and adds no window `message` listener: links, hashes, copies, versions and changes reach the host only through its adapters, and an adapter that throws is caught and logged, never counted against the frame.
+
+| Adapter | Meaning |
+|---|---|
+| `assets` | Required: the exact texts of `frame/guard.js`, `frame/bootstrap.js`, `frame/enhance.js`, `frame/reader.css` and `mermaid/mermaid.frame.js`. |
+| `watchdogMs` | Required: from insertion to a valid ready, an integer from 1 to 120000 ms. In `'auto'` mode ready waits for Mermaid's first full pass, so allow for it. |
+| `store`, `storePrefix`, `docKey` | The host's Web Storage (`getItem`, `setItem`, `removeItem`, `key`, `length`), the prefix of every key it writes (default `'docreader:'`), and this document's identity (absent: no per-document state). The store builds every key itself: `<prefix>pref:<name>` and `<prefix>doc:<docKey>:<field>`. A value is JSON of at most 64 KiB, everything under the prefix stays within 1 MiB, and past it the least recently written documents' keys are evicted, inside the prefix only. |
+| `prefs`, `features` | Starting prefs (`theme`, `width`, `font`) and the layout's switches and word lists (`rules`, `folds`, `keyboard`, `chrome`, `vocabulary`), as plain data. |
+| `mermaidGate`, `mermaidDraw` | Tighter gate caps, and `'auto'` (default) or `'on-request'`. |
+| `title`, `focus` | The iframe's accessible name (default `'Document'`), and whether to focus it on mount (default `true`). |
+| `onLink` | A link the reader followed, already classified: a `fragment`, a `relative` path (query dropped) or an `external` http, https or mailto URL. `javascript:`, `data:`, protocol-relative links, backslashes, controls and white space are refused before it. |
+| `onHash` | The reader went to this fragment id. |
+| `copy` | `copy(text, { hidden })`: the text to copy and every character in it a reader cannot see (controls, bidi controls, zero-width characters), each with its index, code point and name, so the host can show them before writing. |
+| `changes` | `changes(sha)`: a promise of `{ ranges, removedAfter? }` or `null`; a throw, a rejection, a malformed answer or 30 s without one answers the frame "unavailable". |
+| `openVersion` | `openVersion({ sha?, only? })`: show that version; no keys is the latest. |
+| `onReady` | The frame said ready. |
+| `onFallback` | Required: the frame is gone, for one reason: `'timeout'`, `'nonce'`, `'error'`, `'protocol'`, `'refusals'`, `'navigated'`, `'assets'`, `'too-large'` or `'invalid-input'`. Called once per mount; the mount never remounts by itself. The frame's own error reason never reaches it. |
+
+Without `copy`, `changes` or `openVersion` the reader builds no control for that action, and without `onLink` a link to another page does nothing: the frame never navigates itself. `update(document)` is a full remount (a new iframe, channel, nonce and watchdog), also after a fallback; `setPrefs(prefs)` is posted once ready and seeds every later mount; `destroy()` is idempotent and calls no adapter, and after it `update` and `setPrefs` do nothing.
+
+**The host page's own policy binds the frame.** A srcdoc frame inherits its embedder's Content Security Policy, so the page that uses `mountDocFrame` must not block what the frame needs:
+
+- scripts: set no `script-src` (and no `default-src` that governs scripts), or list all four of `frameCsp()`'s hash sources in the page's own `script-src` (a nonce for the page's own scripts may sit beside them);
+- style: allow inline style, with `'unsafe-inline'`, or with the hash of `frame/reader.css`'s exact text, which serves only documents with neither Mermaid nor an aligned table: Mermaid's drawings carry inline styles of their own, and an aligned table cell carries its alignment (`text-align:left`, `right` or `center`) in a `style` attribute, which no stylesheet hash admits;
+- fonts and images: allow `data:` in `font-src` and `img-src` (or in `default-src`).
+
+This version's frame policy, whose four hash sources a page's `script-src` lists:
+
+```text
+default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-dmDWLV7cSNtSAgX9LSQEH0CbNScLJznV9DSXq+8GMQw=' 'sha256-AHliXMMKVzo2lZ+/k1c9XKUOws1uJUE5FRfbbMqvKSk=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
+```
+
+A page that blocks any of them gets a fallback; the frame is never left partly working:
+
+1. scripts blocked, or the bootstrap's hash missing: no ready, and `onFallback('timeout')` when the watchdog runs out;
+2. enhance's, the guard's or Mermaid's hash missing: ready, then the frame's error, then `onFallback('error')`;
+3. style, fonts or images blocked: ready, then the frame's error, then `onFallback('error')`.
+
+**Fonts.** `frame/reader.css` inlines the package's fonts, Source Serif 4 and Source Sans 3 under the SIL Open Font License 1.1, and carries their copyright lines and licence in a `/*! … */` comment that travels inside every srcdoc. A host that bundles `frame/reader.css`, or ships a srcdoc built from it (a saved page, say), ships `fonts/OFL.txt` with it, and the notices in `THIRD-PARTY-NOTICES`.
+
+## The bridge
+
+The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRIDGE_PROTOCOL`). Every message the frame sends is a flat object whose values are strings, except `v`; the parent refuses anything else. Of the parent's messages, `hello` and `prefs` are flat in the same way, and `changes.result` carries `sha` and either `ranges`, a list of `[from, to]` pairs of integers, with or without `removedAfter`, a list of integers, or `unavailable: true` alone; the frame ignores anything else. The parent sends `hello` once, on the frame's window, with exactly one port; everything after it travels on that port.
+
+| Op | Direction | Carries | Bound |
+|---|---|---|---|
+| `hello` | parent to frame | `v` | Once, on the window, with one port. |
+| `prefs` | parent to frame | `theme`, `width`, `font` | Each optional, each one of its values. |
+| `changes.result` | parent to frame | `sha`, `ranges`, `removedAfter`, or `unavailable` | Only for the one request in flight. |
+| `ready` | frame to parent | `v`, `nonce` | Once; echoes the seed's nonce. The parent drops every other op before it. |
+| `error` | frame to parent | `why`: `boot`, `render`, `mermaid`, `assets` or `protocol` | At most once, right after ready; terminal by itself. |
+| `store.set` | frame to parent | `key`, `value` | A key on the allow-list below; JSON text of at most 64 KiB; the JSON literal `null` (the string `'null'`) deletes. |
+| `navigate` | frame to parent | `href` | 1 to 4096 code units, no control character; the parent coalesces it over 250 ms. |
+| `copy` | frame to parent | `text` | At most 64 KiB of UTF-8. |
+| `changes` | frame to parent | `sha` | A full 40- or 64-hex sha; one in flight. |
+| `hash` | frame to parent | `id` | An id in the fragment grammar, never empty. |
+| `version` | frame to parent | `sha`, `only` | Full shas; no keys is back to the latest; the parent coalesces it over 250 ms. |
+
+`OP_KEYS` lists every key each op may carry, and `ERROR_WHY` the error reasons. A `changes.result` from an older parent may omit `removedAfter`: that means no deletions. **The fragment grammar** is `FRAGMENT_ID_GRAMMAR`: `^[\p{L}\p{M}\p{N}_.:-]+$` (Unicode flag), 1 to 256 UTF-16 code units, checked by `isFragmentId()`. It covers every id the layout can go to: heading slugs, anchors, footnotes (`fnref1:1`) and defined IDs (`D2.1a`). An id outside it is never sent and never thrown on: the frame still scrolls to it, and the host's address does not record it; an `initialHash` outside it is seeded as `null`.
+
+**Storage keys.** The frame names a key only in bridge-key space, from a closed allow-list, and the parent builds the stored key; the frame can name neither the prefix nor another document.
+
+| Bridge key | The layout's key (namespace `docreader`) |
+|---|---|
+| `pref:prefs`, `pref:ui` | `docreader:prefs`, `docreader:ui` |
+| `doc:pos` | `docreader:pos:doc` |
+| `doc:folds`, `doc:ixfold`, `doc:marks`, `doc:outline`, `doc:seen` | `docreader:doc:doc:<field>` |
+
+**Limits** (`BRIDGE_LIMITS`). The parent reads its limits as token buckets: 40 messages refilled at 20 a second, and of those `store.set` 10 refilled at 10 a second; one `changes` in flight, answered within 30 s; sixteen refusals close the bridge. The frame paces itself so that neither a bucket nor a strict one-second window refuses it: at most 16 messages and 8 `store.set` in any sliding 1.1 seconds (one second plus a 100 ms transit margin), the flush after ready included, with 4 of the 16 kept for `copy`. A parent that reads the limits as a strict window refuses nothing while transit jitter stays within that margin.
+
+**Versioning.** `BRIDGE_PROTOCOL` is separate from the package's version. Protocol 1 changes only additively: a new op or an optional key, which the frame ignores and the parent drops and counts. Anything else is protocol 2, a major release. `bridgeCases()` from `./conformance` returns the wire as fixtures (`conformance/bridge-cases.json`): every message case with the verdict of its receiving side, and timed sequences for the limits, for a host's own parser of the wire.
+
+## Highlighting: `./highlight`
+
+The code highlighter `render()` uses, for a host that colours code itself: render with `highlight: false` (`render(markdown, { highlight: false })`), then colour each fence. `createHighlighter(options?)` makes one highlighter per document; `highlight(code, info)` answers `{ html, language, mode, charsUsed }`, and passing each fence of a document in order gives `render()`'s own code html, block for block: the language from `LANGUAGES` only (through `resolveLanguage(info)`, never guessed), a block of at most `MAX_WHOLE_BLOCK_CHARS` (256) code units highlighted whole and a longer one a line at a time, a block with a line over `MAX_LINE_CHARS` (256) left plain, and at most `MAX_DOCUMENT_CHARS` (262144) code units highlighted per document (`maxDocumentChars` changes it). `HIGHLIGHT_ENGINE` names highlight.js and its pinned version. It is pure and worker-safe, and its declarations name no highlight.js or DOM type.
+
 ## The conformance corpus: `./conformance`
 
 The corpus is the contract: what `render()` must produce, shipped with the package so any host can check its own renderer or build against it.
@@ -215,7 +451,7 @@ The corpus is the contract: what `render()` must produce, shipped with the packa
 | Kind | Cases | Judged by |
 |---|---|---|
 | golden | 37 | `conformance/corpus/<id>.md` in, `conformance/expected/<id>.html` and `.meta.json` out, compared exactly |
-| hostile | 15 | a golden, plus a verdict in `conformance/hostile.json` (strings that must never appear, bounds on depth and time) |
+| hostile | 17 | a golden, plus a verdict in `conformance/hostile.json` (strings that must never appear, bounds on depth and time) |
 | generated | 30 | a verdict only; the input is built from a small spec on the consumer's machine (deep nesting, long delimiter runs, huge tables, comment and heading floods, pathological code, note floods, an over-limit input, an html expansion past `maxHtmlBytes`) |
 
 Every case is also checked by an output-safety oracle: only known tags, attributes, classes and URL schemes may appear. Code inside a highlighted block is compared as text, so a host may use another highlighter's markup.
@@ -232,6 +468,8 @@ if (!run.ok) process.exit(1);
 ```
 
 `runCorpus(renderFn, { only, scanRefs, timeScale })` returns `{ ok, total, passed, results }`, one result per case with its failures. Pass `scanRefs`, or the case that bounds image scanning fails and says so. `timeScale` multiplies every time bound for a slow machine; it never changes a verdict. `loadCorpus()` returns the cases themselves, and `normaliseForCompare`, `checkOutputSafety`, `evaluateVerdict`, `buildInput`, `inputSize` and `MAX_INPUT_BYTES` are exported for hosts that judge cases their own way.
+
+Two more sets of cases ship for a host that builds or hosts the frame itself. `bridgeCases()` returns `conformance/bridge-cases.json`, the bridge as fixtures (see the bridge, above), and throws on a file of another protocol. `conformance/frame-mutants/` holds labelled srcdoc mutants for a host's checks of a `frameDocument` output: `clean.html` is a real output with the policy and each asset's text replaced by a placeholder, and every other file is `clean.html` with exactly one defect, which `index.json` names with the check it must trip (the srcdoc's prefix and order, no URL outside the scripts, or the seed). Expand the placeholders with this version's `frameCsp()` and asset files, check that `clean.html` passes every check, and check each mutant with its own row's check.
 
 ### Departures from the reference renderer
 
@@ -257,21 +495,35 @@ Node 22 or later. Every dependency is pinned to an exact version and installed f
 
 ```sh
 npm ci                            # install exactly what package-lock.json records
-npm run typecheck                 # the whole tree, src/render alone with no host types, src/enhance with the DOM
+npm run typecheck                 # the whole tree; src/render, src/frame and src/highlight with no host types; src/enhance, the frame runtime and src/host with the DOM
 ./node_modules/.bin/vitest run    # every test; one file: ./node_modules/.bin/vitest run test/package.test.ts
-npm run build                     # dist/ from src/
+npm run build                     # the Mermaid files, the frame assets and their manifests, then dist/ from src/
 ```
 
 - Run the local `vitest` binary, never a bare `npx vitest`, which can resolve a different global copy.
 - The layout tests (`test/browser/`) run last, in real Chromium and WebKit: install them once with `npx playwright-core install --with-deps chromium webkit` (the system libraries need root); a browser that cannot start fails them, and `DOCREADER_BROWSERS=chromium` runs one browser and reports the other as excluded.
 - Tests never reach a network: `test/setup/no-network.ts` makes `fetch` and every socket connect throw, and the packing test runs npm offline.
-- CI (`.github/workflows/ci.yml`) installs the pinned browsers and runs those four steps on Node 22 and 24, on pull requests and on `main`, failing a run whose tests leave `conformance/layout/` changed, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry (with `--before` set 14 days back, so its transitive dependencies obey the age rule too) typechecks a strict consumer of the three code entries, imports `./enhance` in Node, resolves the stylesheet and the font licence through `./assets/*`, checks that deep imports are refused, and runs the corpus through the package's public entries.
+- CI (`.github/workflows/ci.yml`) installs the pinned browsers and runs those four steps on Node 22 and 24, on pull requests and on `main`, failing a run whose tests leave `conformance/layout/` changed, then the verdict ratchet against the base branch (on a push, against `main` before the push), then `npm pack` and `scripts/consumer-smoke.mjs`, which installs the tarball in a throwaway project from the registry (with `--before` set 14 days back, so its transitive dependencies obey the age rule too), typechecks a strict consumer of every code entry (`./frame` and `./highlight` also without the DOM library), checks that the exports map is exactly the public surface and that deep imports are refused, imports `./enhance`, `./frame`, `./host` and `./highlight` in Node and checks that each is import-inert and exports exactly its names, re-hashes every `assets.json` entry through `./assets/*`, builds two srcdocs with `frameDocument` from the installed files (one with Mermaid, one without) and checks their scripts against those files byte for byte, runs the srcdoc checks on them and on every labelled frame mutant, checks the font notice in the frame stylesheet, loads `bridgeCases()`, and runs the corpus through the package's public entries.
 - A new or bumped dependency is an exact version at least 14 days old. Add it with
   `npm install --save-exact --before=<a date 14 days back> <name>@<x.y.z>`; npm then refuses a younger version.
 
+## Release verification
+
+Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The package is private until v1. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):
+
+```sh
+npm install @synapsium-labs/docserver@$VERSION --ignore-scripts
+npm audit signatures
+npm pack @synapsium-labs/docserver@$VERSION
+test "$(npm view @synapsium-labs/docserver@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-docserver-$VERSION.tgz | openssl base64 -A)"
+gh attestation verify synapsium-labs-docserver-$VERSION.tgz --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml
+```
+
+`npm audit signatures` checks the registry signatures and provenance of what was installed. `npm pack` fetches the registry's own tarball of that version into the directory, as `synapsium-labs-docserver-$VERSION.tgz`. The `test` line exits non-zero unless the registry's `dist.integrity`, which the install was checked against, is the `sha512-` integrity of those bytes. `gh attestation verify` then checks that the same bytes were built by this repository's release workflow and attested there; they are also the tarball attached to the GitHub release of that version. Each command must exit 0.
+
 ## Design
 
-The design lives in ccrc's spec: [Rich Docs reader and a shared renderer](https://github.com/Synapsium-Labs/ccrc-pwa/blob/main/docs/superpowers/specs/2026-10-12-rich-docs-reader-and-shared-renderer-design.md), §3. The programme ledger is [`docs/superpowers/programs/docserver.md`](docs/superpowers/programs/docserver.md).
+The design lives in the first consumer's public spec: [Rich Docs reader and a shared renderer](https://github.com/Synapsium-Labs/ccrc-pwa/blob/main/docs/superpowers/specs/2026-10-12-rich-docs-reader-and-shared-renderer-design.md), §3. The programme ledger is [`docs/superpowers/programs/docserver.md`](docs/superpowers/programs/docserver.md).
 
 ## Licence
 
