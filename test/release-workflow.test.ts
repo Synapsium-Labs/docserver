@@ -118,7 +118,7 @@ const V_SIGNED = '2. the tag is signed by a release-signer key line of the signe
 const V_VERSION_TAG = "3. the tag is v + package.json's version";
 const V_ON_MAIN = '4. the tag is on main';
 const V_PUBLIC = '5. package.json is not private';
-const V_ENVIRONMENT = '6. the npm-release environment needs a reviewer, prevents self-review and deploys v* tags only';
+const V_ENVIRONMENT = '6. the npm-release environment needs a reviewer that administrators cannot bypass, and deploys v* tags only';
 const TAG_FREE = [V_VERSION, V_SIGNERS_MAIN];
 const TAG_STEPS = [V_TAG, V_ANNOTATED, V_SIGNED, V_VERSION_TAG, V_ON_MAIN, V_PUBLIC, V_ENVIRONMENT];
 
@@ -460,11 +460,16 @@ describe('release.yml: verify-tag (L3.W7, L3.W11)', () => {
     for (const value of [true, false]) expect(verify(V_PUBLIC, packageDir({ version: '1.0.0', private: value }, '1.0.0'), {}, true).r.status).not.toBe(0);
   });
 
-  /** The two answers GitHub gives for the environment and its deployment policies; each row changes one. */
+  /**
+   * The two answers GitHub gives for the environment and its deployment policies; each row changes one. The environment is
+   * the operator's single-maintainer arrangement (ledger C101): the maintainer who pushes the tag is the required reviewer,
+   * so self-review is allowed, and administrators cannot bypass the review.
+   */
   const ENVIRONMENT = {
     name: 'npm-release',
+    can_admins_bypass: false,
     protection_rules: [
-      { id: 1, type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', reviewer: { login: 'operator-a' } }] },
+      { id: 1, type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', reviewer: { login: 'operator-a' } }] },
       { id: 2, type: 'branch_policy' },
     ],
     deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
@@ -489,6 +494,11 @@ describe('release.yml: verify-tag (L3.W7, L3.W11)', () => {
     expect(stepNamed('verify-tag', V_ENVIRONMENT)?.env).toEqual({ GH_TOKEN: '${{ github.token }}', REPO: '${{ github.repository }}' });
   });
 
+  it('6. the environment check passes when self-review is prevented too: a second reviewer is a stricter arrangement', () => {
+    const { r } = environment(rule({ prevent_self_review: true }), POLICIES);
+    expect(r.status, r.stderr).toBe(0);
+  });
+
   const rule = (patch: Record<string, unknown>): unknown => ({ ...ENVIRONMENT, protection_rules: [{ ...ENVIRONMENT.protection_rules[0], ...patch }, ENVIRONMENT.protection_rules[1]] });
   it.each([
     ['GitHub refuses the environment read (it does not exist, or the token cannot read it)', undefined, POLICIES],
@@ -496,8 +506,8 @@ describe('release.yml: verify-tag (L3.W7, L3.W11)', () => {
     ['the answer is not JSON', '<html>', POLICIES],
     ['no required-reviewers rule', { ...ENVIRONMENT, protection_rules: [ENVIRONMENT.protection_rules[1]] }, POLICIES],
     ['no protection rules at all', { ...ENVIRONMENT, protection_rules: [] }, POLICIES],
-    ['self-review is allowed', rule({ prevent_self_review: false }), POLICIES],
-    ['self-review is not stated', rule({ prevent_self_review: undefined }), POLICIES],
+    ['administrators can bypass the review', { ...ENVIRONMENT, can_admins_bypass: true }, POLICIES],
+    ['whether administrators can bypass the review is not stated', { ...ENVIRONMENT, can_admins_bypass: undefined }, POLICIES],
     ['the reviewers list is empty', rule({ reviewers: [] }), POLICIES],
     ['deployments are open to every branch', { ...ENVIRONMENT, deployment_branch_policy: null }, POLICIES],
     ['deployments follow protected branches', { ...ENVIRONMENT, deployment_branch_policy: { protected_branches: true, custom_branch_policies: false } }, POLICIES],
