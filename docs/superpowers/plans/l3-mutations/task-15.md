@@ -1,23 +1,23 @@
 # L3 Task 15: mutation rows (the operator's environment arrangement)
 
-Task 15 adds no guard of its own; the lane's rows are Task 14's (`task-14.md`). This file holds the rows of one change made at Task 15 step 2 on the operator's ruling (ledger C101): the `npm-release` environment's required reviewer is the maintainer who pushes the tag, so self-review is allowed, and verify-tag's check 6 requires instead that administrators cannot bypass the review. Task 14's row L3.W7f (check 6, prevent self-review) guarded the check this change removes; L3.W7m below shows that putting it back fails the operator's environment.
+Task 15 adds no guard of its own; the lane's rows are Task 14's (`task-14.md`). This file holds the rows of one change made at Task 15 step 2 on the operator's ruling (ledger C101): the `npm-release` environment's required reviewer is the maintainer who pushes the tag, so self-review is allowed, and verify-tag's check 6 requires instead that administrators cannot bypass the review. Task 14's row L3.W7f (check 6, prevent self-review) guarded the check this change removes; L3.W7t below shows that putting it back fails the operator's environment. The ids continue after Task 14's last check-row id, L3.W7q.
 
 **Result.** 3 rows, 3 red, each through failing vitest assertions (`AssertionError`); no row counts a setup, type or timeout error, and the file was restored from its saved bytes and its sha256 compared equal after each row. Measured on this change's final code and tests, 2026-10-29, Node 24.22.1.
 
 **Method.** As Task 14's (C69, C75): one row at a time, in place in the library worktree, never in parallel and never in a copy; the file's original bytes and sha256 saved outside the worktree before the first row; one exact replacement (its old text occurring exactly once); `./node_modules/.bin/vitest run --maxWorkers=1 --fileParallelism=false test/release-workflow.test.ts` under `ulimit -u` (the measured thread count plus 1500) and `timeout -k 10 600`; then the saved bytes written back and compared by sha256, never `git checkout`.
 
-## L3.W7k to L3.W7m: check 6, administrators cannot bypass the review
+## L3.W7r to L3.W7t: check 6, administrators cannot bypass the review
 
 | Row | Guard | File | Change | Red | Restore |
 |---|---|---|---|---|---|
-| L3.W7k | check 6, administrators cannot bypass (check deleted) | `.github/workflows/release.yml` | `          if (env?.can_admins_bypass !== false) failures.push('administrators can bypass t…` → (removed) | `test/release-workflow.test.ts`: exit 1, 2 failed \| 67 passed (69). "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check fails closed when administrators can bypass the review"; "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check fails closed when whether administrators can bypass the review is not stated" | sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal |
-| L3.W7l | check 6, an unstated bypass fails closed | `.github/workflows/release.yml` | `env?.can_admins_bypass !== false)` → `env?.can_admins_bypass === true)` | `test/release-workflow.test.ts`: exit 1, 1 failed \| 68 passed (69). "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check fails closed when whether administrators can bypass the review is not stated" | sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal |
-| L3.W7m | check 6 accepts the single-maintainer arrangement (the old self-review check put back) | `.github/workflows/release.yml` | `          if (env?.can_admins_bypass !== false) failures.push('administrators can bypass t…` → `          if (env?.can_admins_bypass !== false) failures.push('administrators can bypass t…` | `test/release-workflow.test.ts`: exit 1, 1 failed \| 68 passed (69). "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check reads the environment and its deployment policies with the job's token, and passes on the protected environment" | sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal |
+| L3.W7r | check 6, administrators cannot bypass (check deleted) | `.github/workflows/release.yml` | `          if (env?.can_admins_bypass !== false) failures.push('administrators can bypass t…` → (removed) | `test/release-workflow.test.ts`: exit 1, 2 failed \| 67 passed (69). "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check fails closed when administrators can bypass the review"; "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check fails closed when whether administrators can bypass the review is not stated" | sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal |
+| L3.W7s | check 6, an unstated bypass fails closed | `.github/workflows/release.yml` | `env?.can_admins_bypass !== false)` → `env?.can_admins_bypass === true)` | `test/release-workflow.test.ts`: exit 1, 1 failed \| 68 passed (69). "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check fails closed when whether administrators can bypass the review is not stated" | sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal |
+| L3.W7t | check 6 accepts the single-maintainer arrangement (the old self-review check put back) | `.github/workflows/release.yml` | after `          if (env?.can_admins_bypass !== false) failures.pus…`, added `          if (reviewers.length !== 1 \|\| reviewers[0].prevent_self_review !== true) failures.push('self-review …` | `test/release-workflow.test.ts`: exit 1, 1 failed \| 68 passed (69). "release.yml: verify-tag (L3.W7, L3.W11) 6. the environment check reads the environment and its deployment policies with the job's token, and passes on the protected environment" | sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal |
 
 ```json
 [
   {
-    "id": "L3.W7k",
+    "id": "L3.W7r",
     "guard": "check 6, administrators cannot bypass (check deleted)",
     "file": ".github/workflows/release.yml",
     "old": "          if (env?.can_admins_bypass !== false) failures.push('administrators can bypass the review');\n",
@@ -38,7 +38,7 @@ Task 15 adds no guard of its own; the lane's rows are Task 14's (`task-14.md`). 
     "restore": "sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal"
   },
   {
-    "id": "L3.W7l",
+    "id": "L3.W7s",
     "guard": "check 6, an unstated bypass fails closed",
     "file": ".github/workflows/release.yml",
     "old": "env?.can_admins_bypass !== false)",
@@ -57,7 +57,7 @@ Task 15 adds no guard of its own; the lane's rows are Task 14's (`task-14.md`). 
     "restore": "sha256 2079f4c926a7574282948104aef5060cc50f152203be12cd6cb5f8d28d48c9be restored, equal"
   },
   {
-    "id": "L3.W7m",
+    "id": "L3.W7t",
     "guard": "check 6 accepts the single-maintainer arrangement (the old self-review check put back)",
     "file": ".github/workflows/release.yml",
     "old": "          if (env?.can_admins_bypass !== false) failures.push('administrators can bypass the review');\n",
