@@ -4,7 +4,7 @@ One shared renderer for spec and plan documents written in Markdown. It turns Ma
 
 It is pure. It does no network, storage, auth, git or hosting. Each product that uses it brings its own transport, login, content source and hosting, and pins one exact version.
 
-**Status:** 1.0.0, the first published version. `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. Every version is published from a signed tag through the release lane (`.github/workflows/release.yml`); the Release verification section below checks one.
+**Status:** 1.0.0, the first release. `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. Every version is published from a signed tag through the release lane (`.github/workflows/release.yml`); the Release verification section below checks one.
 
 ## What it holds
 
@@ -509,7 +509,7 @@ npm run build                     # the Mermaid files, the frame assets and thei
 
 ## Release verification
 
-Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first published version is 1.0.0. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):
+Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first release is 1.0.0; the deprecated `0.0.0-reserve` before it is an empty placeholder that reserved the name on npm. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):
 
 ```sh
 npm install @synapsium-labs/docserver@$VERSION --ignore-scripts
