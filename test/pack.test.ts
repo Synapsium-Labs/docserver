@@ -244,7 +244,7 @@ afterAll(() => {
 describe('npm pack', () => {
   it('names the tarball as CI expects it', () => {
     expect(packed.filename).toBe(TARBALL);
-    expect(TARBALL).toBe('synapsium-labs-docserver-0.1.0.tgz');
+    expect(TARBALL).toBe('synapsium-labs-docserver-1.0.0.tgz');
   });
 
   it('holds the six entries with their types, the corpus files, the licence, the readme, the assets and their notices', () => {

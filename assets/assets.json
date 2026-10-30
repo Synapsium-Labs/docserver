@@ -1,7 +1,7 @@
 {
   "manifest": 1,
   "package": "@synapsium-labs/docserver",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "bridgeProtocol": 1,
   "files": [
     {

@@ -1,7 +1,6 @@
 {
   "name": "@synapsium-labs/docserver",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
   "description": "A pure Markdown renderer with a conformance corpus.",
   "license": "MIT",
   "type": "module",

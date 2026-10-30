@@ -5,7 +5,8 @@
 # against main's copy of this file, and refuses a tag unless the file holds at least one key line for this principal:
 #   release-signer <key type> <public key> [comment]
 #
-# This file holds no key line yet. The key line is the operator's, supplied for the v1 release; it lands in the v1
-# release pull request, beside the change that makes the package public, and never earlier.
+# The key line below is the operator's, supplied for the v1 release (Task 15, Q9) and copied verbatim after the
+# principal; it landed in the v1 release pull request, beside the change that made the package public.
 # test/public-ready.test.ts (L3.W10) holds that rule: no key line while package.json is private, at least one
 # release-signer key line once it is not.
+release-signer ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJULH8M34nKN2KE72ivv5Goz3s8PuwCua0ikMU1C4GpR release-signer
