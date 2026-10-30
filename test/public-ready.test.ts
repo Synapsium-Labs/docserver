@@ -21,8 +21,8 @@
 // L3 Task 14 adds the release files' pins: package.json's publishConfig and exact repository URL (npm provenance
 // compares it), the MIT LICENSE, SECURITY.md, .github/CODEOWNERS, THIRD-PARTY-NOTICES covering both Mermaid files and
 // the four runtime libraries, the font licence in the packed files, .github/release-signers (L3.W10: no key line while
-// the package is private, at least one `release-signer` key line once it is not), and the one pin that the package is
-// still private, which Task 15 flips in the v1 release PR.
+// the package is private, at least one `release-signer` key line once it is not), and the one pin of package.json's
+// private field, which Task 15 flipped in the v1 release PR: the package is public.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -284,8 +284,8 @@ function signersProblems(text: string, isPrivate: boolean): string[] {
 }
 
 describe('public-ready: the release files (L3 Task 14)', () => {
-  it('package.json is still private: Task 15 flips this pin, and only this one, in the v1 release PR', () => {
-    expect(manifest.private).toBe(true);
+  it('package.json is public: it carries no private field (Task 15 flipped this pin, the only one, in the v1 release PR)', () => {
+    expect(manifest.private).toBeUndefined();
   });
 
   it('this file holds the only pin of package.json\'s private field among the tests, so Task 15 flips exactly one', () => {
@@ -370,7 +370,7 @@ describe('public-ready: the release files (L3 Task 14)', () => {
     }
   });
 
-  it('L3.W10: .github/release-signers names the principal and holds no key line while the package is private', () => {
+  it('L3.W10: .github/release-signers names the principal and, the package being public, holds a release-signer key line', () => {
     expect(signersProblems(readRoot('.github/release-signers'), manifest.private === true)).toEqual([]);
   });
 

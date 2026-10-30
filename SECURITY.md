@@ -14,7 +14,7 @@ The maintainers acknowledge a report in the advisory, agree a fix and a release 
 
 ## Supported versions
 
-Only the latest published version receives fixes. Before v1.0.0 the package is not published.
+Only the latest published version receives fixes. The one version before 1.0.0, `0.0.0-reserve`, is an empty, deprecated placeholder that reserved the name on npm.
 
 ## Verifying what you install
 
