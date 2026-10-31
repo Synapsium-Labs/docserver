@@ -42,3 +42,7 @@ Its assets, each with the sha256 that `assets/assets.json` records:
 ## 0.0.0-reserve
 
 An empty placeholder, published once by hand and deprecated, that reserved the package name on npm so that the trusted publisher could be attached before 1.0.0. It holds no code; install 1.0.0 or later.
+
+## 0.0.0-stage
+
+An empty placeholder that npm made itself during the first publish of the package ("Temporary package placeholder for staged publishing"), deprecated. It holds no code; install 1.0.0 or later.

@@ -509,7 +509,7 @@ npm run build                     # the Mermaid files, the frame assets and thei
 
 ## Release verification
 
-Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first release is 1.0.0; the deprecated `0.0.0-reserve` before it is an empty placeholder that reserved the name on npm. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):
+Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first release is 1.0.0; the deprecated `0.0.0-reserve` and `0.0.0-stage` before it are empty placeholders: the first reserved the name on npm, and npm made the second itself during that first publish. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):
 
 ```sh
 npm install @synapsium-labs/docserver@$VERSION --ignore-scripts
