@@ -2,7 +2,7 @@
 
 Each guard of Task 9, changed once, with the tests that go red: the parser (`src/host/parse.ts`), the limiter (`src/host/limits.ts`), the store (`src/host/store.ts`), the link classifier (`src/host/links.ts`) and the hidden-character check (`src/host/copy.ts`). Measured 2026-10-27 (UTC) on branch `l3-t09-host-internals` (base `af42b96`, the Task 9 changes not yet committed), on the code and test files after the review's fix round; the first measurement's 56 rows were measured again, L3.H4k was reversed with the code (it now restores the `error` exemption the fix round removed), and seven rows are new (L3.H4n, L3.H5g, L3.H5h, L3.H6j to L3.H6m).
 
-**Result.** 63 rows, 63 red: every row exits 1 through failing assertions only (every failing test failed with an `AssertionError`; none through a file that failed to load, an unhandled error or a timeout). No row is an equivalent mutant.
+**Result.** 75 rows, 75 red: every row exits 1 through failing assertions only (every failing test failed with an `AssertionError`; none through a file that failed to load, an unhandled error or a timeout). No row is an equivalent mutant.
 
 **Method** (Global Constraints, "Low disk"; C69, C75). One row at a time, in place in the task's own worktree, never in parallel and never in a copy of the repository. For each row: the file's original bytes and their sha256 were saved outside the worktree; each `old` was checked to occur exactly once and replaced by `new`; the thread count was measured (`ps -L -u "$(id -u)" --no-headers | wc -l`, 1844 to 1995 over the runs) and the row ran as `ulimit -u <threads + 1500>; timeout -k 10 600 ./node_modules/.bin/vitest run --maxWorkers=2 <tests>`, its output captured to a log; the file was then restored from the saved bytes and its sha256 checked equal to the saved one (never `git checkout`). Every restore matched, and after the last row `sha256sum -c` over the ten Task 9 files and the frame build's two committed outputs matched the hashes taken before the first. No row mutates an input of the frame build, so none needs a rebuild; `node scripts/build-frame.mjs --check` is green on the restored tree. The Red column gives the count line and the failing tests (at most five). In the Change column a line break is shown as ⏎; the JSON fence holds the exact text.
 
@@ -1157,19 +1157,33 @@ Reference §11.3. The plan's row "drop each refusal" is one row per refusal: the
 ]
 ```
 
-## Copy: `src/host/copy.ts` (L3.H7a to L3.H7g)
+## Copy: `src/host/copy.ts` (L3.H7a to L3.H7g, L3.H7h to L3.H7s)
 
 Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per class: the C0 controls with ESC (L3.H7a), DEL (L3.H7b), the bidi embeddings and overrides (L3.H7c), the bidi isolates (L3.H7d) and the zero-width characters (L3.H7e). L3.H7f reports tab and newline, and L3.H7g counts indices in code points.
 
+Rows L3.H7h to L3.H7s guard the operator's ruling of 2026-11-02 (ledger C103): the directional marks (L3.H7h), the tag block (L3.H7i), the walk by code point in `hiddenChars` (L3.H7j) and in `hasHiddenChar` (L3.H7k), the tag block's upper and lower bound (L3.H7l, L3.H7m), the names of U+E0001, U+E007F and the unassigned tags (L3.H7n, L3.H7o, L3.H7p), the step threshold of each walk (L3.H7q, L3.H7r: `>=` for `>` makes U+FFFF step two and skip the next character) and the order of the ASCII name table (L3.H7s). Because `copy.ts` was rewritten for the ruling, L3.H7g was re-targeted at the new `hiddenChars` loop (the same guard: the index counted in code points, by a `for (const ch of text)` walk) and **every row L3.H7a to L3.H7s, with L3.H7c1, was measured again on the final tree** on 2026-11-02 (UTC), on branch `copy-check-marks-and-tags` (base `689457f`, the change not yet committed), by the Method above: each row run against `test/host-copy.test.ts` and then `test/host-links.test.ts` with `--reporter=json`, `copy.ts` restored from the saved bytes after each row, sha256 `10f83c087996…` equal to the saved one every time. The count lines of rows L3.H7a to L3.H7g therefore replace the ones measured on the first Task 9 tree (the test file has grown, 37 tests now). A row whose links-test file also goes red lists both files; its count line in the JSON is the sum of the two runs. Every failing test failed with an `AssertionError`. L3.H7j and L3.H7k are separate rows because each function has its own loop. Advancing one code unit after an astral character, with `codePointAt` kept, is an equivalent mutant (the low surrogate then read alone is not hidden), so it has no row.
+
 | Row | Guard | File | Change | Red | Restore |
 |---|---|---|---|---|---|
-| L3.H7a | drop a class: C0 controls (ESC among them) | `src/host/copy.ts` | `  if (c < 0x20) return c === TAB \|\| c === NEWLINE ? null : (C0_NAMES[c] ?? null);` → `  if (c < 0x20) return null;` | `test/host-copy.test.ts`: 4 failed \| 17 passed (21). "DEL, NUL, BEL, BACKSPACE, VT, FF and CR"; "ESC"; "every C0 control but tab and newline, each with a name of its own"; "every hidden character of a mixed text, in order" | sha256 `c56eb9ee5809…` restored, equal |
-| L3.H7b | drop a class: DEL | `src/host/copy.ts` | `  0x7f: 'DELETE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 1 failed \| 20 passed (21). "DEL, NUL, BEL, BACKSPACE, VT, FF and CR" | sha256 `c56eb9ee5809…` restored, equal |
-| L3.H7c | drop a class: the bidi embeddings and overrides (U+202A to U+202E) | `src/host/copy.ts` | `  0x202a: 'LEFT-TO-RIGHT EMBEDDING', ⏎   0x202b: 'RIGHT-TO-LEFT EMBEDDING', ⏎   0x202c: 'POP DIRECTIONAL FORMATTING', ⏎   0x202d: 'LEFT-TO-RIGHT OVERRIDE', ⏎   0x202e: 'RIGHT-TO-LEFT OVERRIDE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 6 failed \| 15 passed (21). "the bidi control U+202A LEFT-TO-RIGHT EMBEDDING"; "the bidi control U+202B RIGHT-TO-LEFT EMBEDDING"; "the bidi control U+202C POP DIRECTIONAL FORMATTING"; "the bidi control U+202D LEFT-TO-RIGHT OVERRIDE"; "the bidi control U+202E RIGHT-TO-LEFT OVERRIDE"; and 1 more | sha256 `c56eb9ee5809…` restored, equal |
-| L3.H7d | drop a class: the bidi isolates (U+2066 to U+2069) | `src/host/copy.ts` | `  0x2066: 'LEFT-TO-RIGHT ISOLATE', ⏎   0x2067: 'RIGHT-TO-LEFT ISOLATE', ⏎   0x2068: 'FIRST STRONG ISOLATE', ⏎   0x2069: 'POP DIRECTIONAL ISOLATE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 5 failed \| 16 passed (21). "the bidi control U+2066 LEFT-TO-RIGHT ISOLATE"; "the bidi control U+2067 RIGHT-TO-LEFT ISOLATE"; "the bidi control U+2068 FIRST STRONG ISOLATE"; "the bidi control U+2069 POP DIRECTIONAL ISOLATE"; "every hidden character of a mixed text, in order" | sha256 `c56eb9ee5809…` restored, equal |
-| L3.H7e | drop a class: the zero-width characters | `src/host/copy.ts` | `  0x200b: 'ZERO WIDTH SPACE', ⏎   0x200c: 'ZERO WIDTH NON-JOINER', ⏎   0x200d: 'ZERO WIDTH JOINER', ⏎   0x2060: 'WORD JOINER', ⏎   0xfeff: 'ZERO WIDTH NO-BREAK SPACE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 7 failed \| 14 passed (21). "the zero-width character U+200B ZERO WIDTH SPACE"; "the zero-width character U+200C ZERO WIDTH NON-JOINER"; "the zero-width character U+200D ZERO WIDTH JOINER"; "the zero-width character U+2060 WORD JOINER"; "the zero-width character U+FEFF ZERO WIDTH NO-BREAK SPACE"; and 2 more | sha256 `c56eb9ee5809…` restored, equal |
-| L3.H7f | report tab and newline as hidden | `src/host/copy.ts` | `return c === TAB \|\| c === NEWLINE ? null : (C0_NAMES[c] ?? null);` → `return C0_NAMES[c] ?? null;` | `test/host-copy.test.ts`: 2 failed \| 19 passed (21). "every C0 control but tab and newline, each with a name of its own"; "clean text, tab, newline, ordinary non-ASCII and the marks beside the listed ranges give nothing" | sha256 `c56eb9ee5809…` restored, equal |
-| L3.H7g | index by code points, not UTF-16 code units | `src/host/copy.ts` | `  for (let i = 0; i < text.length; i += 1) { ⏎     const c = text.charCodeAt(i);` → `  let i = -1; ⏎   for (const ch of text) { ⏎     i += 1; ⏎     const c = ch.codePointAt(0) ?? 0;` | `test/host-copy.test.ts`: 1 failed \| 20 passed (21). "an astral character before a hidden one counts two" | sha256 `c56eb9ee5809…` restored, equal |
+| L3.H7a | drop a class: C0 controls (ESC among them) | `src/host/copy.ts` | `  if (c < 0x20) return c === TAB \|\| c === NEWLINE ? null : (C0_NAMES[c] ?? null);` → `  if (c < 0x20) return null;` | `test/host-copy.test.ts`: 4 failed \| 33 passed (37). "ESC"; "DEL, NUL, BEL, BACKSPACE, VT, FF and CR"; "every C0 control but tab and newline, each with a name of its own"; "every hidden character of a mixed text, in order". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7b | drop a class: DEL | `src/host/copy.ts` | `  0x7f: 'DELETE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "DEL, NUL, BEL, BACKSPACE, VT, FF and CR". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7c | drop a class: the bidi embeddings and overrides (U+202A to U+202E) | `src/host/copy.ts` | `  0x202a: 'LEFT-TO-RIGHT EMBEDDING', ⏎   0x202b: 'RIGHT-TO-LEFT EMBEDDING', ⏎   0x202c: 'POP DIRECTIONAL FORMATTING', ⏎   0x202d: 'LEFT-TO-RIGHT OVERRIDE', ⏎   0x202e: 'RIGHT-TO-LEFT OVERRIDE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 6 failed \| 31 passed (37). "the bidi control U+202A LEFT-TO-RIGHT EMBEDDING"; "the bidi control U+202B RIGHT-TO-LEFT EMBEDDING"; "the bidi control U+202C POP DIRECTIONAL FORMATTING"; "the bidi control U+202D LEFT-TO-RIGHT OVERRIDE"; "the bidi control U+202E RIGHT-TO-LEFT OVERRIDE"; and 1 more. `test/host-links.test.ts`: 1 failed \| 21 passed (22). "the copy check's bidi controls and zero-width characters, anywhere, in every kind of link". | sha256 `10f83c087996…` restored, equal |
+| L3.H7d | drop a class: the bidi isolates (U+2066 to U+2069) | `src/host/copy.ts` | `  0x2066: 'LEFT-TO-RIGHT ISOLATE', ⏎   0x2067: 'RIGHT-TO-LEFT ISOLATE', ⏎   0x2068: 'FIRST STRONG ISOLATE', ⏎   0x2069: 'POP DIRECTIONAL ISOLATE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 5 failed \| 32 passed (37). "the bidi control U+2066 LEFT-TO-RIGHT ISOLATE"; "the bidi control U+2067 RIGHT-TO-LEFT ISOLATE"; "the bidi control U+2068 FIRST STRONG ISOLATE"; "the bidi control U+2069 POP DIRECTIONAL ISOLATE"; "every hidden character of a mixed text, in order". `test/host-links.test.ts`: 1 failed \| 21 passed (22). "the copy check's bidi controls and zero-width characters, anywhere, in every kind of link". | sha256 `10f83c087996…` restored, equal |
+| L3.H7e | drop a class: the zero-width characters | `src/host/copy.ts` | `  0x200b: 'ZERO WIDTH SPACE', ⏎   0x200c: 'ZERO WIDTH NON-JOINER', ⏎   0x200d: 'ZERO WIDTH JOINER', ⏎   0x2060: 'WORD JOINER', ⏎   0xfeff: 'ZERO WIDTH NO-BREAK SPACE', ⏎ ` → (removed) | `test/host-copy.test.ts`: 7 failed \| 30 passed (37). "the zero-width character U+200B ZERO WIDTH SPACE"; "the zero-width character U+200C ZERO WIDTH NON-JOINER"; "the zero-width character U+200D ZERO WIDTH JOINER"; "the zero-width character U+2060 WORD JOINER"; "the zero-width character U+FEFF ZERO WIDTH NO-BREAK SPACE"; and 2 more. `test/host-links.test.ts`: 1 failed \| 21 passed (22). "the copy check's bidi controls and zero-width characters, anywhere, in every kind of link". | sha256 `10f83c087996…` restored, equal |
+| L3.H7f | report tab and newline as hidden | `src/host/copy.ts` | `return c === TAB \|\| c === NEWLINE ? null : (C0_NAMES[c] ?? null);` → `return C0_NAMES[c] ?? null;` | `test/host-copy.test.ts`: 2 failed \| 35 passed (37). "every C0 control but tab and newline, each with a name of its own"; "clean text, tab, newline, ordinary non-ASCII and the marks beside the listed ranges give nothing". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7g | index by code points, not UTF-16 code units | `src/host/copy.ts` | `  const out: HiddenChar[] = []; ⏎   for (let i = 0; i < text.length; ) { ⏎     const c = text.codePointAt(i) ?? 0; ⏎     const name = hiddenName(c); ⏎     if (name !== null) out.push({ index: i, codePoint: c, name }); ⏎     i += c > 0xffff ? 2 : 1; ⏎   }` → `  const out: HiddenChar[] = []; ⏎   let i = -1; ⏎   for (const ch of text) { ⏎     i += 1; ⏎     const c = ch.codePointAt(0) ?? 0; ⏎     const name = hiddenName(c); ⏎     if (name !== null) out.push({ index: i, codePoint: c, name }); ⏎   }` | `test/host-copy.test.ts`: 4 failed \| 33 passed (37). "an astral character before a hidden one counts two"; "the whole block: 128 entries in order, two code units apart, each with a name of its own"; "the England flag: the flag is visible, its six tag characters are not"; "an index stays right after an astral visible character". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7h | drop a class: the directional marks (U+061C, U+200E, U+200F) | `src/host/copy.ts` | `  // directional marks (ledger C103) ⏎   0x061c: 'ARABIC LETTER MARK', ⏎   0x200e: 'LEFT-TO-RIGHT MARK', ⏎   0x200f: 'RIGHT-TO-LEFT MARK', ⏎ ` → (removed) | `test/host-copy.test.ts`: 8 failed \| 29 passed (37). "the directional mark U+061C ARABIC LETTER MARK"; "the directional mark U+200E LEFT-TO-RIGHT MARK"; "the directional mark U+200F RIGHT-TO-LEFT MARK"; "an index stays right after an astral visible character"; "a lone high surrogate before a mark does not break the walk; alone it is not hidden"; and 3 more. `test/host-links.test.ts`: 2 failed \| 20 passed (22). "the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)"; "a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)". | sha256 `10f83c087996…` restored, equal |
+| L3.H7i | drop a class: the tag block (U+E0000 to U+E007F) | `src/host/copy.ts` | `  if (c >= TAG_FIRST && c <= TAG_LAST) return tagName(c); ⏎ ` → (removed) | `test/host-copy.test.ts`: 7 failed \| 30 passed (37). "LANGUAGE TAG and CANCEL TAG, each with its name"; "the whole block: 128 entries in order, two code units apart, each with a name of its own"; "the England flag: the flag is visible, its six tag characters are not"; "every U+E0020 to U+E007E is TAG plus the name of its ASCII twin"; "the step threshold: the mark after U+FFFF (one code unit) is not skipped"; and 2 more. `test/host-links.test.ts`: 1 failed \| 21 passed (22). "the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)". | sha256 `10f83c087996…` restored, equal |
+| L3.H7j | walk hiddenChars by code unit, not by code point | `src/host/copy.ts` | `    const c = text.codePointAt(i) ?? 0; ⏎     const name = hiddenName(c); ⏎     if (name !== null) out.push({ index: i, codePoint: c, name }); ⏎     i += c > 0xffff ? 2 : 1;` → `    const c = text.charCodeAt(i); ⏎     const name = hiddenName(c); ⏎     if (name !== null) out.push({ index: i, codePoint: c, name }); ⏎     i += 1;` | `test/host-copy.test.ts`: 6 failed \| 31 passed (37). "LANGUAGE TAG and CANCEL TAG, each with its name"; "the whole block: 128 entries in order, two code units apart, each with a name of its own"; "the England flag: the flag is visible, its six tag characters are not"; "every U+E0020 to U+E007E is TAG plus the name of its ASCII twin"; "the step threshold: the mark after U+FFFF (one code unit) is not skipped"; and 1 more. (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7k | walk hasHiddenChar by code unit, not by code point | `src/host/copy.ts` | `    const c = text.codePointAt(i) ?? 0; ⏎     if (hiddenName(c) !== null) return true; ⏎     i += c > 0xffff ? 2 : 1;` → `    const c = text.charCodeAt(i); ⏎     if (hiddenName(c) !== null) return true; ⏎     i += 1;` | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "is true for a directional mark and for a tag character, false for clean text". `test/host-links.test.ts`: 1 failed \| 21 passed (22). "the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)". | sha256 `10f83c087996…` restored, equal |
+| L3.H7l | off by one: the tag block without its upper bound (U+E007F) | `src/host/copy.ts` | `c >= TAG_FIRST && c <= TAG_LAST` → `c >= TAG_FIRST && c < TAG_LAST` | `test/host-copy.test.ts`: 4 failed \| 33 passed (37). "LANGUAGE TAG and CANCEL TAG, each with its name"; "the whole block: 128 entries in order, two code units apart, each with a name of its own"; "the England flag: the flag is visible, its six tag characters are not"; "is true for a directional mark and for a tag character, false for clean text". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7m | off by one: the tag block without its lower bound (U+E0000) | `src/host/copy.ts` | `c >= TAG_FIRST && c <= TAG_LAST` → `c > TAG_FIRST && c <= TAG_LAST` | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "the whole block: 128 entries in order, two code units apart, each with a name of its own". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7n | name U+E0001 by the code point label, not LANGUAGE TAG | `src/host/copy.ts` | `  if (c === TAG_LANGUAGE) return 'LANGUAGE TAG'; ⏎ ` → (removed) | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "LANGUAGE TAG and CANCEL TAG, each with its name". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7o | name U+E007F by the code point label, not CANCEL TAG | `src/host/copy.ts` | `  if (c === TAG_CANCEL) return 'CANCEL TAG'; ⏎ ` → (removed) | `test/host-copy.test.ts`: 2 failed \| 35 passed (37). "LANGUAGE TAG and CANCEL TAG, each with its name"; "the England flag: the flag is visible, its six tag characters are not". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7p | write the code point label of an unassigned tag in lower case | `src/host/copy.ts` | `c.toString(16).toUpperCase().padStart(5, '0')` → `c.toString(16).padStart(5, '0')` | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "the whole block: 128 entries in order, two code units apart, each with a name of its own". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7q | step threshold: hiddenChars steps two from U+FFFF (>= 0xffff) | `src/host/copy.ts` | `    if (name !== null) out.push({ index: i, codePoint: c, name }); ⏎     i += c > 0xffff ? 2 : 1;` → `    if (name !== null) out.push({ index: i, codePoint: c, name }); ⏎     i += c >= 0xffff ? 2 : 1;` | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "the step threshold: the mark after U+FFFF (one code unit) is not skipped". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
+| L3.H7r | step threshold: hasHiddenChar steps two from U+FFFF (>= 0xffff) | `src/host/copy.ts` | `    if (hiddenName(c) !== null) return true; ⏎     i += c > 0xffff ? 2 : 1;` → `    if (hiddenName(c) !== null) return true; ⏎     i += c >= 0xffff ? 2 : 1;` | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "the step threshold: the mark after U+FFFF (one code unit) is seen". `test/host-links.test.ts`: 1 failed \| 21 passed (22). "a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)". | sha256 `10f83c087996…` restored, equal |
+| L3.H7s | swap two names of the ASCII table (LATIN SMALL LETTER C and D) | `src/host/copy.ts` | `'LATIN SMALL LETTER C', 'LATIN SMALL LETTER D'` → `'LATIN SMALL LETTER D', 'LATIN SMALL LETTER C'` | `test/host-copy.test.ts`: 1 failed \| 36 passed (37). "every U+E0020 to U+E007E is TAG plus the name of its ASCII twin". (test/host-links.test.ts stays green) | sha256 `10f83c087996…` restored, equal |
 
 ```json
 [
@@ -1181,14 +1195,14 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
     "new": "  if (c < 0x20) return null;",
     "tests": "test/host-copy.test.ts",
     "rc": 1,
-    "red": "4 failed | 17 passed (21)",
+    "red": "4 failed | 33 passed (37)",
     "failing": [
-      "L3.H7 each hidden character is reported with its index and name > DEL, NUL, BEL, BACKSPACE, VT, FF and CR",
       "L3.H7 each hidden character is reported with its index and name > ESC",
+      "L3.H7 each hidden character is reported with its index and name > DEL, NUL, BEL, BACKSPACE, VT, FF and CR",
       "L3.H7 each hidden character is reported with its index and name > every C0 control but tab and newline, each with a name of its own",
       "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   },
   {
@@ -1199,11 +1213,11 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
     "new": "",
     "tests": "test/host-copy.test.ts",
     "rc": 1,
-    "red": "1 failed | 20 passed (21)",
+    "red": "1 failed | 36 passed (37)",
     "failing": [
       "L3.H7 each hidden character is reported with its index and name > DEL, NUL, BEL, BACKSPACE, VT, FF and CR"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   },
   {
@@ -1212,18 +1226,19 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
     "file": "src/host/copy.ts",
     "old": "  0x202a: 'LEFT-TO-RIGHT EMBEDDING',\n  0x202b: 'RIGHT-TO-LEFT EMBEDDING',\n  0x202c: 'POP DIRECTIONAL FORMATTING',\n  0x202d: 'LEFT-TO-RIGHT OVERRIDE',\n  0x202e: 'RIGHT-TO-LEFT OVERRIDE',\n",
     "new": "",
-    "tests": "test/host-copy.test.ts",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
     "rc": 1,
-    "red": "6 failed | 15 passed (21)",
+    "red": "7 failed | 52 passed (59)",
     "failing": [
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+202A LEFT-TO-RIGHT EMBEDDING",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+202B RIGHT-TO-LEFT EMBEDDING",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+202C POP DIRECTIONAL FORMATTING",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+202D LEFT-TO-RIGHT OVERRIDE",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+202E RIGHT-TO-LEFT OVERRIDE",
-      "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order"
+      "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order",
+      "L3.H6 refused: controls, white space and length > the copy check's bidi controls and zero-width characters, anywhere, in every kind of link"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   },
   {
@@ -1232,17 +1247,18 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
     "file": "src/host/copy.ts",
     "old": "  0x2066: 'LEFT-TO-RIGHT ISOLATE',\n  0x2067: 'RIGHT-TO-LEFT ISOLATE',\n  0x2068: 'FIRST STRONG ISOLATE',\n  0x2069: 'POP DIRECTIONAL ISOLATE',\n",
     "new": "",
-    "tests": "test/host-copy.test.ts",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
     "rc": 1,
-    "red": "5 failed | 16 passed (21)",
+    "red": "6 failed | 53 passed (59)",
     "failing": [
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+2066 LEFT-TO-RIGHT ISOLATE",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+2067 RIGHT-TO-LEFT ISOLATE",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+2068 FIRST STRONG ISOLATE",
       "L3.H7 each hidden character is reported with its index and name > the bidi control U+2069 POP DIRECTIONAL ISOLATE",
-      "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order"
+      "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order",
+      "L3.H6 refused: controls, white space and length > the copy check's bidi controls and zero-width characters, anywhere, in every kind of link"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   },
   {
@@ -1251,9 +1267,9 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
     "file": "src/host/copy.ts",
     "old": "  0x200b: 'ZERO WIDTH SPACE',\n  0x200c: 'ZERO WIDTH NON-JOINER',\n  0x200d: 'ZERO WIDTH JOINER',\n  0x2060: 'WORD JOINER',\n  0xfeff: 'ZERO WIDTH NO-BREAK SPACE',\n",
     "new": "",
-    "tests": "test/host-copy.test.ts",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
     "rc": 1,
-    "red": "7 failed | 14 passed (21)",
+    "red": "8 failed | 51 passed (59)",
     "failing": [
       "L3.H7 each hidden character is reported with its index and name > the zero-width character U+200B ZERO WIDTH SPACE",
       "L3.H7 each hidden character is reported with its index and name > the zero-width character U+200C ZERO WIDTH NON-JOINER",
@@ -1261,9 +1277,10 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
       "L3.H7 each hidden character is reported with its index and name > the zero-width character U+2060 WORD JOINER",
       "L3.H7 each hidden character is reported with its index and name > the zero-width character U+FEFF ZERO WIDTH NO-BREAK SPACE",
       "L3.H7 indices are UTF-16 code units, in order > an astral character before a hidden one counts two",
-      "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order"
+      "L3.H7 indices are UTF-16 code units, in order > every hidden character of a mixed text, in order",
+      "L3.H6 refused: controls, white space and length > the copy check's bidi controls and zero-width characters, anywhere, in every kind of link"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   },
   {
@@ -1274,27 +1291,237 @@ Reference §11.3, mirroring M8.19. The plan's row "drop a class" is one row per 
     "new": "return C0_NAMES[c] ?? null;",
     "tests": "test/host-copy.test.ts",
     "rc": 1,
-    "red": "2 failed | 19 passed (21)",
+    "red": "2 failed | 35 passed (37)",
     "failing": [
       "L3.H7 each hidden character is reported with its index and name > every C0 control but tab and newline, each with a name of its own",
       "L3.H7 what is not hidden > clean text, tab, newline, ordinary non-ASCII and the marks beside the listed ranges give nothing"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   },
   {
     "id": "L3.H7g",
     "guard": "index by code points, not UTF-16 code units",
     "file": "src/host/copy.ts",
-    "old": "  for (let i = 0; i < text.length; i += 1) {\n    const c = text.charCodeAt(i);",
-    "new": "  let i = -1;\n  for (const ch of text) {\n    i += 1;\n    const c = ch.codePointAt(0) ?? 0;",
+    "old": "  const out: HiddenChar[] = [];\n  for (let i = 0; i < text.length; ) {\n    const c = text.codePointAt(i) ?? 0;\n    const name = hiddenName(c);\n    if (name !== null) out.push({ index: i, codePoint: c, name });\n    i += c > 0xffff ? 2 : 1;\n  }",
+    "new": "  const out: HiddenChar[] = [];\n  let i = -1;\n  for (const ch of text) {\n    i += 1;\n    const c = ch.codePointAt(0) ?? 0;\n    const name = hiddenName(c);\n    if (name !== null) out.push({ index: i, codePoint: c, name });\n  }",
     "tests": "test/host-copy.test.ts",
     "rc": 1,
-    "red": "1 failed | 20 passed (21)",
+    "red": "4 failed | 33 passed (37)",
     "failing": [
-      "L3.H7 indices are UTF-16 code units, in order > an astral character before a hidden one counts two"
+      "L3.H7 indices are UTF-16 code units, in order > an astral character before a hidden one counts two",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the whole block: 128 entries in order, two code units apart, each with a name of its own",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the England flag: the flag is visible, its six tag characters are not",
+      "L3.H7 the walk is by code point (ledger C103) > an index stays right after an astral visible character"
     ],
-    "sha256": "c56eb9ee58090f70d35770adcf99246573ad3bd6e55231ad604a1572fca23a8b",
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7h",
+    "guard": "drop a class: the directional marks (U+061C, U+200E, U+200F)",
+    "file": "src/host/copy.ts",
+    "old": "  // directional marks (ledger C103)\n  0x061c: 'ARABIC LETTER MARK',\n  0x200e: 'LEFT-TO-RIGHT MARK',\n  0x200f: 'RIGHT-TO-LEFT MARK',\n",
+    "new": "",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
+    "rc": 1,
+    "red": "10 failed | 49 passed (59)",
+    "failing": [
+      "L3.H7 each hidden character is reported with its index and name > the directional mark U+061C ARABIC LETTER MARK",
+      "L3.H7 each hidden character is reported with its index and name > the directional mark U+200E LEFT-TO-RIGHT MARK",
+      "L3.H7 each hidden character is reported with its index and name > the directional mark U+200F RIGHT-TO-LEFT MARK",
+      "L3.H7 the walk is by code point (ledger C103) > an index stays right after an astral visible character",
+      "L3.H7 the walk is by code point (ledger C103) > a lone high surrogate before a mark does not break the walk; alone it is not hidden",
+      "L3.H7 the walk is by code point (ledger C103) > the step threshold: the mark after U+FFFF (one code unit) is not skipped",
+      "L3.H7 hasHiddenChar > is true for a directional mark and for a tag character, false for clean text",
+      "L3.H7 hasHiddenChar > the step threshold: the mark after U+FFFF (one code unit) is seen",
+      "L3.H6 refused: controls, white space and length > the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)",
+      "L3.H6 refused: controls, white space and length > a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7i",
+    "guard": "drop a class: the tag block (U+E0000 to U+E007F)",
+    "file": "src/host/copy.ts",
+    "old": "  if (c >= TAG_FIRST && c <= TAG_LAST) return tagName(c);\n",
+    "new": "",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
+    "rc": 1,
+    "red": "8 failed | 51 passed (59)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > LANGUAGE TAG and CANCEL TAG, each with its name",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the whole block: 128 entries in order, two code units apart, each with a name of its own",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the England flag: the flag is visible, its six tag characters are not",
+      "L3.H7 the tag names, all 95 of them, against a list derived apart from the source table (ledger C103) > every U+E0020 to U+E007E is TAG plus the name of its ASCII twin",
+      "L3.H7 the walk is by code point (ledger C103) > the step threshold: the mark after U+FFFF (one code unit) is not skipped",
+      "L3.H7 the walk is by code point (ledger C103) > a lone high surrogate before a tag character reads as that tag character after the surrogate",
+      "L3.H7 hasHiddenChar > is true for a directional mark and for a tag character, false for clean text",
+      "L3.H6 refused: controls, white space and length > the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7j",
+    "guard": "walk hiddenChars by code unit, not by code point",
+    "file": "src/host/copy.ts",
+    "old": "    const c = text.codePointAt(i) ?? 0;\n    const name = hiddenName(c);\n    if (name !== null) out.push({ index: i, codePoint: c, name });\n    i += c > 0xffff ? 2 : 1;",
+    "new": "    const c = text.charCodeAt(i);\n    const name = hiddenName(c);\n    if (name !== null) out.push({ index: i, codePoint: c, name });\n    i += 1;",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "6 failed | 31 passed (37)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > LANGUAGE TAG and CANCEL TAG, each with its name",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the whole block: 128 entries in order, two code units apart, each with a name of its own",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the England flag: the flag is visible, its six tag characters are not",
+      "L3.H7 the tag names, all 95 of them, against a list derived apart from the source table (ledger C103) > every U+E0020 to U+E007E is TAG plus the name of its ASCII twin",
+      "L3.H7 the walk is by code point (ledger C103) > the step threshold: the mark after U+FFFF (one code unit) is not skipped",
+      "L3.H7 the walk is by code point (ledger C103) > a lone high surrogate before a tag character reads as that tag character after the surrogate"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7k",
+    "guard": "walk hasHiddenChar by code unit, not by code point",
+    "file": "src/host/copy.ts",
+    "old": "    const c = text.codePointAt(i) ?? 0;\n    if (hiddenName(c) !== null) return true;\n    i += c > 0xffff ? 2 : 1;",
+    "new": "    const c = text.charCodeAt(i);\n    if (hiddenName(c) !== null) return true;\n    i += 1;",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
+    "rc": 1,
+    "red": "2 failed | 57 passed (59)",
+    "failing": [
+      "L3.H7 hasHiddenChar > is true for a directional mark and for a tag character, false for clean text",
+      "L3.H6 refused: controls, white space and length > the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7l",
+    "guard": "off by one: the tag block without its upper bound (U+E007F)",
+    "file": "src/host/copy.ts",
+    "old": "c >= TAG_FIRST && c <= TAG_LAST",
+    "new": "c >= TAG_FIRST && c < TAG_LAST",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "4 failed | 33 passed (37)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > LANGUAGE TAG and CANCEL TAG, each with its name",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the whole block: 128 entries in order, two code units apart, each with a name of its own",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the England flag: the flag is visible, its six tag characters are not",
+      "L3.H7 hasHiddenChar > is true for a directional mark and for a tag character, false for clean text"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7m",
+    "guard": "off by one: the tag block without its lower bound (U+E0000)",
+    "file": "src/host/copy.ts",
+    "old": "c >= TAG_FIRST && c <= TAG_LAST",
+    "new": "c > TAG_FIRST && c <= TAG_LAST",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "1 failed | 36 passed (37)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the whole block: 128 entries in order, two code units apart, each with a name of its own"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7n",
+    "guard": "name U+E0001 by the code point label, not LANGUAGE TAG",
+    "file": "src/host/copy.ts",
+    "old": "  if (c === TAG_LANGUAGE) return 'LANGUAGE TAG';\n",
+    "new": "",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "1 failed | 36 passed (37)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > LANGUAGE TAG and CANCEL TAG, each with its name"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7o",
+    "guard": "name U+E007F by the code point label, not CANCEL TAG",
+    "file": "src/host/copy.ts",
+    "old": "  if (c === TAG_CANCEL) return 'CANCEL TAG';\n",
+    "new": "",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "2 failed | 35 passed (37)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > LANGUAGE TAG and CANCEL TAG, each with its name",
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the England flag: the flag is visible, its six tag characters are not"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7p",
+    "guard": "write the code point label of an unassigned tag in lower case",
+    "file": "src/host/copy.ts",
+    "old": "c.toString(16).toUpperCase().padStart(5, '0')",
+    "new": "c.toString(16).padStart(5, '0')",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "1 failed | 36 passed (37)",
+    "failing": [
+      "L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) > the whole block: 128 entries in order, two code units apart, each with a name of its own"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7q",
+    "guard": "step threshold: hiddenChars steps two from U+FFFF (>= 0xffff)",
+    "file": "src/host/copy.ts",
+    "old": "    if (name !== null) out.push({ index: i, codePoint: c, name });\n    i += c > 0xffff ? 2 : 1;",
+    "new": "    if (name !== null) out.push({ index: i, codePoint: c, name });\n    i += c >= 0xffff ? 2 : 1;",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "1 failed | 36 passed (37)",
+    "failing": [
+      "L3.H7 the walk is by code point (ledger C103) > the step threshold: the mark after U+FFFF (one code unit) is not skipped"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7r",
+    "guard": "step threshold: hasHiddenChar steps two from U+FFFF (>= 0xffff)",
+    "file": "src/host/copy.ts",
+    "old": "    if (hiddenName(c) !== null) return true;\n    i += c > 0xffff ? 2 : 1;",
+    "new": "    if (hiddenName(c) !== null) return true;\n    i += c >= 0xffff ? 2 : 1;",
+    "tests": "test/host-copy.test.ts test/host-links.test.ts",
+    "rc": 1,
+    "red": "2 failed | 57 passed (59)",
+    "failing": [
+      "L3.H7 hasHiddenChar > the step threshold: the mark after U+FFFF (one code unit) is seen",
+      "L3.H6 refused: controls, white space and length > a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
+    "restored": true
+  },
+  {
+    "id": "L3.H7s",
+    "guard": "swap two names of the ASCII table (LATIN SMALL LETTER C and D)",
+    "file": "src/host/copy.ts",
+    "old": "'LATIN SMALL LETTER C', 'LATIN SMALL LETTER D'",
+    "new": "'LATIN SMALL LETTER D', 'LATIN SMALL LETTER C'",
+    "tests": "test/host-copy.test.ts",
+    "rc": 1,
+    "red": "1 failed | 36 passed (37)",
+    "failing": [
+      "L3.H7 the tag names, all 95 of them, against a list derived apart from the source table (ledger C103) > every U+E0020 to U+E007E is TAG plus the name of its ASCII twin"
+    ],
+    "sha256": "10f83c087996bcea7bf9d172141a578e544fc3c29030213b96eeb6513fe74a87",
     "restored": true
   }
 ]
@@ -1310,8 +1537,7 @@ round's `copy.ts` they failed (2 failed | 21 passed (23), assertion failures), t
 
 | Row | Guard | File | Change | Exit | Red | Restore |
 |---|---|---|---|---|---|---|
-| L3.H7c1 (coordinator) | the C1 controls are hidden | `src/host/copy.ts` | `  if (c >= 0x80 && c <= 0x9f) return C1_NAMES[c - 0x80] ?? null;` → (deleted) | 1 | `test/host-copy.test.ts`: 2 failed \| 21 passed (23). "CSI, the one-code-point form of ESC [, is reported by name"; "every C1 control, U+0080 to U+009F, each with a name of its own". | sha256 `230141e4…` matched |
+| L3.H7c1 (coordinator) | the C1 controls are hidden | `src/host/copy.ts` | `  if (c >= 0x80 && c <= 0x9f) return C1_NAMES[c - 0x80] ?? null;` → (deleted) | 1 | `test/host-copy.test.ts`: 2 failed \| 35 passed (37). "CSI, the one-code-point form of ESC [, is reported by name"; "every C1 control, U+0080 to U+009F, each with a name of its own". (test/host-links.test.ts stays green) Re-measured 2026-11-02 on the final tree (it read "2 failed \| 21 passed (23)" on the file as it then stood). | sha256 `10f83c087996…` matched |
 
-Measured under `ulimit -u 3476` (threads 1976 plus 1500) and `timeout -k 10 600`. The earlier rows were measured on
-`copy.ts` before this addition; the only later change is the C1 table, its branch and the header comment, which none of
-their edits touch.
+Measured under `ulimit -u 3476` (threads 1976 plus 1500) and `timeout -k 10 600`. That measurement stands for the thread count and the
+limits; the row itself was measured again on the final tree (see the paragraph under the Copy heading).

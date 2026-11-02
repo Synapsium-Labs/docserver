@@ -65,6 +65,20 @@ describe('L3.H6 refused: controls, white space and length', () => {
     }
   });
 
+  it("the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)", () => {
+    for (const ch of ['\u200e', '\u200f', '\u061c', '\u{E0041}']) {
+      for (const href of [`docs/${ch}txt.exe`, `a.md${ch}`, `mailto:a${ch}b@example.com`, `https://example.com/${ch}`, `#a${ch}b`]) {
+        expect(classifyLink(href), `${ch.codePointAt(0)?.toString(16)} in ${JSON.stringify(href)}`).toBeNull();
+      }
+    }
+  });
+
+  it('a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)', () => {
+    for (const href of ['docs/\uffff\u200etxt.exe', 'a.md\uffff\u200e', 'https://example.com/\uffff\u200e', '#a\uffff\u200e']) {
+      expect(classifyLink(href), JSON.stringify(href)).toBeNull();
+    }
+  });
+
   it('4097 code units are refused; 4096 pass', () => {
     const at = `https://example.com/${'a'.repeat(BRIDGE_LIMITS.hrefMaxChars - 20)}`;
     expect(at.length).toBe(4096);
