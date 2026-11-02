@@ -378,9 +378,9 @@ A mount checks the adapters (own data properties only; an unknown key or a bad v
 | `prefs`, `features` | Starting prefs (`theme`, `width`, `font`) and the layout's switches and word lists (`rules`, `folds`, `keyboard`, `chrome`, `vocabulary`), as plain data. |
 | `mermaidGate`, `mermaidDraw` | Tighter gate caps, and `'auto'` (default) or `'on-request'`. |
 | `title`, `focus` | The iframe's accessible name (default `'Document'`), and whether to focus it on mount (default `true`). |
-| `onLink` | A link the reader followed, already classified: a `fragment`, a `relative` path (query dropped) or an `external` http, https or mailto URL. `javascript:`, `data:`, protocol-relative links, backslashes, controls and white space are refused before it. |
+| `onLink` | A link the reader followed, already classified: a `fragment`, a `relative` path (query dropped) or an `external` http, https or mailto URL. `javascript:`, `data:`, protocol-relative links, backslashes, controls, white space and every hidden character the `copy` row lists are refused before it. |
 | `onHash` | The reader went to this fragment id. |
-| `copy` | `copy(text, { hidden })`: the text to copy and every character in it a reader cannot see (controls, bidi controls, zero-width characters), each with its index, code point and name, so the host can show them before writing. |
+| `copy` | `copy(text, { hidden })`: the text to copy and every character in it a reader cannot see (controls, bidi controls, directional marks, zero-width characters, tag characters), each with its index, code point and name, so the host can show them before writing. |
 | `changes` | `changes(sha)`: a promise of `{ ranges, removedAfter? }` or `null`; a throw, a rejection, a malformed answer or 30 s without one answers the frame "unavailable". |
 | `openVersion` | `openVersion({ sha?, only? })`: show that version; no keys is the latest. |
 | `onReady` | The frame said ready. |
