@@ -4,7 +4,7 @@ One shared renderer for spec and plan documents written in Markdown. It turns Ma
 
 It is pure. It does no network, storage, auth, git or hosting. Each product that uses it brings its own transport, login, content source and hosting, and pins one exact version.
 
-**Status:** 1.0.0, the first release. `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. Every version is published from a signed tag through the release lane (`.github/workflows/release.yml`); the Release verification section below checks one.
+**Status:** 1.0.1, a patch to 1.0.0, the first release. `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. Every version is published from a signed tag through the release lane (`.github/workflows/release.yml`); the Release verification section below checks one.
 
 ## What it holds
 
