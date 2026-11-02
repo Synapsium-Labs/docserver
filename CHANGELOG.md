@@ -12,6 +12,13 @@ How versions move:
 
 Each release is built once from a signed tag, attested, and published with provenance through npm trusted publishing; the README's Release verification section gives the commands that check a published version.
 
+## 1.0.1
+
+A patch. Bridge protocol 1 and seed schema 1 are unchanged, and no asset hash moved: `assets/assets.json` differs from 1.0.0's only in its `version`.
+
+- `./host`'s copy check (`copy(text, { hidden })`) also lists the directional marks U+200E LEFT-TO-RIGHT MARK, U+200F RIGHT-TO-LEFT MARK and U+061C ARABIC LETTER MARK, and every code point of the tag block U+E0000 to U+E007F, by its Unicode name (`LANGUAGE TAG`, `CANCEL TAG`, `TAG LATIN SMALL LETTER G` and so on; the code point label `<reserved-E0000>` form for an unassigned one). A tag character is outside the BMP, so its `index` is still its first UTF-16 code unit and it takes two: a host that marks a listed character in place reads the width from `codePoint`.
+- `onLink`: an href holding any of these characters is now refused before the host sees it, through the same table.
+
 ## 1.0.0
 
 The first release. Bridge protocol 1, seed schema 1. It holds:
