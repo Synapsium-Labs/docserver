@@ -449,6 +449,39 @@ describe('README: the bridge', () => {
   });
 });
 
+describe('README: one header bar over the bridge (batch 1.1, ledger C108)', () => {
+  it('Hosting: the onProgress row, DocFrame.command, and the title recipe that reads result.meta.title (Q9)', () => {
+    const s = section('Hosting');
+    const row = /\n\| `onProgress` \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ['`onProgress(share)`', 'a number from 0 to 1', 'at most four times a second', 'the latest of each 250 ms window', 'the final value always arrives', 'no `onProgress`']) {
+      expect(row, part).toContain(part);
+    }
+    const command = /\n\*\*`command\(name\)`\*\*[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ["`'jump'`", "`'settings'`", "`'contents'`", "`'outline'`", 'focuses the iframe', 'not queued', 'after `destroy()`', '`TypeError`']) {
+      expect(command, part).toContain(part);
+    }
+    expect(s).toContain('**One header bar.**');
+    expect(s).toContain('result.meta.title');
+    expect(s).toContain('frame.command(');
+    expect(s).toContain('onProgress:');
+  });
+
+  it('The bridge: the command and progress rows, the progress grammar and window, and the switch that is off by default', async () => {
+    const { BRIDGE_LIMITS } = await import('../src/frame/index.js');
+    const s = section('The bridge');
+    const command = /\n\| `command` \| parent to frame \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ['`name`', "`'jump'`", "`'outline'`", 'ignored']) expect(command, part).toContain(part);
+    const progress = /\n\| `progress` \| frame to parent \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ['`p`', 'Thousandths', "`'0'` to `'1000'`", 'no sign', `${String(BRIDGE_LIMITS.progressWindowMs)} ms`, 'bridge.progress']) expect(progress, part).toContain(part);
+    expect(s).toContain('`progress` carries `p`');
+  });
+
+  it('Framing: the bridge switch `progress` defaults to false while the others default to true', () => {
+    const s = section('Framing');
+    expect(s).toMatch(/`bridge`[^\n]*`progress`[^\n]*(?:false|off)/);
+  });
+});
+
 describe('README: Release verification', () => {
   it("states the release lane's post-verify commands, verbatim, one per line (plan Reference §13 step 7)", () => {
     const [commands] = blocks(section('Release verification'), 'sh');

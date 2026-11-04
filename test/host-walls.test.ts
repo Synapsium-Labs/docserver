@@ -12,8 +12,8 @@
 //    each by a literal name (never src, name, allow, allowfullscreen, loading, style or a handler).
 // 3. No window `message` listener: no addEventListener with 'message' (or with a type built at run time), whether the
 //    method is named as a member or by a string key; `onmessage` and `onmessageerror` only on the channel's own port;
-//    `postMessage` only at mount.ts's two sites (the hello on the frame's window, and the port), and `contentWindow` and
-//    `focus()` once each. Other spellings are seen too: any string whose text is one of GUARDED_STRINGS (an element
+//    `postMessage` only at mount.ts's two sites (the hello on the frame's window, and the port), and `contentWindow` once and
+//    `focus()` twice (the mount's, and DocFrame.command's). Other spellings are seen too: any string whose text is one of GUARDED_STRINGS (an element
 //    access, a Reflect.set or Object.defineProperty key, a computed key, a variable later used as a listener type), and
 //    any GUARDED_NAMES name outside a member access (an object-literal key, a destructured binding).
 // 4. src/host compiles with the DOM library and no ambient types (tsconfig.host.json gives its tests Node's types; the
@@ -69,7 +69,7 @@ const SET_ATTRIBUTES: readonly string[] = ['sandbox', 'referrerpolicy', 'csp', '
 
 /** The sites where a guarded use is allowed, by file, with exact counts. */
 const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
-  'mount.ts': { postMessage: 2, contentWindow: 1, 'focus()': 1, 'port.onmessage': 2, 'port.onmessageerror': 2 },
+  'mount.ts': { postMessage: 2, contentWindow: 1, 'focus()': 2, 'port.onmessage': 2, 'port.onmessageerror': 2 },
 };
 
 const parse = (name: string, text: string): ts.SourceFile => ts.createSourceFile(name, text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
@@ -281,7 +281,7 @@ describe('host walls: CSP, the page and the window message listener', () => {
     });
   }
 
-  it('a planted extra site in mount.ts goes red: a third postMessage, a second contentWindow, a second focus(), a third port.onmessage', () => {
+  it('a planted extra site in mount.ts goes red: a third postMessage, a second contentWindow, a third focus() (DocFrame.command is the second site), a third port.onmessage', () => {
     const mount = sources().find((f) => f.name === 'mount.ts')?.text ?? '';
     for (const extra of ['x.postMessage(1);', 'void f.contentWindow;', 'f.focus();', 'port.onmessage = null;']) {
       const text = `${mount}\nexport function planted(x: any, f: any, port: any) { ${extra} }\n`;

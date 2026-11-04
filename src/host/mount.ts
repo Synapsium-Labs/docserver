@@ -35,6 +35,10 @@
 // console warning otherwise; the loader is untrusted, so nothing it does escapes. Each such mount posts one `mermaid` op
 // after its own valid ready, at once if the answer came first, and a replaced or destroyed mount posts nothing.
 //
+// One header bar (batch 1.1, ledger C108): `onProgress` asks the frame for `progress` ops (the seed's `bridge.progress`,
+// set by that adapter alone) and is handed each as `Number(p) / 1000`; `DocFrame.command(name)` posts a `command` op after
+// focusing the iframe, once this mount is ready, and does nothing before it, after a fallback or after destroy().
+//
 // Teardown: a fallback clears the timers, closes the port, removes the iframe and calls onFallback once; it never
 // remounts. update() is a full remount (new iframe, channel, nonce and watchdog), never a srcdoc reassignment.
 // destroy() is idempotent and calls no adapter, also when host code that a mount step runs (a focusout at the focus)
@@ -47,7 +51,7 @@ import { frameCsp } from '../frame/csp.js';
 import { FrameError, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
-import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, type FrameToParent } from '../frame/protocol.js';
 import { hex, sha256Text } from '../frame/sha256.js';
 import type { FramePrefs } from '../frame/wire-types.js';
 import { hiddenChars, type HiddenChar } from './copy.js';
@@ -107,6 +111,12 @@ export interface HostAdapters {
   copy?(text: string, check: { readonly hidden: readonly HiddenChar[] }): void;
   changes?(sha: string): Promise<{ ranges: readonly (readonly [number, number])[]; removedAfter?: readonly number[] } | null>;
   openVersion?(v: { sha?: string; only?: string }): void;
+  /**
+   * How far the document has been read, a number from 0 to 1 (the frame's thousandths over 1000): at most four calls a
+   * second, the first at once and the latest of each 250 ms window at its end, so the final value arrives. Giving it
+   * is what asks the frame to send progress at all (batch 1.1, C108).
+   */
+  onProgress?(share: number): void;
   onReady?(): void;
   /** Required. The frame's own error reason never reaches it. */
   onFallback(reason: FallbackReason): void;
@@ -117,6 +127,12 @@ export interface DocFrame {
   update(d: RenderInput): void;
   /** Posted once ready, else queued; seeds every later remount. */
   setPrefs(p: Partial<FramePrefs>): void;
+  /**
+   * Runs one of the reader's tools without the reader's own bar, as a toggle (batch 1.1, C108): focuses the iframe, then
+   * posts the command. Before the frame is ready, after destroy() and after a fallback it does nothing (it is not
+   * queued); a name outside the four throws a TypeError, whatever the state.
+   */
+  command(name: (typeof COMMAND_OPS)[number]): void;
   /** Idempotent; calls no adapter. */
   destroy(): void;
 }
@@ -124,11 +140,11 @@ export interface DocFrame {
 /** Every key HostAdapters may hold. */
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
-  'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid',
+  'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid',
 ]);
 
 /** The callbacks, each a function when given. */
-const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback'] as const);
+const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback'] as const);
 type CallbackName = (typeof CALLBACKS)[number];
 
 const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request', 'after-ready']);
@@ -335,6 +351,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   let teardown: (() => void) | null = null;
   /** Posts prefs on the current mount's port (now or at its ready). */
   let sendPrefs: (p: Partial<FramePrefs>) => void = () => undefined;
+  /** Focuses the current mount's iframe and posts a command on its port; nothing before its ready or once it is gone. */
+  let sendCommand: (name: (typeof COMMAND_OPS)[number]) => void = () => undefined;
 
   /** What every 'after-ready' mount of this DocFrame posts: the build, or that there is none. */
   type Build = { readonly text: string } | { readonly unavailable: true };
@@ -423,6 +441,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           copy: c.callbacks.copy !== undefined,
           changes: c.callbacks.changes !== undefined,
           versions: c.callbacks.openVersion !== undefined,
+          // Asked for by giving onProgress, and by nothing else: a frame is never sent a progress nobody listens to.
+          progress: c.callbacks.onProgress !== undefined,
         },
       };
       page = frameDocument(d, frameOptions);
@@ -555,6 +575,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         case 'hash':
           call('onHash', msg.id);
           return;
+        case 'progress':
+          call('onProgress', Number(msg.p) / 1000);
+          return;
         case 'version': {
           const v: { sha?: string; only?: string } = {};
           if (msg.sha !== undefined) v.sha = msg.sha;
@@ -630,6 +653,13 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       if (ready) post({ t: 'prefs', ...p });
       else pending = { ...(pending ?? {}), ...p };
     };
+    sendCommand = (name) => {
+      if (!live || !ready) return;
+      // The focus first, so the keys the tool uses reach the frame; it runs host code (a blur or focusout handler),
+      // which may destroy or update this mount, and `post` then drops the command.
+      iframe.focus();
+      post({ t: 'command', name });
+    };
     teardown = () => {
       if (live) stop();
     };
@@ -660,6 +690,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       teardown?.();
       teardown = null;
       sendPrefs = () => undefined;
+      sendCommand = () => undefined;
       mount(d);
     },
     setPrefs(p) {
@@ -668,12 +699,20 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       seedPrefs = { ...seedPrefs, ...checked };
       sendPrefs(checked);
     },
+    command(name) {
+      if (typeof name !== 'string' || !(COMMAND_OPS as readonly string[]).includes(name)) {
+        throw new TypeError(`docserver host: command name must be one of ${COMMAND_OPS.join(', ')}`);
+      }
+      if (destroyed) return;
+      sendCommand(name);
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       teardown?.();
       teardown = null;
       sendPrefs = () => undefined;
+      sendCommand = () => undefined;
     },
   };
 }

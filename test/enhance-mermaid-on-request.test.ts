@@ -13,10 +13,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { COMMAND_NAMES } from '../src/enhance/commands.js';
 import { NOTES } from '../src/enhance/diagrams.js';
 import { destroyEnhancement, enhance, EnhanceError, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { MERMAID_DRAW_VALUES, normalizeOptions } from '../src/enhance/options.js';
+import { COMMAND_OPS } from '../src/frame/protocol.js';
 import { MERMAID_DRAW, type MermaidDraw, type SeedMermaid } from '../src/frame/seed.js';
 import { arrivesLate, enhanceMermaid, lateApi, mermaidOption, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
 import { probeInlineStyle, STYLE_PROBE_ATTR, STYLE_PROBE_TEXT, styleIntrinsics } from '../src/frame-runtime/styles.js';
@@ -406,6 +408,12 @@ describe("L3.D4: draw absent is 'auto'; only 'auto', 'on-request' and 'after-rea
   it('the type and the values are the seed\'s (src/frame/seed.ts), held equal', () => {
     expectTypeOf<NonNullable<EnhanceOptions['mermaid']>['draw']>().toEqualTypeOf<MermaidDraw | undefined>();
     expect([...MERMAID_DRAW_VALUES]).toEqual([...MERMAID_DRAW]);
+  });
+
+  it("B7.8: the wire's COMMAND_OPS (src/frame/protocol.ts) equals L2's COMMAND_NAMES (src/enhance/commands.ts), value for value and in order", () => {
+    // L2 may import only its own siblings, so the frame's wire keeps a twin of the names, held equal here (C94(2), C108).
+    expect([...COMMAND_OPS]).toEqual([...COMMAND_NAMES]);
+    expectTypeOf<(typeof COMMAND_OPS)[number]>().toEqualTypeOf<(typeof COMMAND_NAMES)[number]>();
   });
 });
 

@@ -41,6 +41,8 @@ export const BRIDGE_LIMITS = Object.freeze({
   storeSetRefillPerSecond: 10,
   changesInFlight: 1,
   coalesceMs: 250,
+  /** The window in which the frame sends one `progress` (leading edge: the first at once, the latest of the window at its end), batch 1.1. */
+  progressWindowMs: 250,
   refusalsToClose: 16,
   valueMaxBytes: 65536,
   copyMaxBytes: 65536,
@@ -100,6 +102,26 @@ export const FRAME_PREF_VALUES = Object.freeze({
   font: Object.freeze(['serif', 'sans'] as const),
 });
 
+/**
+ * The command names a parent may send in a `command` op (batch 1.1, C108): the twin of L2's `COMMAND_NAMES`
+ * (src/enhance/commands.ts), which L2 cannot import from here (it may import only its own siblings). Held equal by
+ * test/enhance-mermaid-on-request.test.ts, beside the draw lists (C94(2)).
+ */
+export const COMMAND_OPS = Object.freeze(['jump', 'settings', 'contents', 'outline'] as const);
+export type CommandOp = (typeof COMMAND_OPS)[number];
+
+/**
+ * A `progress` op's `p`: the share read so far in thousandths, a string of the whole numbers 0 to 1000 with no sign,
+ * point, exponent, white space or leading zero. The parent hands its adapter `Number(p) / 1000`.
+ */
+export const PROGRESS_SOURCE = '^(?:0|[1-9][0-9]{0,2}|1000)$';
+const PROGRESS = new RegExp(PROGRESS_SOURCE);
+
+/** True for a `progress` value: a string inside PROGRESS_SOURCE. */
+export function isProgressThousandths(p: unknown): p is string {
+  return typeof p === 'string' && PROGRESS.test(p);
+}
+
 /** The reader prefs the bridge carries, each optional. */
 export type FramePrefValues = { -readonly [K in keyof typeof FRAME_PREF_VALUES]?: (typeof FRAME_PREF_VALUES)[K][number] };
 
@@ -111,7 +133,9 @@ export type ParentToFrame =
   | { t: 'changes.result'; sha: string; unavailable: true }
   /** The diagram engine's build (an 'after-ready' frame only, once, after ready), or the host's "no build". */
   | { t: 'mermaid'; text: string }
-  | { t: 'mermaid'; unavailable: true };
+  | { t: 'mermaid'; unavailable: true }
+  /** A reader tool to toggle, by name (batch 1.1, C108): a frame older than this release ignores it, as it ignores every op it does not know. */
+  | { t: 'command'; name: CommandOp };
 
 /** What the frame sends, on the port only. Flat; every value a string except v. */
 export type FrameToParent =
@@ -125,7 +149,9 @@ export type FrameToParent =
   /** isFragmentId(id); never ''. */
   | { t: 'hash'; id: string }
   /** No keys: back to the latest. */
-  | { t: 'version'; sha?: string; only?: string };
+  | { t: 'version'; sha?: string; only?: string }
+  /** How far the document has been read, in thousandths (isProgressThousandths); sent only when the seed's bridge asks for it. */
+  | { t: 'progress'; p: string };
 
 /**
  * Every key each op may carry, `t` included, by its `t`: the one table both parsers read. A key outside its op's set
@@ -137,6 +163,7 @@ export const OP_KEYS = Object.freeze({
   prefs: Object.freeze(['t', 'theme', 'width', 'font'] as const),
   'changes.result': Object.freeze(['t', 'sha', 'ranges', 'removedAfter', 'unavailable'] as const),
   mermaid: Object.freeze(['t', 'text', 'unavailable'] as const),
+  command: Object.freeze(['t', 'name'] as const),
   ready: Object.freeze(['t', 'v', 'nonce'] as const),
   error: Object.freeze(['t', 'why'] as const),
   'store.set': Object.freeze(['t', 'key', 'value'] as const),
@@ -145,10 +172,11 @@ export const OP_KEYS = Object.freeze({
   changes: Object.freeze(['t', 'sha'] as const),
   hash: Object.freeze(['t', 'id'] as const),
   version: Object.freeze(['t', 'sha', 'only'] as const),
+  progress: Object.freeze(['t', 'p'] as const),
 } satisfies Record<FrameToParent['t'] | ParentToFrame['t'], readonly string[]>);
 
 /** The ops the frame sends (`./host` reads only these). */
-export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version'] as const satisfies readonly FrameToParent['t'][]);
+export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress'] as const satisfies readonly FrameToParent['t'][]);
 
 /** The ops the parent sends (the frame reads only these: hello on the window, the others on the port). */
-export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid'] as const satisfies readonly ParentToFrame['t'][]);
+export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid', 'command'] as const satisfies readonly ParentToFrame['t'][]);

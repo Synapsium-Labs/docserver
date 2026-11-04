@@ -346,6 +346,8 @@ try {
 
 **Mermaid.** `mermaidGate(counts, caps?)` decides whether Mermaid is on for a document (in `'auto'` and `'on-request'` it then inlines `mermaid.frame.js`; in `'after-ready'` it decides whether the host hands the build over, and nothing is inlined), from `scanRefs().mermaid`'s code-unit counts: Mermaid comes in for a document with at least one fence and at most `MERMAID_GATE_DEFAULTS`' 24 fences and 131072 code units in all, and the per-fence cap (16384) travels as `maxTextSize`, so only a longer fence shows as its source. Caps above the defaults are a RangeError: caps only tighten. With `mermaid: null` every figure shows its source. `mermaid.draw` is `'auto'` (the default: every figure is drawn before the frame says it is ready), `'on-request'` (a figure is drawn only when a reader taps its Render button, so nothing draws before ready) or `'after-ready'` (the frame is ready without Mermaid, no `mermaid.frame.js` is inlined and `assets.mermaid` is not needed, but the policy must still list its hash; the host sends the build over the bridge after ready, and every figure stays readable source until it arrives, and for good if it never does).
 
+**Bridge switches.** `frameDocument`'s `bridge` option says which ops the parent answers: `links`, `hash`, `copy`, `changes`, `versions` and `progress`, each a boolean, and an unknown key is `invalid-input`. A switch left out is `true`, except `progress`, which is `false`: the frame sends `progress` only to a parent that asked for it, so a host that never heard of the op is never sent one. A `false` leaves that reader callback absent, so the reader builds no control whose op nobody answers.
+
 `./frame` also exports the bridge's protocol (`BRIDGE_PROTOCOL`, `SEED_SCHEMA`, `BRIDGE_LIMITS`, `OP_KEYS`, `ERROR_WHY`, `PREF_KEYS`, `DOC_FIELDS`, `FRAGMENT_ID_GRAMMAR`, `isFragmentId()`; see the bridge, below) and its types: `RenderInput`, `FrameOptions`, `FrameAssets`, `FrameFeatures`, `FramePrefs`, `FrameErrorCode`, `BridgeStoreKey`, `ErrorWhy`, `FrameToParent`, `ParentToFrame` and `CspRefusal`. Its declarations name no DOM type, so a worker or a server builds a srcdoc with no DOM library.
 
 ## Hosting: `./host`
@@ -387,10 +389,31 @@ A mount checks the adapters (own data properties only; an unknown key or a bad v
 | `copy` | `copy(text, { hidden })`: the text to copy and every character in it a reader cannot see (controls, bidi controls, directional marks, the line and paragraph separators U+2028 and U+2029, zero-width characters, tag characters), each with its index, code point and name, so the host can show them before writing. |
 | `changes` | `changes(sha)`: a promise of `{ ranges, removedAfter? }` or `null`; a throw, a rejection, a malformed answer or 30 s without one answers the frame "unavailable". |
 | `openVersion` | `openVersion({ sha?, only? })`: show that version; no keys is the latest. |
+| `onProgress` | `onProgress(share)`: how far the document has been read, a number from 0 to 1 (the frame's thousandths over 1000), at most four times a second: the first value at once, then the latest of each 250 ms window when it ends, so the final value always arrives. Giving it is what asks the frame to send progress: a host with no `onProgress` is sent none. A throw is caught and logged, never counted against the frame. |
 | `onReady` | The frame said ready. |
 | `onFallback` | Required: the frame is gone, for one reason: `'timeout'`, `'nonce'`, `'error'`, `'protocol'`, `'refusals'`, `'navigated'`, `'assets'`, `'too-large'` or `'invalid-input'`. Called once per mount; the mount never remounts by itself. The frame's own error reason never reaches it. |
 
 Without `copy`, `changes` or `openVersion` the reader builds no control for that action, and without `onLink` a link to another page does nothing: the frame never navigates itself. `update(document)` is a full remount (a new iframe, channel, nonce and watchdog), also after a fallback; `setPrefs(prefs)` is posted once ready and seeds every later mount; `destroy()` is idempotent and calls no adapter, and after it `update` and `setPrefs` do nothing.
+
+**`command(name)`** runs one of the reader's tools for a host that draws its own bar: `'jump'` (the quick jump), `'settings'` (the reading settings), `'contents'` (the contents drawer) or `'outline'` (a plan's Outline), the names `runEnhancementCommand` takes, each a toggle. It focuses the iframe, then posts the command, so the keys the tool uses reach the frame. Before the frame is ready, after a fallback and after `destroy()` it does nothing and is not queued; a name outside the four throws a `TypeError`, whatever the state. The frame answers nothing: a tool that is turned off, a document without that tool or another overlay that is open make a command that changes nothing. Call it from the click handler of the host's own button, so a second press closes what the first opened.
+
+**One header bar.** A host that draws its own bar above the frame turns the reader's bar off, keeps the title and the reading line itself, and reaches the tools through `command`. The title is the document's first level-1 heading, already in `result.meta.title` (the same text the frame shows, byte for byte; no op carries it), so the host reads it there and falls back to its own name:
+
+```ts
+const frame = mountDocFrame(container, {
+  document: { result, scan },
+  adapters: {
+    assets,
+    watchdogMs: 20_000,
+    features: { chrome: { bar: false, topSpace: false } },
+    onProgress: (share) => progressLine.style.setProperty('--share', String(share)),
+    onFallback: (reason) => showPlainView(reason),
+  },
+});
+titleElement.textContent = result.meta.title ?? 'Document'; // textContent, never markup
+jumpButton.addEventListener('click', () => frame.command('jump'));
+settingsButton.addEventListener('click', () => frame.command('settings'));
+```
 
 **The host page's own policy binds the frame.** A srcdoc frame inherits its embedder's Content Security Policy, so the page that uses `mountDocFrame` must not block what the frame needs:
 
@@ -401,7 +424,7 @@ Without `copy`, `changes` or `openVersion` the reader builds no control for that
 This version's frame policy, whose four hash sources a page's `script-src` lists:
 
 ```text
-default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-J5JiH31iXyifbK9ee4xtzpagtQwRDQDVLHXb2gtyfbM=' 'sha256-DX0lf3gDZp+YEtHgQi8JOizQh9Vkt99XMeV4H/Lt8yA=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
+default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-mdes9SZyke2vPyEBaFgDYtu3mUNPS8uyaEYrQfMM+14=' 'sha256-DX0lf3gDZp+YEtHgQi8JOizQh9Vkt99XMeV4H/Lt8yA=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
 ```
 
 A page that blocks any of them gets a fallback; the frame is never left partly working:
@@ -414,7 +437,7 @@ A page that blocks any of them gets a fallback; the frame is never left partly w
 
 ## The bridge
 
-The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRIDGE_PROTOCOL`). Every message the frame sends is a flat object whose values are strings, except `v`; the parent refuses anything else. Of the parent's messages, `hello` and `prefs` are flat in the same way; `changes.result` carries `sha` and either `ranges`, a list of `[from, to]` pairs of integers, with or without `removedAfter`, a list of integers, or `unavailable: true` alone; and `mermaid` carries exactly one of `text`, a string of at most 8388608 UTF-16 code units (the diagram engine's build), or `unavailable: true` alone; the frame ignores anything else. The parent sends `hello` once, on the frame's window, with exactly one port; everything after it travels on that port.
+The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRIDGE_PROTOCOL`). Every message the frame sends is a flat object whose values are strings, except `v`; the parent refuses anything else. Of the parent's messages, `hello` and `prefs` are flat in the same way; `changes.result` carries `sha` and either `ranges`, a list of `[from, to]` pairs of integers, with or without `removedAfter`, a list of integers, or `unavailable: true` alone; and `mermaid` carries exactly one of `text`, a string of at most 8388608 UTF-16 code units (the diagram engine's build), or `unavailable: true` alone; `command` carries `name`, one of `'jump'`, `'settings'`, `'contents'` or `'outline'` and nothing else; the frame ignores anything else. Of the frame's messages, `progress` carries `p`, the share read so far in thousandths: a string of the whole numbers `0` to `1000`, with no sign, point, exponent, white space or leading zero (a string outside that, a number, a missing `p` or another key is refused). The parent sends `hello` once, on the frame's window, with exactly one port; everything after it travels on that port.
 
 | Op | Direction | Carries | Bound |
 |---|---|---|---|
@@ -422,6 +445,7 @@ The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRID
 | `prefs` | parent to frame | `theme`, `width`, `font` | Each optional, each one of its values. |
 | `changes.result` | parent to frame | `sha`, `ranges`, `removedAfter`, or `unavailable` | Only for the one request in flight. |
 | `mermaid` | parent to frame | `text`, or `unavailable` | Only to a frame whose seed draws `'after-ready'`, once, after ready; any other `mermaid` message is ignored. `text` is run as one inline script, and runs only if the frame's policy lists its hash (any of the frame's own scripts posted as `text` qualifies, runs inertly and ends in the load note); the frame takes Mermaid's API only from exactly one registration by that script; `unavailable: true` says the host has no build. |
+| `command` | parent to frame | `name` | One of `'jump'`, `'settings'`, `'contents'`, `'outline'` (`COMMAND_OPS`), each a toggle of that reader tool; an unknown name, a non-string or another key is ignored. A protocol-1 frame older than this release ignores the whole op, as it ignores every op it does not know. |
 | `ready` | frame to parent | `v`, `nonce` | Once; echoes the seed's nonce. The parent drops every other op before it. |
 | `error` | frame to parent | `why`: `boot`, `render`, `mermaid`, `assets` or `protocol` | At most once, right after ready; terminal by itself. |
 | `store.set` | frame to parent | `key`, `value` | A key on the allow-list below; JSON text of at most 64 KiB; the JSON literal `null` (the string `'null'`) deletes. |
@@ -430,6 +454,7 @@ The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRID
 | `changes` | frame to parent | `sha` | A full 40- or 64-hex sha; one in flight. |
 | `hash` | frame to parent | `id` | An id in the fragment grammar, never empty. |
 | `version` | frame to parent | `sha`, `only` | Full shas; no keys is back to the latest; the parent coalesces it over 250 ms. |
+| `progress` | frame to parent | `p` | Thousandths of the share read, `'0'` to `'1000'`, no sign, point or leading zero; sent only when the seed's `bridge.progress` is true (off unless asked for), at most once per 250 ms window (`progressWindowMs`): the first value at once, the window's latest at its end. |
 
 `OP_KEYS` lists every key each op may carry, and `ERROR_WHY` the error reasons. A `changes.result` from an older parent may omit `removedAfter`: that means no deletions. **The fragment grammar** is `FRAGMENT_ID_GRAMMAR`: `^[\p{L}\p{M}\p{N}_.:-]+$` (Unicode flag), 1 to 256 UTF-16 code units, checked by `isFragmentId()`. It covers every id the layout can go to: heading slugs, anchors, footnotes (`fnref1:1`) and defined IDs (`D2.1a`). An id outside it is never sent and never thrown on: the frame still scrolls to it, and the host's address does not record it; an `initialHash` outside it is seeded as `null`.
 

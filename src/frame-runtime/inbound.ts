@@ -1,5 +1,5 @@
 // What the frame accepts on its port (docserver L3, Task 5; plan Reference §6.5 and §8.2): `prefs`,
-// `changes.result` and `mermaid`. Anything else, or anything malformed, is ignored (null): the frame keeps no refusal count. `hello`
+// `changes.result`, `mermaid` and `command`. Anything else, or anything malformed, is ignored (null): the frame keeps no refusal count. `hello`
 // comes on the window, never on the port, and is the bootstrap's own check. Bundled into the bootstrap; DOM-free.
 //
 // A message is read as `./host`'s parser reads one: a plain object (prototype Object.prototype or null), own string
@@ -16,7 +16,9 @@
 //                   by length) or `unavailable: true`; both, neither, another key, a non-string text or any other
 //                   `unavailable` is ignored. Whether the frame acts on it (its seed draws 'after-ready', it has
 //                   settled, it is the first) is the bootstrap's own check; this file judges the shape only (C107).
-import { BRIDGE_LIMITS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type ParentToFrame } from '../frame/protocol.js';
+//   command         exactly `name`, a string that is one of COMMAND_OPS; any other name, a non-string or another key is
+//                   ignored (batch 1.1, C108). Whether the reader has that tool is the reader's own answer.
+import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type CommandOp, type ParentToFrame } from '../frame/protocol.js';
 
 const getProto = Object.getPrototypeOf;
 const ownKeys = Reflect.ownKeys;
@@ -61,9 +63,13 @@ export function parseParentMessage(data: unknown): ParentToFrame | null {
   const m = own(data);
   if (m === null) return null;
   const t = m.get('t');
-  if (t !== 'prefs' && t !== 'changes.result' && t !== 'mermaid') return null;
+  if (t !== 'prefs' && t !== 'changes.result' && t !== 'mermaid' && t !== 'command') return null;
   const allowed: readonly string[] = OP_KEYS[t];
   for (const k of m.keys()) if (!allowed.includes(k)) return null;
+  if (t === 'command') {
+    const name = m.get('name');
+    return m.size === 2 && typeof name === 'string' && (COMMAND_OPS as readonly string[]).includes(name) ? { t: 'command', name: name as CommandOp } : null;
+  }
   if (t === 'mermaid') {
     const hasText = m.has('text');
     if (hasText === m.has('unavailable')) return null;

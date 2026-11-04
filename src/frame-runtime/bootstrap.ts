@@ -52,6 +52,10 @@
 //
 // On the port (inbound.ts; anything malformed is ignored): `prefs` goes to setEnhancementPrefs, and `changes.result`
 // to the outbox's changes slot, which hands it to L2's `changes` callback (L2's readChangeSet checks it again).
+// `command` (batch 1.1, C108) goes to the reader's runEnhancementCommand(root, name), only once settled; the reader's
+// boolean (it answers false for a tool that is off, another overlay open, and so on) is ignored: there is no reply op.
+// The reader's `onProgress` is handed over only when the seed's bridge asks for progress (adapters.ts); it sends
+// `progress` through the outbox, one value per 250 ms window.
 //
 // `mermaid` (C107, BD3, BD4): only in SETTLED state, only for an 'after-ready' seed, and only the first time; every
 // other case is ignored silently. Enhance was handed a `mermaid` option whose load() is pending (the deferred promise
@@ -86,6 +90,8 @@ interface EnhanceApi {
   enhance(root: HTMLElement, options: unknown): Promise<void>;
   destroyEnhancement(root: HTMLElement): unknown;
   setEnhancementPrefs(root: HTMLElement, prefs: unknown): void;
+  /** Absent from an enhance script that predates the commands; the frame and the script ship together, so it is there. */
+  runEnhancementCommand?(root: HTMLElement, name: string): unknown;
 }
 
 (() => {
@@ -222,6 +228,14 @@ interface EnhanceApi {
       outbox.answer(m);
     } else if (m.t === 'mermaid') {
       offerMermaid(m);
+    } else if (m.t === 'command') {
+      if (root !== null && api !== null) {
+        try {
+          api.runEnhancementCommand?.(root, m.name);
+        } catch {
+          // a command that throws changes nothing for the parent, which gets no reply either way
+        }
+      }
     } else if (m.t === 'prefs' && root !== null && api !== null) {
       const { t: _t, ...prefs } = m;
       try {
@@ -418,6 +432,7 @@ interface EnhanceApi {
         ...(adapters.copy === undefined ? {} : { copy: adapters.copy }),
         ...(adapters.changes === undefined ? {} : { changes: adapters.changes }),
         ...(adapters.openVersion === undefined ? {} : { openVersion: adapters.openVersion }),
+        ...(adapters.onProgress === undefined ? {} : { onProgress: adapters.onProgress }),
         // The seed's caps, secure keys and `draw`, passed through (Task 16): in 'after-ready' always, with the deferred load.
         ...mermaidOption(seed.mermaid, mermaidModule, () => lateBuild),
       });

@@ -135,6 +135,21 @@ describe('L3.H3 hash goes through isFragmentId, never the ID grammar alone', () 
   });
 });
 
+describe('B7.1 progress: thousands of the share as a string, judged by its grammar, with the existing reasons only', () => {
+  it("every '0' to '1000' is accepted, and each string outside the grammar is a 'type' refusal", () => {
+    for (let n = 0; n <= 1000; n++) expect(parseBridgeMessage({ t: 'progress', p: String(n) }, [], NONCE), String(n)).toEqual({ ok: true, msg: { t: 'progress', p: String(n) } });
+    for (const p of ['1001', '2000', '-1', '-0', '5.5', '05', '00', '+5', '1e2', ' 5', '5 ', '0x1', '', '10000', '\u0665']) {
+      expect(parseBridgeMessage({ t: 'progress', p }, [], NONCE), JSON.stringify(p)).toEqual({ ok: false, reason: 'type' });
+    }
+  });
+
+  it("a missing p and an extra key are 'keys'; a number, null and an array are 'type'", () => {
+    expect(parseBridgeMessage({ t: 'progress' }, [], NONCE)).toEqual({ ok: false, reason: 'keys' });
+    expect(parseBridgeMessage({ t: 'progress', p: '5', q: '6' }, [], NONCE)).toEqual({ ok: false, reason: 'keys' });
+    for (const p of [5, null, ['5'], true]) expect(parseBridgeMessage({ t: 'progress', p }, [], NONCE), String(p)).toEqual({ ok: false, reason: 'type' });
+  });
+});
+
 describe('L3.H3 the parser reads a message once, as plain data', () => {
   it('returns a fresh object, never the one it was given', () => {
     const m = { t: 'navigate', href: 'https://example.com/' };
@@ -185,7 +200,7 @@ describe('L3.H3 the parser reads a message once, as plain data', () => {
   });
 
   it('a parent op, a frame op of another case and an inherited t are unknown ops', () => {
-    for (const t of ['hello', 'prefs', 'changes.result', 'Hash', 'toString', '__proto__']) {
+    for (const t of ['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'Hash', 'toString', '__proto__']) {
       expect(parseBridgeMessage({ t }, [], NONCE), t).toEqual({ ok: false, reason: 'unknown-op' });
     }
     expect(parseBridgeMessage(Object.create({ t: 'hash', id: 'a' }) as unknown, [], NONCE)).toEqual({ ok: false, reason: 'not-plain' });

@@ -144,13 +144,17 @@ export interface FrameOptions {
     readonly draw?: MermaidDraw;
   } | null;
   readonly features?: FrameFeatures;
-  /** Which ops the parent answers; each defaults to true. A false leaves that enhance callback absent. */
+  /**
+   * Which ops the parent answers; each defaults to true except `progress`, which defaults to false (the frame sends
+   * `progress` only to a parent that asked for it). A false leaves that enhance callback absent.
+   */
   readonly bridge?: {
     readonly links?: boolean;
     readonly hash?: boolean;
     readonly copy?: boolean;
     readonly changes?: boolean;
     readonly versions?: boolean;
+    readonly progress?: boolean;
   };
   /** Default MAX_SRCDOC_CHARS_DEFAULT; a host may only lower it. */
   readonly maxSrcdocChars?: number;
@@ -350,10 +354,10 @@ function mermaidOf(b: Budget, m: unknown): SeedMermaid | null {
   return { ...caps, secure: field(f, 'secure', []), draw: field(f, 'draw', 'auto') } as SeedMermaid;
 }
 
-/** The bridge switches, copied, each absent one true. */
+/** The bridge switches, copied, each absent one true, except `progress`: absent, it is false. */
 function bridgeOf(budget: Budget, b: unknown): Seed['bridge'] {
   const f = fieldsOf(budget, b, 'bridge', BRIDGE_KEYS);
-  return Object.fromEntries(BRIDGE_KEYS.map((k) => [k, field(f, k, true)])) as Seed['bridge'];
+  return Object.fromEntries(BRIDGE_KEYS.map((k) => [k, field(f, k, k !== 'progress')])) as Seed['bridge'];
 }
 
 /**

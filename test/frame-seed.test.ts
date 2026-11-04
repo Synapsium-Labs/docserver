@@ -22,6 +22,7 @@ import { loadCorpus } from '../src/conformance/index.js';
 import { LIMITS as ENHANCE_LIMITS, normalizeOptions } from '../src/enhance/options.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, FRAME_PREF_VALUES, PREF_KEYS } from '../src/frame/protocol.js';
 import {
+  BRIDGE_KEYS,
   escapedHtmlLength,
   FEATURE_KEYS,
   IMAGE_BUDGET_CHARS,
@@ -62,7 +63,7 @@ function base(): Seed {
     snapshot: [],
     features: {},
     mermaid: null,
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
   };
 }
 
@@ -91,7 +92,7 @@ function full(): Seed {
     ],
     features: { rules: true, folds: false, keyboard: true, chrome: { bar: false }, vocabulary: { ids: false, qualifiers: ['annex'] } },
     mermaid: { maxTextSize: 16384, maxEdges: 500, secure: ['themeCSS'], draw: 'on-request' },
-    bridge: { links: true, hash: false, copy: true, changes: false, versions: true },
+    bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true },
   };
 }
 
@@ -183,6 +184,12 @@ describe('L3.M4 validateSeed: the shape', () => {
   it("SEED_KEYS is schema 1's fourteen keys", () => {
     expect([...SEED_KEYS]).toEqual(['bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
     expect(Object.keys(base()).sort()).toEqual([...SEED_KEYS]);
+  });
+
+  it("B7.6 BRIDGE_KEYS is the five answered ops and the progress switch; the seed's bridge keeps exactly those keys, closed", () => {
+    expect([...BRIDGE_KEYS]).toEqual(['links', 'hash', 'copy', 'changes', 'versions', 'progress']);
+    for (const progress of [true, false]) expect(validateSeed({ ...base(), bridge: { ...base().bridge, progress } })).toMatchObject({ ok: true });
+    expect(validateSeed(loose({ bridge: { ...base().bridge, command: true } }))).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
   });
 
   it('an extra key: refused, with the nonce kept so the frame can report', () => {
@@ -364,8 +371,11 @@ const BAD: readonly Row[] = [
   ['mermaid', { secure: [], draw: 'auto', maxTextSize: '100' }, 'mermaid.maxTextSize'],
   ['bridge', {}, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true }, 'bridge'],
-  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, prefs: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true }, 'bridge'],
+  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true, progress: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: 0 }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, prefs: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, command: true }, 'bridge'],
   ['bridge', null, 'bridge'],
 ];
 
@@ -701,7 +711,7 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       // The validator keeps a repeated word (L2 drops it), so the longest list repeats the longest word.
       features: maximalFeatures(L.words, () => lt(L.wordMaxCodeUnits)) as Seed['features'],
       mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as MermaidDraw },
-      bridge: { links: false, hash: false, copy: false, changes: false, versions: false },
+      bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false },
     };
   }
 

@@ -91,8 +91,11 @@ const SECURE_KEY = new RegExp(SECURE_KEY_SOURCE);
 export const MERMAID_DRAW = Object.freeze(['auto', 'on-request', 'after-ready'] as const);
 export type MermaidDraw = (typeof MERMAID_DRAW)[number];
 
-/** The ops the parent answers, each a boolean in the seed (FrameOptions.bridge, default all true). */
-export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions'] as const);
+/**
+ * The ops the parent answers, each a boolean in the seed (FrameOptions.bridge: each defaults to true but `progress`,
+ * which defaults to false, because a parent that never asked for progress should never be sent it; batch 1.1, C108).
+ */
+export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress'] as const);
 
 /**
  * The keys of `features`: three flags, `chrome`'s flags and `vocabulary`'s word lists, in groups (`status`,

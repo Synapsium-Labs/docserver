@@ -355,7 +355,7 @@ function recordingOutbox(): { box: Outbox; sent: FrameToParent[]; copies: string
   return { box, sent, copies, asked };
 }
 
-const ALL = { links: true, hash: true, copy: true, changes: true, versions: true } as const;
+const ALL = { links: true, hash: true, copy: true, changes: true, versions: true, progress: true } as const;
 const SHA40 = 'a'.repeat(40);
 
 describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.3; row L3.B8 unit half)', () => {
@@ -441,11 +441,67 @@ describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.
 
   it('each callback exists only when the seed\'s bridge allows it; storage always does', () => {
     const { box, sent } = recordingOutbox();
-    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false } });
-    expect([a.onLink, a.onHash, a.copy, a.changes, a.openVersion]).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false } });
+    expect([a.onLink, a.onHash, a.copy, a.changes, a.openVersion, a.onProgress]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
     a.link('x.md');
     expect(sent).toEqual([]);
     expect(typeof a.storage.set).toBe('function');
+  });
+});
+
+describe('B7.2 adapters: onProgress exists only when the seed\'s bridge asks for progress (batch 1.1, C108)', () => {
+  it('progress false: no onProgress, whatever else the bridge allows (B7h)', () => {
+    const { box, sent } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: { ...ALL, progress: false } });
+    expect(a.onProgress).toBeUndefined();
+    expect(a.onLink).toBeDefined();
+    expect(sent).toEqual([]);
+  });
+
+  it("progress true: onProgress(share) sends the share in thousandths as a string, rounded and clamped to 0..1000", () => {
+    const { box, sent } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: { ...ALL, progress: true } });
+    for (const share of [0, 0.5, 1, 0.1234, 0.0004, 0.0005, 0.99949, 0.9996, -0.2, 3, 0.37]) a.onProgress?.(share);
+    expect(sent).toEqual(['0', '500', '1000', '123', '0', '1', '999', '1000', '0', '1000', '370'].map((p) => ({ t: 'progress', p })));
+  });
+
+  it('a share that is not a finite number sends nothing', () => {
+    const { box, sent } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: ALL });
+    for (const bad of [NaN, Infinity, -Infinity, '0.5' as unknown as number, null as unknown as number, undefined as unknown as number]) a.onProgress?.(bad);
+    expect(sent).toEqual([]);
+  });
+
+  it('a seed that predates the switch (no progress key) builds no onProgress', () => {
+    const { box } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: { links: true, hash: true, copy: true, changes: true, versions: true } as never });
+    expect(a.onProgress).toBeUndefined();
+  });
+});
+
+describe('B7.4 the bootstrap passes a command to the reader and the reader\'s onProgress on (structure; the browser rows are test/browser)', () => {
+  const file = path.join(ROOT, 'src/frame-runtime/bootstrap.ts');
+  const source = readFileSync(file, 'utf8');
+
+  it('onPortMessage runs runEnhancementCommand(root, m.name) for a command, only once settled (the guard before it is the state check)', () => {
+    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true);
+    let found = 0;
+    const visit = (n: ts.Node): void => {
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === 'onPortMessage' && n.initializer !== undefined) {
+        const text = n.initializer.getText(sf);
+        expect(text).toMatch(/if \(state !== 'settled' \|\| mismatch\) return;/);
+        expect(text).toMatch(/m\.t === 'command'/);
+        expect(text).toMatch(/runEnhancementCommand\??\.?\(root, m\.name\)/);
+        found += 1;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    expect(found).toBe(1);
+  });
+
+  it("adapters' onProgress goes to enhance's options only when it exists", () => {
+    expect(source).toMatch(/\.\.\.\(adapters\.onProgress === undefined \? \{\} : \{ onProgress: adapters\.onProgress \}\)/);
   });
 });
 
@@ -554,6 +610,48 @@ describe('parseParentMessage: what the frame accepts on the port (Reference §6.
       for (const [k, f] of Object.entries(c.fill ?? {})) m[k] = `${f.prefix ?? ''}${f.unit.repeat(f.times)}${f.suffix ?? ''}`;
       const got = parseParentMessage(m);
       if (c.verdict === 'accept') expect(got, c.label).toEqual(m);
+      else expect(got, c.label).toBeNull();
+    }
+  });
+
+  it('command: exactly {name}, one of the four command names (B7a, B7b)', () => {
+    for (const name of ['jump', 'settings', 'contents', 'outline']) expect(parseParentMessage({ t: 'command', name }), name).toEqual({ t: 'command', name });
+    for (const bad of [
+      { t: 'command' },
+      { t: 'command', name: 'print' },
+      { t: 'command', name: 'Jump' },
+      { t: 'command', name: '' },
+      { t: 'command', name: 'toString' },
+      { t: 'command', name: 'constructor' },
+      { t: 'command', name: 1 },
+      { t: 'command', name: null },
+      { t: 'command', name: ['jump'] },
+      { t: 'command', name: 'jump', extra: 'x' },
+      { t: 'command', name: 'jump', arg: 1 },
+      Object.defineProperty({ t: 'command' }, 'name', { get: () => 'jump', enumerable: true }),
+      JSON.parse('{"t":"command","name":"jump","__proto__":{}}') as unknown,
+    ]) {
+      expect(parseParentMessage(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("command: every parent-to-frame fixture of the op is judged as its verdict says, by the frame's own parser (B7.1)", () => {
+    interface Case {
+      label: string;
+      direction: string;
+      channel?: string;
+      ports?: number;
+      message: Record<string, unknown> | null;
+      verdict: 'accept' | 'refuse';
+    }
+    const cases = (JSON.parse(readText('conformance/bridge-cases.json')) as { messages: Case[] }).messages.filter(
+      (c) => c.direction === 'parent-to-frame' && c.message?.['t'] === 'command' && c.channel === 'port' && (c.ports ?? 0) === 0,
+    );
+    expect(cases.filter((c) => c.verdict === 'accept')).toHaveLength(4);
+    expect(cases.filter((c) => c.verdict === 'refuse').length).toBeGreaterThanOrEqual(3);
+    for (const c of cases) {
+      const got = parseParentMessage(c.message);
+      if (c.verdict === 'accept') expect(got, c.label).toEqual(c.message);
       else expect(got, c.label).toBeNull();
     }
   });

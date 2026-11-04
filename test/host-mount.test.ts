@@ -730,6 +730,189 @@ describe('after ready: the limiter, then one effect per op (Reference §11.3)', 
 
 // ───────── setPrefs, update, destroy ─────────
 
+describe('B7.7 progress: the frame\'s share in thousandths reaches onProgress as p / 1000 (batch 1.1, C108)', () => {
+  const withProgress = (): Partial<Record<keyof HostAdapters, unknown>> => ({
+    onProgress: (share: unknown) => progressLog.push(share),
+  });
+  let progressLog: unknown[] = [];
+  beforeEach(() => {
+    progressLog = [];
+  });
+
+  it("'0', '1', '500' and '1000' arrive as 0, 0.001, 0.5 and 1, as numbers", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const m = mount(PLAIN, withProgress());
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    for (const p of ['0', '1', '500', '1000']) {
+      m.say({ t: 'progress', p });
+      vi.advanceTimersByTime(250);
+    }
+    expect(progressLog).toEqual([0, 0.001, 0.5, 1]);
+    expect(progressLog.every((v) => typeof v === 'number')).toBe(true);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('onProgress is called as a method of the adapters object, and a throw is caught and logged, never counted against the frame', async () => {
+    const seen: Seen = { events: [] };
+    const adapters = adaptersFor(seen, {
+      onProgress(this: unknown) {
+        seen.events.push(['this', this === adapters]);
+        throw new Error('boom');
+      },
+    });
+    const frame = mountDocFrame(container, { document: input(PLAIN), adapters });
+    const ch = channels[channels.length - 1] as FakeChannel;
+    const nonce = NONCE_RE.exec(container.querySelector('iframe')?.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    ch.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    ch.port1.onmessage?.({ data: { t: 'progress', p: '500' }, ports: [] });
+    expect(seen.events.filter(([n]) => n === 'this')).toEqual([['this', true]]);
+    expect(seen.events.filter(([n]) => n === 'fallback')).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+    frame.destroy();
+  });
+
+  it("a value outside the grammar is refused and never reaches onProgress: '1001', '05', '-1', '5.5', a number", async () => {
+    const m = await ready(PLAIN, withProgress());
+    for (const p of ['1001', '05', '-1', '5.5', 500]) m.say({ t: 'progress', p });
+    expect(progressLog).toEqual([]);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('a progress op before ready is dropped like every other op', () => {
+    const m = mount(PLAIN, withProgress());
+    m.say({ t: 'progress', p: '500' });
+    expect(progressLog).toEqual([]);
+  });
+
+  it('a frame that sends progress to a host with no onProgress is harmless: no call, no fallback', async () => {
+    const m = await ready();
+    m.say({ t: 'progress', p: '500' });
+    expect(m.seen.events.map(([n]) => n)).toEqual(['ready']);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('onProgress must be a function when given, and is a known adapter key', () => {
+    expect(() => mount(PLAIN, { onProgress: 'x' })).toThrow(TypeError);
+    expect(() => mount(PLAIN, { onProgress: {} })).toThrow(/adapters\.onProgress must be a function/);
+    expect(iframes()).toBe(0);
+    expect(() => mount(PLAIN, { onProgres: () => undefined } as never)).toThrow(/unknown key/);
+  });
+});
+
+describe('B7.4 DocFrame.command(name): drops before ready and after destroy, throws on an unknown name, else focuses the iframe and posts (batch 1.1, C108)', () => {
+  const NAMES = ['jump', 'settings', 'contents', 'outline'] as const;
+
+  it('before ready it posts nothing and moves no focus (B7j)', async () => {
+    const m = mount();
+    await m.loaded();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(document.activeElement === other, 'the focus stays where it was').toBe(true);
+    // And the command is not queued: it does not arrive at ready.
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m)).toEqual([]);
+  });
+
+  it('after ready it posts the exact op, once, after focusing the iframe (B7k)', async () => {
+    const m = await ready();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    expect(document.activeElement === m.iframe, 'the iframe has lost the focus').toBe(false);
+    const order: string[] = [];
+    m.iframe.addEventListener('focus', () => order.push(`focus (posted ${String(frameBound(m).length)})`));
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([{ t: 'command', name: 'jump' }]);
+    expect(document.activeElement === m.iframe, 'the iframe is the active element').toBe(true);
+    expect(order).toEqual(['focus (posted 0)']);
+    for (const name of NAMES.slice(1)) m.frame.command(name);
+    expect(frameBound(m)).toEqual(NAMES.map((name) => ({ t: 'command', name })));
+  });
+
+  it('it focuses the iframe even when the mount was made with focus: false (the host asked for the command)', async () => {
+    const m = await ready(PLAIN, { focus: false });
+    expect(document.activeElement === m.iframe, 'not focused at mount').toBe(false);
+    m.frame.command('settings');
+    expect(document.activeElement === m.iframe).toBe(true);
+    expect(frameBound(m)).toEqual([{ t: 'command', name: 'settings' }]);
+  });
+
+  it('an unknown name throws a TypeError and posts and focuses nothing: another name, another case, an inherited name, a non-string', async () => {
+    const m = await ready();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    for (const bad of ['print', 'Jump', ' jump', '', 'toString', 'constructor', '__proto__', 1, null, undefined, {}, ['jump']]) {
+      expect(() => m.frame.command(bad as never), String(bad)).toThrow(TypeError);
+    }
+    expect(frameBound(m)).toEqual([]);
+    expect(document.activeElement === other, 'the focus stays where it was').toBe(true);
+  });
+
+  it('the name is checked before the state: an unknown name throws before ready and after destroy too', async () => {
+    const m = mount();
+    expect(() => m.frame.command('print' as never)).toThrow(TypeError);
+    m.frame.destroy();
+    expect(() => m.frame.command('print' as never)).toThrow(TypeError);
+  });
+
+  it('after destroy() it posts and focuses nothing, and calls no adapter', async () => {
+    const m = await ready();
+    m.frame.destroy();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    const before = m.seen.events.length;
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(document.activeElement === other).toBe(true);
+    expect(m.seen.events).toHaveLength(before);
+  });
+
+  it('after update() the new mount is not ready: it posts nothing, on the old port or the new one, until its own ready', async () => {
+    const m = await ready();
+    m.frame.update(input(PLAIN));
+    const fresh = channels[channels.length - 1] as FakeChannel;
+    m.frame.command('jump');
+    expect(m.channel.port1.sent).toEqual([]);
+    expect(fresh.port1.sent).toEqual([]);
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const nonce = NONCE_RE.exec(iframe.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    m.frame.command('contents');
+    expect(fresh.port1.sent).toEqual([{ t: 'command', name: 'contents' }]);
+    expect(m.channel.port1.sent).toEqual([]);
+  });
+
+  it('after a fallback it posts nothing', async () => {
+    const m = await ready();
+    m.say({ t: 'error', why: 'render' });
+    expect(m.fallbacks()).toEqual(['error']);
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+  });
+
+  it("host code that runs at the focus (a focusout that destroys the frame) leaves the command unposted, and nothing throws", async () => {
+    const m = await ready();
+    const search = document.createElement('input');
+    document.body.append(search);
+    search.focus();
+    search.addEventListener('focusout', () => m.frame.destroy());
+    expect(() => m.frame.command('jump')).not.toThrow();
+    expect(frameBound(m)).toEqual([]);
+  });
+
+  it('the op is the whole message: exactly {t, name}', async () => {
+    const m = await ready();
+    m.frame.command('outline');
+    const [op] = frameBound(m);
+    expect(Object.keys(op as object)).toEqual(['t', 'name']);
+  });
+});
+
 describe('setPrefs, update and destroy (Reference §11.4)', () => {
   it('setPrefs before ready queues the latest and posts it once at ready; after ready it posts at once', async () => {
     const m = mount();
@@ -994,11 +1177,19 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference �
   });
 
   it('the bridge switches follow which adapters exist', () => {
-    const all = mount(PLAIN, { changes: () => Promise.resolve(null) });
-    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true });
+    const all = mount(PLAIN, { changes: () => Promise.resolve(null), onProgress: () => undefined });
+    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true });
     all.frame.destroy();
     const none = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined });
-    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false });
+    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false });
+  });
+
+  it('B7.2: progress is switched on by onProgress alone, and by nothing else (B7i)', () => {
+    const without = mount(PLAIN, { changes: () => Promise.resolve(null) });
+    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
+    without.frame.destroy();
+    const only = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined, onProgress: () => undefined });
+    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true });
   });
 
   it('features and prefs pass through to the seed', () => {

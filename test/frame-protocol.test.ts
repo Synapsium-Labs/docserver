@@ -22,7 +22,7 @@ import {
   type ParentToFrame,
 } from '../src/frame/index.js';
 // The wire helpers the frame runtime and `./host` read inside the package: never part of `./frame`'s public surface.
-import { FRAME_OPS, FRAME_PREF_VALUES, isBridgeStoreKey, isFullSha, PARENT_OPS } from '../src/frame/protocol.js';
+import { COMMAND_OPS, FRAME_OPS, FRAME_PREF_VALUES, isBridgeStoreKey, isFullSha, isProgressThousandths, PARENT_OPS, PROGRESS_SOURCE } from '../src/frame/protocol.js';
 
 const ROOT = new URL('../', import.meta.url);
 const readText = (rel: string): string => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -70,6 +70,7 @@ describe('U9 BRIDGE_LIMITS: exactly Reference §8.4 (ruling R5)', () => {
       storeSetRefillPerSecond: 10,
       changesInFlight: 1,
       coalesceMs: 250,
+      progressWindowMs: 250,
       refusalsToClose: 16,
       valueMaxBytes: 65536,
       copyMaxBytes: 65536,
@@ -158,6 +159,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       prefs: ['t', 'theme', 'width', 'font'],
       'changes.result': ['t', 'sha', 'ranges', 'removedAfter', 'unavailable'],
       mermaid: ['t', 'text', 'unavailable'],
+      command: ['t', 'name'],
       ready: ['t', 'v', 'nonce'],
       error: ['t', 'why'],
       'store.set': ['t', 'key', 'value'],
@@ -166,14 +168,15 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       changes: ['t', 'sha'],
       hash: ['t', 'id'],
       version: ['t', 'sha', 'only'],
+      progress: ['t', 'p'],
     });
     expect(Object.isFrozen(OP_KEYS)).toBe(true);
     for (const keys of Object.values(OP_KEYS)) expect(Object.isFrozen(keys)).toBe(true);
   });
 
   it('FRAME_OPS and PARENT_OPS split it by direction, with no op in both', () => {
-    expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version']);
-    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid']);
+    expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress']);
+    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid', 'command']);
     expect([...FRAME_OPS, ...PARENT_OPS].sort()).toEqual(Object.keys(OP_KEYS).sort());
   });
 
@@ -184,6 +187,8 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
     expectTypeOf<(typeof OP_KEYS)['changes.result'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'changes.result' }>>>();
     expectTypeOf<(typeof OP_KEYS)['prefs'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'prefs' }>>>();
     expectTypeOf<(typeof OP_KEYS)['mermaid'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'mermaid' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['command'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'command' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['progress'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'progress' }>>>();
     expectTypeOf<(typeof OP_KEYS)['ready'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'ready' }>>>();
   });
 
@@ -191,6 +196,29 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
     expect(FRAME_PREF_VALUES).toEqual({ theme: ['auto', 'light', 'dark'], width: ['standard', 'wide'], font: ['serif', 'sans'] });
     expect(Object.isFrozen(FRAME_PREF_VALUES)).toBe(true);
     expect(OP_KEYS.prefs.filter((k) => k !== 't')).toEqual(Object.keys(FRAME_PREF_VALUES));
+  });
+});
+
+describe('B7: the command op and the progress op (batch 1.1, C108)', () => {
+  it("COMMAND_OPS is the four command names in the bar's order, frozen; the type follows it", () => {
+    expect([...COMMAND_OPS]).toEqual(['jump', 'settings', 'contents', 'outline']);
+    expect(Object.isFrozen(COMMAND_OPS)).toBe(true);
+    expectTypeOf<Extract<ParentToFrame, { t: 'command' }>['name']>().toEqualTypeOf<(typeof COMMAND_OPS)[number]>();
+    expectTypeOf<Extract<FrameToParent, { t: 'progress' }>['p']>().toEqualTypeOf<string>();
+  });
+
+  it("the progress window is 250 ms, beside coalesceMs, and a progress share is at most 4 messages a second", () => {
+    expect(BRIDGE_LIMITS.progressWindowMs).toBe(250);
+    expect(Math.floor(BRIDGE_LIMITS.frameWindowMs / BRIDGE_LIMITS.progressWindowMs)).toBe(4);
+  });
+
+  it("the progress grammar: a string of thousandths, '0' to '1000', no sign, point, exponent, space or leading zero", () => {
+    expect(PROGRESS_SOURCE).toBe('^(?:0|[1-9][0-9]{0,2}|1000)$');
+    for (let n = 0; n <= 1000; n++) expect(isProgressThousandths(String(n)), String(n)).toBe(true);
+    for (const bad of ['1001', '1100', '9999', '-1', '-0', '5.5', '05', '00', '+5', '1e2', ' 5', '5 ', '0x10', '', '\u0665', '10000']) {
+      expect(isProgressThousandths(bad), JSON.stringify(bad)).toBe(false);
+    }
+    for (const v of [5, null, undefined, {}, ['5'], true]) expect(isProgressThousandths(v)).toBe(false);
   });
 });
 
@@ -285,8 +313,10 @@ const REQUIRED: Readonly<Record<string, readonly string[]>> = {
   changes: ['sha'],
   hash: ['id'],
   version: [],
+  progress: ['p'],
   hello: ['v'],
   prefs: [],
+  command: ['name'],
 };
 
 const refuse = (reason: string): Verdict => ({ verdict: 'refuse', reason });
@@ -347,6 +377,11 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context']): Ve
     case 'version':
       for (const k of ['sha', 'only']) if (Object.hasOwn(msg, k) && !isFullSha(msg[k])) return refuse('sha');
       return ACCEPT;
+    case 'progress': {
+      // thousandths of the share, 0 to 1000: no sign, no point, no leading zero.
+      const p = msg['p'] as string;
+      return /^(?:0|[1-9][0-9]{0,2}|1000)$/.test(p) ? ACCEPT : refuse('type');
+    }
     default:
       return refuse('unknown-op');
   }
@@ -354,7 +389,7 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context']): Ve
 
 /** The frame's reading of a parent-to-frame message (Reference §6.3 on the window, §6.5 on the port). */
 function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: BridgeCases['context']): Verdict {
-  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid']);
+  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid', 'command']);
   if ('fail' in c) return c.fail;
   const o = c.msg;
   const t = o['t'];
@@ -381,6 +416,12 @@ function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: 
     const text = o['text'];
     if (typeof text !== 'string') return refuse('type');
     return text.length <= BRIDGE_LIMITS.mermaidMaxChars ? ACCEPT : refuse('oversize');
+  }
+  if (t === 'command') {
+    // command: exactly {name}, a string that is one of the four command names.
+    const name = o['name'];
+    if (typeof name !== 'string') return refuse('type');
+    return (['jump', 'settings', 'contents', 'outline'] as readonly string[]).includes(name) ? ACCEPT : refuse('type');
   }
   // changes.result: {sha, ranges, removedAfter?} or {sha, unavailable: true}, never both shapes.
   if (!Object.hasOwn(o, 'sha')) return refuse('keys');
@@ -504,6 +545,45 @@ describe('conformance/bridge-cases.json: the M8.5 battery is present', () => {
     const sizes = copies.map((c) => [utf8Bytes((messageOf(c) as { text: string }).text), (messageOf(c) as { text: string }).text.length, c.verdict] as const);
     expect(sizes.some(([b, u, v]) => b === BRIDGE_LIMITS.copyMaxBytes && u < b && v === 'accept')).toBe(true);
     expect(sizes.some(([b, u, v]) => b > BRIDGE_LIMITS.copyMaxBytes && u < BRIDGE_LIMITS.copyMaxBytes && v === 'refuse')).toBe(true);
+  });
+});
+
+describe('B7.1 conformance/bridge-cases.json: the progress and command battery, with the existing reasons only', () => {
+  const find = (pred: (c: MessageCase, m: Record<string, unknown>) => boolean): MessageCase[] =>
+    CASES.messages.filter((c) => isPlain(messageOf(c)) && pred(c, messageOf(c) as Record<string, unknown>));
+
+  it("progress is accepted for '0', '500' and '1000', and refused as 'type' for each string outside the grammar and for a number", () => {
+    for (const p of ['0', '500', '1000']) {
+      expect(find((c, m) => m['t'] === 'progress' && m['p'] === p && c.verdict === 'accept' && c.direction === 'frame-to-parent'), p).toHaveLength(1);
+    }
+    for (const p of ['1001', '-1', '5.5', '05']) {
+      expect(find((c, m) => m['t'] === 'progress' && m['p'] === p && c.reason === 'type' && c.direction === 'frame-to-parent'), p).toHaveLength(1);
+    }
+    expect(find((c, m) => m['t'] === 'progress' && m['p'] === 500 && c.reason === 'type')).toHaveLength(1);
+  });
+
+  it("progress without p, and with another key, is refused as 'keys'", () => {
+    expect(find((c, m) => m['t'] === 'progress' && !Object.hasOwn(m, 'p') && c.reason === 'keys')).toHaveLength(1);
+    expect(find((c, m) => m['t'] === 'progress' && Object.hasOwn(m, 'p') && Object.keys(m).length === 3 && c.reason === 'keys')).toHaveLength(1);
+  });
+
+  it("command is accepted for each of the four names on the port; an unknown or non-string name is 'type', an extra key or a missing name 'keys'", () => {
+    for (const name of ['jump', 'settings', 'contents', 'outline']) {
+      expect(find((c, m) => m['t'] === 'command' && m['name'] === name && c.verdict === 'accept' && c.channel === 'port'), name).toHaveLength(1);
+    }
+    expect(find((c, m) => m['t'] === 'command' && typeof m['name'] === 'string' && !['jump', 'settings', 'contents', 'outline'].includes(m['name']) && c.reason === 'type').length).toBeGreaterThanOrEqual(1);
+    expect(find((c, m) => m['t'] === 'command' && Object.hasOwn(m, 'name') && typeof m['name'] !== 'string' && c.reason === 'type').length).toBeGreaterThanOrEqual(1);
+    expect(find((c, m) => m['t'] === 'command' && m['name'] === 'jump' && Object.keys(m).length === 3 && c.reason === 'keys')).toHaveLength(1);
+    expect(find((c, m) => m['t'] === 'command' && !Object.hasOwn(m, 'name') && c.reason === 'keys')).toHaveLength(1);
+    expect(find((c, m) => m['t'] === 'command' && c.channel === 'window' && c.reason === 'unknown-op')).toHaveLength(1);
+    expect(find((c, m) => m['t'] === 'command' && (c.ports ?? 0) === 1 && c.reason === 'port')).toHaveLength(1);
+  });
+
+  it('B7.5: the command fixture says that a protocol-1 frame older than this release ignores it, as it ignores every op it does not know', () => {
+    const [c] = find((x, m) => m['t'] === 'command' && m['name'] === 'jump' && x.verdict === 'accept');
+    expect(c?.note ?? '').toMatch(/older than this release ignore it, as they ignore every op they do not know/);
+    // The pin of that behaviour: an op the frame does not know is 'unknown-op' on the port.
+    expect(find((x) => x.direction === 'parent-to-frame' && x.channel === 'port' && x.reason === 'unknown-op').length).toBeGreaterThanOrEqual(1);
   });
 });
 

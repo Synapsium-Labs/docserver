@@ -12,8 +12,11 @@
 //             shows a failed copy
 //   changes   only a full sha (40 or 64 lower-case hex): anything shorter resolves null locally; else the outbox's slot
 //   openVersion  version: null keys omitted, full shas only (a short one sends nothing); {} back to the latest
+//   onProgress   progress: the share (0 to 1) as a string of thousandths, rounded and clamped to 0..1000; a value that is
+//                not a finite number sends nothing (batch 1.1, C108)
 //
-// Each callback but storage exists only when the seed's `bridge` allows its op (links, hash, copy, changes, versions),
+// Each callback but storage exists only when the seed's `bridge` allows its op (links, hash, copy, changes, versions,
+// progress),
 // so L2 builds no control whose op the parent does not answer.
 //
 // The storage key mapping (L2's scheme, src/enhance/state.ts; namespace `docreader`, storageKey and posKey `doc`):
@@ -93,6 +96,8 @@ export interface FrameAdapters {
   readonly copy?: (text: string) => Promise<void>;
   readonly changes?: (sha: string) => Promise<ChangesAnswer | null>;
   readonly openVersion?: (v: { readonly sha: string | null; readonly only: string | null }) => void;
+  /** Only when the seed's bridge asks for progress (its default is false): the share read so far, 0 to 1. */
+  readonly onProgress?: (share: number) => void;
   /** The guard's `docserver:link`: the same sink as onLink, dropped when links are off. */
   link(href: string): void;
 }
@@ -144,6 +149,14 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
             const { sha, only } = v;
             if ((sha !== null && !isFullSha(sha)) || (only !== null && !isFullSha(only))) return;
             outbox.send({ t: 'version', ...(sha === null ? {} : { sha }), ...(only === null ? {} : { only }) });
+          },
+        }
+      : {}),
+    ...(b.progress === true
+      ? {
+          onProgress: (share: number): void => {
+            if (typeof share !== 'number' || !Number.isFinite(share)) return;
+            outbox.send({ t: 'progress', p: String(Math.min(1000, Math.max(0, Math.round(share * 1000)))) });
           },
         }
       : {}),
