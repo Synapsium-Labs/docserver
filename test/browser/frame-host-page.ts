@@ -41,6 +41,11 @@
 //     the frame's console (a `docserver-test-post ` line, with the console method captured before any frame script
 //     runs), which the parent's console channel collects as `framePosts`: `./host` removes the frame at an error, so
 //     the record in the frame may be gone before a row can read it.
+//   - `forgeRegister` (B5.5): a capture listener on the document that, from inside the real Mermaid registration of a
+//     late insertion, dispatches a forged `docserver:register` carrying a fake API (on the body, or on the inserted
+//     element), and counts the fake's calls;
+//   - `holdSettled` (B5.7): holds the font-face probe for a second (it wraps FontFaceSet.prototype.load before the
+//     bootstrap captures it), so the frame is still booting when an early op reaches its port.
 // The record sits under a symbol key, so no authored id can shadow it.
 //
 // The library page (Task 10, `openLibHost`): the same context, route and violation channel, but the parent is
@@ -88,6 +93,15 @@ export interface InitHow {
   readonly diagramsAtReady?: boolean;
   readonly stepWallClock?: boolean;
   readonly posts?: boolean;
+  /**
+   * The B5.5 rows (the late Mermaid insertion): a capture listener on the frame's document for the real
+   * `docserver:register` of Mermaid's build. From inside it, so within the synchronous appendChild window, it
+   * dispatches a forged `docserver:register` carrying a fake Mermaid API, on `other` (the body) or on `inserted`
+   * (the real event's own target, the inserted script element). The fake's calls are counted in the record.
+   */
+  readonly forgeRegister?: 'other' | 'inserted';
+  /** The B5.7 'before settled' row: the frame's font-face probe is held for a second, so the frame stays unsettled. */
+  readonly holdSettled?: boolean;
 }
 
 /** How the host page itself is served. */
@@ -103,6 +117,8 @@ export interface MountHow {
   readonly sandbox?: string | null;
   /** Set the csp attribute; default true. False is L3.HB1's control: a bare iframe bound by no policy of its own. */
   readonly cspAttribute?: boolean;
+  /** Messages posted on the main port right after the hello, in the same task (they reach a frame that is still booting). */
+  readonly early?: readonly unknown[];
 }
 
 /** The in-frame record the init script keeps. */
@@ -117,12 +133,14 @@ export interface FrameRecord {
   readonly diagrams: readonly { readonly state: string | null; readonly at: number }[];
   /** One entry per `ready` op the frame posted: the root's `data-docreader-diagrams` at the post (null: absent), and when. */
   readonly ready: readonly { readonly state: string | null; readonly at: number }[];
+  /** With `forgeRegister`: how many forged events were dispatched, and how often the fake API's functions were called. */
+  readonly forged: { readonly dispatched: number; readonly fakeCalls: number };
   /** Every op the frame posted on a MessagePort (with `posts`): its `t`, and an error's `why`. */
   readonly posts: readonly { readonly t: string; readonly why?: string }[];
 }
 
 interface HostApi {
-  mount(srcdoc: string, csp: string | null, hello: HelloMode, sandbox: string | null): void;
+  mount(srcdoc: string, csp: string | null, hello: HelloMode, sandbox: string | null, early: readonly unknown[]): void;
   secondHello(): void;
   send(port: string, data: unknown): void;
   record(): HostRecord;
@@ -160,7 +178,7 @@ function hostMain(): void {
     return ch.port2;
   };
   const api = {
-    mount(srcdoc: string, csp: string | null, hello: 'auto' | 'none' | 'battery' | 'v2', sandbox: string | null): void {
+    mount(srcdoc: string, csp: string | null, hello: 'auto' | 'none' | 'battery' | 'v2', sandbox: string | null, early: readonly unknown[]): void {
       const f = document.createElement('iframe');
       if (sandbox !== null) f.setAttribute('sandbox', sandbox);
       f.setAttribute('referrerpolicy', 'no-referrer');
@@ -179,6 +197,7 @@ function hostMain(): void {
           w.postMessage({ t: 'hello', v: 1 }, '*', [channel('two-a'), channel('two-b')]);
         }
         w.postMessage({ t: 'hello', v: hello === 'v2' ? 2 : 1 }, '*', [channel('main')]);
+        for (const m of early) ends['main']?.postMessage(m);
       });
       iframe = f;
       rec.inserted = performance.now();
@@ -218,10 +237,10 @@ const PAGE = `<!doctype html>
 
 /** The init script, or null when nothing is asked for: in the srcdoc document only, each part opt-in. */
 function initScript(how: InitHow): string | null {
-  if (how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true && how.posts !== true) return null;
+  if (how.forgeRegister === undefined && how.holdSettled !== true && how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true && how.posts !== true) return null;
   return `(() => {
   if (location.href !== 'about:srcdoc') return;
-  const rec = { dcl: null, root: null, closed: 0, diagrams: [], ready: [], posts: [], wallOffset: 0 };
+  const rec = { dcl: null, root: null, closed: 0, diagrams: [], ready: [], posts: [], wallOffset: 0, forged: { dispatched: 0, fakeCalls: 0 } };
   Object.defineProperty(window, Symbol.for('frame-test.record'), { value: rec });
   if (${String(how.stepWallClock === true)}) {
     const now = Date.now;
@@ -254,6 +273,33 @@ function initScript(how: InitHow): string | null {
         rec.ready.push({ state: root === null ? null : getAttribute.call(root, 'data-docreader-diagrams'), at: perfNow.call(perf) });
       }
       return post.apply(this, args);
+    };
+  }
+  if (${String(how.forgeRegister === 'other')} || ${String(how.forgeRegister === 'inserted')}) {
+    const onInserted = ${String(how.forgeRegister === 'inserted')};
+    let busy = false;
+    const fake = {
+      initialize() { rec.forged.fakeCalls++; },
+      render() { rec.forged.fakeCalls++; return Promise.resolve({ svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>' }); },
+    };
+    document.addEventListener('docserver:register', (e) => {
+      const d = e.detail;
+      if (busy || typeof d !== 'object' || d === null || d.name !== 'mermaid') return;
+      busy = true;
+      try {
+        rec.forged.dispatched++;
+        const to = onInserted ? e.target : document.body;
+        to.dispatchEvent(new CustomEvent('docserver:register', { detail: { name: 'mermaid', api: fake }, bubbles: true }));
+      } finally {
+        busy = false;
+      }
+    }, true);
+  }
+  if (${String(how.holdSettled === true)}) {
+    const load = FontFaceSet.prototype.load;
+    FontFaceSet.prototype.load = function (...args) {
+      const self = this;
+      return new Promise((resolve) => setTimeout(resolve, 1000)).then(() => load.apply(self, args));
     };
   }
   if (${String(how.posts === true)}) {
@@ -407,8 +453,8 @@ async function openContext(browser: Browser, how: InitHow, files: ReadonlyMap<st
       frame().evaluate(() => {
         const r = (window as unknown as Record<symbol, FrameRecord | undefined>)[Symbol.for('frame-test.record')];
         return r === undefined
-          ? { dcl: null, root: null, closed: -1, origin: -1, diagrams: [], ready: [], posts: [] }
-          : { dcl: r.dcl, root: r.root, closed: r.closed, origin: performance.timeOrigin, diagrams: [...r.diagrams], ready: [...r.ready], posts: [...r.posts] };
+          ? { dcl: null, root: null, closed: -1, origin: -1, diagrams: [], ready: [], posts: [], forged: { dispatched: 0, fakeCalls: 0 } }
+          : { dcl: r.dcl, root: r.root, closed: r.closed, origin: performance.timeOrigin, diagrams: [...r.diagrams], ready: [...r.ready], posts: [...r.posts], forged: { ...r.forged } };
       }),
   };
 }
@@ -426,8 +472,8 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}, served:
     errors: o.errors,
     mount: (srcdoc, csp, how = 'auto') => {
       const m: MountHow = typeof how === 'string' ? { hello: how } : how;
-      const args = [srcdoc, m.cspAttribute === false ? null : csp, m.hello ?? 'auto', m.sandbox === undefined ? 'allow-scripts' : m.sandbox] as const;
-      return p.evaluate(([s, c, h, sb]) => (window.__frameHost as HostApi).mount(s, c, h, sb), args);
+      const args = [srcdoc, m.cspAttribute === false ? null : csp, m.hello ?? 'auto', m.sandbox === undefined ? 'allow-scripts' : m.sandbox, m.early ?? []] as const;
+      return p.evaluate(([s, c, h, sb, ea]) => (window.__frameHost as HostApi).mount(s, c, h, sb, ea), args);
     },
     secondHello: () => p.evaluate(() => (window.__frameHost as HostApi).secondHello()),
     send: (port, data) => p.evaluate(([n, d]) => (window.__frameHost as HostApi).send(n, d), [port, data] as const),
@@ -458,7 +504,13 @@ export interface LibMountSpec {
   readonly watchdogMs: number;
   readonly focus?: boolean;
   readonly title?: string;
-  readonly mermaidDraw?: 'auto' | 'on-request';
+  readonly mermaidDraw?: 'auto' | 'on-request' | 'after-ready';
+  /**
+   * The 'after-ready' loader (B5.9): `deferred` is a loadMermaid whose promise the row settles with `releaseLoader`;
+   * `immediate` answers `mermaidText` at once. Absent, no loader is given (the build is assets.mermaid's, when given).
+   */
+  readonly loader?: 'deferred' | 'immediate';
+  readonly mermaidText?: string;
   /** Give the mount an in-page store (a Map behind Web Storage's interface). */
   readonly store?: boolean;
   readonly docKey?: string;
@@ -470,7 +522,7 @@ export interface LibMountSpec {
 
 /** One thing a library mount's adapters saw. */
 export interface LibEvent {
-  readonly kind: 'ready' | 'fallback' | LibCallback;
+  readonly kind: 'ready' | 'fallback' | 'loader' | LibCallback;
   readonly value: unknown;
   /** ms since the page's latest mount call. */
   readonly at: number;
@@ -498,6 +550,7 @@ interface LibApi {
   update(d: RenderInput): void;
   setPrefs(p: unknown): void;
   destroy(): void;
+  releaseLoader(): void;
   record(): LibRecord;
 }
 
@@ -537,6 +590,7 @@ function libMain(): void {
     true,
   );
   let frame: { update(d: unknown): void; setPrefs(p: unknown): void; destroy(): void } | null = null;
+  let release: () => void = () => undefined;
   const plain = (v: unknown): unknown => JSON.parse(JSON.stringify(v ?? null)) as unknown;
   const api = {
     mount(spec: {
@@ -546,6 +600,8 @@ function libMain(): void {
       focus?: boolean;
       title?: string;
       mermaidDraw?: string;
+      loader?: string;
+      mermaidText?: string;
       store?: boolean;
       docKey?: string;
       callbacks?: string[];
@@ -580,6 +636,19 @@ function libMain(): void {
       if (spec.focus !== undefined) adapters['focus'] = spec.focus;
       if (spec.title !== undefined) adapters['title'] = spec.title;
       if (spec.mermaidDraw !== undefined) adapters['mermaidDraw'] = spec.mermaidDraw;
+      if (spec.loader === 'deferred') {
+        adapters['loadMermaid'] = () => {
+          log('loader')();
+          return new Promise<string>((resolve) => {
+            release = () => resolve(spec.mermaidText ?? '');
+          });
+        };
+      } else if (spec.loader === 'immediate') {
+        adapters['loadMermaid'] = () => {
+          log('loader')();
+          return Promise.resolve(spec.mermaidText ?? '');
+        };
+      }
       if (spec.store === true) adapters['store'] = store;
       if (spec.docKey !== undefined) adapters['docKey'] = spec.docKey;
       if (callbacks.includes('onLink')) adapters['onLink'] = log('onLink');
@@ -605,6 +674,9 @@ function libMain(): void {
     },
     destroy(): void {
       frame?.destroy();
+    },
+    releaseLoader(): void {
+      release();
     },
     record() {
       const f = container.querySelector('iframe');
@@ -666,6 +738,8 @@ export interface LibHost {
   update(d: RenderInput): Promise<void>;
   setPrefs(p: unknown): Promise<void>;
   destroy(): Promise<void>;
+  /** Settle the deferred `loadMermaid` of the latest mount (spec.loader 'deferred') with spec.mermaidText. */
+  releaseLoader(): Promise<void>;
   /** What the page recorded. */
   lib(): Promise<LibRecord>;
   /** The page's record in the frame host's shape (the adapters' events as messages), for waitProgress. */
@@ -714,6 +788,7 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
     update: (d) => p.evaluate((x) => (window.__libHost as LibApi).update(x), d),
     setPrefs: (x) => p.evaluate((v) => (window.__libHost as LibApi).setPrefs(v), x),
     destroy: () => p.evaluate(() => (window.__libHost as LibApi).destroy()),
+    releaseLoader: () => p.evaluate(() => (window.__libHost as LibApi).releaseLoader()),
     lib,
     async record() {
       const r = await lib();

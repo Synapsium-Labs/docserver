@@ -502,6 +502,30 @@ describeBrowsers((browser) => {
   }, 120_000);
 });
 
+describeBrowsers((browser) => {
+  it("L3.B6/B3.6 (batch B5.C): an 'after-ready' seed with Mermaid on carries no Mermaid script and boots to ready, with no FAILED mermaid and no error; nothing is drawn", async () => {
+    const host = await openFrameHost(await browserFor(browser));
+    try {
+      const nonce = freshNonce();
+      const srcdoc = frameDocument(input(DIAGRAMS), { csp: frameCsp(), nonce, assets, mermaid: { draw: 'after-ready' } });
+      // The srcdoc holds the guard, the seed, the bootstrap and enhance: no fifth script, so nothing registers as Mermaid.
+      expect(srcdoc.split('<script').length - 1).toBe(4);
+      await host.mount(srcdoc, frameCsp());
+      expect(data(await host.waitMessages(1, 30_000))).toEqual([{ t: 'ready', v: 1, nonce }]);
+      await sleep(500);
+      expect(data(await host.record())).toEqual([{ t: 'ready', v: 1, nonce }]);
+      expect(host.errors).toEqual([]);
+      const shown = await host.frame().evaluate(() => ({
+        state: document.body.querySelector(':scope > article')?.getAttribute('data-docreader-diagrams') ?? null,
+        svgs: document.querySelectorAll('figure.mermaid-figure svg').length,
+      }));
+      expect(shown).toEqual({ state: 'waiting', svgs: 0 });
+    } finally {
+      await host.close();
+    }
+  }, 120_000);
+});
+
 /** Wait until the frame's content root is enhanced (or `ms` pass). */
 const rooted = async (host: FrameHost, ms = 10_000): Promise<boolean> => {
   const until = Date.now() + ms;
