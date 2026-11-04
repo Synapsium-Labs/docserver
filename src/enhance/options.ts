@@ -40,7 +40,7 @@ export interface ChromeFlags {
   readonly bar: boolean;
   readonly rail: boolean;
   readonly settings: boolean;
-  /** False trims the root's top padding to 8px (the root class `no-top-space`); batch 1.1, C108. */
+  /** False trims the root's top padding to 8px (the root class `no-top-space`), for a root with no bar only; batch 1.1, C108. */
   readonly topSpace: boolean;
 }
 

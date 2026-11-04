@@ -40,7 +40,7 @@ describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", ()
   });
 });
 
-describe("the frame's registered reader api (T6-h)", () => {
+describe("the frame's registered reader api (C-F4)", () => {
   it('the enhance entry registers exactly the five members, runEnhancementCommand among them', async () => {
     const script = document.createElement('script');
     const seen: unknown[] = [];

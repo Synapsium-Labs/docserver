@@ -130,11 +130,13 @@ export function build(ctx: FeatureContext): void {
     if (menu.hidden) show();
     else close();
   });
-  // A close made by the reader's press or focus leaving, outside the menu: the same gesture's click may then run the
-  // settings command (a host's own button), which must find the menu closed and leave it so, or a second press on that
-  // button would open it again. The flag is cleared after the gesture's click has been dispatched (a bubbling listener
-  // on the document runs after the target's own), by the next press, and when the command consumes it. (A press dragged away from its target sends no click, and the flag
-  // then waits for the next press or click.)
+  // A close made by the reader's own press outside the menu (the pointerdown, seen in the capture phase, so a host that
+  // stops the event on its button cannot hide it): the same gesture's click may then run the settings command (a host's
+  // own button, run synchronously from its click handler), which must find the menu closed and leave it so, or a second
+  // press on that button would open it again. The flag is cleared after the gesture's click has been dispatched (a
+  // bubbling listener on the document runs after the target's own), by a key's click (detail 0, before the target's
+  // handler), by a cancelled press (pointercancel), by the next press, and when the command consumes it. A focus
+  // leaving the menu (Tab) never sets it: no click follows to clear it.
   let closedByOutside = false;
   ctx.journal.listen(wrap, 'focusout', (event) => {
     const to = (event as FocusEvent).relatedTarget;
@@ -142,7 +144,6 @@ export function build(ctx: FeatureContext): void {
     // Focus leaving the document itself (a frame whose parent took the focus) names no element: the menu stays open.
     // Another element of this document, the page's own press, Escape and the command still close it.
     if (to === null && !doc.hasFocus()) return;
-    closedByOutside = true;
     close();
   });
   ctx.journal.listen(doc, 'pointerdown', (event) => {
@@ -150,7 +151,13 @@ export function build(ctx: FeatureContext): void {
     if (menu.hidden || contains(wrap, event.target)) return;
     closedByOutside = true;
     close();
+  }, { capture: true });
+  ctx.journal.listen(doc, 'pointercancel', () => {
+    closedByOutside = false;
   });
+  ctx.journal.listen(doc, 'click', (event) => {
+    if ((event as MouseEvent).detail === 0) closedByOutside = false;
+  }, { capture: true });
   ctx.journal.listen(doc, 'click', () => {
     closedByOutside = false;
   });

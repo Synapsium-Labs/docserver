@@ -1016,7 +1016,7 @@ describe('commands without the bar: outline (B6.2, B6.3)', () => {
   });
 });
 
-describe('commands during startup (T6-g)', () => {
+describe('commands during startup (S-F3)', () => {
   it('a command called from a feature build, before the instance is active, answers false and changes nothing', async () => {
     const seen: boolean[] = [];
     afterPlans((ctx) => {

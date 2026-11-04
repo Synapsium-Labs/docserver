@@ -778,7 +778,7 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
   /** A press as a browser dispatches it: pointerdown, then (after the focus moves) click. */
   const press = (el: Element): void => {
     el.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
-    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1 }));
   };
 
   it('a button outside the root: the first press opens, the second closes, a third opens again', async () => {
@@ -804,7 +804,7 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
     runEnhancementCommand(root, 'settings');
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(menu(root).hidden).toBe(true);
-    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true })); // the gesture's click, no command in it
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })); // the gesture's click, no command in it
     expect(runEnhancementCommand(root, 'settings')).toBe(true);
     expect(menu(root).hidden).toBe(false);
   });
@@ -821,28 +821,87 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
     spy.mockRestore();
   });
 
-  it('focus moving to another element of the document, an outside press and Escape still close it', async () => {
+  it('focus moving to another element, a focusout naming no element while the document has focus, an outside press and Escape still close it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const other = document.createElement('button');
+    document.body.append(other);
+    const out = (to: Element | null): void => {
+      radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: to }));
+    };
+    const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    out(other);
+    expect(menu(root).hidden).toBe(true);
+    spy.mockReturnValue(true); // the document keeps the focus: a focusout that names no element is a click on the page
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false); // opened: no flag was left by the focusout above
+    out(null);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    key(radio(root, 'theme', 'auto'), 'Escape');
+    expect(menu(root).hidden).toBe(true);
+    spy.mockRestore();
+    other.remove();
+  });
+
+  it('N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it', async () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
     const other = document.createElement('button');
     document.body.append(other);
     runEnhancementCommand(root, 'settings');
-    const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: other }));
     expect(menu(root).hidden).toBe(true);
-    spy.mockReturnValue(true);
-    runEnhancementCommand(root, 'settings');
-    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null })); // the document keeps focus
-    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    other.remove();
+  });
+
+  it('N1: a press that is cancelled (a touch that became a scroll) leaves no flag', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
     runEnhancementCommand(root, 'settings');
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(menu(root).hidden).toBe(true);
-    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document.body.dispatchEvent(new Event('pointercancel', { bubbles: true }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('N1: a key\'s click (detail 0) on the host\'s button after a press that sent no click clears the flag first', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
     runEnhancementCommand(root, 'settings');
-    key(radio(root, 'theme', 'auto'), 'Escape');
-    expect(menu(root).hidden).toBe(true);
-    spy.mockRestore();
-    other.remove();
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); // closes, flags; no click follows
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 })); // Enter on the host's button
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+
+  it('the pointerdown is seen even when the host stops it on its button', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const host = document.createElement('button');
+    host.addEventListener('pointerdown', (e) => e.stopPropagation());
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    runEnhancementCommand(root, 'settings');
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+    expect(menu(root).hidden).toBe(true); // closed by the press itself, before any click
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1 }));
+    expect(menu(root).hidden).toBe(true); // and the command in the same gesture leaves it closed
+    host.remove();
   });
 });
 
@@ -865,7 +924,7 @@ describe('commands never open over another overlay (T6-d)', () => {
   });
 });
 
-describe('runEnhancementCommand\'s own guards (T6-g)', () => {
+describe('runEnhancementCommand\'s own guards (T6-c)', () => {
   it('answers false for a root that is no element, a name that is no string, and a destroyed root', async () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
@@ -878,4 +937,28 @@ describe('runEnhancementCommand\'s own guards (T6-g)', () => {
     expect(runEnhancementCommand(root, 'settings')).toBe(false); // after it
     expect(root.querySelector('.aa-menu')).toBeNull();
   });
+
+  it('a destroy requested by a host listener while the command runs waits for the command to return', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    let gone: Promise<void> | null = null;
+    const seen: boolean[] = [];
+    const onFocusIn = (): void => {
+      gone ??= destroyEnhancement(root);
+      // The command is still running: its own writes (the menu's `aria-expanded`) are not yet undone.
+      seen.push(root.querySelector('.aa-btn')?.getAttribute('aria-expanded') === 'true');
+    };
+    document.addEventListener('focusin', onFocusIn);
+    try {
+      expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    } finally {
+      document.removeEventListener('focusin', onFocusIn);
+    }
+    expect(gone).not.toBeNull();
+    expect(seen).toEqual([true]); // mid-command the teardown had not run
+    expect(root.hasAttribute('data-docreader-root')).toBe(false); // torn down as the command returned
+    expect(root.querySelector('.aa-wrap')).toBeNull();
+    await gone;
+  });
 });
+
