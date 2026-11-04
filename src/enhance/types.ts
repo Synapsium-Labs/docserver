@@ -1,6 +1,7 @@
 // The types of `./enhance`: the public ones (re-exported by index.ts) and the context every feature builds with.
 // Import-inert: declarations only.
 import type { BarSlots } from './bar.js';
+import type { Commands } from './commands.js';
 import type { Cancel, Env } from './env.js';
 import type { Folds } from './folds.js';
 import type { HeadCtl } from './headctl.js';
@@ -92,6 +93,8 @@ export interface ChromeOptions {
   readonly rail?: boolean;
   /** The reading settings menu. */
   readonly settings?: boolean;
+  /** Room above the text: default true; false trims the root's top padding to 8px (a host that supplies its own space). */
+  readonly topSpace?: boolean;
 }
 
 /** Drawing Mermaid figures. The host passes the module, never a URL. */
@@ -218,6 +221,11 @@ export interface EnhanceOptions {
    * history; `from` is an opaque token for the place being left, which the host hands back when it returns there.
    */
   onHash?(id: string | null, entry: { readonly push: boolean; readonly from: string | null }): void;
+  /**
+   * How far the root has been read, a number from 0 to 1: the share the bar's progress line draws, with or without
+   * the bar, called only when it changes (batch 1.1, C108).
+   */
+  onProgress?(share: number): void;
   /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
   copy?(text: string): void | Promise<void>;
   /** The document's changes since commit `sha`, for "what changed". Absent: no comparison. */
@@ -385,6 +393,8 @@ export interface FeatureContext {
   readonly headCtl: HeadCtl;
   /** The bar's skeleton: bar, tools, running head, progress, skip link (bar.ts); null without chrome.bar. */
   readonly slots: BarSlots | null;
+  /** The commands a host runs with runEnhancementCommand: the bar's tools without the bar (commands.ts). */
+  readonly commands: Commands;
   /** The folds' members API (folds.ts): empty without folds. */
   readonly folds: Folds;
   /**

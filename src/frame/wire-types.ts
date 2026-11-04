@@ -38,6 +38,8 @@ export interface ChromeOptions {
   readonly rail?: boolean;
   /** The reading settings menu. */
   readonly settings?: boolean;
+  /** Room above the text: default true; false trims the root's top padding to 8px (a host that supplies its own space). */
+  readonly topSpace?: boolean;
 }
 
 /**

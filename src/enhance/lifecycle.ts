@@ -62,6 +62,7 @@
 // when the outermost operation unwinds. The promise settles after the teardown; every call for that root returns
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
 import { createBar } from './bar.js';
+import { createCommands } from './commands.js';
 import { createEnv } from './env.js';
 import { features, type Feature } from './features.js';
 import { createFolds } from './folds.js';
@@ -414,6 +415,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     onRelayout: relayout.onRelayout,
     headCtl: createHeadCtl({ root, journal }),
     slots: bar?.slots ?? null,
+    commands: createCommands(live),
     folds: createFolds(root),
     setPrefs: (change) => {
       const checked = normalizePrefs(change);
@@ -426,6 +428,8 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   applyPrefs(journal, root, state.prefs);
   const list = features();
   inst.built = list;
+  // chrome.topSpace false: the root's top padding is trimmed by the stylesheet (C108).
+  if (!options.chrome.topSpace) journal.toggleClass(root, 'no-top-space', true);
   for (const f of list) {
     f.build(ctx);
     if (!live()) return;
@@ -619,6 +623,19 @@ export function goToHash(root: HTMLElement, id: string | null, from?: string | n
   operate(inst, () => {
     ctx.nav.goToHash(id, token);
   });
+}
+
+/**
+ * Run one of the bar's tools without the bar (batch 1.1, C108; commands.ts): `name` is one of COMMAND_NAMES, and the
+ * command toggles its overlay as its bar button did. True when it ran; false for a root that is not enhanced (or still
+ * starting), an unknown name, or a tool turned off or absent from this document. Calls no host callback.
+ */
+export function runEnhancementCommand(root: HTMLElement, name: string): boolean {
+  if (!isElement(root) || typeof name !== 'string') return false;
+  const inst = findByRoot(root);
+  const ctx = inst?.ctx ?? null;
+  if (inst === undefined || inst.phase !== 'active' || ctx === null) return false;
+  return operate(inst, () => ctx.commands.run(name)) === true;
 }
 
 /**

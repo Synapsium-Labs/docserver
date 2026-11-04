@@ -1074,3 +1074,56 @@ describe('RF3: rect reads per frame', () => {
     expect(worst).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(n)) + 4);
   });
 });
+
+describe('progress without the bar (B6.4)', () => {
+  /** The root's rect as the page scrolls: its top is -y, its height is `h`. */
+  const place = (root: HTMLElement, h: number) => (y: number): void => {
+    rects.set(root, { top: -y, height: h });
+  };
+
+  it('with the bar off and onProgress given, scrolling reports the share once per change', async () => {
+    const seen: number[] = [];
+    const root = mount();
+    await enhance(root, { chrome: { bar: false }, onProgress: (s) => void seen.push(s) });
+    await frames();
+    const at = place(root, 3768); // room: 3768 - 768
+    seen.length = 0;
+    await scrollTo(600, at);
+    expect(seen).toEqual([0.2]);
+    await scrollTo(600, at); // a tick with no change reports nothing
+    expect(seen).toEqual([0.2]);
+    await scrollTo(1500, at);
+    expect(seen).toEqual([0.2, 0.5]);
+    await scrollTo(3000, at);
+    expect(seen).toEqual([0.2, 0.5, 1]);
+  });
+
+  it('with the bar on, the same share is reported and the bar line draws it', async () => {
+    const seen: number[] = [];
+    const root = mount();
+    await enhance(root, { onProgress: (s) => void seen.push(s) });
+    await frames();
+    seen.length = 0;
+    await scrollTo(600, place(root, 3768));
+    expect(seen).toEqual([0.2]);
+    expect((root.querySelector('.doc-progress') as HTMLElement).style.width).toBe('20%');
+  });
+
+  it('with neither the bar nor onProgress, no progress is computed: the root\'s rect is never read', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    await frames();
+    const at = place(root, 3768);
+    const before = readsOf.get(root) ?? 0;
+    await scrollTo(600, at);
+    expect(readsOf.get(root) ?? 0).toBe(before);
+  });
+
+  it('a host callback that throws leaves scrolling working', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false }, onProgress: () => { throw new Error('host'); } });
+    await frames();
+    await scrollTo(600, place(root, 3768));
+    expect(root.isConnected).toBe(true);
+  });
+});

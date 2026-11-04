@@ -292,6 +292,9 @@ export function build(ctx: FeatureContext): void {
       setOutline(!outlined);
     });
   }
+  ctx.commands.register('outline', () => {
+    setOutline(!outlined);
+  });
   ctx.keys.bind({
     key: 'o',
     label: 'Outline: step titles only',

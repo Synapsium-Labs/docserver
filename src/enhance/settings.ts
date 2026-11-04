@@ -35,10 +35,10 @@ function focus(target: Element): void {
   if (typeof method === 'function') method.call(target, { preventScroll: true });
 }
 
-/** Build the settings tool only when this root owns the bar and settings chrome. */
+/** Build the settings tool when this root has settings chrome: in the bar's tray, else at the root's top right (batch 1.1, C108). */
 export function build(ctx: FeatureContext): void {
   completeFoldJoins(ctx);
-  if (!ctx.options.chrome.settings || ctx.slots === null) return;
+  if (!ctx.options.chrome.settings) return;
   const doc = ctx.root.ownerDocument;
   const wrap = chrome(doc, 'div', { className: 'aa-wrap' });
   const menuId = ctx.chromeId('settings');
@@ -146,5 +146,10 @@ export function build(ctx: FeatureContext): void {
     if (reasons.has('folds')) update();
   });
   wrap.append(button, menu);
-  ctx.slots.tool('settings', wrap);
+  ctx.commands.register('settings', () => {
+    if (menu.hidden) show();
+    else close();
+  });
+  if (ctx.slots !== null) ctx.slots.tool('settings', wrap);
+  else ctx.journal.insert(wrap, ctx.root, ctx.root.firstChild);
 }

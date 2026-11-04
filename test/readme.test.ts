@@ -113,9 +113,9 @@ describe('README', () => {
     expect(README).toContain('Goldens-moved: <id>, <id>');
   });
 
-  it('names every runtime export of ./enhance, including goToHash', () => {
+  it('names every runtime export of ./enhance, including goToHash and runEnhancementCommand', () => {
     const names = Object.keys(enhance).sort();
-    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'setEnhancementPrefs']);
+    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementPrefs']);
     expect(names.filter((name) => !README.includes(`\`${name}\``) && !README.includes(`\`${name}(`))).toEqual([]);
   });
 

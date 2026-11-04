@@ -209,14 +209,15 @@ describe('Product controls completed after folds', () => {
   });
 
   it.each([
-    ['settings-disabled', { chrome: { settings: false } }],
-    ['no-bar-slots', { chrome: { bar: false } }],
-  ] as const)('completes initial Product joins before the %s settings guard', async (_name, options) => {
+    ['settings-disabled', { chrome: { settings: false } }, 0],
+    // C108: without the bar the settings tool is no longer skipped; Aa sits on the root.
+    ['no-bar-slots', { chrome: { bar: false } }, 1],
+  ] as const)('completes initial Product joins before the %s settings guard', async (_name, options, aa) => {
     const root = mount();
     await enhance(root, { ...options, prefs: { lens: 'product' } });
 
     assertJoinedAndFoldable(root);
-    expect(root.querySelectorAll('.aa-wrap')).toHaveLength(0);
+    expect(root.querySelectorAll('.aa-wrap')).toHaveLength(aa);
   });
 
   it.each([

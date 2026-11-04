@@ -78,7 +78,7 @@ const SMOKE_LINES = [
   'consumer-smoke: the frame and highlight declarations typecheck with no DOM library and no ambient types',
   'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
   'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-  'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, setEnhancementPrefs',
+  'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementPrefs',
   'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
   "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
   'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',

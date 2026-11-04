@@ -724,3 +724,13 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
     expect(escapedHtmlLength('\u{1F600}')).toBe(2);
   });
 });
+
+describe('the seed carries chrome.topSpace (B6.5)', () => {
+  it('features.chrome.topSpace is accepted by the seed and by L2\'s normalizeOptions', () => {
+    expect(FEATURE_KEYS.chrome).toContain('topSpace');
+    const f = { chrome: { bar: false, topSpace: false } };
+    expect(why(loose({ features: f }))).toBe('ok');
+    expect(normalizeOptions(f).chrome.topSpace).toBe(false);
+    expect(why(loose({ features: { chrome: { topSpace: 1 } } }))).toBe('features.chrome');
+  });
+});

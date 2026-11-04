@@ -9,7 +9,7 @@
 // that turns the real IDs feature back on before the rail. Seeds still run right before jump and late probes after every
 // feature.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, type EnhanceOptions } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR, chrome } from '../src/enhance/journal.js';
 import { CHORD } from '../src/enhance/keys.js';
@@ -823,6 +823,22 @@ describe('the jump: keys and options', () => {
     expect(btn.querySelector('.lbl')?.textContent).toBe('Jump to');
     openByButton(root);
     expect(isOpen(jumpOf(root))).toBe(true);
+  });
+
+  it('B6.2: with the bar off, the jump command opens then closes the dialog, and Escape closes it', async () => {
+    const root = await enhanced(DOC, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'jump')).toBe(true);
+    expect(isOpen(jumpOf(root))).toBe(true);
+    expect(runEnhancementCommand(root, 'jump')).toBe(true);
+    expect(isOpen(jumpOf(root))).toBe(false);
+    runEnhancementCommand(root, 'jump');
+    key(inputOf(root), 'Escape');
+    expect(isOpen(jumpOf(root))).toBe(false);
+  });
+
+  it('B6.3: the jump command answers false for a root with too few entries to jump over', async () => {
+    const root = await enhanced('# Short\n\nText.\n', { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'jump')).toBe(false);
   });
 
   it('chrome.bar false: no button; "/" still opens it', async () => {

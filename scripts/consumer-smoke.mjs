@@ -182,7 +182,7 @@ try {
 }
 
 const enhanceApi = Object.keys(await import('${PACKAGE}/enhance')).sort().join(', ');
-if (enhanceApi === 'EnhanceError, destroyEnhancement, enhance, goToHash, setEnhancementPrefs') {
+if (enhanceApi === 'EnhanceError, destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementPrefs') {
   say(\`${PACKAGE}/enhance imports in Node and exports exactly \${enhanceApi}\`);
 } else {
   ok = false;

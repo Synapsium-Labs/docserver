@@ -130,6 +130,8 @@ export const OFL_NOTICE = 'Licensed under the SIL Open Font License 1.1, see fon
 /** The frame's own rules, before the reader's stylesheet. */
 const PRELUDE =
   'html,body{margin:0}\n' +
+  // C108: with no bar in the root nothing reserves room for one (the reader's own sheet says 48px, for a root with a bar).
+  '[data-docreader-root][data-docreader-root]:not(:has(> .topbar)){--bar-h:0px}\n' +
   '.ds-img-missing{display:inline-block;padding:0 .3em;border:1px dashed currentColor;border-radius:3px;font-size:.9em}\n';
 
 /** A font url of assets/reader.css. */

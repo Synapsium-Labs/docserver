@@ -8,7 +8,7 @@
 // before or right after `plans` (so a probe sees what plans built before any later feature runs). The position seam is
 // wrapped too, so a case sees what changed inside keep().
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { destroyEnhancement, enhance, type EnhanceOptions, type ReaderStorage } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, type EnhanceOptions, type ReaderStorage } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR, chrome } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
@@ -990,5 +990,25 @@ describe('teardown, names and safety', () => {
     expect(ctxOf(root).state.readDoc(OUTLINE)).toBe(true);
     key(document.body, 'o');
     expect(ctxOf(root).state.readDoc(OUTLINE)).toBeNull();
+  });
+});
+
+describe('commands without the bar: outline (B6.2, B6.3)', () => {
+  it('B6.2: the outline command toggles a plan\'s Outline with the bar off', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(root.querySelector('.topbar')).toBeNull();
+    expect(root.classList.contains('outline')).toBe(false);
+    expect(runEnhancementCommand(root, 'outline')).toBe(true);
+    expect(root.classList.contains('outline')).toBe(true);
+    expect(runEnhancementCommand(root, 'outline')).toBe(true);
+    expect(root.classList.contains('outline')).toBe(false);
+  });
+
+  it('B6.3: a document that is no plan has no outline command', async () => {
+    const root = mount('# Not a plan\n\n## 1. One\n\nText.\n\n## 2. Two\n\nText.\n\n## 3. Three\n\nText.\n');
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'outline')).toBe(false);
+    expect(root.classList.contains('outline')).toBe(false);
   });
 });

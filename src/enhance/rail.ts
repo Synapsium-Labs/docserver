@@ -262,6 +262,10 @@ export function build(ctx: FeatureContext): void {
     if (drawerOpen) close();
     else open();
   });
+  ctx.commands.register('contents', () => {
+    if (drawerOpen) close();
+    else open();
+  });
   journal.listen(scrim, 'click', () => close(true));
   journal.listen(rail, 'click', (event) => {
     const mouse = event as MouseEvent;

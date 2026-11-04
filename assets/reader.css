@@ -225,6 +225,10 @@
 [data-docreader-root][data-docreader-root]:not(i) { overflow-wrap: break-word; max-width: none; margin: 0; padding: 52px var(--pad) 96px; }
 /* every block sits in the reading column, centred; the wide ones break out (below) */
 [data-docreader-root][data-docreader-root]:not(i) > * { max-width: var(--measure); margin-left: auto; margin-right: auto; }
+/* chrome.topSpace false (the root class no-top-space): the root's top padding is 8px, for a host that supplies its own space above the text. */
+[data-docreader-root][data-docreader-root]:not(i).no-top-space { padding-top: 8px; }
+/* The reading settings button without the bar (chrome.bar false): the root's own child, sticky at its top right, taking no room. */
+[data-docreader-root][data-docreader-root]:not(i) > .aa-wrap { position: sticky; top: 8px; z-index: 100; width: max-content; max-width: none; height: 34px; margin: 0 calc(12px - var(--pad)) -34px auto; }
 [data-docreader-root][data-docreader-root]:not(i) p { margin-top: 0; margin-bottom: 1.05em; hyphens: manual; -webkit-hyphens: manual; hanging-punctuation: first; }
 [data-docreader-root][data-docreader-root]:not(i) ul,
 [data-docreader-root][data-docreader-root]:not(i) ol { padding-left: 1.4em; margin-top: 0; margin-bottom: 1.1em; }

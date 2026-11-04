@@ -3,7 +3,8 @@
 // its root-local radio groups and close behavior, fold controls, Product lens peeks, and
 // the marks that direct a reader to the document's pending work.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { destroyEnhancement, enhance, setEnhancementPrefs } from '../src/enhance/index.js';
+import { COMMAND_NAMES, createCommands } from '../src/enhance/commands.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, setEnhancementPrefs } from '../src/enhance/index.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import type { ReaderStorage } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
@@ -704,5 +705,69 @@ describe('attention', () => {
     expect(entry.status).toBe('wait');
     expect(pill.querySelector('br')).not.toBeNull();
     expect(entry.target.classList.contains('attn')).toBe(true);
+  });
+});
+
+describe('commands without the bar: settings (B6.1, B6.3)', () => {
+  it('B6.1: with the bar off, Aa is built on the root, and the settings command opens then closes it; Escape closes it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(root.querySelector('.topbar')).toBeNull();
+    expect(tool(root).closest('.aa-wrap')?.parentElement).toBe(root);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    expect(tool(root).getAttribute('aria-expanded')).toBe('true');
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    key(radio(root, 'theme', 'auto'), 'Escape');
+    expect(menu(root).hidden).toBe(true);
+  });
+
+  it('with the bar on, the same command works and Aa stays in the bar tray', async () => {
+    const root = mount();
+    await enhance(root, {});
+    expect(tool(root).closest('.bar-tools')).not.toBeNull();
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('B6.3: chrome.settings false answers false and builds nothing; an unknown name or root answers false', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false, settings: false } });
+    expect(runEnhancementCommand(root, 'settings')).toBe(false);
+    expect(root.querySelectorAll('.aa-wrap')).toHaveLength(0);
+    const on = mount();
+    await enhance(on, { chrome: { bar: false } });
+    expect(runEnhancementCommand(on, 'nope')).toBe(false);
+    expect(runEnhancementCommand(on, '__proto__')).toBe(false);
+    expect(menu(on).hidden).toBe(true);
+    expect(runEnhancementCommand(mount(), 'settings')).toBe(false);
+  });
+});
+
+describe('the command registry (B6.3)', () => {
+  it('names four commands, runs a registered one only while live, and answers false otherwise', () => {
+    expect([...COMMAND_NAMES]).toEqual(['jump', 'settings', 'contents', 'outline']);
+    let alive = true;
+    const commands = createCommands(() => alive);
+    const ran: string[] = [];
+    commands.register('jump', () => void ran.push('jump'));
+    expect(commands.run('jump')).toBe(true);
+    expect(commands.run('settings')).toBe(false); // known, but no tool registered it
+    expect(commands.run('open')).toBe(false); // unknown
+    expect(commands.run('constructor')).toBe(false);
+    expect(() => commands.register('jump', () => undefined)).toThrow(/registers once/);
+    expect(() => commands.register('nope' as 'jump', () => undefined)).toThrow(/one of/);
+    alive = false;
+    expect(commands.run('jump')).toBe(false);
+    expect(ran).toEqual(['jump']);
+    let later = false;
+    const dead = createCommands(() => later);
+    dead.register('jump', () => void ran.push('dead'));
+    later = true;
+    expect(dead.run('jump')).toBe(false); // a registration made while not live is dropped
+    expect(ran).toEqual(['jump']);
   });
 });

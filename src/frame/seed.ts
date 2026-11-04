@@ -101,7 +101,7 @@ export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'v
  */
 export const FEATURE_KEYS = Object.freeze({
   flags: Object.freeze(['rules', 'folds', 'keyboard'] as const),
-  chrome: Object.freeze(['bar', 'rail', 'settings'] as const),
+  chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),
   groups: Object.freeze({
     status: Object.freeze(['ok', 'wait', 'no', 'info'] as const),
     attention: Object.freeze(['status', 'who', 'question', 'openAnswers', 'blocking', 'risk', 'openStatus'] as const),
