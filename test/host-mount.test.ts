@@ -1006,3 +1006,274 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference �
     expect(seed['prefs']).toEqual({ theme: 'dark', width: 'wide' });
   });
 });
+
+// ───────── B4: mermaidDraw 'after-ready' and loadMermaid (docserver batch T4; ledger C107) ─────────
+
+describe("B4 mermaidDraw 'after-ready': the build is fetched in parallel with the boot and posted after ready (ledger C107)", () => {
+  const AFTER = { mermaidDraw: 'after-ready' } as const;
+  const OP_CAP = 8_388_608;
+
+  /** A loader the test settles by hand, and the number of times it was called. */
+  function deferred(): { readonly load: () => Promise<string>; readonly calls: () => number; resolve(v: unknown): void; reject(e: unknown): void } {
+    let n = 0;
+    let res: (v: string) => void = () => undefined;
+    let rej: (e: unknown) => void = () => undefined;
+    return {
+      load: () => {
+        n += 1;
+        return new Promise<string>((a, b) => {
+          res = a;
+          rej = b;
+        });
+      },
+      calls: () => n,
+      resolve: (v) => res(v as string),
+      reject: (e) => rej(e),
+    };
+  }
+
+  /** Records every postMessage on a channel's parent end, also after the port closed (the fake port drops those). */
+  function watch(channel: FakeChannel): unknown[] {
+    const posts: unknown[] = [];
+    const original = channel.port1.postMessage.bind(channel.port1);
+    channel.port1.postMessage = (m: unknown): void => {
+      posts.push(m);
+      original(m);
+    };
+    return posts;
+  }
+
+  /**
+   * The mermaid ops among the posts, the text summarised: a failing assertion formats its values, and a diff of a
+   * 3.7 MB build (or a Mermaid-sized string) would exhaust the worker.
+   */
+  const mermaidOps = (posts: readonly unknown[]): unknown[] =>
+    posts
+      .filter((p) => (p as { t?: unknown }).t === 'mermaid')
+      .map((p) => {
+        const op = p as { t: string; text?: unknown; unavailable?: unknown };
+        if (!('text' in op)) return op;
+        const { text } = op;
+        return { t: op.t, text: typeof text !== 'string' ? `a ${typeof text}` : text === mermaidText ? 'the build' : `another text of ${String(text.length)} code units` };
+      });
+  const settle = (): Promise<void> => new Promise((r) => globalThis.setTimeout(r, 0));
+
+  /** The newest mount: its channel, its posts and a way to speak as its frame. */
+  function newest(): { readonly channel: FakeChannel; readonly posts: unknown[]; ready(): void } {
+    const all = container.querySelectorAll('iframe');
+    const iframe = all[all.length - 1] as HTMLIFrameElement;
+    const channel = channels[channels.length - 1] as FakeChannel;
+    const nonce = NONCE_RE.exec(iframe.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    const posts = watch(channel);
+    return { channel, posts, ready: () => channel.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] }) };
+  }
+
+  it("B4.0: 'after-ready' is an accepted mode: a mount with a loader does not throw, and the srcdoc seeds it", () => {
+    let m: Mounted | undefined;
+    expect(() => {
+      m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: () => new Promise<string>(() => undefined) });
+    }).not.toThrow();
+    expect(iframes()).toBe(1);
+    expect((seedOf((m as Mounted).iframe.getAttribute('srcdoc') ?? '')['mermaid'] as { draw: string }).draw).toBe('after-ready');
+  });
+
+  it('B4.1: for a document the gate admits, the loader is called at mount, before ready; nothing is posted before ready; the op follows a valid ready', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    expect(d.calls()).toBe(1);
+    const srcdoc = m.iframe.getAttribute('srcdoc') ?? '';
+    expect(seedOf(srcdoc)['mermaid']).toEqual({ maxTextSize: MERMAID_GATE_DEFAULTS.maxFenceChars, secure: [], draw: 'after-ready' });
+    expect(srcdoc.includes(mermaidText), 'no inline Mermaid script').toBe(false);
+    await m.loaded();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(posts), 'nothing before ready').toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(mermaidOps(posts), 'the build, byte for byte').toEqual([{ t: 'mermaid', text: 'the build' }]);
+    expect(Object.keys(posts.find((p) => (p as { t?: unknown }).t === 'mermaid') as object)).toEqual(['t', 'text']);
+    await settle();
+    expect(mermaidOps(posts), 'exactly once').toHaveLength(1);
+    expect(d.calls()).toBe(1);
+  });
+
+  it('B4.2: an answer that arrives after ready is posted at once', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(mermaidOps(posts)).toEqual([]);
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+  });
+
+  it('B4.3: a wrong text posts unavailable and warns; so does a rejection', async () => {
+    const wrong = deferred();
+    const a = mount(MERMAID_DOC, { ...AFTER, loadMermaid: wrong.load });
+    const aPosts = watch(a.channel);
+    await a.loaded();
+    a.say({ t: 'ready', v: 1, nonce: a.nonce });
+    wrong.resolve(`${mermaidText} `);
+    await settle();
+    expect(mermaidOps(aPosts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    a.frame.destroy();
+    warn.mockClear();
+    const rejected = deferred();
+    const b = mount(MERMAID_DOC, { ...AFTER, loadMermaid: rejected.load });
+    const bPosts = watch(b.channel);
+    await b.loaded();
+    b.say({ t: 'ready', v: 1, nonce: b.nonce });
+    rejected.reject(new Error('offline'));
+    await settle();
+    expect(mermaidOps(bPosts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('B4.4: an answer that arrives after destroy() posts nothing', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    m.frame.destroy();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(posts)).toEqual([]);
+  });
+
+  it("B4.5: 'after-ready' with neither source is a TypeError; with assets.mermaid only, that text is posted after ready", async () => {
+    expect(() => mountDocFrame(container, { document: input(MERMAID_DOC), adapters: adaptersFor({ events: [] }, AFTER) })).toThrow(TypeError);
+    expect(iframes()).toBe(0);
+    expect(() => mountDocFrame(container, { document: input(MERMAID_DOC), adapters: adaptersFor({ events: [] }, { ...AFTER, loadMermaid: 'x' }) })).toThrow(TypeError);
+    expect(() => mountDocFrame(container, { document: input(MERMAID_DOC), adapters: adaptersFor({ events: [] }, { ...AFTER, assets: { ...assets, mermaid: 5 } }) })).toThrow(TypeError);
+    const m = mount(MERMAID_DOC, { ...AFTER, assets: { ...assets, mermaid: mermaidText } });
+    const posts = watch(m.channel);
+    expect((m.iframe.getAttribute('srcdoc') ?? '').includes(mermaidText), 'not inlined').toBe(false);
+    await m.loaded();
+    await settle();
+    expect(mermaidOps(posts)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(mermaidOps(posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+  });
+
+  it("B4.6: 'auto' and 'on-request' never call loadMermaid and post no mermaid op", async () => {
+    for (const mode of ['auto', 'on-request'] as const) {
+      const d = deferred();
+      const m = mount(MERMAID_DOC, { mermaidDraw: mode, assets: { ...assets, mermaid: mermaidText }, loadMermaid: d.load });
+      const posts = watch(m.channel);
+      await m.loaded();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      d.resolve(mermaidText);
+      await settle();
+      expect(d.calls(), mode).toBe(0);
+      expect(mermaidOps(posts), mode).toEqual([]);
+      m.frame.destroy();
+    }
+    const d = deferred();
+    const dflt = mount(MERMAID_DOC, { assets: { ...assets, mermaid: mermaidText }, loadMermaid: d.load });
+    await settle();
+    expect(d.calls(), 'default mode').toBe(0);
+    dflt.frame.destroy();
+  });
+
+  it('B4.7: an update before the loader resolves: the new mount gets exactly one op, the replaced mount none, the loader one call; a later update re-posts without a call', async () => {
+    const d = deferred();
+    const first = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const firstPosts = watch(first.channel);
+    await first.loaded();
+    first.say({ t: 'ready', v: 1, nonce: first.nonce });
+    first.frame.update(input(MERMAID_DOC));
+    const second = newest();
+    expect(d.calls(), 'the remount reuses the held promise').toBe(1);
+    second.ready();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(firstPosts), 'the replaced mount posts nothing').toEqual([]);
+    expect(mermaidOps(second.posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+    first.frame.update(input(MERMAID_DOC));
+    const third = newest();
+    third.ready();
+    await settle();
+    expect(mermaidOps(third.posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+    expect(mermaidOps(second.posts), 'still one for the second').toHaveLength(1);
+    expect(d.calls(), 'one call for the whole DocFrame').toBe(1);
+  });
+
+  it('B4.7b: a replaced mount that is not replaced by a Mermaid mount still posts nothing when the answer arrives', async () => {
+    const d = deferred();
+    const first = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const firstPosts = watch(first.channel);
+    await first.loaded();
+    first.say({ t: 'ready', v: 1, nonce: first.nonce });
+    first.frame.update(input(PLAIN));
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(firstPosts)).toEqual([]);
+    expect(mermaidOps(newest().posts)).toEqual([]);
+  });
+
+  it('B4.8: a document with no fences never calls loadMermaid and posts no op; an update that brings figures calls it once', async () => {
+    const d = deferred();
+    const m = mount(PLAIN, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    await settle();
+    expect(d.calls()).toBe(0);
+    expect(mermaidOps(posts)).toEqual([]);
+    m.frame.update(input(MERMAID_DOC));
+    expect(d.calls()).toBe(1);
+    const next = newest();
+    next.ready();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(next.posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+  });
+
+  it('B4.9: a loader that throws, resolves to a non-string, or resolves over the cap posts unavailable and warns; nothing throws out of mountDocFrame', async () => {
+    const loaders: [string, () => Promise<string>][] = [
+      ['a synchronous throw', () => { throw new Error('sync'); }],
+      ['a non-string', () => Promise.resolve(42 as unknown as string)],
+      // A String object has the right length and characters, so only the typeof check (not the hash) refuses it.
+      ['a String object', () => Promise.resolve(new String(mermaidText) as unknown as string)],
+      ['over the cap', () => Promise.resolve('a'.repeat(OP_CAP + 1))],
+      ['a thenable whose then throws', () => ({ then: () => { throw new Error('then'); } }) as unknown as Promise<string>],
+      ['a throwing then getter', () => Object.defineProperty({}, 'then', { get: () => { throw new Error('getter'); } }) as unknown as Promise<string>],
+    ];
+    for (const [name, loadMermaid] of loaders) {
+      warn.mockClear();
+      let m: Mounted | undefined;
+      expect(() => { m = mount(MERMAID_DOC, { ...AFTER, loadMermaid }); }, name).not.toThrow();
+      const mounted = m as Mounted;
+      const posts = watch(mounted.channel);
+      await mounted.loaded();
+      mounted.say({ t: 'ready', v: 1, nonce: mounted.nonce });
+      await settle();
+      expect(mermaidOps(posts), name).toEqual([{ t: 'mermaid', unavailable: true }]);
+      expect(warn, name).toHaveBeenCalledTimes(1);
+      mounted.frame.destroy();
+    }
+  });
+
+  it('B4.9b: a loader that calls update() or destroy() from inside itself never loops, never throws and is called once', () => {
+    for (const how of ['update', 'destroy'] as const) {
+      let calls = 0;
+      let frame: DocFrame | undefined;
+      const load = (): Promise<string> => {
+        calls += 1;
+        if (how === 'update') frame?.update(input(MERMAID_DOC));
+        else frame?.destroy();
+        return new Promise<string>(() => undefined);
+      };
+      const m = mount(PLAIN, { ...AFTER, loadMermaid: load });
+      frame = m.frame;
+      expect(() => m.frame.update(input(MERMAID_DOC)), how).not.toThrow();
+      expect(calls, how).toBe(1);
+      m.frame.destroy();
+      container.replaceChildren();
+    }
+  });
+});

@@ -5,8 +5,8 @@
 // One mount, in the order of Reference §11.1:
 //   1. The adapters are checked: own data properties only (a getter is refused unread, an inherited property is
 //      absent, an unknown key refused), `watchdogMs` an integer from 1 to 120000, `onFallback` a function, every other
-//      callback a function when given, `mermaidDraw` absent or one of its values, each `mermaidGate` cap at most its
-//      default. A failure throws TypeError or RangeError before any iframe exists.
+//      callback a function when given, `mermaidDraw` absent or one of its values ('after-ready' needs `loadMermaid` or
+//      `assets.mermaid`), each `mermaidGate` cap at most its default. A failure throws TypeError or RangeError before any iframe exists.
 //   2. The Mermaid gate (`mermaidGate`, in code units) on the document's scan; when it passes, Mermaid is inlined with
 //      the per-fence cap as `maxTextSize`. A document with no scan carries no Mermaid.
 //   3. A fresh nonce: 16 bytes of crypto.getRandomValues, lower-case hex.
@@ -28,6 +28,12 @@
 // refusals (the parser's, the limiter's, a messageerror) fall back ('refusals'). An adapter that throws is caught and
 // logged and never counts against the frame.
 //
+// 'after-ready' (ledger C107): a mount whose gate admits Mermaid asks for the build at once, in parallel with the frame's
+// boot, and the DocFrame holds the one answer (the loader is called at most once per DocFrame, however many remounts).
+// The answer is checked (a string, within the bridge's cap, the shipped build's sha256) and is `unavailable` after one
+// console warning otherwise; the loader is untrusted, so nothing it does escapes. Each such mount posts one `mermaid` op
+// after its own valid ready, at once if the answer came first, and a replaced or destroyed mount posts nothing.
+//
 // Teardown: a fallback clears the timers, closes the port, removes the iframe and calls onFallback once; it never
 // remounts. update() is a full remount (new iframe, channel, nonce and watchdog), never a srcdoc reassignment.
 // destroy() is idempotent and calls no adapter, also when host code that a mount step runs (a focusout at the focus)
@@ -39,7 +45,9 @@
 import { frameCsp } from '../frame/csp.js';
 import { FrameError, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
+import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
 import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent } from '../frame/protocol.js';
+import { hex, sha256Text } from '../frame/sha256.js';
 import type { FramePrefs } from '../frame/wire-types.js';
 import { hiddenChars, type HiddenChar } from './copy.js';
 import { createLimiter, type Limiter } from './limits.js';
@@ -74,8 +82,18 @@ export interface HostAdapters {
   readonly features?: FrameFeatures;
   /** Only tighten. */
   readonly mermaidGate?: MermaidGateCaps;
-  /** Default 'auto'; passed through as FrameOptions.mermaid.draw. */
-  readonly mermaidDraw?: 'auto' | 'on-request';
+  /**
+   * Default 'auto'; passed through as FrameOptions.mermaid.draw. 'after-ready' mounts at once, fetches the build in
+   * parallel with the frame's boot and posts it after ready (ledger C107): it needs `loadMermaid`, or `assets.mermaid`.
+   */
+  readonly mermaidDraw?: 'auto' | 'on-request' | 'after-ready';
+  /**
+   * Only for 'after-ready' (ignored, and never called, in any other mode): the exact text of
+   * `mermaid/mermaid.frame.js`. Called at most once per DocFrame, at the first mount whose document the gate lets
+   * Mermaid into; untrusted host code, so a throw, a rejection, a value that is not a string, a string over the bridge's
+   * cap or a text whose sha256 is not the shipped build's all leave the figures as source (one console warning).
+   */
+  readonly loadMermaid?: () => Promise<string>;
   /** The iframe's accessible name; default 'Document'. */
   readonly title?: string;
   /** Default true: focus the iframe right after insertion (M8.1). */
@@ -104,14 +122,14 @@ export interface DocFrame {
 /** Every key HostAdapters may hold. */
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
-  'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback',
+  'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid',
 ]);
 
 /** The callbacks, each a function when given. */
 const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback'] as const);
 type CallbackName = (typeof CALLBACKS)[number];
 
-const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request']);
+const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request', 'after-ready']);
 const WATCHDOG_MAX_MS = 120_000;
 const TITLE_MAX = 1024;
 const DEFAULT_TITLE = 'Document';
@@ -181,7 +199,9 @@ interface Checked {
   readonly prefs: Partial<FramePrefs>;
   readonly features: unknown;
   readonly gate: MermaidGateCaps;
-  readonly draw: 'auto' | 'on-request';
+  readonly draw: 'auto' | 'on-request' | 'after-ready';
+  /** The 'after-ready' build's one source: the loader, else assets.mermaid's text; null in any other mode. */
+  readonly mermaidSource: (() => unknown) | string | null;
   readonly title: string;
   readonly focus: boolean;
   readonly callbacks: Partial<Record<CallbackName, (...args: never[]) => unknown>>;
@@ -203,6 +223,16 @@ function check(adapters: unknown): Checked {
   const draw = a['mermaidDraw'] ?? 'auto';
   if (typeof draw !== 'string') throw new TypeError('docserver host: adapters.mermaidDraw must be a string');
   if (!MERMAID_DRAW.includes(draw)) throw new RangeError(`docserver host: adapters.mermaidDraw must be one of ${MERMAID_DRAW.join(', ')}`);
+  const loader = a['loadMermaid'];
+  if (loader !== undefined && typeof loader !== 'function') throw new TypeError('docserver host: adapters.loadMermaid must be a function');
+  let mermaidSource: Checked['mermaidSource'] = null;
+  if (draw === 'after-ready') {
+    // Exactly one source is required: the loader, or the Mermaid text among the assets (read as an own data property).
+    const given: unknown = isPlain(a['assets']) ? Object.getOwnPropertyDescriptor(a['assets'], 'mermaid')?.value : undefined;
+    if (typeof loader === 'function') mermaidSource = loader as () => unknown;
+    else if (typeof given === 'string') mermaidSource = given;
+    else throw new TypeError("docserver host: mermaidDraw 'after-ready' needs adapters.loadMermaid or adapters.assets.mermaid");
+  }
   const gate = a['mermaidGate'] ?? {};
   if (!isPlain(gate)) throw new TypeError('docserver host: adapters.mermaidGate must be a plain object');
   // The gate checks its caps itself (TypeError, RangeError: caps only tighten); a document with no fence asks it now.
@@ -225,7 +255,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('docserver host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('docserver host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, assets: a['assets'], watchdogMs: w, store, prefs, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as 'auto' | 'on-request', title, focus, callbacks };
+  return { raw: adapters as object, assets: a['assets'], watchdogMs: w, store, prefs, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -303,9 +333,56 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   /** Posts prefs on the current mount's port (now or at its ready). */
   let sendPrefs: (p: Partial<FramePrefs>) => void = () => undefined;
 
+  /** What every 'after-ready' mount of this DocFrame posts: the build, or that there is none. */
+  type Build = { readonly text: string } | { readonly unavailable: true };
+  /** The held answer: asked at most once per DocFrame, at the first mount whose gate admits Mermaid (ledger C107). */
+  let build: Promise<Build> | null = null;
+
+  /** The one answer, never a rejection: the source is untrusted host code, and nothing it does may escape. */
+  const ask = (source: NonNullable<Checked['mermaidSource']>): Promise<Build> => {
+    const none = (why: string, e?: unknown): Build => {
+      console.warn('docserver host: the Mermaid build is unavailable', why, ...(e === undefined ? [] : [e]));
+      return { unavailable: true };
+    };
+    let answer: Promise<unknown>;
+    try {
+      const asked: unknown = typeof source === 'string' ? source : Reflect.apply(source, c.raw, []);
+      // A fresh native promise: a thenable, or a promise with a hostile constructor or then, is adopted by it safely.
+      answer = new Promise<unknown>((resolve) => resolve(asked));
+    } catch (e) {
+      return Promise.resolve(none('the loader threw', e));
+    }
+    return answer.then(
+      (text): Build => {
+        try {
+          if (typeof text !== 'string') return none('the loader did not answer a string');
+          if (text.length > BRIDGE_LIMITS.mermaidMaxChars) return none('the build is over the bridge cap');
+          if (hex(sha256Text(text)) !== FRAME_MANIFEST.mermaid.sha256) return none('the build is not the shipped one');
+          return { text };
+        } catch (e) {
+          return none('the build could not be checked', e);
+        }
+      },
+      (e: unknown): Build => none('the loader rejected', e),
+    );
+  };
+
+  /** The held answer, asking on the first call. The slot is filled before the source runs, so a source that re-enters cannot ask twice. */
+  const held = (source: NonNullable<Checked['mermaidSource']>): Promise<Build> => {
+    if (build !== null) return build;
+    let settle: (b: Build) => void = () => undefined;
+    build = new Promise<Build>((resolve) => {
+      settle = resolve;
+    });
+    void ask(source).then(settle);
+    return build;
+  };
+
   const mount = (d: RenderInput): void => {
     let live = true;
     let fellBack = false;
+    /** This mount seeds 'after-ready' with Mermaid on: it is owed one mermaid op after its own ready. */
+    let late = false;
     // Steps 2 to 5: the gate, the nonce, the snapshot, the srcdoc. Any refusal: one fallback, no iframe.
     const nonceBytes = new Uint8Array(16);
     win.crypto.getRandomValues(nonceBytes);
@@ -315,6 +392,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     try {
       const scanned: unknown = isPlain(d) ? (d as { scan?: { mermaid?: unknown } }).scan?.mermaid : undefined;
       const gated = scanned === undefined ? null : mermaidGate(scanned as Parameters<typeof mermaidGate>[0], c.gate);
+      late = c.draw === 'after-ready' && gated !== null && gated.inline;
       const frameOptions: FrameOptions = {
         csp: policy,
         nonce,
@@ -356,6 +434,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     let early = 0;
     let limiter: Limiter | null = null;
     let pending: Partial<FramePrefs> | null = null;
+    let answer: Build | null = null;
+    let sent = false;
     const changeTimers = new Set<number>();
     let watchdog: number | null = null;
 
@@ -380,6 +460,20 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     };
     const post = (m: unknown): void => {
       if (live) port.postMessage(m);
+    };
+
+    /**
+     * The mermaid op, once, after this mount's own valid ready and once the answer is known (ledger C107). It goes
+     * through `post`, whose `live` flag is what keeps a replaced or destroyed mount silent.
+     */
+    const deliver = (): void => {
+      if (!ready || sent || answer === null) return;
+      sent = true;
+      try {
+        post('text' in answer ? { t: 'mermaid', text: answer.text } : { t: 'mermaid', unavailable: true });
+      } catch (e) {
+        console.warn('docserver host: the Mermaid build could not be posted', e);
+      }
     };
 
     /** One refusal, counted toward the sixteen. */
@@ -470,6 +564,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         post({ t: 'prefs', ...pending });
         pending = null;
       }
+      deliver();
     };
 
     port.onmessage = (e: MessageEvent): void => {
@@ -522,6 +617,13 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     watchdog = win.setTimeout(() => fail('timeout'), c.watchdogMs);
     // Step 8: focus right after insertion; nothing is focused again at ready.
     if (c.focus) iframe.focus();
+    // The build is asked for in parallel with the frame's boot, only for a document the gate let Mermaid into.
+    if (live && late && c.mermaidSource !== null) {
+      void held(c.mermaidSource).then((b) => {
+        answer = b;
+        deliver();
+      });
+    }
   };
 
   mount(opts['document'] as RenderInput);

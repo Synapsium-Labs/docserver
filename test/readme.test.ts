@@ -262,11 +262,36 @@ describe('README: Hosting (./host)', () => {
     const s = section('Hosting');
     for (const name of [
       'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title', 'focus',
-      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback',
+      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid',
     ]) expect(s, name).toContain(`\`${name}\``);
     for (const reason of ['timeout', 'nonce', 'error', 'protocol', 'refusals', 'navigated', 'assets', 'too-large', 'invalid-input']) {
       expect(s, reason).toContain(`\`'${reason}'\``);
     }
+  });
+
+  it("states 'after-ready' and loadMermaid for ./host: the host hands the build over or the figures stay as source (ledger C107)", () => {
+    const s = section('Hosting');
+    const mermaidDraw = /\n\| `mermaidGate`, `mermaidDraw` \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const word of ["'auto'", "'on-request'", "'after-ready'"]) expect(mermaidDraw, word).toContain(word);
+    const row = /\n\| `loadMermaid` \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of [
+      "`mermaidDraw: 'after-ready'`", 'ignored and never called', 'hand the build over', 'every figure as its source', '`TypeError`',
+      'at most once per `DocFrame`', 'a document with no fences never calls it', '8388608', 'sha256', 'one console warning', 'after that mount\'s own valid ready',
+    ]) expect(row, part).toContain(part);
+    expect(/\n\| `assets` \|[^\n]*/.exec(s)?.[0] ?? '').toContain("`'after-ready'`");
+  });
+
+  it("states what 'after-ready' changes in the srcdoc, the missing-asset code, the root's states and the policy fallback (ledger C107)", () => {
+    const frame = section('Framing');
+    expect(frame).toContain("only when `mermaid` is not `null` and its draw mode is not `'after-ready'`");
+    expect(frame).toMatch(/\| `missing-asset` \|[^\n]*except in `'after-ready'`/);
+    const all = README;
+    const states = /`data-docreader-diagrams` with ([^.]*)\./.exec(all)?.[1] ?? '';
+    for (const state of ['on-request', 'waiting', 'drawing', 'drawn', 'partial', 'failed']) expect(states, state).toContain(`\`${state}\``);
+    const fallback = /\n2\. enhance's, the guard's or Mermaid's hash missing:[^\n]*/.exec(section('Hosting'))?.[0] ?? '';
+    expect(fallback).toContain("in `'after-ready'` mode");
+    expect(fallback).toContain('leaves every figure as its source');
+    expect(fallback).toContain('sends no error');
   });
 
   it('states the Mermaid duties handed to the README: no stock Mermaid with start-on-load on, and a stylesheet-hash policy only without Mermaid (ledger C94(3))', () => {
