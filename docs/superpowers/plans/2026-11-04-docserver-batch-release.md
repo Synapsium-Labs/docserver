@@ -485,7 +485,7 @@ Numbered `BX-<n>` while the wave runs; each is folded into a C-ruling by Task 9 
 
 | ID | Task | What departed and why | Ruling |
 |---|---|---|---|
-| — | — | (none yet) | — |
+| BX-1 | 2 | The typecheck forced two edits outside Task 2's file list: the `draw` docstring in src/frame/document.ts:136 and the type pin at test/frame-document.test.ts:176 (both files are Tasks 3 and 7's), because FrameOptions.mermaid.draw is the seed's MermaidDraw | Accepted: a docstring and a type pin only; Tasks 3 and 7 write after it (controller) |
 
 ---
 

@@ -681,8 +681,10 @@ export async function after(ctx: FeatureContext): Promise<void> {
     await ctx.env.fonts(FONT_WAIT_MS);
     if (!ctx.live()) return;
     api = mermaidOf(module);
-    ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
-    ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing');
+    ctx.operate(() => {
+      ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
+      ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing');
+    });
   } else {
     ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
     ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing'); // the state (LD5)

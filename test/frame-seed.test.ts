@@ -34,6 +34,7 @@ import {
   SEED_LIMITS,
   serializeSeed,
   validateSeed,
+  type MermaidDraw,
   type Seed,
 } from '../src/frame/seed.js';
 import { FM_LIST_MAX_ITEM, FM_LIST_MAX_ITEMS, FM_MAX_KEYS, FM_MAX_VALUE } from '../src/render/frontMatter.js';
@@ -699,7 +700,7 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       snapshot: storeKeys.map((k) => [k, `"${lt(BRIDGE_LIMITS.valueMaxBytes - 2)}"`] as const) as Seed['snapshot'],
       // The validator keeps a repeated word (L2 drops it), so the longest list repeats the longest word.
       features: maximalFeatures(L.words, () => lt(L.wordMaxCodeUnits)) as Seed['features'],
-      mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as 'auto' | 'on-request' },
+      mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as MermaidDraw },
       bridge: { links: false, hash: false, copy: false, changes: false, versions: false },
     };
   }

@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs, type EnhanceOptions } from '../src/enhance/index.js';
 import { createHost, HOST_CALLBACKS, type HostCallback, type HostCallbacks } from '../src/enhance/host.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
-import { LIMITS, normalizeOptions, OPTION_KEYS, PREF_VALUES } from '../src/enhance/options.js';
+import { LIMITS, MERMAID_DRAW_VALUES, normalizeOptions, OPTION_KEYS, PREF_VALUES } from '../src/enhance/options.js';
+import { MERMAID_DRAW } from '../src/frame/seed.js';
 import { defaultPrefs, PREFS_KEY } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
@@ -40,6 +41,12 @@ function verdict(options: unknown): string {
   } catch (e) {
     return e instanceof EnhanceError ? `${e.code}: ${e.message}` : `other: ${String(e)}`;
   }
+}
+
+/** The draw value normalizeOptions kept for `draw`, or the verdict when it refused it. */
+function normalizeOptionsDraw(draw: string): string {
+  const v = verdict({ mermaid: { load: noop, draw } });
+  return v === 'accepted' ? draw : v;
 }
 
 /** How a promise settled: 'resolved', an EnhanceError's code, or the other error's text. */
@@ -115,7 +122,14 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
     expect(normalizeOptions({ chrome: {} }).chrome).toEqual({ bar: true, rail: true, settings: true });
     expect(normalizeOptions({ chrome: { settings: false } }).chrome).toEqual({ bar: true, rail: true, settings: false });
     expect(normalizeOptions({ mermaid: { load } }).mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [], draw: 'auto' });
-    expect(normalizeOptions({ mermaid: { load, draw: 'after-ready' } }).mermaid?.draw).toBe('after-ready');
+  });
+
+  it("mermaid.draw: 'after-ready' is accepted and kept, and the values are the seed's list, held equal", () => {
+    expect(verdict({ mermaid: { load, draw: 'after-ready' } })).toBe('accepted');
+    expect(verdict({ mermaid: { load, draw: 'lazy' } })).toMatch(/^invalid-options: docreader: mermaid\.draw must be one of 'auto', 'on-request', 'after-ready'$/);
+    expect(verdict({ mermaid: { load, draw: null } })).toMatch(/^invalid-options: docreader: mermaid\.draw must be one of/);
+    expect([...MERMAID_DRAW_VALUES]).toEqual([...MERMAID_DRAW]);
+    expect(MERMAID_DRAW_VALUES.map((d) => normalizeOptionsDraw(d))).toEqual(['auto', 'on-request', 'after-ready']);
   });
 
   it('what features read is frozen: chrome, the mermaid limits and keys, commits and their entries', () => {

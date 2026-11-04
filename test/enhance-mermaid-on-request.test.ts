@@ -343,7 +343,7 @@ describe('L3.D3: draws run one at a time', () => {
   });
 });
 
-describe("L3.D4: draw absent is 'auto'; only 'auto' and 'on-request' are accepted", () => {
+describe("L3.D4: draw absent is 'auto'; only 'auto', 'on-request' and 'after-ready' are accepted", () => {
   it("normalizeOptions: absent and 'auto' give 'auto', 'on-request' is kept", () => {
     const load = (): Promise<unknown> => Promise.resolve(null);
     expect(normalizeOptions({ mermaid: { load } }).mermaid?.draw).toBe('auto');

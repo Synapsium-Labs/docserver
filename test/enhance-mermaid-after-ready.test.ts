@@ -179,18 +179,46 @@ describe('B2.4: one figure that throws', () => {
     expect(a.classList.contains('drawn')).toBe(true);
     expect(c.classList.contains('drawn')).toBe(true);
     expect(b.classList.contains('draw-failed')).toBe(true);
-    expect(b.querySelector('.fig-error p')).not.toBeNull();
+    expect(b.querySelector('.fig-error p')?.textContent).toBe(NOTES.error);
     expect(b.querySelector('pre.fig-src code')).not.toBeNull();
+  });
+
+  it('an over-maxTextSize figure takes the long note through draw(), and the others are drawn (partial)', async () => {
+    const root = mount(THREE);
+    const d = deferred();
+    await enhance(root, { mermaid: { ...(d.options.mermaid as NonNullable<EnhanceOptions['mermaid']>), maxTextSize: 'flowchart LR\n  one --> X\n'.length } });
+    const fake = fakeMermaid();
+    // The cap fits 'one' and 'two' (equal in length) but not 'three'.
+    d.answer({ default: fake.api });
+    await vi.waitFor(() => {
+      expect(root.getAttribute(STATE)).toBe('partial');
+    });
+    const [a, b, c] = figuresOf(root) as [HTMLElement, HTMLElement, HTMLElement];
+    expect(a.classList.contains('drawn') && b.classList.contains('drawn')).toBe(true);
+    expect(c.classList.contains('draw-failed')).toBe(true);
+    expect(c.querySelector('.fig-error p')?.textContent).toBe(NOTES.long);
+    expect(c.querySelector('pre.fig-src code')).not.toBeNull();
+    expect(fake.log).toEqual(['render one', 'render two']);
   });
 });
 
 describe('B2.5: the option', () => {
   const load = (): Promise<unknown> => Promise.resolve({});
+  /** 'accepted', or the refusal's message. */
+  const verdict = (draw: unknown): string => {
+    try {
+      normalizeOptions({ mermaid: { load, draw } });
+      return 'accepted';
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
   it("refuses 'lazy', true and null; accepts 'after-ready'; 'auto' and 'on-request' stand", () => {
-    for (const draw of ['lazy', true, null]) expect(() => normalizeOptions({ mermaid: { load, draw } })).toThrow(/mermaid\.draw must be one of/);
+    for (const draw of ['lazy', true, null]) expect(verdict(draw)).toMatch(/mermaid\.draw must be one of/);
+    expect(verdict('after-ready')).toBe('accepted');
+    expect(verdict('auto')).toBe('accepted');
+    expect(verdict('on-request')).toBe('accepted');
     expect(normalizeOptions({ mermaid: { load, draw: 'after-ready' } }).mermaid?.draw).toBe('after-ready');
-    expect(normalizeOptions({ mermaid: { load, draw: 'auto' } }).mermaid?.draw).toBe('auto');
-    expect(normalizeOptions({ mermaid: { load, draw: 'on-request' } }).mermaid?.draw).toBe('on-request');
     expect(normalizeOptions({ mermaid: { load } }).mermaid?.draw).toBe('auto');
   });
 });
@@ -201,5 +229,108 @@ describe('B2.6: the draw lists', () => {
     expect(MERMAID_DRAW).toContain('after-ready');
     expect(MERMAID_DRAW_VALUES).toContain('after-ready');
     // The seed's acceptance of the value and its refusal of an unknown one: test/frame-seed.test.ts.
+  });
+});
+
+/** document.fonts as a font set whose faces load when the test says so (jsdom has none). */
+function pendingFonts(): { release(): void } {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: { load: () => gate.then(() => [{ status: 'loaded' }]), addEventListener: () => undefined, removeEventListener: () => undefined },
+  });
+  return { release };
+}
+
+describe('B2.7: the order is load(), then the fonts, then the gate and drawing', () => {
+  it('load() has answered and the fonts are pending: still waiting, no gate; the fonts end: gate and drawing; the first render ends: drawn', async () => {
+    const fonts = pendingFonts();
+    try {
+      const root = mount(THREE);
+      const d = deferred();
+      await enhance(root, d.options);
+      const fake = fakeMermaid();
+      // Hold the first render so the intermediate state can be seen.
+      let endFirst: () => void = () => undefined;
+      const first = new Promise<void>((resolve) => {
+        endFirst = resolve;
+      });
+      const inner = fake.api.render.bind(fake.api);
+      let held = false;
+      fake.api.render = async (id, text, el) => {
+        if (!held) {
+          held = true;
+          await first;
+        }
+        return inner(id, text, el);
+      };
+      d.answer({ default: fake.api });
+      await tick(80);
+      expect(root.getAttribute(STATE)).toBe('waiting');
+      expect(root.hasAttribute(GATE)).toBe(false);
+      expect(fake.log).toEqual([]);
+      fonts.release();
+      await vi.waitFor(() => {
+        expect(root.getAttribute(STATE)).toBe('drawing');
+      });
+      expect(root.hasAttribute(GATE)).toBe(true);
+      endFirst();
+      await vi.waitFor(() => {
+        expect(root.getAttribute(STATE)).toBe('drawn');
+      });
+      expect(root.hasAttribute(GATE)).toBe(true);
+    } finally {
+      Reflect.deleteProperty(document, 'fonts');
+    }
+  });
+});
+
+describe('B2.8: destroyed while waiting', () => {
+  it('destroyed before load() answers: the state is gone at once; a later answer leaves no gate, no state, no drawing; a fresh enhance still settles', async () => {
+    const root = mount(THREE);
+    const d = deferred();
+    await enhance(root, d.options);
+    await tick(40);
+    expect(root.getAttribute(STATE)).toBe('waiting');
+    await destroyEnhancement(root);
+    expect(root.hasAttribute(STATE)).toBe(false);
+    const fake = fakeMermaid();
+    d.answer({ default: fake.api });
+    await tick(100);
+    expect(root.hasAttribute(GATE)).toBe(false);
+    expect(root.hasAttribute(STATE)).toBe(false);
+    expect(svgsIn(root)).toBe(0);
+    expect(fake.log).toEqual([]);
+    const again = deferred();
+    await enhance(root, again.options);
+    again.answer({ default: fakeMermaid().api });
+    await vi.waitFor(() => {
+      expect(root.getAttribute(STATE)).toBe('drawn');
+    });
+  });
+
+  it('destroyed after load() answers, during the fonts wait: no gate, no state, nothing drawn', async () => {
+    const fonts = pendingFonts();
+    try {
+      const root = mount(THREE);
+      const d = deferred();
+      await enhance(root, d.options);
+      const fake = fakeMermaid();
+      d.answer({ default: fake.api });
+      await tick(80);
+      expect(root.getAttribute(STATE)).toBe('waiting');
+      await destroyEnhancement(root);
+      fonts.release();
+      await tick(100);
+      expect(root.hasAttribute(GATE)).toBe(false);
+      expect(root.hasAttribute(STATE)).toBe(false);
+      expect(svgsIn(root)).toBe(0);
+      expect(fake.log).toEqual([]);
+    } finally {
+      Reflect.deleteProperty(document, 'fonts');
+    }
   });
 });
