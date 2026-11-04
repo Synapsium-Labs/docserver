@@ -4,9 +4,9 @@
 // the C1 controls U+0080 to U+009F (CSI, the one-code-point form of ESC [, among them; ledger C88), the bidi controls
 // U+202A to U+202E and U+2066 to U+2069, the zero-width characters U+200B to U+200D, U+2060 and U+FEFF, and, by the
 // operator's ruling of 2026-11-02 (ledger C103), the directional marks U+200E, U+200F and U+061C and the tag characters
-// U+E0000 to U+E007F (invisible text that rides a copy, "ASCII smuggling"), and, by ledger C106, which supersedes point (4)
-// of C103, the line separator U+2028 and the paragraph separator U+2029 (named by their character names: Zl and Zp are
-// not controls, so they have no name alias). Each comes with its index in UTF-16 code
+// U+E0000 to U+E007F (invisible text that rides a copy, "ASCII smuggling"), and, by ledger C106, which supersedes
+// point (4) of C103, the line separator U+2028 and the paragraph separator U+2029 (named by their character names: Zl
+// and Zp are not controls, so they have no name alias). Each comes with its index in UTF-16 code
 // units, its code point and its Unicode name, so the host can show a visible marker for each. `./host` never touches
 // the clipboard. The link classifier refuses an href holding any of them (hasHiddenChar), so the one table serves both.
 // Pure and import-inert: frozen tables and two functions.
