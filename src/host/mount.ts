@@ -29,7 +29,8 @@
 // logged and never counts against the frame.
 //
 // 'after-ready' (ledger C107): a mount whose gate admits Mermaid asks for the build at once, in parallel with the frame's
-// boot, and the DocFrame holds the one answer (the loader is called at most once per DocFrame, however many remounts).
+// boot, and the DocFrame holds the one verdict (the loader is called at most once per DocFrame, however many remounts;
+// one reaction is attached to its answer, and it reaches only the current mount, so no replaced mount is retained).
 // The answer is checked (a string, within the bridge's cap, the shipped build's sha256) and is `unavailable` after one
 // console warning otherwise; the loader is untrusted, so nothing it does escapes. Each such mount posts one `mermaid` op
 // after its own valid ready, at once if the answer came first, and a replaced or destroyed mount posts nothing.
@@ -88,7 +89,8 @@ export interface HostAdapters {
    */
   readonly mermaidDraw?: 'auto' | 'on-request' | 'after-ready';
   /**
-   * Only for 'after-ready' (ignored, and never called, in any other mode): the exact text of
+   * Only for 'after-ready' (in any other mode it is ignored, whatever it holds, and never called; when `assets.mermaid` is
+   * given too, this wins): the exact text of
    * `mermaid/mermaid.frame.js`. Called at most once per DocFrame, at the first mount whose document the gate lets
    * Mermaid into; untrusted host code, so a throw, a rejection, a value that is not a string, a string over the bridge's
    * cap or a text whose sha256 is not the shipped build's all leave the figures as source (one console warning).
@@ -224,10 +226,11 @@ function check(adapters: unknown): Checked {
   if (typeof draw !== 'string') throw new TypeError('docserver host: adapters.mermaidDraw must be a string');
   if (!MERMAID_DRAW.includes(draw)) throw new RangeError(`docserver host: adapters.mermaidDraw must be one of ${MERMAID_DRAW.join(', ')}`);
   const loader = a['loadMermaid'];
-  if (loader !== undefined && typeof loader !== 'function') throw new TypeError('docserver host: adapters.loadMermaid must be a function');
   let mermaidSource: Checked['mermaidSource'] = null;
   if (draw === 'after-ready') {
-    // Exactly one source is required: the loader, or the Mermaid text among the assets (read as an own data property).
+    // A source is required: the loader, else the Mermaid text among the assets (read as an own data property); when both
+    // are given the loader is used. In any other mode `loadMermaid` is ignored, whatever it holds, and never called.
+    if (loader !== undefined && typeof loader !== 'function') throw new TypeError('docserver host: adapters.loadMermaid must be a function');
     const given: unknown = isPlain(a['assets']) ? Object.getOwnPropertyDescriptor(a['assets'], 'mermaid')?.value : undefined;
     if (typeof loader === 'function') mermaidSource = loader as () => unknown;
     else if (typeof given === 'string') mermaidSource = given;
@@ -335,13 +338,18 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
 
   /** What every 'after-ready' mount of this DocFrame posts: the build, or that there is none. */
   type Build = { readonly text: string } | { readonly unavailable: true };
-  /** The held answer: asked at most once per DocFrame, at the first mount whose gate admits Mermaid (ledger C107). */
-  let build: Promise<Build> | null = null;
+  const noop = (): void => undefined;
 
   /** The one answer, never a rejection: the source is untrusted host code, and nothing it does may escape. */
   const ask = (source: NonNullable<Checked['mermaidSource']>): Promise<Build> => {
-    const none = (why: string, e?: unknown): Build => {
-      console.warn('docserver host: the Mermaid build is unavailable', why, ...(e === undefined ? [] : [e]));
+    // One warning, a fixed reason and never the loader's own value: formatting a hostile value could throw, and so
+    // could a console, so the call is contained too.
+    const none = (reason: string): Build => {
+      try {
+        console.warn('docserver host: the Mermaid build is unavailable', reason);
+      } catch {
+        // a console that throws is no reason to lose the answer
+      }
       return { unavailable: true };
     };
     let answer: Promise<unknown>;
@@ -349,8 +357,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const asked: unknown = typeof source === 'string' ? source : Reflect.apply(source, c.raw, []);
       // A fresh native promise: a thenable, or a promise with a hostile constructor or then, is adopted by it safely.
       answer = new Promise<unknown>((resolve) => resolve(asked));
-    } catch (e) {
-      return Promise.resolve(none('the loader threw', e));
+    } catch {
+      return Promise.resolve(none('the loader threw'));
     }
     return answer.then(
       (text): Build => {
@@ -359,23 +367,31 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           if (text.length > BRIDGE_LIMITS.mermaidMaxChars) return none('the build is over the bridge cap');
           if (hex(sha256Text(text)) !== FRAME_MANIFEST.mermaid.sha256) return none('the build is not the shipped one');
           return { text };
-        } catch (e) {
-          return none('the build could not be checked', e);
+        } catch {
+          return none('the build could not be checked');
         }
       },
-      (e: unknown): Build => none('the loader rejected', e),
+      (): Build => none('the loader rejected'),
     );
   };
 
-  /** The held answer, asking on the first call. The slot is filled before the source runs, so a source that re-enters cannot ask twice. */
-  const held = (source: NonNullable<Checked['mermaidSource']>): Promise<Build> => {
-    if (build !== null) return build;
-    let settle: (b: Build) => void = () => undefined;
-    build = new Promise<Build>((resolve) => {
-      settle = resolve;
+  // The verdict lives here, at DocFrame level (ledger C107): the loader is asked at most once, one reaction is attached
+  // to its answer, and that reaction reaches only the current mount, through `onVerdict`. A mount that is replaced,
+  // destroyed or fallen back clears the hook, so at most the current mount is retained while a loader stays pending,
+  // and none after destroy().
+  let asked = false;
+  let verdict: Build | null = null;
+  let onVerdict: () => void = noop;
+  /** Asks on the first call. `asked` is set before the source runs, so a source that re-enters cannot ask twice. */
+  const askOnce = (source: NonNullable<Checked['mermaidSource']>): void => {
+    if (asked) return;
+    asked = true;
+    void ask(source).then((b) => {
+      verdict = b;
+      const hook = onVerdict;
+      onVerdict = noop;
+      hook();
     });
-    void ask(source).then(settle);
-    return build;
   };
 
   const mount = (d: RenderInput): void => {
@@ -446,6 +462,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       for (const t of changeTimers) win.clearTimeout(t);
       changeTimers.clear();
       limiter?.dispose();
+      onVerdict = noop; // only the current mount is ever stopped, and it is the one that holds the hook
       port.onmessage = null;
       port.onmessageerror = null;
       port.close();
@@ -471,8 +488,12 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sent = true;
       try {
         post('text' in answer ? { t: 'mermaid', text: answer.text } : { t: 'mermaid', unavailable: true });
-      } catch (e) {
-        console.warn('docserver host: the Mermaid build could not be posted', e);
+      } catch {
+        try {
+          console.warn('docserver host: the Mermaid build could not be posted');
+        } catch {
+          // a console that throws is no reason to fail the port
+        }
       }
     };
 
@@ -619,10 +640,15 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     if (c.focus) iframe.focus();
     // The build is asked for in parallel with the frame's boot, only for a document the gate let Mermaid into.
     if (live && late && c.mermaidSource !== null) {
-      void held(c.mermaidSource).then((b) => {
-        answer = b;
-        deliver();
-      });
+      if (verdict !== null) answer = verdict;
+      else {
+        // The hook first, then the ask: a loader that re-enters update() or destroy() stops this mount, which clears it.
+        onVerdict = () => {
+          answer = verdict;
+          deliver();
+        };
+        askOnce(c.mermaidSource);
+      }
     }
   };
 

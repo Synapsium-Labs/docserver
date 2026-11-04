@@ -275,7 +275,7 @@ describe('README: Hosting (./host)', () => {
     for (const word of ["'auto'", "'on-request'", "'after-ready'"]) expect(mermaidDraw, word).toContain(word);
     const row = /\n\| `loadMermaid` \|[^\n]*/.exec(s)?.[0] ?? '';
     for (const part of [
-      "`mermaidDraw: 'after-ready'`", 'ignored and never called', 'hand the build over', 'every figure as its source', '`TypeError`',
+      "`mermaidDraw: 'after-ready'`", 'ignored, whatever it holds, and never called', 'the loader is used', 'must be a function when given', 'hand the build over', 'every figure as its source', '`TypeError`',
       'at most once per `DocFrame`', 'a document with no fences never calls it', '8388608', 'sha256', 'one console warning', 'after that mount\'s own valid ready',
     ]) expect(row, part).toContain(part);
     expect(/\n\| `assets` \|[^\n]*/.exec(s)?.[0] ?? '').toContain("`'after-ready'`");
@@ -283,6 +283,9 @@ describe('README: Hosting (./host)', () => {
 
   it("states what 'after-ready' changes in the srcdoc, the missing-asset code, the root's states and the policy fallback (ledger C107)", () => {
     const frame = section('Framing');
+    const mermaid = /\n\*\*Mermaid\.\*\*[^\n]*/.exec(frame)?.[0] ?? '';
+    expect(mermaid).toContain("`'after-ready'`");
+    expect(mermaid).toContain('decides whether the host hands the build over, and nothing is inlined');
     expect(frame).toContain("only when `mermaid` is not `null` and its draw mode is not `'after-ready'`");
     expect(frame).toMatch(/\| `missing-asset` \|[^\n]*except in `'after-ready'`/);
     const all = README;
