@@ -681,17 +681,20 @@ describe('outline mode (the reference layout, section 23)', () => {
     expect(sets).toEqual([[docKey('k', OUTLINE), null]]);
   });
 
-  it('a stored outline is applied only when the reader can turn it off: with neither the bar nor the keyboard it is left as stored', async () => {
+  it('a stored outline is applied whatever the bar and the keyboard are: the outline command can always leave it (T6-g)', async () => {
     const opts = (o: EnhanceOptions): EnhanceOptions => ({ ...o, storage: storageWith('true').storage, storageKey: 'k' });
     const neither = mount();
     const { storage, sets } = storageWith('true');
     await enhance(neither, { chrome: { bar: false }, keyboard: false, storage, storageKey: 'k' });
-    expect(neither.classList.contains('outline')).toBe(false);
+    expect(neither.classList.contains('outline')).toBe(true);
     expect(neither.querySelector('.outline-btn')).toBeNull();
     key(document.body, 'o');
+    expect(neither.classList.contains('outline')).toBe(true); // no key
+    expect(sets).toEqual([]);
+    expect(runEnhancementCommand(neither, 'outline')).toBe(true); // one command clears it
     expect(neither.classList.contains('outline')).toBe(false);
+    expect(sets).toEqual([[docKey('k', OUTLINE), null]]);
     await destroyEnhancement(neither);
-    expect(sets).toEqual([]); // left as stored, for a reader that can leave it
     const keysOnly = mount();
     await enhance(keysOnly, opts({ chrome: { bar: false } }));
     expect(keysOnly.classList.contains('outline')).toBe(true);
@@ -1010,5 +1013,19 @@ describe('commands without the bar: outline (B6.2, B6.3)', () => {
     await enhance(root, { chrome: { bar: false } });
     expect(runEnhancementCommand(root, 'outline')).toBe(false);
     expect(root.classList.contains('outline')).toBe(false);
+  });
+});
+
+describe('commands during startup (T6-g)', () => {
+  it('a command called from a feature build, before the instance is active, answers false and changes nothing', async () => {
+    const seen: boolean[] = [];
+    afterPlans((ctx) => {
+      seen.push(runEnhancementCommand(ctx.root, 'outline'));
+      seen.push(ctx.root.classList.contains('outline'));
+    });
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(seen).toEqual([false, false]);
+    expect(runEnhancementCommand(root, 'outline')).toBe(true);
   });
 });

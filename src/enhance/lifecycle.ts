@@ -628,7 +628,9 @@ export function goToHash(root: HTMLElement, id: string | null, from?: string | n
 /**
  * Run one of the bar's tools without the bar (batch 1.1, C108; commands.ts): `name` is one of COMMAND_NAMES, and the
  * command toggles its overlay as its bar button did. True when it ran; false for a root that is not enhanced (or still
- * starting), an unknown name, or a tool turned off or absent from this document. Calls no host callback.
+ * starting), an unknown name, a tool turned off or absent from this document, or a command that changes nothing (another
+ * overlay is open; the contents rail is shown, so there is no drawer). Calls no host callback of its own: the Outline writes
+ * its state through the host's storage, as its button did.
  */
 export function runEnhancementCommand(root: HTMLElement, name: string): boolean {
   if (!isElement(root) || typeof name !== 'string') return false;

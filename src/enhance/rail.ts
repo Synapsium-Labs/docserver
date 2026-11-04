@@ -263,8 +263,14 @@ export function build(ctx: FeatureContext): void {
     else open();
   });
   ctx.commands.register('contents', () => {
-    if (drawerOpen) close();
-    else open();
+    if (drawerOpen) {
+      close();
+      return true;
+    }
+    // Where the rail is shown there is no drawer to toggle; and no drawer opens over another dialog.
+    if (ctx.env.viewport().w >= RAIL_MIN_WIDTH || ctx.overlays.any()) return false;
+    open();
+    return true;
   });
   journal.listen(scrim, 'click', () => close(true));
   journal.listen(rail, 'click', (event) => {

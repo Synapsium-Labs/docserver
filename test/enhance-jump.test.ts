@@ -831,9 +831,21 @@ describe('the jump: keys and options', () => {
     expect(isOpen(jumpOf(root))).toBe(true);
     expect(runEnhancementCommand(root, 'jump')).toBe(true);
     expect(isOpen(jumpOf(root))).toBe(false);
-    runEnhancementCommand(root, 'jump');
+    expect(runEnhancementCommand(root, 'jump')).toBe(true);
+    expect(isOpen(jumpOf(root))).toBe(true);
     key(inputOf(root), 'Escape');
     expect(isOpen(jumpOf(root))).toBe(false);
+  });
+
+  it('T6-d: the jump command answers false and changes nothing while another dialog is open', async () => {
+    const root = await enhanced(DOC, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(runEnhancementCommand(root, 'jump')).toBe(false);
+    expect(isOpen(jumpOf(root))).toBe(false);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(runEnhancementCommand(root, 'jump')).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(false);
+    expect(isOpen(jumpOf(root))).toBe(true);
   });
 
   it('B6.3: the jump command answers false for a root with too few entries to jump over', async () => {

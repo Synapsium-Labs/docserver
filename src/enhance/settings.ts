@@ -130,13 +130,31 @@ export function build(ctx: FeatureContext): void {
     if (menu.hidden) show();
     else close();
   });
+  // A close made by the reader's press or focus leaving, outside the menu: the same gesture's click may then run the
+  // settings command (a host's own button), which must find the menu closed and leave it so, or a second press on that
+  // button would open it again. The flag is cleared after the gesture's click has been dispatched (a bubbling listener
+  // on the document runs after the target's own), by the next press, and when the command consumes it. (A press dragged away from its target sends no click, and the flag
+  // then waits for the next press or click.)
+  let closedByOutside = false;
   ctx.journal.listen(wrap, 'focusout', (event) => {
     const to = (event as FocusEvent).relatedTarget;
-    if (!menu.hidden && !contains(wrap, to)) close();
+    if (menu.hidden || contains(wrap, to)) return;
+    // Focus leaving the document itself (a frame whose parent took the focus) names no element: the menu stays open.
+    // Another element of this document, the page's own press, Escape and the command still close it.
+    if (to === null && !doc.hasFocus()) return;
+    closedByOutside = true;
+    close();
   });
   ctx.journal.listen(doc, 'pointerdown', (event) => {
-    if (!menu.hidden && !contains(wrap, event.target)) close();
+    closedByOutside = false;
+    if (menu.hidden || contains(wrap, event.target)) return;
+    closedByOutside = true;
+    close();
   });
+  ctx.journal.listen(doc, 'click', () => {
+    closedByOutside = false;
+  });
+
   ctx.overlays.register('settings', { isOpen: () => !menu.hidden, close });
   ctx.journal.defer(() => ctx.overlays.close('settings'));
 
@@ -147,8 +165,17 @@ export function build(ctx: FeatureContext): void {
   });
   wrap.append(button, menu);
   ctx.commands.register('settings', () => {
-    if (menu.hidden) show();
-    else close();
+    if (closedByOutside) {
+      closedByOutside = false;
+      return true; // this gesture's press just closed it: the command is the toggle's second half, and leaves it closed
+    }
+    if (!menu.hidden) {
+      close();
+      return true;
+    }
+    if (ctx.overlays.any()) return false;
+    show();
+    return true;
   });
   if (ctx.slots !== null) ctx.slots.tool('settings', wrap);
   else ctx.journal.insert(wrap, ctx.root, ctx.root.firstChild);

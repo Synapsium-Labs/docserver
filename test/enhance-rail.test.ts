@@ -419,9 +419,24 @@ describe('commands without the bar: contents (B6.2, B6.3)', () => {
     expect(root.classList.contains('toc-open')).toBe(true);
     expect(runEnhancementCommand(root, 'contents')).toBe(true);
     expect(root.classList.contains('toc-open')).toBe(false);
-    runEnhancementCommand(root, 'contents');
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(root.classList.contains('toc-open')).toBe(true);
     (root.querySelector('nav.doc-toc') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(root.classList.contains('toc-open')).toBe(false);
+  });
+
+  it('T6-e: where the rail is shown (1240 px or more) there is no drawer: the command answers false and changes nothing', async () => {
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 });
+    try {
+      const root = mount(DOC);
+      await enhance(root, { chrome: { bar: false } });
+      expect(runEnhancementCommand(root, 'contents')).toBe(false);
+      expect(root.classList.contains('toc-open')).toBe(false);
+    } finally {
+      if (width === undefined) Reflect.deleteProperty(window, 'innerWidth');
+      else Object.defineProperty(window, 'innerWidth', width);
+    }
   });
 
   it('B6.3: with chrome.rail false the contents command answers false and the drawer stays shut', async () => {

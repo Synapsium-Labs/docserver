@@ -1086,6 +1086,7 @@ describe('progress without the bar (B6.4)', () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false }, onProgress: (s) => void seen.push(s) });
     await frames();
+    expect(seen).toEqual([0]); // the initial share, once, at start
     const at = place(root, 3768); // room: 3768 - 768
     seen.length = 0;
     await scrollTo(600, at);
@@ -1096,6 +1097,8 @@ describe('progress without the bar (B6.4)', () => {
     expect(seen).toEqual([0.2, 0.5]);
     await scrollTo(3000, at);
     expect(seen).toEqual([0.2, 0.5, 1]);
+    await scrollTo(9000, at); // the root wholly above the window: the share is 0 (as the bar's line is)
+    expect(seen).toEqual([0.2, 0.5, 1, 0]);
   });
 
   it('with the bar on, the same share is reported and the bar line draws it', async () => {
@@ -1121,9 +1124,95 @@ describe('progress without the bar (B6.4)', () => {
 
   it('a host callback that throws leaves scrolling working', async () => {
     const root = mount();
-    await enhance(root, { chrome: { bar: false }, onProgress: () => { throw new Error('host'); } });
+    let calls = 0;
+    await enhance(root, { chrome: { bar: false }, onProgress: () => { calls += 1; throw new Error('host'); } });
     await frames();
-    await scrollTo(600, place(root, 3768));
-    expect(root.isConnected).toBe(true);
+    const log = spyLog(root);
+    const at = placer(root, { 'in-short': 400, '1-context': 800, '2-design': 1200, 'open-questions': 1600 });
+    const share = place(root, 3768);
+    const both = (y: number): void => {
+      at(y);
+      share(y);
+    };
+    const before = calls;
+    await scrollTo(600, both);
+    expect(calls).toBe(before + 1); // the callback ran and threw
+    await scrollTo(1500, both);
+    expect(calls).toBe(before + 2); // the next change is still reported
+    expect(log.length).toBeGreaterThan(0); // and the spy goes on
+  });
+
+  it('a destroy requested inside onProgress with the bar on: the running head is not written afterwards', async () => {
+    const root = mount();
+    let gone: Promise<void> | null = null;
+    await enhance(root, {
+      onProgress: (s) => {
+        if (s > 0 && gone === null) gone = destroyEnhancement(root);
+      },
+    });
+    await frames();
+    const running = ctxOf(root).slots?.running as HTMLElement;
+    const before = running.textContent;
+    const at = placer(root, { 'in-short': 400, '1-context': 800, '2-design': 1200, 'open-questions': 1600 });
+    const share = place(root, 3768);
+    await scrollTo(1000, (y) => {
+      at(y);
+      share(y);
+    });
+    expect(gone).not.toBeNull();
+    await gone;
+    expect(running.textContent).toBe(before); // the section's number and title were never written
+  });
+
+  it('a destroy requested inside onProgress ends the frame there: no heading rect is read afterwards', async () => {
+    const root = mount();
+    let gone: Promise<void> | null = null;
+    await enhance(root, {
+      chrome: { bar: false },
+      onProgress: (s) => {
+        if (s > 0 && gone === null) gone = destroyEnhancement(root);
+      },
+    });
+    await frames();
+    const headings = Array.from(root.querySelectorAll('h2'));
+    const at = placer(root, { 'in-short': 400, '1-context': 800, '2-design': 1200, 'open-questions': 1600 });
+    const share = place(root, 3768);
+    readsOf.clear();
+    await scrollTo(1000, (y) => {
+      at(y);
+      share(y);
+    });
+    await gone;
+    expect(readsOf.get(root)).toBeGreaterThan(0); // the share was read: the frame did run
+    expect(headings.reduce((n, h) => n + (readsOf.get(h) ?? 0), 0)).toBe(0);
+  });
+
+  it('a destroy requested inside onProgress stops the frame: no later report, no spy event, the root restored', async () => {
+    const root = mount();
+    const seen: number[] = [];
+    let gone: Promise<void> | null = null;
+    await enhance(root, {
+      chrome: { bar: false },
+      onProgress: (s) => {
+        seen.push(s);
+        if (s > 0 && gone === null) gone = destroyEnhancement(root);
+      },
+    });
+    await frames();
+    const log = spyLog(root);
+    const at = placer(root, { 'in-short': 400, '1-context': 800, '2-design': 1200, 'open-questions': 1600 });
+    const share = place(root, 3768);
+    const both = (y: number): void => {
+      at(y);
+      share(y);
+    };
+    await scrollTo(600, both);
+    expect(seen).toEqual([0, 0.2]);
+    expect(gone).not.toBeNull();
+    await gone;
+    expect(log).toEqual([]); // the spy event after the report never came
+    await scrollTo(1500, both);
+    expect(seen).toEqual([0, 0.2]);
+    expect(root.hasAttribute('data-docreader-root')).toBe(false);
   });
 });

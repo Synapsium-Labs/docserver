@@ -943,3 +943,18 @@ describe('options: chrome.topSpace and onProgress (B6.5)', () => {
     expect(off.classList.contains('no-top-space')).toBe(false);
   });
 });
+
+describe('chrome.topSpace takes effect only on a root with no bar (T6-b)', () => {
+  const css = readFileSync(path.join(import.meta.dirname, '..', 'assets', 'reader.css'), 'utf8');
+
+  it('with the bar on and topSpace false the root has its bar and the class; the stylesheet trims only a root with no bar', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { topSpace: false } });
+    expect(root.querySelector(':scope > .topbar')).not.toBeNull();
+    expect(root.classList.contains('no-top-space')).toBe(true);
+    const rule = css.split('\n').find((l) => l.includes('.no-top-space') && l.includes('padding-top: 8px'));
+    expect(rule).toBeDefined();
+    expect(rule).toContain('.no-top-space:not(:has(> .topbar))');
+    expect(css.split('\n').filter((l) => l.includes('.no-top-space') && l.includes('padding-top')).length).toBe(1);
+  });
+});

@@ -713,6 +713,7 @@ describe('commands without the bar: settings (B6.1, B6.3)', () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
     expect(root.querySelector('.topbar')).toBeNull();
+    expect(root.querySelector('.aa-btn')).not.toBeNull();
     expect(tool(root).closest('.aa-wrap')?.parentElement).toBe(root);
     expect(menu(root).hidden).toBe(true);
     expect(runEnhancementCommand(root, 'settings')).toBe(true);
@@ -721,6 +722,7 @@ describe('commands without the bar: settings (B6.1, B6.3)', () => {
     expect(runEnhancementCommand(root, 'settings')).toBe(true);
     expect(menu(root).hidden).toBe(true);
     expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
     key(radio(root, 'theme', 'auto'), 'Escape');
     expect(menu(root).hidden).toBe(true);
   });
@@ -769,5 +771,111 @@ describe('the command registry (B6.3)', () => {
     later = true;
     expect(dead.run('jump')).toBe(false); // a registration made while not live is dropped
     expect(ran).toEqual(['jump']);
+  });
+});
+
+describe('a host\'s own button toggles the settings (T6-c)', () => {
+  /** A press as a browser dispatches it: pointerdown, then (after the focus moves) click. */
+  const press = (el: Element): void => {
+    el.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+  };
+
+  it('a button outside the root: the first press opens, the second closes, a third opens again', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    press(host);
+    expect(menu(root).hidden).toBe(false);
+    press(host);
+    expect(menu(root).hidden).toBe(true);
+    press(host);
+    expect(menu(root).hidden).toBe(false);
+    press(host);
+    expect(menu(root).hidden).toBe(true);
+    host.remove();
+  });
+
+  it('the swallowed half does not outlive its gesture: a later command opens it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true })); // the gesture's click, no command in it
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu open', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+    expect(menu(root).hidden).toBe(false);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true); // the command is the toggle: it closes
+    expect(menu(root).hidden).toBe(true);
+    spy.mockRestore();
+  });
+
+  it('focus moving to another element of the document, an outside press and Escape still close it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const other = document.createElement('button');
+    document.body.append(other);
+    runEnhancementCommand(root, 'settings');
+    const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: other }));
+    expect(menu(root).hidden).toBe(true);
+    spy.mockReturnValue(true);
+    runEnhancementCommand(root, 'settings');
+    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null })); // the document keeps focus
+    expect(menu(root).hidden).toBe(true);
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    runEnhancementCommand(root, 'settings');
+    key(radio(root, 'theme', 'auto'), 'Escape');
+    expect(menu(root).hidden).toBe(true);
+    spy.mockRestore();
+    other.remove();
+  });
+});
+
+describe('commands never open over another overlay (T6-d)', () => {
+  it('settings answers false and changes nothing while the drawer is open; closing its own still works', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(root.classList.contains('toc-open')).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(false);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'jump')).toBe(false);
+    expect(root.classList.contains('toc-open')).toBe(true);
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    expect(runEnhancementCommand(root, 'contents')).toBe(false); // the other order
+    expect(root.classList.contains('toc-open')).toBe(false);
+    expect(runEnhancementCommand(root, 'jump')).toBe(false);
+  });
+});
+
+describe('runEnhancementCommand\'s own guards (T6-g)', () => {
+  it('answers false for a root that is no element, a name that is no string, and a destroyed root', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand({} as HTMLElement, 'settings')).toBe(false);
+    expect(runEnhancementCommand(root, 42 as unknown as string)).toBe(false);
+    expect(runEnhancementCommand(root, undefined as unknown as string)).toBe(false);
+    const gone = destroyEnhancement(root);
+    expect(runEnhancementCommand(root, 'settings')).toBe(false); // while the teardown is pending
+    await gone;
+    expect(runEnhancementCommand(root, 'settings')).toBe(false); // after it
+    expect(root.querySelector('.aa-menu')).toBeNull();
   });
 });

@@ -93,7 +93,7 @@ export interface ChromeOptions {
   readonly rail?: boolean;
   /** The reading settings menu. */
   readonly settings?: boolean;
-  /** Room above the text: default true; false trims the root's top padding to 8px (a host that supplies its own space). */
+  /** Room above the text: default true; false trims the root's top padding to 8px, for a root with no bar (`bar: false`) only: with the bar it changes nothing. */
   readonly topSpace?: boolean;
 }
 
@@ -223,7 +223,7 @@ export interface EnhanceOptions {
   onHash?(id: string | null, entry: { readonly push: boolean; readonly from: string | null }): void;
   /**
    * How far the root has been read, a number from 0 to 1: the share the bar's progress line draws, with or without
-   * the bar, called only when it changes (batch 1.1, C108).
+   * the bar. Called once when the reader starts, then on every change (batch 1.1, C108).
    */
   onProgress?(share: number): void;
   /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
