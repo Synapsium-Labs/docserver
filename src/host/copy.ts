@@ -4,7 +4,9 @@
 // the C1 controls U+0080 to U+009F (CSI, the one-code-point form of ESC [, among them; ledger C88), the bidi controls
 // U+202A to U+202E and U+2066 to U+2069, the zero-width characters U+200B to U+200D, U+2060 and U+FEFF, and, by the
 // operator's ruling of 2026-11-02 (ledger C103), the directional marks U+200E, U+200F and U+061C and the tag characters
-// U+E0000 to U+E007F (invisible text that rides a copy, "ASCII smuggling"). Each comes with its index in UTF-16 code
+// U+E0000 to U+E007F (invisible text that rides a copy, "ASCII smuggling"), and, by ledger C106, which supersedes point (4)
+// of C103, the line separator U+2028 and the paragraph separator U+2029 (named by their character names: Zl and Zp are
+// not controls, so they have no name alias). Each comes with its index in UTF-16 code
 // units, its code point and its Unicode name, so the host can show a visible marker for each. `./host` never touches
 // the clipboard. The link classifier refuses an href holding any of them (hasHiddenChar), so the one table serves both.
 // Pure and import-inert: frozen tables and two functions.
@@ -19,7 +21,7 @@ export interface HiddenChar {
   /** The character's index in the text, in UTF-16 code units. */
   readonly index: number;
   readonly codePoint: number;
-  /** Its Unicode name (for a control, its name alias; for an unassigned tag code point, its `<reserved-XXXXX>` code point label). */
+  /** Its Unicode name (for a control, its name alias; for U+2028 and U+2029, their character names; for an unassigned tag code point, its `<reserved-XXXXX>` code point label). */
   readonly name: string;
 }
 
@@ -61,6 +63,9 @@ const OTHER_NAMES: Readonly<Record<number, string>> = Object.freeze({
   0x2067: 'RIGHT-TO-LEFT ISOLATE',
   0x2068: 'FIRST STRONG ISOLATE',
   0x2069: 'POP DIRECTIONAL ISOLATE',
+  // line and paragraph separators (ledger C106; Zl and Zp, not controls, so they carry their character names)
+  0x2028: 'LINE SEPARATOR',
+  0x2029: 'PARAGRAPH SEPARATOR',
   // zero-width characters
   0x200b: 'ZERO WIDTH SPACE',
   0x200c: 'ZERO WIDTH NON-JOINER',
