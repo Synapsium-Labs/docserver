@@ -63,7 +63,7 @@ sequenceDiagram
   H->>F: srcdoc without Mermaid script
   H->>F: hello (port)
   F->>E: enhance(), mermaid.draw = 'after-ready'
-  E-->>F: resolved; root reads waiting, sources readable
+  E-->>F: resolved, root reads waiting, sources readable
   F->>H: ready (nonce)
   Note over H: watchdog cleared: no Mermaid allowance needed
   L-->>H: Mermaid text
