@@ -16,7 +16,7 @@ import { checkVocabulary, contentIntrinsics, materialise, MISSING_CLASS } from '
 import { FACES, FONT_WAIT_MS, probeFaces } from '../src/frame-runtime/fonts.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES, parseParentMessage } from '../src/frame-runtime/inbound.js';
 import type { Outbox } from '../src/frame-runtime/outbox.js';
-import { pinFreeGlobals } from '../src/frame-runtime/pin.js';
+import { pinFreeGlobals, RESERVED_GLOBALS, reserveGlobals } from '../src/frame-runtime/pin.js';
 import { INPUT_ATTRIBUTES, STYLE_VALUE_SOURCE, VOCABULARY_ATTRIBUTES, VOCABULARY_TAGS } from '../src/frame-runtime/vocabulary.js';
 import { render } from '../src/render/index.js';
 
@@ -186,7 +186,8 @@ describe('L3.M22: pinFreeGlobals', () => {
         }
         if (n.expression.text === 'createAdapters') at['adapters']?.push(n.getStart(sf));
       }
-      if (ts.isCallExpression(n) && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'docserver:register') && /\badd\.call\b/.test(n.expression.getText(sf))) at['register']?.push(n.getStart(sf));
+      // The document's own listener (`add.call(doc, ...)`); the late insertion's, on the inserted element, is another site.
+      if (ts.isCallExpression(n) && n.arguments[0]?.getText(sf) === 'doc' && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'docserver:register') && /\badd\.call\b/.test(n.expression.getText(sf))) at['register']?.push(n.getStart(sf));
       if (ts.isCallExpression(n) && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'DOMContentLoaded')) at['start']?.push(n.getStart(sf));
       ts.forEachChild(n, visit);
     };
@@ -201,6 +202,82 @@ describe('L3.M22: pinFreeGlobals', () => {
     const before = Object.getOwnPropertyNames(win).length;
     pinFreeGlobals(win, []);
     expect(Object.getOwnPropertyNames(win).length).toBe(before);
+  });
+});
+
+describe('BD5: reserveGlobals, the names Mermaid writes while it evaluates', () => {
+  it('reserves the two names, in every mode (the build\'s allowlist is held equal to them in test/frame-build.test.ts)', () => {
+    expect([...RESERVED_GLOBALS].sort()).toEqual(['fastdom', 'injected']);
+  });
+
+  it('defines an absent name as an own, writable, non-configurable property holding undefined; leaves an own one as it is', () => {
+    const win = freshWindow();
+    const w = win as unknown as Record<string, unknown>;
+    w['ownThing'] = 7;
+    const ownBefore = Object.getOwnPropertyDescriptor(win, 'ownThing');
+    expect(Object.hasOwn(win, 'fastdom')).toBe(false);
+    reserveGlobals(win, ['fastdom', 'injected', 'ownThing']);
+    for (const name of ['fastdom', 'injected']) {
+      expect(Object.getOwnPropertyDescriptor(win, name), name).toEqual({ value: undefined, writable: true, enumerable: false, configurable: false });
+    }
+    expect(Object.getOwnPropertyDescriptor(win, 'ownThing')).toEqual(ownBefore);
+    expect(() => {
+      Object.defineProperty(win, 'fastdom', { value: 1, configurable: true });
+    }).toThrow(TypeError);
+    expect(Reflect.deleteProperty(win, 'fastdom')).toBe(false);
+  });
+
+  it("an element with that id cannot stand in for it, and Mermaid's own writes still land (`??=` and `x = x || ...`)", () => {
+    const win = freshWindow();
+    const w = win as unknown as Record<string, unknown>;
+    reserveGlobals(win, RESERVED_GLOBALS);
+    for (const id of [...RESERVED_GLOBALS, 'docserverControl']) {
+      const a = win.document.createElement('a');
+      a.id = id;
+      win.document.body.append(a);
+    }
+    // The control: an unreserved name is clobbered by its element; the reserved ones read undefined, not an element.
+    expect(w['docserverControl']).toBe(win.document.getElementById('docserverControl'));
+    expect(w['fastdom']).toBeUndefined();
+    expect(w['injected']).toBeUndefined();
+    w['injected'] ??= { markdown: true };
+    w['fastdom'] = w['fastdom'] ?? { read: 1 };
+    expect(w['injected']).toEqual({ markdown: true });
+    expect(w['fastdom']).toEqual({ read: 1 });
+  });
+
+  it('without the reservation an element does stand in for the name (the control of the case above)', () => {
+    const win = freshWindow();
+    const w = win as unknown as Record<string, unknown>;
+    const a = win.document.createElement('a');
+    a.id = 'fastdom';
+    win.document.body.append(a);
+    expect(w['fastdom']).toBe(a);
+  });
+
+  it('the bootstrap reserves RESERVED_GLOBALS in Phase S: once, right after the pin, before the adapters, the listeners and any content', () => {
+    const file = path.join(ROOT, 'src/frame-runtime/bootstrap.ts');
+    const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true);
+    const at: Record<string, number[]> = { pin: [], reserve: [], adapters: [], register: [], start: [] };
+    const visit = (n: ts.Node): void => {
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
+        if (n.expression.text === 'pinFreeGlobals') at['pin']?.push(n.getStart(sf));
+        if (n.expression.text === 'reserveGlobals') {
+          expect(n.arguments.map((a) => a.getText(sf))).toEqual(['win', 'RESERVED_GLOBALS']);
+          at['reserve']?.push(n.getStart(sf));
+        }
+        if (n.expression.text === 'createAdapters') at['adapters']?.push(n.getStart(sf));
+      }
+      // The document's own listener (`add.call(doc, ...)`); the late insertion's, on the inserted element, is another site.
+      if (ts.isCallExpression(n) && n.arguments[0]?.getText(sf) === 'doc' && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'docserver:register') && /\badd\.call\b/.test(n.expression.getText(sf))) at['register']?.push(n.getStart(sf));
+      if (ts.isCallExpression(n) && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'DOMContentLoaded')) at['start']?.push(n.getStart(sf));
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    expect(at['pin']).toHaveLength(1);
+    expect(at['reserve']).toHaveLength(1);
+    expect(at['pin']?.[0]).toBeLessThan(at['reserve']?.[0] ?? -1);
+    for (const k of ['adapters', 'register', 'start']) expect(at['reserve']?.[0], k).toBeLessThan(at[k]?.[0] ?? -1);
   });
 });
 
@@ -420,6 +497,59 @@ describe('parseParentMessage: what the frame accepts on the port (Reference §6.
     expect(parseParentMessage({ t: 'changes.result', sha: SHA40, ranges: new Array(2 ** 32 - 1) })).toBeNull();
     expect(parseParentMessage({ t: 'changes.result', sha: SHA40, ranges: [], removedAfter: new Array(2 ** 32 - 1) })).toBeNull();
     expect(performance.now() - t0).toBeLessThan(1000);
+  });
+
+  it("mermaid: exactly one of text (a string within the cap) or unavailable: true (B3.4)", () => {
+    expect(parseParentMessage({ t: 'mermaid', text: '(function(){})();' })).toEqual({ t: 'mermaid', text: '(function(){})();' });
+    expect(parseParentMessage({ t: 'mermaid', unavailable: true })).toEqual({ t: 'mermaid', unavailable: true });
+    expect(parseParentMessage({ t: 'mermaid', text: '' })).toEqual({ t: 'mermaid', text: '' });
+    for (const bad of [
+      { t: 'mermaid' },
+      { t: 'mermaid', text: 1 },
+      { t: 'mermaid', text: null },
+      { t: 'mermaid', text: ['x'] },
+      { t: 'mermaid', unavailable: false },
+      { t: 'mermaid', unavailable: 'true' },
+      { t: 'mermaid', unavailable: 1 },
+      { t: 'mermaid', text: 'x', unavailable: true },
+      { t: 'mermaid', text: 'x', src: 'y' },
+      { t: 'mermaid', unavailable: true, src: 'y' },
+    ]) {
+      expect(parseParentMessage(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it('mermaid: the text is capped at mermaidMaxChars UTF-16 code units, counted by length', () => {
+    expect(BRIDGE_LIMITS.mermaidMaxChars).toBe(8_388_608);
+    expect(parseParentMessage({ t: 'mermaid', text: 'a'.repeat(BRIDGE_LIMITS.mermaidMaxChars) })).not.toBeNull();
+    expect(parseParentMessage({ t: 'mermaid', text: 'a'.repeat(BRIDGE_LIMITS.mermaidMaxChars + 1) })).toBeNull();
+    // Code units, not code points or bytes: 4,194,305 astral characters are 8,388,610 code units.
+    expect(parseParentMessage({ t: 'mermaid', text: '\u{1F600}'.repeat(BRIDGE_LIMITS.mermaidMaxChars / 2 + 1) })).toBeNull();
+    expect(parseParentMessage({ t: 'mermaid', text: '\u{1F600}'.repeat(BRIDGE_LIMITS.mermaidMaxChars / 2) })).not.toBeNull();
+  });
+
+  it("mermaid: every parent-to-frame fixture of the op is judged as its verdict says, by the frame's own parser", () => {
+    interface Case {
+      label: string;
+      direction: string;
+      channel?: string;
+      ports?: number;
+      message: Record<string, unknown> | null;
+      fill?: Record<string, { prefix?: string; unit: string; times: number; suffix?: string }>;
+      verdict: 'accept' | 'refuse';
+    }
+    const cases = (JSON.parse(readText('conformance/bridge-cases.json')) as { messages: Case[] }).messages.filter(
+      (c) => c.direction === 'parent-to-frame' && c.message?.['t'] === 'mermaid' && c.channel === 'port' && (c.ports ?? 0) === 0,
+    );
+    expect(cases.filter((c) => c.verdict === 'accept').length).toBeGreaterThanOrEqual(3);
+    expect(cases.filter((c) => c.verdict === 'refuse').length).toBeGreaterThanOrEqual(8);
+    for (const c of cases) {
+      const m: Record<string, unknown> = { ...(c.message ?? {}) };
+      for (const [k, f] of Object.entries(c.fill ?? {})) m[k] = `${f.prefix ?? ''}${f.unit.repeat(f.times)}${f.suffix ?? ''}`;
+      const got = parseParentMessage(m);
+      if (c.verdict === 'accept') expect(got, c.label).toEqual(m);
+      else expect(got, c.label).toBeNull();
+    }
   });
 
   it('ignores hello, a frame op, an unknown op, a non-plain object, a prototype key and a getter', () => {

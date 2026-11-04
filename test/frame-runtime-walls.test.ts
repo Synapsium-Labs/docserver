@@ -14,6 +14,8 @@
 //    `typeof globalThis`).
 // 5. `DOMParser` only in content.ts; `postMessage`, and a `'message'` argument (addEventListener('message', ...)), only
 //    at the bootstrap's sites.
+//    A `script` element is created in exactly one place, bootstrap.ts: the late Mermaid insertion (BD3, BD4; C107), the
+//    only script the frame ever creates. Any other creation of one, in any file, is over the count.
 // 6. The built assets/frame/guard.js and bootstrap.js pass the same scan, with the sites of the sources they bundle;
 //    assets/frame/enhance.js gets a binder scan for global (not member) references to the forbidden names only (L2's own
 //    walls cover its source); and none of the three carries a test marker (`__TEST`, `process.env`, `import.meta.vitest`,
@@ -55,10 +57,11 @@ const ID_SELECTOR = /#|\[\s*id\s*[~|^$*]?=/i;
 /**
  * The sites where a guarded name is allowed, by file, with exact counts. A site key is one of:
  * `Function.prototype.toString`, `open()` (the outbox's method, defined), `.open` (a member use), `DOMParser`,
- * `postMessage`, `'message'` (a call argument), `.onmessage`.
+ * `postMessage`, `'message'` (a call argument), `.onmessage`, `createElement(script)` (a call of createElement or
+ * createElementNS, called or applied, with the string 'script' among its arguments).
  */
 const SOURCE_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
-  'bootstrap.ts': { 'Function.prototype.toString': 1, '.open': 1, postMessage: 1, "'message'": 2, '.onmessage': 1 },
+  'bootstrap.ts': { 'Function.prototype.toString': 1, '.open': 1, postMessage: 1, "'message'": 2, '.onmessage': 1, 'createElement(script)': 1 },
   'content.ts': { DOMParser: 1 },
   'outbox.ts': { 'open()': 1 },
 };
@@ -66,7 +69,7 @@ const SOURCE_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> =
 /** The same sites in the built scripts: the bootstrap bundles content.ts and outbox.ts. */
 const BUILT_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
   'guard.js': {},
-  'bootstrap.js': { 'Function.prototype.toString': 1, '.open': 1, postMessage: 1, "'message'": 2, '.onmessage': 1, DOMParser: 1, 'open()': 1 },
+  'bootstrap.js': { 'Function.prototype.toString': 1, '.open': 1, postMessage: 1, "'message'": 2, '.onmessage': 1, DOMParser: 1, 'open()': 1, 'createElement(script)': 1 },
 };
 
 const PROGRAM_OPTIONS: ts.CompilerOptions = {
@@ -212,6 +215,7 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
         else if (ID_SELECTOR.test(first.text)) at(first, `${callee}('${first.text}')`);
       }
       for (const a of node.arguments) if (ts.isStringLiteralLike(a) && a.text === 'message') site("'message'");
+      if (/\bcreateElement(?:NS)?(?:\.(?:call|apply))?$/.test(node.expression.getText(sf)) && node.arguments.some((a) => ts.isStringLiteralLike(a) && a.text.toLowerCase() === 'script')) site('createElement(script)');
     }
     ts.forEachChild(node, visit);
   };
@@ -356,10 +360,15 @@ describe('L3.M19: the frame runtime sources', () => {
     ['bootstrap.ts', 'export const p3 = MessagePort.prototype.postMessage;', 'postMessage x2, allowed x1'],
     ['bootstrap.ts', "addEventListener('message', () => undefined);", "'message' x3, allowed x2"],
     ['bootstrap.ts', 'export const p4 = (p: MessagePort): void => { p.onmessage = null; };', '.onmessage x2, allowed x1'],
+    ['bootstrap.ts', "export const p11 = (d: Document): Element => d.createElement('script');", 'createElement(script) x2, allowed x1'],
+    ['bootstrap.ts', "export const p12 = (d: Document): Element => Document.prototype.createElement.call(d, 'script');", 'createElement(script) x2, allowed x1'],
+    ['bootstrap.ts', "export const p13 = (d: Document): Element => d.createElementNS('http://www.w3.org/1999/xhtml', 'SCRIPT');", 'createElement(script) x2, allowed x1'],
     ['content.ts', 'export const p5 = DOMParser;', 'DOMParser x2, allowed x1'],
     ['outbox.ts', 'export const p6 = { open(): void {} };', 'open() x2, allowed x1'],
     ['guard.ts', 'export const p7 = Function.prototype.toString;', 'Function.prototype.toString x1, allowed x0'],
     ['adapters.ts', 'export const p8 = DOMParser;', 'DOMParser x1, allowed x0'],
+    ['adapters.ts', "export const p14 = (d: Document): Element => d.createElement('script');", 'createElement(script) x1, allowed x0'],
+    ['styles.ts', "export const p15 = (d: Document): Element => d.createElement('script');", 'createElement(script) x1, allowed x0'],
     ['adapters.ts', 'export const p9 = (o: { postMessage(m: unknown): void }): void => o.postMessage(1);', 'postMessage x1, allowed x0'],
     ['adapters.ts', 'export const p10 = (o: { open(): void }): void => o.open();', '.open x1, allowed x0'],
   ] as const) {
@@ -407,6 +416,14 @@ describe('L3.M19: the built guard.js, bootstrap.js and enhance.js', () => {
   it('a planted extra site in the built bootstrap goes red', () => {
     const got = scanTexts(path.join(ROOT, 'built'), [{ name: 'bootstrap.js', text: `${built.bootstrap}\nvar planted = Function.prototype.toString, p2 = new DOMParser();\n` }], BUILT_SITES);
     expect(got.get('bootstrap.js')).toEqual(expect.arrayContaining(['Function.prototype.toString x2, allowed x1', 'DOMParser x2, allowed x1']));
+  });
+
+  it('a planted second script creation in the built bootstrap goes red, and so does the loss of the one', () => {
+    const more = scanTexts(path.join(ROOT, 'built'), [{ name: 'bootstrap.js', text: `${built.bootstrap}\nvar planted = document.createElement("script");\n` }], BUILT_SITES);
+    expect(more.get('bootstrap.js')).toEqual(['createElement(script) x2, allowed x1']);
+    // A negative control: a style element is not a script.
+    const style = scanTexts(path.join(ROOT, 'built'), [{ name: 'bootstrap.js', text: `${built.bootstrap}\nvar planted = document.createElement("style");\n` }], BUILT_SITES);
+    expect(style.get('bootstrap.js')).toEqual([]);
   });
 
   it('enhance.js references none of the forbidden or page names as a global', () => {

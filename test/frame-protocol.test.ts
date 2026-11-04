@@ -76,6 +76,7 @@ describe('U9 BRIDGE_LIMITS: exactly Reference §8.4 (ruling R5)', () => {
       hashMaxCodeUnits: 256,
       hrefMaxChars: 4096,
       storeBudgetBytes: 1048576,
+      mermaidMaxChars: 8388608,
       changesTimeoutMs: 30000,
       frameWindowMs: 1000,
       frameMaxPerWindow: 16,
@@ -156,6 +157,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       hello: ['t', 'v'],
       prefs: ['t', 'theme', 'width', 'font'],
       'changes.result': ['t', 'sha', 'ranges', 'removedAfter', 'unavailable'],
+      mermaid: ['t', 'text', 'unavailable'],
       ready: ['t', 'v', 'nonce'],
       error: ['t', 'why'],
       'store.set': ['t', 'key', 'value'],
@@ -171,7 +173,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
 
   it('FRAME_OPS and PARENT_OPS split it by direction, with no op in both', () => {
     expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version']);
-    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result']);
+    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid']);
     expect([...FRAME_OPS, ...PARENT_OPS].sort()).toEqual(Object.keys(OP_KEYS).sort());
   });
 
@@ -181,6 +183,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
     expectTypeOf<(typeof OP_KEYS)['version'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'version' }>>>();
     expectTypeOf<(typeof OP_KEYS)['changes.result'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'changes.result' }>>>();
     expectTypeOf<(typeof OP_KEYS)['prefs'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'prefs' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['mermaid'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'mermaid' }>>>();
     expectTypeOf<(typeof OP_KEYS)['ready'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'ready' }>>>();
   });
 
@@ -351,7 +354,7 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context']): Ve
 
 /** The frame's reading of a parent-to-frame message (Reference §6.3 on the window, §6.5 on the port). */
 function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: BridgeCases['context']): Verdict {
-  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result']);
+  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid']);
   if ('fail' in c) return c.fail;
   const o = c.msg;
   const t = o['t'];
@@ -368,6 +371,16 @@ function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: 
       if (!allowed.includes(v as string)) return refuse('pref');
     }
     return ACCEPT;
+  }
+  if (t === 'mermaid') {
+    // mermaid: exactly one of `text` (a string of at most mermaidMaxChars UTF-16 code units) or `unavailable: true`.
+    const hasText = Object.hasOwn(o, 'text');
+    const hasNone = Object.hasOwn(o, 'unavailable');
+    if (hasText === hasNone) return refuse('keys');
+    if (hasNone) return o['unavailable'] === true ? ACCEPT : refuse('type');
+    const text = o['text'];
+    if (typeof text !== 'string') return refuse('type');
+    return text.length <= BRIDGE_LIMITS.mermaidMaxChars ? ACCEPT : refuse('oversize');
   }
   // changes.result: {sha, ranges, removedAfter?} or {sha, unavailable: true}, never both shapes.
   if (!Object.hasOwn(o, 'sha')) return refuse('keys');

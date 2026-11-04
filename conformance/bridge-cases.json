@@ -4,7 +4,7 @@
     "The bridge between the sealed reader frame and its parent, protocol 1, as fixtures for any parser of it: the frame reads parent-to-frame messages, the parent reads frame-to-parent messages and applies its limits.",
     "messages: one message each, with its direction, for a parent-to-frame message its channel (hello arrives on the window, every other parent op on the port), the number of transferred ports (0 when absent), and the verdict of the reader on the receiving side: accept, or refuse with a reason from the closed list in reasons.",
     "A frame-to-parent case is judged by a parent that already holds a valid ready, except a ready case, which is judged as the first message. A parent-to-frame changes.result case is judged while context.inFlightSha is the one changes request in flight.",
-    "fill: before judging, each named key of the message is set to prefix + unit repeated times + suffix (prefix and suffix default to empty). Caps on values are counted in UTF-8 bytes; caps on href and hash in UTF-16 code units.",
+    "fill: before judging, each named key of the message is set to prefix + unit repeated times + suffix (prefix and suffix default to empty). Caps on values are counted in UTF-8 bytes; caps on href, hash and the mermaid text in UTF-16 code units.",
     "Every refused case has exactly one fault, except a case with a proto key, which is also outside every op key set: proto-key is checked before the key set.",
     "sequences: frame-to-parent messages after a valid ready at time 0, each step at a time in whole milliseconds since ready, count times (1 when absent), with the verdict of the parent limits read as token buckets (sequenceRules). closes marks the refusal that closes the bridge."
   ],
@@ -154,7 +154,20 @@
     {"label": "changes.result unavailable with removedAfter", "direction": "parent-to-frame", "channel": "port", "message": {"t": "changes.result", "sha": "0123456789abcdef0123456789abcdef01234567", "unavailable": true, "removedAfter": []}, "verdict": "refuse", "reason": "keys"},
     {"label": "changes.result unavailable false", "direction": "parent-to-frame", "channel": "port", "message": {"t": "changes.result", "sha": "0123456789abcdef0123456789abcdef01234567", "unavailable": false}, "verdict": "refuse", "reason": "type"},
     {"label": "changes.result ranges not an array", "direction": "parent-to-frame", "channel": "port", "message": {"t": "changes.result", "sha": "0123456789abcdef0123456789abcdef01234567", "ranges": "1-3"}, "verdict": "refuse", "reason": "type"},
-    {"label": "changes.result removedAfter not an array", "direction": "parent-to-frame", "channel": "port", "message": {"t": "changes.result", "sha": "0123456789abcdef0123456789abcdef01234567", "ranges": [], "removedAfter": 4}, "verdict": "refuse", "reason": "type"}
+    {"label": "changes.result removedAfter not an array", "direction": "parent-to-frame", "channel": "port", "message": {"t": "changes.result", "sha": "0123456789abcdef0123456789abcdef01234567", "ranges": [], "removedAfter": 4}, "verdict": "refuse", "reason": "type"},
+    {"label": "mermaid text", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "text": "(function(){})();"}, "verdict": "accept", "note": "the one build of the diagram engine, sent once after ready"},
+    {"label": "mermaid text of exactly 8388608 code units", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid"}, "fill": {"text": {"unit": "a", "times": 8388608}}, "verdict": "accept", "note": "the cap is counted in UTF-16 code units"},
+    {"label": "mermaid unavailable", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "unavailable": true}, "verdict": "accept", "note": "the host has no build to send"},
+    {"label": "mermaid text of 8388609 code units", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid"}, "fill": {"text": {"unit": "a", "times": 8388609}}, "verdict": "refuse", "reason": "oversize"},
+    {"label": "mermaid text not a string", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "text": 1}, "verdict": "refuse", "reason": "type"},
+    {"label": "mermaid text null", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "text": null}, "verdict": "refuse", "reason": "type"},
+    {"label": "mermaid unavailable false", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "unavailable": false}, "verdict": "refuse", "reason": "type"},
+    {"label": "mermaid unavailable not a boolean", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "unavailable": "true"}, "verdict": "refuse", "reason": "type"},
+    {"label": "mermaid both text and unavailable", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "text": "(function(){})();", "unavailable": true}, "verdict": "refuse", "reason": "keys"},
+    {"label": "mermaid neither text nor unavailable", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid"}, "verdict": "refuse", "reason": "keys"},
+    {"label": "mermaid text with another key", "direction": "parent-to-frame", "channel": "port", "message": {"t": "mermaid", "text": "(function(){})();", "src": "x"}, "verdict": "refuse", "reason": "keys"},
+    {"label": "mermaid on the window", "direction": "parent-to-frame", "channel": "window", "message": {"t": "mermaid", "text": "(function(){})();"}, "verdict": "refuse", "reason": "unknown-op"},
+    {"label": "mermaid with a port", "direction": "parent-to-frame", "channel": "port", "ports": 1, "message": {"t": "mermaid", "text": "(function(){})();"}, "verdict": "refuse", "reason": "port"}
   ],
   "sequenceRules": [
     "Two token buckets, both full at ready: a general bucket of bucketCapacity (40) tokens refilled at bucketRefillPerSecond (20) a second, and a store.set bucket of storeSetBucketCapacity (10) refilled at storeSetRefillPerSecond (10) a second.",

@@ -115,11 +115,13 @@ export const ASSET_BUDGETS = Object.freeze({
 export const FREE_GLOBALS_ALLOWLIST = Object.freeze({
   injected:
     "Mermaid's markdown helpers write `globalThis.injected ??= {…}` while the file evaluates (C90 (5)); the scan sees " +
-    'that write. It lands before the bootstrap adds any content, so no element id can stand in for it first.',
+    'that write. The name is reserved in Phase S as an own, writable, non-configurable property (BD5), so no element id ' +
+    'can stand in for it, even when the file evaluates after content exists (C107), and the write still lands.',
   fastdom:
     "Mermaid's bundled fastdom writes `e.fastdom = e.fastdom || …` while the file evaluates, through its IIFE " +
     "parameter `e` (window or globalThis), which the binder cannot prove is the global, so the scan sees neither " +
-    'the write nor a read. Listed so that a read the scan does see is never pinned; it lands before any content.',
+    'the write nor a read. Listed so that a read the scan does see is never pinned. The name is reserved in Phase S as an ' +
+    'own, writable, non-configurable property (BD5), so no element id can stand in for it and the write still lands.',
 });
 
 /** The licence sentence of the frame stylesheet's notice. */

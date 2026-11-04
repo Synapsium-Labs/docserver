@@ -4,9 +4,10 @@
 // comes before ready, so a host page whose own policy blocks inline style (one that allows only the hash of the frame
 // stylesheet, say) raises its violation while the bootstrap's listener still ends the boot. In 'on-request' mode the
 // first drawing comes on a tap, after ready, when protocol 1 has no error left to send, so the frame would stay mounted
-// with drawings its policy breaks. Before ready, in that mode, the bootstrap therefore asks for both itself: it connects
-// one `<style>` element whose text is a comment and which carries a `style` attribute, and takes it out only once the
-// state is decided, so a violation event still finds the document on its path. Under a policy that allows inline
+// with drawings its policy breaks. So it does in 'after-ready' mode, whose first drawing comes when the build arrives
+// over the port, after ready (C94(1), C107). Before ready, in every mode but 'auto', the bootstrap therefore asks for
+// both itself: it connects one `<style>` element whose text is a comment and which carries a `style` attribute, and
+// takes it out only once the state is decided, so a violation event still finds the document on its path. Under a policy that allows inline
 // style nothing is raised, and the element styles nothing (a comment; a style element is not rendered).
 //
 // The probe is shipped behaviour, like the face probe (fonts.ts), not a test hook. The built-ins it uses are read in

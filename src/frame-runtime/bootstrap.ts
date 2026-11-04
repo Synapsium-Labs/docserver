@@ -13,7 +13,10 @@
 //      (a host policy that blocks the guard's hash alone is caught here).
 //   4. Pin the free globals (pin.ts): every name of the build's DOCSERVER_FREE_GLOBALS list becomes an own,
 //      non-writable property of the global, so no element id can shadow what the frame's scripts read. A global that
-//      refuses a pin is FAILED('boot').
+//      refuses a pin is FAILED('boot'). Then reserve the two names Mermaid writes while it evaluates, `fastdom` and
+//      `injected`, as own, writable, non-configurable properties holding undefined, in every mode (reserveGlobals; BD5):
+//      in 'after-ready' mode the file evaluates after content exists, so an element id could otherwise stand in for
+//      them first.
 //   5. Listeners: `docserver:register` in the capture phase on the document (accepted only from the script element at
 //      the expected position), `docserver:link` on the guard's element, DOMContentLoaded once, one window `message`
 //      listener for hello, and a capture-phase `securitypolicyviolation` listener on the document: any violation before
@@ -24,16 +27,17 @@
 //
 // At DOMContentLoaded: the register listener goes; with no enhance registered (the browser refused its script: hash
 // drift) the frame is FAILED('assets'), and a seed that asks for Mermaid without a registered Mermaid API holding
-// initialize and render (the functions the reader calls, ledger C95(1)) is FAILED('mermaid'). Otherwise the seed's
+// initialize and render (the functions the reader calls, ledger C95(1)) is FAILED('mermaid'), except in 'after-ready'
+// mode, whose seed carries no Mermaid script at all: nothing registers at boot and nothing is required (C107). Otherwise the seed's
 // html is materialised (content.ts: an inert parse, the closed vocabulary check, the image rewrite) into an `article`
 // root appended to the body, and enhance() runs on it with the frame's adapters (adapters.ts: the enhance callbacks
 // over the outbox, each only when the seed's bridge allows its op). A refusal of the content, enhance's rejection, or
 // a throw, is FAILED('render'). Enhance's `mermaid` option carries the seed's caps, secure keys and `draw`
 // (adapters.ts, enhanceMermaid). In 'auto' Mermaid mode, ready then waits until the root's `data-docreader-diagrams`
 // leaves `drawing` (a failed or partial drawing is not an error);
-// in 'on-request' mode nothing draws before ready, so it does not wait (waitsForDrawing; FD13); instead it asks for
-// inline style itself (styles.ts, probesInlineStyle), as a drawing will on a tap, so an inherited policy that blocks it
-// raises its violation before ready (fix round, review S1; Reference §11.5, ruling R7). Then the face probe (fonts.ts):
+// in 'on-request' and 'after-ready' modes nothing draws before ready, so it does not wait (waitsForDrawing; FD13);
+// instead it asks for inline style itself (styles.ts, probesInlineStyle), as a drawing will on a tap or when the build
+// arrives, so an inherited policy that blocks it raises its violation before ready (fix round, review S1; Reference §11.5, ruling R7). Then the face probe (fonts.ts):
 // each face of the frame's font set is loaded once, bounded by 1500 ms, so a data: font an inherited policy blocks
 // raises its violation before ready. One more task, then the style probe's element comes out, and SETTLED.
 //
@@ -48,15 +52,25 @@
 //
 // On the port (inbound.ts; anything malformed is ignored): `prefs` goes to setEnhancementPrefs, and `changes.result`
 // to the outbox's changes slot, which hands it to L2's `changes` callback (L2's readChangeSet checks it again).
+//
+// `mermaid` (C107, BD3, BD4): only in SETTLED state, only for an 'after-ready' seed, and only the first time; every
+// other case is ignored silently. Enhance was handed a `mermaid` option whose load() is pending (the deferred promise
+// below). `unavailable` resolves it with null. `text` becomes ONE inline script, created with the captured intrinsics
+// (the only script element the frame ever creates; the walls count it), with a `docserver:register` listener on that
+// element alone, appended to the head: a classic inline script runs synchronously inside appendChild with
+// currentScript set to it, so mermaid.frame.js dispatches its register event on it and needs no change. The listener
+// goes again at once; load() resolves with the API when it registered with initialize and render, else null (the
+// figures then show L2's load note). The frame's hash-only policy already lists the file's hash; a text with any other
+// hash is blocked by it, the violation is ignored after ready (onViolation), and the figures show the load note.
 import { cspFloor } from '../frame/csp-rules.js';
-import { BRIDGE_LIMITS, type ErrorWhy } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, type ErrorWhy, type ParentToFrame } from '../frame/protocol.js';
 import { validateSeed, type Seed } from '../frame/seed.js';
-import { createAdapters, enhanceMermaid, FRAME_DOC_KEY, FRAME_NAMESPACE, probesInlineStyle, waitsForDrawing } from './adapters.js';
+import { arrivesLate, createAdapters, FRAME_DOC_KEY, FRAME_NAMESPACE, mermaidOption, probesInlineStyle, waitsForDrawing } from './adapters.js';
 import { contentIntrinsics, materialise } from './content.js';
 import { FACES, FONT_WAIT_MS, probeFaces } from './fonts.js';
 import { parseParentMessage } from './inbound.js';
 import { createOutbox } from './outbox.js';
-import { pinFreeGlobals } from './pin.js';
+import { pinFreeGlobals, RESERVED_GLOBALS, reserveGlobals } from './pin.js';
 import { probeInlineStyle, styleIntrinsics } from './styles.js';
 
 /** The names the frame's bundled scripts read freely from the global: the build's scan (Task 6), a JSON array literal. */
@@ -151,6 +165,12 @@ interface EnhanceApi {
   let api: EnhanceApi | null = null;
   let mermaidApi: Record<string, unknown> | null = null;
   let link: (href: string) => void = () => undefined;
+  // The 'after-ready' build: a promise enhance's load() answers, settled by the one `mermaid` op (offerMermaid).
+  let settleLate: (api: Record<string, unknown> | null) => void = () => undefined;
+  const lateBuild = new Promise<Record<string, unknown> | null>((resolve) => {
+    settleLate = resolve;
+  });
+  let offerMermaid: (m: Extract<ParentToFrame, { t: 'mermaid' }>) => void = () => undefined;
 
   const post = (m: unknown): void => {
     if (port !== null) postMessage.call(port, m);
@@ -195,6 +215,8 @@ interface EnhanceApi {
     if (m === null) return;
     if (m.t === 'changes.result') {
       outbox.answer(m);
+    } else if (m.t === 'mermaid') {
+      offerMermaid(m);
     } else if (m.t === 'prefs' && root !== null && api !== null) {
       const { t: _t, ...prefs } = m;
       try {
@@ -265,6 +287,7 @@ interface EnhanceApi {
       return;
     }
     pinFreeGlobals(win, DOCSERVER_FREE_GLOBALS);
+    reserveGlobals(win, RESERVED_GLOBALS);
   } catch {
     fail('boot');
     return;
@@ -309,6 +332,40 @@ interface EnhanceApi {
     });
   add.call(doc, 'docserver:register', onRegister, true);
 
+  /** The one `mermaid` op (see the header): once, in an 'after-ready' frame; onPortMessage has judged the state and the shape. */
+  let offered = false;
+  offerMermaid = (m) => {
+    if (!arrivesLate(seed.mermaid) || offered) return;
+    offered = true;
+    if ('unavailable' in m) {
+      settleLate(null);
+      return;
+    }
+    let registered: Record<string, unknown> | null = null;
+    try {
+      const head = parentElement.call(guardEl);
+      const el = styles.createElement.call(doc, 'script');
+      // On that element only: the event is dispatched on the script element itself, and nowhere else is listened to.
+      const onBuild = (e: Event): void => {
+        const d = detailOf.call(e);
+        if (!isPlain(d) || d['name'] !== 'mermaid' || registered !== null) return;
+        const a = d['api'];
+        if (typeof a === 'object' && a !== null) registered = a as Record<string, unknown>;
+      };
+      add.call(el, 'docserver:register', onBuild, false);
+      try {
+        styles.setText?.call(el, m.text);
+        if (head !== null) styles.appendChild.call(head, el);
+      } finally {
+        remove.call(el, 'docserver:register', onBuild, false);
+      }
+    } catch {
+      registered = null;
+    }
+    const built = registered as Record<string, unknown> | null;
+    settleLate(built !== null && typeof built['initialize'] === 'function' && typeof built['render'] === 'function' ? built : null);
+  };
+
   // 5 (last). Any violation before ready ends the boot, except a blocked inline script (see the header).
   const onViolation = (e: Event): void => {
     if (done) return;
@@ -328,7 +385,8 @@ interface EnhanceApi {
       return;
     }
     const mermaidModule = mermaidApi;
-    if (seed.mermaid !== null) {
+    // 'after-ready' carries no Mermaid script: nothing registers at boot, so nothing is required of it (C107).
+    if (seed.mermaid !== null && !arrivesLate(seed.mermaid)) {
       if (mermaidModule === null) {
         fail('mermaid');
         return;
@@ -355,17 +413,17 @@ interface EnhanceApi {
         ...(adapters.copy === undefined ? {} : { copy: adapters.copy }),
         ...(adapters.changes === undefined ? {} : { changes: adapters.changes }),
         ...(adapters.openVersion === undefined ? {} : { openVersion: adapters.openVersion }),
-        // The seed's caps, secure keys and `draw`, passed through (Task 16).
-        ...(seed.mermaid === null || mermaidModule === null ? {} : { mermaid: enhanceMermaid(seed.mermaid, mermaidModule) }),
+        // The seed's caps, secure keys and `draw`, passed through (Task 16): in 'after-ready' always, with the deferred load.
+        ...mermaidOption(seed.mermaid, mermaidModule, () => lateBuild),
       });
-      // 'auto': ready waits for the first full pass. 'on-request': nothing draws before ready, so nothing to wait for.
+      // 'auto': ready waits for the first full pass. 'on-request' and 'after-ready': nothing draws before ready, so nothing to wait for.
       if (waitsForDrawing(seed.mermaid)) await diagramsSettled(root);
     } catch {
       fail('render');
       return;
     }
     if (state !== 'boot') return;
-    // On request, a drawing first asks for inline style on a tap, after ready: ask for it now (styles.ts).
+    // On request or after ready, a drawing first asks for inline style after ready: ask for it now (styles.ts).
     const unprobe = probesInlineStyle(seed.mermaid) ? probeInlineStyle(doc, styles) : null;
     const set = fontsOf?.call(doc) as FontFaceSet | null | undefined;
     await probeFaces(set === null || set === undefined || loadFaces === undefined ? null : { load: (f: string) => loadFaces.call(set, f) }, FACES, FONT_WAIT_MS);

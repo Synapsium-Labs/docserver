@@ -47,6 +47,8 @@ export const BRIDGE_LIMITS = Object.freeze({
   hashMaxCodeUnits: 256,
   hrefMaxChars: 4096,
   storeBudgetBytes: 1048576,
+  /** The most UTF-16 code units a `mermaid` message's `text` may carry (twice the 4 MiB budget of the build itself, in code units). */
+  mermaidMaxChars: 8388608,
   /** The parent's own deadline for answering a `changes`. */
   changesTimeoutMs: 30000,
   // The frame's pacing: a sliding window, never refused under a bucket or a strict-window reading of the above.
@@ -106,7 +108,10 @@ export type ParentToFrame =
   | { t: 'hello'; v: number }
   | ({ t: 'prefs' } & FramePrefValues)
   | { t: 'changes.result'; sha: string; ranges: readonly (readonly [number, number])[]; removedAfter?: readonly number[] }
-  | { t: 'changes.result'; sha: string; unavailable: true };
+  | { t: 'changes.result'; sha: string; unavailable: true }
+  /** The diagram engine's build (an 'after-ready' frame only, once, after ready), or the host's "no build". */
+  | { t: 'mermaid'; text: string }
+  | { t: 'mermaid'; unavailable: true };
 
 /** What the frame sends, on the port only. Flat; every value a string except v. */
 export type FrameToParent =
@@ -131,6 +136,7 @@ export const OP_KEYS = Object.freeze({
   hello: Object.freeze(['t', 'v'] as const),
   prefs: Object.freeze(['t', 'theme', 'width', 'font'] as const),
   'changes.result': Object.freeze(['t', 'sha', 'ranges', 'removedAfter', 'unavailable'] as const),
+  mermaid: Object.freeze(['t', 'text', 'unavailable'] as const),
   ready: Object.freeze(['t', 'v', 'nonce'] as const),
   error: Object.freeze(['t', 'why'] as const),
   'store.set': Object.freeze(['t', 'key', 'value'] as const),
@@ -145,4 +151,4 @@ export const OP_KEYS = Object.freeze({
 export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version'] as const satisfies readonly FrameToParent['t'][]);
 
 /** The ops the parent sends (the frame reads only these: hello on the window, the others on the port). */
-export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result'] as const satisfies readonly ParentToFrame['t'][]);
+export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid'] as const satisfies readonly ParentToFrame['t'][]);

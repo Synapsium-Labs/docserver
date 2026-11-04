@@ -8,7 +8,7 @@
 //   <script>{bootstrap.js}</script>
 //   <style>{frame/reader.css}</style>
 //   <script>{enhance.js}</script>
-//   <script>{mermaid.frame.js}</script>        only when FrameOptions.mermaid is non-null
+//   <script>{mermaid.frame.js}</script>        only when FrameOptions.mermaid is non-null and its draw is not 'after-ready'
 //
 // No doctype (a srcdoc document is never in quirks mode), no html, head or body tag: every element lands in the
 // implied head, and the implied body stays empty until the bootstrap appends the content root at DOMContentLoaded. The
@@ -24,7 +24,9 @@
 // rules: Mermaid's maxTextSize and maxEdges at most MERMAID_LIMIT_CEILINGS (a host may only lower them), the html within
 // SEED_HTML_MAX_CHARS as the seed carries it, the whole string within maxSrcdocChars (at most MAX_SRCDOC_CHARS_DEFAULT),
 // and an initialHash outside FRAGMENT_ID_GRAMMAR seeded as null, never refused (ruling R1). Every supplied asset is
-// verified, Mermaid's too when Mermaid is off (Reference §4: "any supplied asset"). The skeleton is written in one place
+// verified, Mermaid's too when Mermaid is off or its draw is 'after-ready' (Reference §4: "any supplied asset"); in
+// 'after-ready' no script of Mermaid's is emitted and assets.mermaid is not required, while the policy must still list
+// its hash (the frame inserts the build over the port after ready, ledger C107). The skeleton is written in one place
 // (srcdoc), and MAX_SRCDOC_CHARS_DEFAULT counts it at its longest (ruling C92).
 import type { FrontEntry, RenderOutcome } from '../render/types.js';
 import { cssHazards, scriptHazards } from './bytes.js';
@@ -108,7 +110,7 @@ export interface FrameAssets {
   readonly bootstrap: string;
   readonly enhance: string;
   readonly css: string;
-  /** assets/mermaid/mermaid.frame.js; required when FrameOptions.mermaid is non-null. */
+  /** assets/mermaid/mermaid.frame.js; required when FrameOptions.mermaid is non-null, unless its draw is 'after-ready'. */
   readonly mermaid?: string;
 }
 
@@ -427,10 +429,13 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   // Any supplied asset is verified (Reference §4), Mermaid's whether or not this mount inlines it.
   const mermaidAsset: unknown = supplied.mermaid;
   const mermaidText = mermaidAsset === undefined ? null : verify('mermaid', mermaidAsset);
-  if (mermaidOptions !== null && mermaidText === null) throw new FrameError('missing-asset', 'frameDocument: mermaid is on but assets.mermaid is absent');
-  const mermaid = mermaidOptions === null ? null : mermaidText;
+  // 'after-ready': the build is never inlined and never required here (the host sends it over the port after ready, and
+  // the frame inserts it), but the policy must still list its hash, or the late script is blocked (C107).
+  const late = mermaidOptions !== null && mermaidOptions.draw === 'after-ready';
+  if (mermaidOptions !== null && !late && mermaidText === null) throw new FrameError('missing-asset', 'frameDocument: mermaid is on but assets.mermaid is absent');
+  const mermaid = mermaidOptions === null || late ? null : mermaidText;
   const required: string[] = SCRIPTS.map((k) => FRAME_MANIFEST[k].csp);
-  if (mermaid !== null) required.push(FRAME_MANIFEST.mermaid.csp);
+  if (mermaidOptions !== null) required.push(FRAME_MANIFEST.mermaid.csp);
   // The policy is read once: the string checked is the string emitted.
   const policy: unknown = o.csp;
   const csp = checkFrameCsp(policy as string, required);

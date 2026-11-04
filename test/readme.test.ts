@@ -402,12 +402,22 @@ describe('README: the bridge', () => {
       'parent-to-frame changes.result ranges',
       'parent-to-frame changes.result removedAfter',
       'parent-to-frame changes.result unavailable',
+      'parent-to-frame mermaid unavailable',
     ]);
     expect(s).not.toContain('Every message is a flat object');
     expect(s).toContain('Every message the frame sends is a flat object whose values are strings, except `v`');
     expect(s).toContain('`ranges`, a list of `[from, to]` pairs of integers');
     expect(s).toContain('`removedAfter`, a list of integers');
     expect(s).toContain('`unavailable: true`');
+  });
+
+  it("states the mermaid op: exactly one of text (within its cap) or unavailable: true, only for an 'after-ready' frame, once, after ready", async () => {
+    const { BRIDGE_LIMITS } = await import('../src/frame/index.js');
+    const s = section('The bridge');
+    expect(s).toContain('`mermaid` carries exactly one of `text`');
+    expect(s).toContain(`at most ${String(BRIDGE_LIMITS.mermaidMaxChars)} UTF-16 code units`);
+    const row = /\n\| `mermaid` \| parent to frame \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const word of ["'after-ready'", 'once', 'after ready', 'ignored']) expect(row, word).toContain(word);
   });
 });
 

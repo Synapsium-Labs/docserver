@@ -1084,6 +1084,44 @@ describe('L3.M8 Mermaid in the skeleton (the prototype\'s P7)', () => {
     expect(refusal(() => frame(plain(), { mermaid: {} }))).toBe('missing-asset');
     expect(refusal(() => frame(plain(), { mermaid: {}, assets: { ...assets, mermaid: `${mermaidText.slice(0, 10)}~${mermaidText.slice(11)}` } }))).toBe('asset-mismatch');
   });
+  it("'after-ready' (B3.1): no Mermaid script, no assets.mermaid needed, the seed says so", () => {
+    const out = frame(plain(), { mermaid: { draw: 'after-ready' } });
+    const kids = tree(out).head.childNodes.filter(isElement);
+    expect(kids.map((e) => e.tagName)).toEqual(['meta', 'script', 'script', 'script', 'style', 'script']);
+    expect(out.endsWith(`<script>${assets.enhance}</script>`)).toBe(true);
+    expect(seedOf(out)['mermaid']).toEqual({ secure: [], draw: 'after-ready' });
+    // The policy still lists Mermaid's hash: the late script is allowed by it, and by nothing wider.
+    expect(frameCsp()).toContain(FRAME_MANIFEST.mermaid.csp);
+    // A supplied build is verified all the same, and never inlined: the srcdoc is the one without it.
+    const supplied = frame(plain(), { assets: withMermaid(), mermaid: { draw: 'after-ready' } });
+    expect(supplied).toBe(out);
+    expect(supplied).not.toContain(mermaidText);
+    expect(refusal(() => frame(plain(), { assets: { ...assets, mermaid: `${mermaidText.slice(0, 10)}~${mermaidText.slice(11)}` }, mermaid: { draw: 'after-ready' } }))).toBe('asset-mismatch');
+  });
+  it("'after-ready' (B3.1): the inline modes still inline the build and still need it", () => {
+    for (const draw of ['auto', 'on-request'] as const) {
+      const out = frame(plain(), { assets: withMermaid(), mermaid: { draw } });
+      expect(out, draw).toContain(mermaidText);
+      expect(refusal(() => frame(plain(), { mermaid: { draw } })), draw).toBe('missing-asset');
+    }
+  });
+  it("'after-ready' (B3.2): a policy lacking Mermaid's hash is refused with missing-hash, as in the inline modes", () => {
+    const csp = frameCsp().replace(` ${FRAME_MANIFEST.mermaid.csp}`, '');
+    expect(csp).not.toContain(FRAME_MANIFEST.mermaid.csp);
+    const why = (draw: 'auto' | 'on-request' | 'after-ready'): string => {
+      try {
+        frameDocument(plain(), { csp, nonce: NONCE, assets: withMermaid(), mermaid: { draw } });
+      } catch (e) {
+        return e instanceof FrameError ? `${e.code}: ${e.message}` : 'not a FrameError';
+      }
+      return 'no refusal';
+    };
+    for (const draw of ['auto', 'on-request', 'after-ready'] as const) expect(why(draw), draw).toMatch(/^csp: .*missing-hash/);
+    // The hash is required with no build supplied at all, too: 'after-ready' needs no text, never a weaker policy.
+    expect(refusal(() => frame(plain(), { csp, mermaid: { draw: 'after-ready' } }))).toBe('csp');
+    // Mermaid off: the hash is not required (the existing M6 case).
+    expect(refusal(() => frame(plain(), { csp }))).toBe('no refusal');
+  });
   it('the Mermaid frame file passes the byte rules and carries no ELK and no free require', () => {
     expect(rules.scriptHazards(mermaidText)).toEqual([]);
     expect(mermaidText).not.toContain('org.eclipse.elk');

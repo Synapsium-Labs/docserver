@@ -11,8 +11,11 @@
 //   reports it as an assigned member of the global, so it needs that scan's reviewed allowlist.
 // - `fastdom`: written as `e.fastdom = e.fastdom || …` inside fastdom's own IIFE, whose parameter `e` is bound to
 //   `typeof window < "u" ? window : globalThis`. That is not an alias the scan's binder can prove, so the scan does
-//   not report this write. It is safe because it lands while the file evaluates, before the bootstrap adds any
-//   content, so no element id can clobber the name first.
+//   not report this write.
+// Both writes are safe because the bootstrap reserves the two names in Phase S, in every mode, as own, writable,
+// non-configurable properties holding undefined (src/frame-runtime/pin.ts, reserveGlobals; BD5): an element id cannot
+// stand in for either name, whenever the file evaluates, and the file's own write still lands. The order of
+// evaluation no longer makes them safe: in 'after-ready' mode the file evaluates after content exists.
 // Mermaid also reads two globals lazily, while a diagram is drawn, which an element id could clobber:
 // `globalThis.mermaidCaptureSizes` and `globalThis.__mermaidProfiler` (read as `n?.begin("layoutCore")`). The
 // free-global scan (Task 6) and the anchor battery (Task 8, B3p) must list both; this note does not stand in for them.

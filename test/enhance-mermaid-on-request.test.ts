@@ -18,7 +18,7 @@ import { destroyEnhancement, enhance, EnhanceError, type EnhanceOptions } from '
 import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { MERMAID_DRAW_VALUES, normalizeOptions } from '../src/enhance/options.js';
 import { MERMAID_DRAW, type MermaidDraw, type SeedMermaid } from '../src/frame/seed.js';
-import { enhanceMermaid, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
+import { arrivesLate, enhanceMermaid, mermaidOption, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
 import { probeInlineStyle, STYLE_PROBE_ATTR, STYLE_PROBE_TEXT, styleIntrinsics } from '../src/frame-runtime/styles.js';
 import { render } from '../src/render/index.js';
 
@@ -412,18 +412,64 @@ describe("L3.D4: draw absent is 'auto'; only 'auto', 'on-request' and 'after-rea
 describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/adapters.ts; the unit half of L3.D5)", () => {
   const api = { initialize: (): void => {}, run: (): Promise<void> => Promise.resolve() };
 
-  it("enhanceMermaid passes the seed's caps, secure keys and draw, with a load that answers the registered API", async () => {
+  it("enhanceMermaid passes the seed's caps, secure keys and draw, with the load it is given", async () => {
     const seed: SeedMermaid = { maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request' };
-    const m = enhanceMermaid(seed, api);
+    const load = (): Promise<unknown> => Promise.resolve(api);
+    const m = enhanceMermaid(seed, load);
     expect({ ...m, load: typeof m.load }).toEqual({ maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request', load: 'function' });
+    expect(m.load).toBe(load);
     expect(await m.load()).toBe(api);
-    const bare = enhanceMermaid({ secure: [], draw: 'auto' }, api);
+    const bare = enhanceMermaid({ secure: [], draw: 'auto' }, load);
     expect(Object.keys(bare).sort()).toEqual(['draw', 'load', 'secure']);
+  });
+
+  it("the inline modes' load answers the registered API, and 'after-ready' answers what arrives later (B3.7)", async () => {
+    for (const draw of ['auto', 'on-request'] as const) {
+      const opt = mermaidOption({ secure: [], draw }, api, () => Promise.reject(new Error('the late build is not asked for')));
+      expect(opt.mermaid?.draw, draw).toBe(draw);
+      expect(await opt.mermaid?.load(), draw).toBe(api);
+    }
+    // 'after-ready', no module registered at boot: the option is still built, and its load is pending until the build arrives.
+    let arrive: (v: unknown) => void = () => undefined;
+    const late = new Promise<unknown>((resolve) => {
+      arrive = resolve;
+    });
+    const opt = mermaidOption({ maxEdges: 9, secure: ['look'], draw: 'after-ready' }, null, () => late);
+    expect(opt.mermaid).toBeDefined();
+    expect({ ...opt.mermaid, load: typeof opt.mermaid?.load }).toEqual({ maxEdges: 9, secure: ['look'], draw: 'after-ready', load: 'function' });
+    let settled = false;
+    const answer = opt.mermaid?.load().then((v) => {
+      settled = true;
+      return v;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    arrive(api);
+    expect(await answer).toBe(api);
+    // The late answer may be null (no build): still the option, with a load that answers null.
+    const none = mermaidOption({ secure: [], draw: 'after-ready' }, null, () => Promise.resolve(null));
+    expect(await none.mermaid?.load()).toBeNull();
+  });
+
+  it('an inline mode with no registered module builds no option at all; Mermaid off builds none either', () => {
+    const late = (): Promise<unknown> => Promise.resolve(null);
+    expect(mermaidOption({ secure: [], draw: 'auto' }, null, late)).toEqual({});
+    expect(mermaidOption({ secure: [], draw: 'on-request' }, null, late)).toEqual({});
+    expect(mermaidOption(null, api, late)).toEqual({});
+    expect(mermaidOption(null, null, late)).toEqual({});
+  });
+
+  it("only 'after-ready' arrives late (B3.6's predicate; the browser half is the frame's boot)", () => {
+    expect(arrivesLate(null)).toBe(false);
+    expect(arrivesLate({ secure: [], draw: 'auto' })).toBe(false);
+    expect(arrivesLate({ secure: [], draw: 'on-request' })).toBe(false);
+    expect(arrivesLate({ secure: [], draw: 'after-ready' })).toBe(true);
   });
 
   it('what it builds is what L2 accepts: each seed draw reaches the normalized options unchanged', () => {
     for (const draw of MERMAID_DRAW) {
-      const n = normalizeOptions({ mermaid: enhanceMermaid({ maxTextSize: 100, secure: ['look'], draw }, api) });
+      const n = normalizeOptions({ mermaid: enhanceMermaid({ maxTextSize: 100, secure: ['look'], draw }, () => Promise.resolve(api)) });
       expect(n.mermaid).toEqual({ maxTextSize: 100, maxEdges: null, secure: ['look'], draw });
     }
   });
@@ -435,11 +481,19 @@ describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/ada
     expect(waitsForDrawing({ secure: [], draw: 'after-ready' })).toBe(false);
   });
 
-  it('the bootstrap builds its mermaid option with enhanceMermaid and gates its drawing wait on waitsForDrawing', () => {
+  it('the bootstrap builds its mermaid option with mermaidOption, handing it the deferred load, and gates its drawing wait on waitsForDrawing', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
-    expect(src).toMatch(/mermaid:\s*enhanceMermaid\(seed\.mermaid,\s*mermaidModule\)/);
+    expect(src).toMatch(/\.\.\.mermaidOption\(seed\.mermaid,\s*mermaidModule,\s*\(\)\s*=>\s*lateBuild\)/);
+    expect(src.match(/mermaidOption\(/g)).toHaveLength(1);
+    expect(src).not.toMatch(/mermaid:\s*enhanceMermaid\(/);
     expect(src).toMatch(/if\s*\(waitsForDrawing\(seed\.mermaid\)\)\s*await diagramsSettled\(root\)/);
     expect(src.match(/diagramsSettled\(root\)/g)).toHaveLength(1);
+  });
+
+  it("the bootstrap requires a registered API only for the inline modes (B3.6): both fail('mermaid') checks sit behind !arrivesLate", () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+    expect(src.match(/fail\('mermaid'\)/g)).toHaveLength(2);
+    expect(src).toMatch(/if\s*\(seed\.mermaid\s*!==\s*null\s*&&\s*!arrivesLate\(seed\.mermaid\)\)\s*\{\s*if\s*\(mermaidModule\s*===\s*null\)\s*\{\s*fail\('mermaid'\);\s*return;\s*\}\s*if\s*\(typeof mermaidModule\['initialize'\]\s*!==\s*'function'\s*\|\|\s*typeof mermaidModule\['render'\]\s*!==\s*'function'\)\s*\{\s*fail\('mermaid'\);\s*return;\s*\}\s*\}/);
   });
 });
 
@@ -448,6 +502,17 @@ describe('L3.D6: on request, the bootstrap asks for inline style before ready (f
     expect(probesInlineStyle(null)).toBe(false);
     expect(probesInlineStyle({ secure: [], draw: 'auto' })).toBe(false);
     expect(probesInlineStyle({ secure: [], draw: 'on-request' })).toBe(true);
+  });
+
+  it("probesInlineStyle (B3.5): true for 'on-request' and 'after-ready', false for 'auto' and Mermaid off; waitsForDrawing only for 'auto'", () => {
+    expect(probesInlineStyle({ secure: [], draw: 'on-request' })).toBe(true);
+    expect(probesInlineStyle({ secure: [], draw: 'after-ready' })).toBe(true);
+    expect(probesInlineStyle({ secure: [], draw: 'auto' })).toBe(false);
+    expect(probesInlineStyle(null)).toBe(false);
+    expect(waitsForDrawing({ secure: [], draw: 'auto' })).toBe(true);
+    expect(waitsForDrawing({ secure: [], draw: 'on-request' })).toBe(false);
+    expect(waitsForDrawing({ secure: [], draw: 'after-ready' })).toBe(false);
+    expect(waitsForDrawing(null)).toBe(false);
   });
 
   it('probeInlineStyle connects one <style> element with a comment for text and a style attribute (both checks a drawing makes); its remover takes it out once', () => {

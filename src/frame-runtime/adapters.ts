@@ -23,11 +23,13 @@
 //   docreader:doc:doc:<name>    doc:<name>, <name> a DOC_FIELDS member other than pos
 //   anything else               dropped, never sent
 //
-// Mermaid (docserver L3, Task 16): enhanceMermaid() is enhance's `mermaid` option from the seed's (its caps when given,
-// its secure keys and its `draw`, passed through unchanged) with a load() that answers the registered API; and
-// waitsForDrawing() is the ready rule: ready waits for the first full pass only in 'auto' mode (FD13, FD18); and
-// probesInlineStyle() says when the bootstrap asks for inline style before ready instead: in 'on-request' mode, whose
-// first drawing comes after ready (styles.ts; fix round, review S1; Reference §11.5, ruling R7).
+// Mermaid (docserver L3, Task 16; C107): enhanceMermaid() is enhance's `mermaid` option from the seed's (its caps when
+// given, its secure keys and its `draw`, passed through unchanged) with the load() it is given; mermaidOption() says
+// which load: the registered API in the inline modes, the build that arrives over the port in 'after-ready' (always
+// passed there, even with nothing registered at boot); and waitsForDrawing() is the ready rule: ready waits for the first
+// full pass only in 'auto' mode (FD13, FD18); and probesInlineStyle() says when the bootstrap asks for inline style
+// before ready instead: in every other mode, whose first drawing comes after ready (styles.ts; fix round, review S1;
+// Reference §11.5, ruling R7).
 import { isFragmentId } from '../frame/fragment.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey } from '../frame/protocol.js';
 import type { Seed, SeedMermaid } from '../frame/seed.js';
@@ -149,29 +151,54 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
   };
 }
 
-/** enhance's `mermaid` option for a frame whose seed asks for Mermaid: the seed's settings, `draw` included, and the API. */
+/**
+ * enhance's `mermaid` option for a frame whose seed asks for Mermaid: the seed's settings, `draw` included, and the
+ * `load` it is given (the inline modes answer the registered API; 'after-ready' answers what arrives over the port).
+ */
 export function enhanceMermaid(
   m: SeedMermaid,
-  api: object,
+  load: () => Promise<unknown>,
 ): { maxTextSize?: number; maxEdges?: number; secure: readonly string[]; draw: SeedMermaid['draw']; load: () => Promise<unknown> } {
   return {
     ...(m.maxTextSize === undefined ? {} : { maxTextSize: m.maxTextSize }),
     ...(m.maxEdges === undefined ? {} : { maxEdges: m.maxEdges }),
     secure: m.secure,
     draw: m.draw,
-    load: () => Promise.resolve(api),
+    load,
   };
 }
 
-/** Whether ready waits for Mermaid's first full pass: only with Mermaid on in 'auto' mode; never on request (FD13). */
+/** Whether Mermaid's build comes after ready, over the port, instead of inline: only in 'after-ready' mode (C107). */
+export function arrivesLate(m: SeedMermaid | null): boolean {
+  return m !== null && m.draw === 'after-ready';
+}
+
+/**
+ * What the bootstrap adds to enhance's options for Mermaid. Mermaid off: nothing. An inline mode: the option, its load
+ * answering the registered API, and nothing at all when none registered. 'after-ready': always the option, whose load
+ * is `late` (pending until the build arrives), however little registered at boot: an option left out would make L2
+ * draw nothing and wait for nothing (C107).
+ */
+export function mermaidOption(
+  m: SeedMermaid | null,
+  registered: object | null,
+  late: () => Promise<unknown>,
+): { mermaid?: ReturnType<typeof enhanceMermaid> } {
+  if (m === null) return {};
+  if (arrivesLate(m)) return { mermaid: enhanceMermaid(m, late) };
+  return registered === null ? {} : { mermaid: enhanceMermaid(m, () => Promise.resolve(registered)) };
+}
+
+/** Whether ready waits for Mermaid's first full pass: only with Mermaid on in 'auto' mode; never on request or after ready (FD13). */
 export function waitsForDrawing(m: SeedMermaid | null): boolean {
   return m !== null && m.draw === 'auto';
 }
 
 /**
- * Whether the bootstrap asks for inline style before ready (styles.ts): only with Mermaid on and drawn on request, where
- * Mermaid's own first request for it comes on a tap, after ready (fix round, review S1; ruling R7).
+ * Whether the bootstrap asks for inline style before ready (styles.ts): with Mermaid on in any mode but 'auto', where
+ * Mermaid's own first request for it comes after ready (on a tap, or when the build arrives), so no violation could end
+ * the boot then (fix round, review S1; ruling R7; C94(1), C107).
  */
 export function probesInlineStyle(m: SeedMermaid | null): boolean {
-  return m !== null && m.draw === 'on-request';
+  return m !== null && m.draw !== 'auto';
 }
