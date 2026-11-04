@@ -109,12 +109,15 @@ export interface MermaidOptions {
    * called once. 'on-request': load() is not called and nothing is drawn until a reader asks; each drawable figure
    * shows its source with a Render button, a tap draws that figure only (the first tap calls load() once), and draws
    * run one at a time. A figure longer than maxTextSize has no button and shows its source with the reader's note.
+   * 'after-ready' (ledger C107): the second phase reads `waiting`, with no gate, so every source stays readable, while
+   * load() (called once) answers; then, after the fonts wait, it sets the gate and `drawing` and draws every figure
+   * with no tap, near ones first, and settles as 'auto' does. enhance() does not wait for any of it.
    */
   readonly draw?: MermaidDraw;
 }
 
 /** When Mermaid figures are drawn (MermaidOptions.draw). */
-export type MermaidDraw = 'auto' | 'on-request';
+export type MermaidDraw = 'auto' | 'on-request' | 'after-ready';
 
 /**
  * The words a host's documents use, for the parts of the layout that read them (docserver L2, Task 8; LD9). Each list

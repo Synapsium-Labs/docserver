@@ -351,6 +351,7 @@ const BAD: readonly Row[] = [
   ['mermaid', { secure: [], draw: 'auto', extra: 1 }, 'mermaid'],
   ['mermaid', { secure: [], draw: 'lazy' }, 'mermaid.draw'],
   ['mermaid', { secure: [], draw: true }, 'mermaid.draw'],
+  ['mermaid', { secure: [], draw: null }, 'mermaid.draw'],
   ['mermaid', { secure: 'x', draw: 'auto' }, 'mermaid.secure'],
   ['mermaid', { secure: ['1a'], draw: 'auto' }, 'mermaid.secure'],
   ['mermaid', { secure: ['k'.repeat(65)], draw: 'auto' }, 'mermaid.secure'],
@@ -464,6 +465,8 @@ describe('L3.M4 validateSeed: each bad field refused by its own name, with the n
 
   it('mermaid: secure and draw alone pass; the caps at their maxima pass', () => {
     expect(why(loose({ mermaid: { secure: [], draw: 'auto' } }))).toBe('ok');
+    expect(why(loose({ mermaid: { secure: [], draw: 'after-ready' } }))).toBe('ok');
+    expect(why(loose({ mermaid: { secure: [], draw: 'lazy' } }))).toBe('mermaid.draw');
     expect(why(loose({ mermaid: { secure: ['securityLevel'], draw: 'on-request', maxTextSize: 1048576, maxEdges: 50000 } }))).toBe('ok');
   });
 
@@ -545,11 +548,11 @@ describe("the seed's copies of L2's and render()'s caps equal their originals", 
     expect(m?.[1]).toBe(SECURE_KEY_SOURCE);
   });
 
-  it('the prefs are FRAME_PREF_VALUES, and the draw values are auto and on-request', () => {
+  it('the prefs are FRAME_PREF_VALUES, and the draw values are auto, on-request and after-ready', () => {
     for (const [k, vals] of Object.entries(FRAME_PREF_VALUES)) {
       for (const v of vals) expect(why(loose({ prefs: { [k]: v } })), `${k}=${v}`).toBe('ok');
     }
-    expect([...MERMAID_DRAW]).toEqual(['auto', 'on-request']);
+    expect([...MERMAID_DRAW]).toEqual(['auto', 'on-request', 'after-ready']);
   });
 });
 

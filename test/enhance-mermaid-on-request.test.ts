@@ -432,6 +432,7 @@ describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/ada
     expect(waitsForDrawing(null)).toBe(false);
     expect(waitsForDrawing({ secure: [], draw: 'auto' })).toBe(true);
     expect(waitsForDrawing({ secure: [], draw: 'on-request' })).toBe(false);
+    expect(waitsForDrawing({ secure: [], draw: 'after-ready' })).toBe(false);
   });
 
   it('the bootstrap builds its mermaid option with enhanceMermaid and gates its drawing wait on waitsForDrawing', () => {

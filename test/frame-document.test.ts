@@ -173,7 +173,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
   it('exports the types a host names (checked by the typecheck)', () => {
     expectTypeOf<FrameErrorCode>().toEqualTypeOf<'not-rendered' | 'invalid-input' | 'nonce' | 'asset-mismatch' | 'unsafe-asset' | 'csp' | 'missing-asset' | 'too-large'>();
     expectTypeOf<FramePrefs>().toEqualTypeOf<{ theme: 'auto' | 'light' | 'dark'; width: 'standard' | 'wide'; font: 'serif' | 'sans' }>();
-    expectTypeOf<NonNullable<FrameOptions['mermaid']>['draw']>().toEqualTypeOf<'auto' | 'on-request' | undefined>();
+    expectTypeOf<NonNullable<FrameOptions['mermaid']>['draw']>().toEqualTypeOf<'auto' | 'on-request' | 'after-ready' | undefined>();
     expectTypeOf<FrameOptions['prefs']>().toEqualTypeOf<Partial<FramePrefs> | undefined>();
     expectTypeOf<FrameOptions['features']>().toEqualTypeOf<FrameFeatures | undefined>();
     expectTypeOf<keyof NonNullable<FrameOptions['snapshot']>>().toEqualTypeOf<BridgeStoreKey>();

@@ -115,6 +115,7 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
     expect(normalizeOptions({ chrome: {} }).chrome).toEqual({ bar: true, rail: true, settings: true });
     expect(normalizeOptions({ chrome: { settings: false } }).chrome).toEqual({ bar: true, rail: true, settings: false });
     expect(normalizeOptions({ mermaid: { load } }).mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [], draw: 'auto' });
+    expect(normalizeOptions({ mermaid: { load, draw: 'after-ready' } }).mermaid?.draw).toBe('after-ready');
   });
 
   it('what features read is frozen: chrome, the mermaid limits and keys, commits and their entries', () => {

@@ -133,7 +133,7 @@ export interface FrameOptions {
   /**
    * null or absent: no Mermaid script; figures show their source. maxTextSize and maxEdges above
    * MERMAID_LIMIT_CEILINGS are refused as invalid-input: a host may only tighten them. `secure` defaults to [];
-   * `draw` defaults to 'auto' (every figure drawn after enhance), and 'on-request' draws a figure only on its Render tap.
+   * `draw` defaults to 'auto' (every figure drawn after enhance), 'on-request' draws a figure only on its Render tap, and 'after-ready' draws every figure once Mermaid has loaded after ready (ledger C107).
    */
   readonly mermaid?: {
     readonly maxTextSize?: number;

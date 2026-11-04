@@ -87,8 +87,8 @@ const IMAGE_DATA_URL = new RegExp(IMAGE_DATA_URL_SOURCE);
 export const SECURE_KEY_SOURCE = '^[A-Za-z][A-Za-z0-9_]{0,63}$';
 const SECURE_KEY = new RegExp(SECURE_KEY_SOURCE);
 
-/** How Mermaid draws: every figure after enhance, or one figure on its Render tap (FD13). */
-export const MERMAID_DRAW = Object.freeze(['auto', 'on-request'] as const);
+/** How Mermaid draws: every figure after enhance, one figure on its Render tap (FD13), or every figure once load() answers, after ready (C107). */
+export const MERMAID_DRAW = Object.freeze(['auto', 'on-request', 'after-ready'] as const);
 export type MermaidDraw = (typeof MERMAID_DRAW)[number];
 
 /** The ops the parent answers, each a boolean in the seed (FrameOptions.bridge, default all true). */

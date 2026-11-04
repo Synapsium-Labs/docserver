@@ -48,7 +48,7 @@ export interface MermaidSettings {
   readonly maxEdges: number | null;
   /** Configuration keys a diagram's directive may not set, added to the library's own list. */
   readonly secure: readonly string[];
-  /** When figures are drawn: all of them in the second phase ('auto'), or each on its Render tap ('on-request'). */
+  /** When figures are drawn: all of them in the second phase ('auto'), each on its Render tap ('on-request'), or all once load() answers ('after-ready'). */
   readonly draw: MermaidDraw;
 }
 
@@ -115,7 +115,7 @@ const CHROME_KEYS: readonly string[] = ['bar', 'rail', 'settings'];
 const MERMAID_KEYS: readonly string[] = ['load', 'maxTextSize', 'maxEdges', 'secure', 'draw'];
 
 /** The values of mermaid.draw, the first being its default (docserver L3, Task 16; FD13). */
-export const MERMAID_DRAW_VALUES = ['auto', 'on-request'] as const;
+export const MERMAID_DRAW_VALUES = ['auto', 'on-request', 'after-ready'] as const;
 
 /** The option lists of the vocabulary, by group (vocab.ts says what each means). */
 const VOCABULARY_KEYS: readonly string[] = [
