@@ -42,10 +42,10 @@
     },
     {
       "path": "frame/bootstrap.js",
-      "sha256": "a98a2641180fcc1d9017ede22acdfd1abf6a1a1ba8f36129c3467594953061a3",
-      "bytes": 28938,
+      "sha256": "113baa8825eb8259a00f07baf0295adb4cf89d08bf6aa2e0152e45ecc6b04b99",
+      "bytes": 29146,
       "kind": "script",
-      "csp": "'sha256-qYomQRgPzB2QF+3iKs39Gr9qGhuo82Epw0Z1lJUwYaM='"
+      "csp": "'sha256-ETuqiCXrglmgDwe68Cla20z4nQi/aqLgFS5F7MawS5k='"
     },
     {
       "path": "frame/enhance.js",

@@ -372,7 +372,7 @@ describe('L3.M19: the frame runtime sources', () => {
     ['adapters.ts', 'export const p9 = (o: { postMessage(m: unknown): void }): void => o.postMessage(1);', 'postMessage x1, allowed x0'],
     ['adapters.ts', 'export const p10 = (o: { open(): void }): void => o.open();', '.open x1, allowed x0'],
   ] as const) {
-    it(`a planted extra use in ${file} goes red: ${what}`, () => {
+    it(`a planted extra use in ${file} goes red: ${what}: ${snippet.replace(/^export const \w+ = /, '')}`, () => {
       expect(plant(file, snippet)).toContain(what);
     });
   }
@@ -418,12 +418,19 @@ describe('L3.M19: the built guard.js, bootstrap.js and enhance.js', () => {
     expect(got.get('bootstrap.js')).toEqual(expect.arrayContaining(['Function.prototype.toString x2, allowed x1', 'DOMParser x2, allowed x1']));
   });
 
-  it('a planted second script creation in the built bootstrap goes red, and so does the loss of the one', () => {
+  it('a planted second script creation in the built bootstrap goes red; a style element beside it does not', () => {
     const more = scanTexts(path.join(ROOT, 'built'), [{ name: 'bootstrap.js', text: `${built.bootstrap}\nvar planted = document.createElement("script");\n` }], BUILT_SITES);
     expect(more.get('bootstrap.js')).toEqual(['createElement(script) x2, allowed x1']);
     // A negative control: a style element is not a script.
     const style = scanTexts(path.join(ROOT, 'built'), [{ name: 'bootstrap.js', text: `${built.bootstrap}\nvar planted = document.createElement("style");\n` }], BUILT_SITES);
     expect(style.get('bootstrap.js')).toEqual([]);
+  });
+
+  it('the loss of the one script creation from the built bootstrap is reported', () => {
+    const only = /\.createElement\.call\(\w+,\s*"script"\)/g;
+    expect(built.bootstrap.match(only)).toHaveLength(1);
+    const lost = scanTexts(path.join(ROOT, 'built'), [{ name: 'bootstrap.js', text: built.bootstrap.replace(only, '.createElement.call(document,"span")') }], BUILT_SITES);
+    expect(lost.get('bootstrap.js')).toEqual(['createElement(script) x0, allowed x1']);
   });
 
   it('enhance.js references none of the forbidden or page names as a global', () => {

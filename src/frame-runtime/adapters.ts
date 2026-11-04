@@ -189,6 +189,34 @@ export function mermaidOption(
   return registered === null ? {} : { mermaid: enhanceMermaid(m, () => Promise.resolve(registered)) };
 }
 
+/** One `docserver:register` the late insertion's listener saw: the event's target, read through a captured accessor, and its detail when it was a plain object (else null). */
+export interface LateRegistration {
+  readonly target: unknown;
+  readonly detail: unknown;
+}
+
+/**
+ * The Mermaid API of a late insertion, or null (the figures then show L2's load note: a denial, never a substitution).
+ * Accepted only when EXACTLY ONE `docserver:register` arrived while the script was inserted, its target is the inserted
+ * element itself, it is Mermaid's (`name: 'mermaid'`), and its API carries `initialize` and `render` functions. Two
+ * registrations (one forged on the same element, say), none, a target that is anything else, another name (a replayed
+ * enhance script registers as `enhance`) or an API without both functions all answer null (BD4, BX-3; C107). Pure: the
+ * bootstrap's listener only records what it saw.
+ */
+export function lateApi(seen: readonly LateRegistration[], inserted: unknown): Record<string, unknown> | null {
+  const [only] = seen;
+  if (seen.length !== 1 || only === undefined) return null;
+  if (only.target !== inserted) return null;
+  const d = only.detail;
+  if (typeof d !== 'object' || d === null) return null;
+  const detail = d as Record<string, unknown>;
+  if (detail['name'] !== 'mermaid') return null;
+  const api = detail['api'];
+  if (typeof api !== 'object' || api === null) return null;
+  const m = api as Record<string, unknown>;
+  return typeof m['initialize'] === 'function' && typeof m['render'] === 'function' ? m : null;
+}
+
 /** Whether ready waits for Mermaid's first full pass: only with Mermaid on in 'auto' mode; never on request or after ready (FD13). */
 export function waitsForDrawing(m: SeedMermaid | null): boolean {
   return m !== null && m.draw === 'auto';

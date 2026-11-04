@@ -59,13 +59,18 @@
 // (the only script element the frame ever creates; the walls count it), with a `docserver:register` listener on that
 // element alone, appended to the head: a classic inline script runs synchronously inside appendChild with
 // currentScript set to it, so mermaid.frame.js dispatches its register event on it and needs no change. The listener
-// goes again at once; load() resolves with the API when it registered with initialize and render, else null (the
-// figures then show L2's load note). The frame's hash-only policy already lists the file's hash; a text with any other
-// hash is blocked by it, the violation is ignored after ready (onViolation), and the figures show the load note.
+// goes again at once. The listener only records each registration it sees (its target, read through a captured
+// accessor, and its detail); lateApi (adapters.ts) accepts the API only when exactly one arrived, from the inserted
+// element, Mermaid's own, with initialize and render functions, else load() resolves null and the figures show L2's
+// load note: a denial, never a substitution (BX-3). The frame's hash-only policy already lists the file's hash; a text
+// with any other hash is blocked by it, the violation is ignored after ready (onViolation), and the figures show the
+// load note. The policy lists the frame's own scripts too, and the frame does not tell which one `text` matches: a
+// guard, bootstrap or enhance script posted as `text` runs again but is inert (the bootstrap finds no seed before it,
+// enhance registers as `enhance`, the guard only doubles its own nets), so it ends in the load note as well.
 import { cspFloor } from '../frame/csp-rules.js';
 import { BRIDGE_LIMITS, type ErrorWhy, type ParentToFrame } from '../frame/protocol.js';
 import { validateSeed, type Seed } from '../frame/seed.js';
-import { arrivesLate, createAdapters, FRAME_DOC_KEY, FRAME_NAMESPACE, mermaidOption, probesInlineStyle, waitsForDrawing } from './adapters.js';
+import { arrivesLate, createAdapters, FRAME_DOC_KEY, FRAME_NAMESPACE, lateApi, type LateRegistration, mermaidOption, probesInlineStyle, waitsForDrawing } from './adapters.js';
 import { contentIntrinsics, materialise } from './content.js';
 import { FACES, FONT_WAIT_MS, probeFaces } from './fonts.js';
 import { parseParentMessage } from './inbound.js';
@@ -341,16 +346,17 @@ interface EnhanceApi {
       settleLate(null);
       return;
     }
-    let registered: Record<string, unknown> | null = null;
+    // What the listener saw, recorded only; lateApi (adapters.ts) decides.
+    const seen: LateRegistration[] = [];
+    let inserted: unknown = null;
     try {
       const head = parentElement.call(guardEl);
       const el = styles.createElement.call(doc, 'script');
+      inserted = el;
       // On that element only: the event is dispatched on the script element itself, and nowhere else is listened to.
       const onBuild = (e: Event): void => {
         const d = detailOf.call(e);
-        if (!isPlain(d) || d['name'] !== 'mermaid' || registered !== null) return;
-        const a = d['api'];
-        if (typeof a === 'object' && a !== null) registered = a as Record<string, unknown>;
+        seen.push({ target: target.call(e), detail: isPlain(d) ? d : null });
       };
       add.call(el, 'docserver:register', onBuild, false);
       try {
@@ -360,10 +366,9 @@ interface EnhanceApi {
         remove.call(el, 'docserver:register', onBuild, false);
       }
     } catch {
-      registered = null;
+      seen.length = 0;
     }
-    const built = registered as Record<string, unknown> | null;
-    settleLate(built !== null && typeof built['initialize'] === 'function' && typeof built['render'] === 'function' ? built : null);
+    settleLate(lateApi(seen, inserted));
   };
 
   // 5 (last). Any violation before ready ends the boot, except a blocked inline script (see the header).

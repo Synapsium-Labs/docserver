@@ -397,7 +397,7 @@ Without `copy`, `changes` or `openVersion` the reader builds no control for that
 This version's frame policy, whose four hash sources a page's `script-src` lists:
 
 ```text
-default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-qYomQRgPzB2QF+3iKs39Gr9qGhuo82Epw0Z1lJUwYaM=' 'sha256-klCT6eejgl1pR6Ug6mAlNZDNMbMxohSKZZeMGxQKswQ=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
+default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-ETuqiCXrglmgDwe68Cla20z4nQi/aqLgFS5F7MawS5k=' 'sha256-klCT6eejgl1pR6Ug6mAlNZDNMbMxohSKZZeMGxQKswQ=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
 ```
 
 A page that blocks any of them gets a fallback; the frame is never left partly working:
@@ -417,7 +417,7 @@ The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRID
 | `hello` | parent to frame | `v` | Once, on the window, with one port. |
 | `prefs` | parent to frame | `theme`, `width`, `font` | Each optional, each one of its values. |
 | `changes.result` | parent to frame | `sha`, `ranges`, `removedAfter`, or `unavailable` | Only for the one request in flight. |
-| `mermaid` | parent to frame | `text`, or `unavailable` | Only to a frame whose seed draws `'after-ready'`, once, after ready; any other `mermaid` message is ignored. `text` is run as one inline script, and runs only if the frame's policy lists its hash; `unavailable: true` says the host has no build. |
+| `mermaid` | parent to frame | `text`, or `unavailable` | Only to a frame whose seed draws `'after-ready'`, once, after ready; any other `mermaid` message is ignored. `text` is run as one inline script, and runs only if the frame's policy lists its hash (any of the frame's own scripts posted as `text` qualifies, runs inertly and ends in the load note); the frame takes Mermaid's API only from exactly one registration by that script; `unavailable: true` says the host has no build. |
 | `ready` | frame to parent | `v`, `nonce` | Once; echoes the seed's nonce. The parent drops every other op before it. |
 | `error` | frame to parent | `why`: `boot`, `render`, `mermaid`, `assets` or `protocol` | At most once, right after ready; terminal by itself. |
 | `store.set` | frame to parent | `key`, `value` | A key on the allow-list below; JSON text of at most 64 KiB; the JSON literal `null` (the string `'null'`) deletes. |

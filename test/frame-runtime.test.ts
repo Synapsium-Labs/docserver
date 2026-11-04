@@ -240,8 +240,14 @@ describe('BD5: reserveGlobals, the names Mermaid writes while it evaluates', () 
     expect(w['docserverControl']).toBe(win.document.getElementById('docserverControl'));
     expect(w['fastdom']).toBeUndefined();
     expect(w['injected']).toBeUndefined();
-    w['injected'] ??= { markdown: true };
-    w['fastdom'] = w['fastdom'] ?? { read: 1 };
+    expect(() => {
+      'use strict';
+      w['injected'] ??= { markdown: true };
+    }).not.toThrow();
+    expect(() => {
+      'use strict';
+      w['fastdom'] = w['fastdom'] ?? { read: 1 };
+    }).not.toThrow();
     expect(w['injected']).toEqual({ markdown: true });
     expect(w['fastdom']).toEqual({ read: 1 });
   });

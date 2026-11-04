@@ -18,7 +18,7 @@ import { destroyEnhancement, enhance, EnhanceError, type EnhanceOptions } from '
 import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { MERMAID_DRAW_VALUES, normalizeOptions } from '../src/enhance/options.js';
 import { MERMAID_DRAW, type MermaidDraw, type SeedMermaid } from '../src/frame/seed.js';
-import { arrivesLate, enhanceMermaid, mermaidOption, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
+import { arrivesLate, enhanceMermaid, lateApi, mermaidOption, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
 import { probeInlineStyle, STYLE_PROBE_ATTR, STYLE_PROBE_TEXT, styleIntrinsics } from '../src/frame-runtime/styles.js';
 import { render } from '../src/render/index.js';
 
@@ -460,6 +460,35 @@ describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/ada
     expect(mermaidOption(null, null, late)).toEqual({});
   });
 
+  it('lateApi (BX-3): one registration from the inserted element, Mermaid\'s own, with initialize and render, gives the API; every other observation gives null', () => {
+    const el = { id: 'inserted' };
+    const other = { id: 'another element' };
+    const build = { initialize: (): void => {}, render: (): Promise<void> => Promise.resolve() };
+    const reg = (target: unknown, detail: unknown): { target: unknown; detail: unknown } => ({ target, detail });
+    const good = reg(el, { name: 'mermaid', api: build });
+    expect(lateApi([good], el)).toBe(build);
+    // zero registrations
+    expect(lateApi([], el)).toBeNull();
+    // two registrations: a forged one on the same element beside the real one, in either order
+    const forged = reg(el, { name: 'mermaid', api: { initialize: (): void => {}, render: (): void => {} } });
+    expect(lateApi([forged, good], el)).toBeNull();
+    expect(lateApi([good, forged], el)).toBeNull();
+    expect(lateApi([good, good], el)).toBeNull();
+    // the target is not the inserted element
+    expect(lateApi([reg(other, { name: 'mermaid', api: build })], el)).toBeNull();
+    expect(lateApi([reg(null, { name: 'mermaid', api: build })], el)).toBeNull();
+    // a script that is not Mermaid's (a replayed enhance script registers as 'enhance')
+    expect(lateApi([reg(el, { name: 'enhance', api: build })], el)).toBeNull();
+    // the API lacks initialize or render, or either is not a function, or there is no API, or no plain detail
+    expect(lateApi([reg(el, { name: 'mermaid', api: { initialize: build.initialize } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: { render: build.render } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: { initialize: 1, render: build.render } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: { initialize: build.initialize, render: 'render' } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: null })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid' })], el)).toBeNull();
+    expect(lateApi([reg(el, null)], el)).toBeNull();
+  });
+
   it("only 'after-ready' arrives late (B3.6's predicate; the browser half is the frame's boot)", () => {
     expect(arrivesLate(null)).toBe(false);
     expect(arrivesLate({ secure: [], draw: 'auto' })).toBe(false);
@@ -490,6 +519,14 @@ describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/ada
     expect(src.match(/diagramsSettled\(root\)/g)).toHaveLength(1);
   });
 
+  it("the bootstrap's late listener only records, the target through the captured accessor, and lateApi decides (BX-3)", () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+    expect(src).toMatch(/seen\.push\(\{\s*target:\s*target\.call\(e\),\s*detail:/);
+    expect(src.match(/seen\.push\(/g)).toHaveLength(1);
+    expect(src).toMatch(/settleLate\(lateApi\(seen,\s*inserted\)\)/);
+    expect(src).not.toMatch(/\be\.target\b|\.target\s*[=!]==/);
+  });
+
   it("the bootstrap requires a registered API only for the inline modes (B3.6): both fail('mermaid') checks sit behind !arrivesLate", () => {
     const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(src.match(/fail\('mermaid'\)/g)).toHaveLength(2);
@@ -498,7 +535,7 @@ describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/ada
 });
 
 describe('L3.D6: on request, the bootstrap asks for inline style before ready (fix round, review S1; Reference §11.5, ruling R7)', () => {
-  it('probesInlineStyle: only with Mermaid on and drawn on request', () => {
+  it('probesInlineStyle: not with Mermaid off or drawn automatically, yes when drawn on request', () => {
     expect(probesInlineStyle(null)).toBe(false);
     expect(probesInlineStyle({ secure: [], draw: 'auto' })).toBe(false);
     expect(probesInlineStyle({ secure: [], draw: 'on-request' })).toBe(true);
