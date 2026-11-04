@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task by task. Each task runs as L3's did: an implementer subagent, a held-out review panel, then one fix round ("How this wave runs"). The plan is lean (C40): it holds no implementation code, only the contract each task must meet, its tests and its mutation rows.
 
-**Status:** draft for the operator's review, written 2026-11-04 against `main` at `e301cf3` (the merge of #80: `package.json` version 1.0.1, untagged). The three items are the operator's rulings; this plan decides only how they are built. Every question that is the operator's is listed as a numbered Q with a recommended answer ("Where things stand"); no task decides one silently. The release tag waits for every task and for Q1. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
+**Status:** approved by the operator on 2026-11-04 ("Approve with every recommendation": Q1 to Q15 as recommended, ledger C104), and run as one wave on one branch and one PR (C105). Written 2026-11-04 against `main` at `e301cf3` (the merge of #80: `package.json` version 1.0.1, untagged), still `main`'s head at the approval. The three items are the operator's rulings; this plan decides only how they are built. Every question that was the operator's is listed as a numbered Q with its answer ("Where things stand"); a new one found while executing goes to the operator, and no task decides one silently. The release tag waits for every task, and the signed tag is the operator's act. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
 
 **Revisions:** review round 1 (three lenses: rulings, executable, guards; 25 findings, 22 distinct): **25 applied, 0 rejected**. Every finding was re-measured at `e301cf3` before it was applied. Overlapping findings were applied once. They covered the command list's home, `update()` re-delivery and the raw separator bytes. Rejections: none.
 
@@ -14,7 +14,7 @@
 
 **Spec:** the first consumer's public spec, [Rich Docs reader and a shared renderer](https://github.com/Synapsium-Labs/ccrc-pwa/blob/main/docs/superpowers/specs/2026-10-12-rich-docs-reader-and-shared-renderer-design.md): §4.4 the bridge, §4.5 one page load, §4.6 watchdog and fallback (its E17 risk), and the `reader-mermaid-on-tap` contingency the first consumer now retires. Item C's inputs come from the first consumer's phone-header plan, option 2 (its approved-for-later notes).
 
-**Ledger:** [`docs/superpowers/programs/docserver.md`](../programs/docserver.md). C1 to C103 stay binding. This batch records its rulings from the next free number on (C104 on `main` today): one per item and one for the version (Task 9). C103 (4) and C103 (6) are superseded by new entries, never edited in place (the ledger is append-only).
+**Ledger:** [`docs/superpowers/programs/docserver.md`](../programs/docserver.md). C1 to C105 stay binding. This batch records its rulings from the next free number on (C106: C104 records the approval and C105 how the wave runs): one per item and one for the version (Task 9). C103 (4) and C103 (6) are superseded by new entries, never edited in place (the ledger is append-only).
 
 ---
 
@@ -173,9 +173,9 @@ Carried from L3 (its plan, "Global Constraints"), binding on every task:
 
 ## How this wave runs
 
-- **Branches.** Each task is one branch and one PR from `main` once its "Depends on" have merged; no rebase or force push (C55). Before a group's first merge the coordinator merges the group's branches in a scratch branch and runs the touched suites and `node scripts/build-frame.mjs --check` there.
+- **Branches (C105).** One wave on one branch and one PR: the tasks land as commits in the table's order, 1 to 9, which meets every "Depends on"; no rebase or force push (C55). The "Group" column now only orders the commits. Each task's commits pass that task's Verify before the next task starts, and `node scripts/build-frame.mjs --check` passes after every task that moves an asset. The coordinator's review run reads the whole branch once Task 9 is committed.
 - **Per task.** Implementer subagent (tests first), a held-out panel of three lenses (contract; safety and lifecycle; tests, rows and evidence), a refute pass per finding, one fix round.
-- **Shared files and their writers, in order.** The task dependencies below enforce this order: every later writer depends on every earlier one. `src/frame/protocol.ts` and `conformance/bridge-cases.json`: 3, then 7. `src/frame-runtime/bootstrap.ts`, `inbound.ts`, `adapters.ts`: 3, then 7. `src/frame-runtime/outbox.ts`: 7. `src/frame/seed.ts` and `test/frame-seed.test.ts`: 2, 6, then 7. `src/frame/document.ts`: 3, then 7. `src/host/mount.ts`: 4, then 7. `src/enhance/options.ts`, `types.ts`: 2, then 6. `src/enhance/diagrams.ts`: 2. `src/enhance/commands.ts` (new), `src/enhance/{settings,rail,jump,scroll,plans,lifecycle}.ts`, `enhance-entry.ts`: 6. `test/enhance-mermaid-on-request.test.ts`: 2, then 3. `test/enhance-walls.test.ts`, `scripts/consumer-smoke.mjs`, `test/pack.test.ts`: 6. `scripts/build-frame.mjs`: 3 (the allowlist reasons only), then 6 (the prelude only). `test/frame-runtime-walls.test.ts`: 3. `test/host-walls.test.ts`: 7. `assets/reader.css`: 6. `src/host/copy.ts`, `links.ts` (comment only): 1. `README.md` and `test/readme.test.ts`: 1, 3, 4, 6, 7 (each its own rows), then 9. `CHANGELOG.md`, `package.json` version, the ledger: 9 only. The generated manifests: every task that moves an asset, rebuilt on its merged base.
+- **Shared files and their writers, in order.** The task dependencies below enforce this order: every later writer depends on every earlier one. `src/frame/protocol.ts` and `conformance/bridge-cases.json`: 3, then 7. `src/frame-runtime/bootstrap.ts`, `inbound.ts`, `adapters.ts`: 3, then 7. `src/frame-runtime/outbox.ts`: 7. `src/frame/seed.ts` and `test/frame-seed.test.ts`: 2, 6, then 7. `src/frame/document.ts`: 3, then 7. `src/host/mount.ts`: 4, then 7. `src/enhance/options.ts`, `types.ts`: 2, then 6. `src/enhance/diagrams.ts`: 2. `src/enhance/commands.ts` (new), `src/enhance/{settings,rail,jump,scroll,plans,lifecycle}.ts`, `enhance-entry.ts`: 6. `test/enhance-mermaid-on-request.test.ts`: 2, then 3. `test/enhance-walls.test.ts`, `scripts/consumer-smoke.mjs`, `test/pack.test.ts`: 6. `scripts/build-frame.mjs`: 3 (the allowlist reasons only), then 6 (the prelude only). `test/frame-runtime-walls.test.ts`: 3. `test/host-walls.test.ts`: 7. `assets/reader.css`: 6. `src/host/copy.ts`, `links.ts` (comment only): 1. `README.md` and `test/readme.test.ts`: 1, 3, 4, 6, 7 (each its own rows), then 9. `CHANGELOG.md`, `package.json` version, the ledger: 9 only. The generated manifests: every task that moves an asset, rebuilt at that task's commit.
 
 ## Tasks
 
@@ -481,7 +481,7 @@ The browser half of these guards (once-only, element identity, mode check, reser
 
 ## Deviations and rulings found
 
-Numbered `BX-<n>` while the wave runs; each is folded into a C-ruling by Task 9 or the coordinator before the release. A task that departs from this plan records the departure here in its own PR, never silently.
+Numbered `BX-<n>` while the wave runs; each is folded into a C-ruling by Task 9 or the coordinator before the release. A task that departs from this plan records the departure here in the wave's PR, never silently.
 
 | ID | Task | What departed and why | Ruling |
 |---|---|---|---|
@@ -496,8 +496,15 @@ Numbered `BX-<n>` while the wave runs; each is folded into a C-ruling by Task 9 
 - The three items and their scope, as the operator ruled them: U+2028 and U+2029 join the copy check; Mermaid draws on open in the first consumer through a library mode that does not hold `ready` and accepts the build after mount; header option 2's library side.
 - The sealed frame's policy does not widen, and C94's violation listener and inline-style probe still fail a bad host policy closed before `ready`.
 - Additive wire under bridge protocol 1; one batched release, its tag held until every task has merged.
+- The operator's approval and answers of 2026-11-04 (below; C104), and how the wave runs (C105).
 
 ### Waiting on you
+
+- Nothing for the plan. The signed release tag stays the operator's act after Task 9 merges.
+
+### Answered by the operator (2026-11-04)
+
+- "Approve with every recommendation" (console item 24; C104). Q1: **1.1.0**; the untagged 1.0.1 is folded into it and never tagged. Q2: the default stays `'auto'`. Q3: the mode is named `'after-ready'`. Q4: nearest figure first. Q5: the E17 risk is accepted with the gate's caps as the bound, and measured on a phone in the first consumer's take-up wave. Q6: a host policy that blocks Mermaid after `ready` leaves the sources with the load note. Q7: an `outline` command, yes. Q8: `chrome.topSpace` (default true), its `false` trim at 8 px, checked by B8.5's measurement. Q9: no title op; the host reads `result.meta.title`. Q10: `--bar-h: 0` in the frame's prelude only. Q11: `SEED_SCHEMA` stays 1. Q12: no running-head or overlay-state report in this batch (Later). Q13: no frame-side timeout for the handover. Q14: one structured-clone copy of the build per Mermaid-on mount. Q15: at most 4 progress reports a second, in 250 ms windows. The questions as asked follow.
 
 - **Q1. The version.** Recommended: **1.1.0**. Rename the untagged 1.0.1 on `main` (#80) and fold its CHANGELOG entry into the 1.1.0 entry, so 1.0.1 is never tagged; the CHANGELOG's rule makes the batch a minor (moved hashes, new options and ops). Alternative: tag 1.0.1 now as C103's patch (plus item A, also a patch) and ship B and C as 1.1.0, which is two releases, not one.
 - **Q2. The library's default draw mode for other hosts.** Recommended: **stays `'auto'`**; `'after-ready'` is opt-in. Changing a default is a behaviour change better left to a major.
