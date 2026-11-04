@@ -11,23 +11,29 @@
 //   B5.3  A host page policy that allows inline style only by the frame stylesheet's hash ends ready, then error boot
 //         (C94(1)): the bootstrap asks for inline style itself before ready, as a drawing will. Its control, a document
 //         with Mermaid off, readies under the same policy.
-//   B5.4  A text with one character changed is blocked by the policy: every figure shows the load note, the frame stays
-//         mounted and sends no error.
+//   B5.4  A text with one character changed is blocked by the policy (a script-src refusal, for a script that WAS
+//         inserted): every figure shows the load note, the frame stays mounted, sends no error, and a prefs op posted
+//         after it still takes effect (the frame is alive inside).
 //   B5.5  A `docserver:register` dispatched by other code in the frame is ignored. From inside a capture listener on the
 //         frame's document for the real event, within the synchronous appendChild window, a forged one is dispatched
-//         (a) on another element, and (b) on the inserted element itself, each carrying a fake API. (a) draws with the
-//         real API and never the fake; (b) is two registrations, so every figure shows the load note, never the fake.
+//         (a) on another element, (b) on the inserted element itself, and (c) after stopping the real event there, on
+//         the inserted script's Text child (bubbling), each carrying a fake API. (a) draws with the real API and never
+//         the fake; (b) is two registrations and (c) one registration of another target, so for both every figure shows
+//         the load note, never the fake. (The construction that stops the real event and forges on the element itself
+//         needs code running in the frame before the handover; it is known and parked, ledger C107.)
 //   B5.6  A second `mermaid` op inserts no second script.
 //   B5.7  The op is ignored in 'auto' and 'on-request' seeds, in a seed with Mermaid off, and before `settled`.
 //   B5.U  `{ t: 'mermaid', unavailable: true }` inserts no script element and every figure shows the load note.
-//   B5.C  An 'after-ready' seed with Mermaid on and no Mermaid script boots to ready with no error (no FAILED mermaid).
+// The no-script boot (an 'after-ready' seed with Mermaid on and no Mermaid script gives ready, no FAILED mermaid) is
+// frame-boot.test.ts's row (batch B5.C), and the hostile Mermaid cases drawn after the handover are frame-mermaid.test.ts's
+// (L3.B15 in both modes).
 //
 // Release bytes only; the one instrumentation of a row is named in its title.
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { frameCsp, type FrameAssets, type FrameOptions } from '../../src/frame/index.js';
 import { openFrameHost, type FrameHost, type InitHow } from './frame-host-page.js';
-import { data, DIAGRAMS, freshNonce, loadFrame, readyOf, sleep, srcdocFor, svgTexts } from './frame-shared.js';
+import { data, DIAGRAMS, freshNonce, loadFrame, opsOf, readyOf, refusals, sleep, srcdocFor, svgTexts } from './frame-shared.js';
 import { browserFor, closeBrowsers, describeBrowsers } from './harness.js';
 
 let assets: FrameAssets;
@@ -177,6 +183,7 @@ describeBrowsers((browser) => {
     await open();
     try {
       const nonce = await mountLate(DIAGRAMS);
+      const before = await shown(host);
       const at = mermaidText.slice(2000).search(/[a-y]/) + 2000;
       const changed = mermaidText.slice(0, at) + String.fromCharCode(mermaidText.charCodeAt(at) + 1) + mermaidText.slice(at + 1);
       expect(changed.length).toBe(mermaidText.length);
@@ -190,11 +197,20 @@ describeBrowsers((browser) => {
         ['mermaid-figure draw-failed', false, true],
         ['mermaid-figure draw-failed', false, true],
       ]);
-      // The policy did block it (the control of the row: the violation reached the parent's console channel).
-      expect(host.cspConsole.length).toBeGreaterThan(0);
+      // The script WAS inserted, and the policy blocked it: a script-src refusal reached the parent's console channel.
+      expect(after.scripts).toBe(before.scripts + 1);
+      expect(refusals(host, /script-src/)).not.toEqual([]);
+      // The frame is alive inside: a prefs op posted after the blocked text still takes effect.
+      const font = (): Promise<string | null> => host.frame().evaluate(() => document.body.querySelector(':scope > article')?.getAttribute('data-font') ?? null);
+      expect(await font()).toBe('serif');
+      await host.send('main', { t: 'prefs', font: 'sans' });
+      await host.frame().waitForFunction(() => document.body.querySelector(':scope > article')?.getAttribute('data-font') === 'sans', undefined, { timeout: 10_000 }).catch(() => undefined);
+      expect(await font()).toBe('sans');
       await sleep(400);
       const rec = await host.record();
-      expect(data(rec)).toEqual([readyOf(nonce)]);
+      // Ready first, and no error: the prefs change the frame took may have crossed as a store write.
+      expect(data(rec)[0]).toEqual(readyOf(nonce));
+      expect(opsOf(rec, ['error'])).toEqual([]);
       expect(rec.loads).toHaveLength(1);
       expect(rec.closes).toEqual([]);
       expect(host.errors).toEqual([]);
@@ -223,6 +239,28 @@ describeBrowsers((browser) => {
 
   it('B5.5 (instrumented: `forgeRegister` dispatches the forged register on the inserted element itself): two registrations, so every figure shows the load note and the fake is never used', async () => {
     await open({ forgeRegister: 'inserted' });
+    try {
+      const nonce = await mountLate(DIAGRAMS);
+      await host.send('main', mermaidOp(mermaidText));
+      await waitFinal(host);
+      const fr = await host.frameRecord();
+      expect(fr.forged).toEqual({ dispatched: 1, fakeCalls: 0 });
+      const after = await shown(host);
+      expect(after.state).toBe('failed');
+      expect(after.figures.map((f) => [f.cls, f.svg, f.note])).toEqual([
+        ['mermaid-figure draw-failed', false, true],
+        ['mermaid-figure draw-failed', false, true],
+        ['mermaid-figure draw-failed', false, true],
+      ]);
+      await sleep(300);
+      expect({ messages: data(await host.record()), errors: host.errors }).toEqual({ messages: [readyOf(nonce)], errors: [] });
+    } finally {
+      await done();
+    }
+  }, 120_000);
+
+  it('B5.5 (instrumented: `forgeRegister` stops the real register and forges on the inserted script\'s Text child, bubbling): one registration of another target, so every figure shows the load note and the fake is never used', async () => {
+    await open({ forgeRegister: 'text' });
     try {
       const nonce = await mountLate(DIAGRAMS);
       await host.send('main', mermaidOp(mermaidText));

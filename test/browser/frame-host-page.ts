@@ -42,8 +42,8 @@
 //     runs), which the parent's console channel collects as `framePosts`: `./host` removes the frame at an error, so
 //     the record in the frame may be gone before a row can read it.
 //   - `forgeRegister` (B5.5): a capture listener on the document that, from inside the real Mermaid registration of a
-//     late insertion, dispatches a forged `docserver:register` carrying a fake API (on the body, or on the inserted
-//     element), and counts the fake's calls;
+//     late insertion, dispatches a forged `docserver:register` carrying a fake API (on the body, on the inserted
+//     element, or, after stopping the real event, on the inserted script's Text child), and counts the fake's calls;
 //   - `holdSettled` (B5.7): holds the font-face probe for a second (it wraps FontFaceSet.prototype.load before the
 //     bootstrap captures it), so the frame is still booting when an early op reaches its port.
 // The record sits under a symbol key, so no authored id can shadow it.
@@ -97,9 +97,10 @@ export interface InitHow {
    * The B5.5 rows (the late Mermaid insertion): a capture listener on the frame's document for the real
    * `docserver:register` of Mermaid's build. From inside it, so within the synchronous appendChild window, it
    * dispatches a forged `docserver:register` carrying a fake Mermaid API, on `other` (the body) or on `inserted`
-   * (the real event's own target, the inserted script element). The fake's calls are counted in the record.
+   * (the real event's own target, the inserted script element), or, for `text`, after stopping the real event, on the
+   * inserted script's Text child (the forged event bubbles to the element). The fake's calls are counted in the record.
    */
-  readonly forgeRegister?: 'other' | 'inserted';
+  readonly forgeRegister?: 'other' | 'inserted' | 'text';
   /** The B5.7 'before settled' row: the frame's font-face probe is held for a second, so the frame stays unsettled. */
   readonly holdSettled?: boolean;
 }
@@ -275,8 +276,8 @@ function initScript(how: InitHow): string | null {
       return post.apply(this, args);
     };
   }
-  if (${String(how.forgeRegister === 'other')} || ${String(how.forgeRegister === 'inserted')}) {
-    const onInserted = ${String(how.forgeRegister === 'inserted')};
+  if (${String(how.forgeRegister !== undefined)}) {
+    const mode = ${JSON.stringify(how.forgeRegister ?? null)};
     let busy = false;
     const fake = {
       initialize() { rec.forged.fakeCalls++; },
@@ -288,7 +289,11 @@ function initScript(how: InitHow): string | null {
       busy = true;
       try {
         rec.forged.dispatched++;
-        const to = onInserted ? e.target : document.body;
+        let to = mode === 'other' ? document.body : e.target;
+        if (mode === 'text') {
+          Event.prototype.stopPropagation.call(e);
+          to = e.target.firstChild;
+        }
         to.dispatchEvent(new CustomEvent('docserver:register', { detail: { name: 'mermaid', api: fake }, bubbles: true }));
       } finally {
         busy = false;
