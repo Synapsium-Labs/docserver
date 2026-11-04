@@ -1470,11 +1470,11 @@ describe("B4 mermaidDraw 'after-ready': the build is fetched in parallel with th
       clearTimeout: (h: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(h),
     };
     const el = { ownerDocument: { defaultView: stubWin }, append: (node: Node): void => void container.append(node) } as unknown as HTMLElement;
-    const frame = mountDocFrame(el, { document: doc, adapters: adaptersFor({ events: [] }, { focus: false, ...over }) });
+    const frame = mountDocFrame(el, { document: doc, adapters: adaptersFor({ events: [] }, { focus: false, watchdogMs: 120_000, ...over }) });
     return { frame, made };
   }
 
-  it('B4.10: while the loader stays pending, a replaced, destroyed or fallen-back mount is not retained: only the current mount can be reached from the verdict hook', async () => {
+  it('B4.10: while the loader stays pending, a replaced or destroyed mount is not retained: only the current mount can be reached from the verdict hook', async () => {
     const collected = async (r: WeakRef<object> | undefined): Promise<boolean> => {
       await collect();
       return r?.deref() === undefined;
