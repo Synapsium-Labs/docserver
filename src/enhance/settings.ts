@@ -109,10 +109,59 @@ export function build(ctx: FeatureContext): void {
 
   menu.append(chrome(doc, 'div', { className: 'aa-key' }, [chrome(doc, 'p', { className: 'aa-kh', text: 'Colour key' }), ctx.text.colourKey(doc)]));
 
+  // A close made by the reader's own press outside the menu (the pointerdown, seen in the capture phase, so a host that
+  // stops the event on its button cannot hide it): the same gesture's click may then run the settings command (a host's
+  // own button, run synchronously from its click handler), which must find the menu closed and leave it so, or a second
+  // press on that button would open it again. The flag is cleared after the gesture's click has been dispatched (a
+  // bubbling listener on the document runs after the target's own), by a key's click (detail 0, before the target's
+  // handler), by a cancelled press (pointercancel), when the menu opens, and when the command consumes it. A focus
+  // leaving the menu (Tab) never sets it: no click follows to clear it.
+  // The document's listeners are there only while they have work, as the pin's are (nav.ts), so an instance with a closed
+  // menu adds none: the outside-press listener while the menu is open, the gesture's while the flag is set. They are
+  // added and removed by hand, and every end is run at teardown.
+  const onDoc = (type: string, fn: (event: Event) => void, capture: boolean): (() => void) => {
+    const run = (event: Event): void => {
+      ctx.operate(() => fn(event));
+    };
+    doc.addEventListener(type, run, { capture });
+    return () => doc.removeEventListener(type, run, { capture });
+  };
+  let closedByOutside = false;
+  let stopOutside: (() => void) | null = null;
+  let stopGesture: (() => void) | null = null;
+  const clearFlag = (): void => {
+    closedByOutside = false;
+    stopGesture?.();
+    stopGesture = null;
+  };
+  const setFlag = (): void => {
+    closedByOutside = true;
+    if (stopGesture !== null) return;
+    const ends = [
+      onDoc('click', (event) => {
+        if ((event as MouseEvent).detail === 0) clearFlag();
+      }, true),
+      onDoc('click', clearFlag, false),
+      onDoc('pointercancel', clearFlag, false),
+    ];
+    stopGesture = () => {
+      for (const end of ends) end();
+    };
+  };
+  const stopListening = (): void => {
+    stopOutside?.();
+    stopOutside = null;
+  };
+  ctx.journal.defer(() => {
+    stopListening();
+    clearFlag();
+  });
+
   let returnTo: Element | null = null;
   const close = (): void => {
     if (menu.hidden) return;
     menu.hidden = true;
+    stopListening();
     button.setAttribute('aria-expanded', 'false');
     const returnFocus = returnTo?.isConnected ? returnTo : button;
     if (menu.contains(doc.activeElement) || doc.activeElement === ctx.root) focus(returnFocus);
@@ -122,6 +171,13 @@ export function build(ctx: FeatureContext): void {
     update();
     returnTo = contains(ctx.root, doc.activeElement) ? doc.activeElement as Element : null;
     menu.hidden = false;
+    clearFlag();
+    stopListening();
+    stopOutside = onDoc('pointerdown', (event) => {
+      if (menu.hidden || contains(wrap, event.target)) return;
+      setFlag();
+      close();
+    }, true);
     button.setAttribute('aria-expanded', 'true');
     const first = menu.querySelector('input:checked, input');
     if (first !== null) focus(first);
@@ -130,14 +186,6 @@ export function build(ctx: FeatureContext): void {
     if (menu.hidden) show();
     else close();
   });
-  // A close made by the reader's own press outside the menu (the pointerdown, seen in the capture phase, so a host that
-  // stops the event on its button cannot hide it): the same gesture's click may then run the settings command (a host's
-  // own button, run synchronously from its click handler), which must find the menu closed and leave it so, or a second
-  // press on that button would open it again. The flag is cleared after the gesture's click has been dispatched (a
-  // bubbling listener on the document runs after the target's own), by a key's click (detail 0, before the target's
-  // handler), by a cancelled press (pointercancel), by the next press, and when the command consumes it. A focus
-  // leaving the menu (Tab) never sets it: no click follows to clear it.
-  let closedByOutside = false;
   ctx.journal.listen(wrap, 'focusout', (event) => {
     const to = (event as FocusEvent).relatedTarget;
     if (menu.hidden || contains(wrap, to)) return;
@@ -145,21 +193,6 @@ export function build(ctx: FeatureContext): void {
     // Another element of this document, the page's own press, Escape and the command still close it.
     if (to === null && !doc.hasFocus()) return;
     close();
-  });
-  ctx.journal.listen(doc, 'pointerdown', (event) => {
-    closedByOutside = false;
-    if (menu.hidden || contains(wrap, event.target)) return;
-    closedByOutside = true;
-    close();
-  }, { capture: true });
-  ctx.journal.listen(doc, 'pointercancel', () => {
-    closedByOutside = false;
-  });
-  ctx.journal.listen(doc, 'click', (event) => {
-    if ((event as MouseEvent).detail === 0) closedByOutside = false;
-  }, { capture: true });
-  ctx.journal.listen(doc, 'click', () => {
-    closedByOutside = false;
   });
 
   ctx.overlays.register('settings', { isOpen: () => !menu.hidden, close });
@@ -173,7 +206,7 @@ export function build(ctx: FeatureContext): void {
   wrap.append(button, menu);
   ctx.commands.register('settings', () => {
     if (closedByOutside) {
-      closedByOutside = false;
+      clearFlag();
       return true; // this gesture's press just closed it: the command is the toggle's second half, and leaves it closed
     }
     if (!menu.hidden) {

@@ -1421,3 +1421,419 @@ The fix round's flag was reworked (re-review N1, N2): the flag is set only by th
   ]
 }
 ```
+
+## Fix round 3 (ledger C108): the settings' document listeners only while they have work
+
+The outside-press listener is now added when the menu opens and removed by every close path and at teardown, the way the pin's listeners are (nav.ts): an instance with a closed menu adds no document pointerdown listener, which the navigation and services cases count. The gesture's listeners (the click in capture and in bubble, pointercancel) are added only when an outside press sets the flag, and removed when it clears or at teardown. Rows B6r, B6s, B6t, B6aj, B6ak, B6al, B6am and B6an are measured again on this code (their edits follow the new text); B6ao to B6ar and B6aq2 are new, and every row of the round is red through assertions. The rows were first measured against a baseline in which the new listener-count case itself failed (a wrong expected count in its last line), so every row was measured again after that was fixed; the rows here are those second measurements. B6aq (the teardown defer no longer stops the outside-press listener) is not equivalent: the overlay's own teardown defer cannot close the menu, because the registry answers false once the instance is not live.
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6ao | a closed menu adds no document pointerdown listener | `src/enhance/settings.ts` | `  let stopOutside: (() => void) \| null = null;` → `  let stopOutside: (() => void) \| null = onDoc('pointerdown', () => undefined, true);` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6ap | every close removes the outside-press listener | `src/enhance/settings.ts` | `    menu.hidden = true; ⏎     stopListening();` → `    menu.hidden = true;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6aq | a destroy with the menu open removes the outside-press listener | `src/enhance/settings.ts` | `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎     clearFlag(); ⏎   });` → `  ctx.journal.defer(() => { ⏎     clearFlag(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6aq2 | a destroy while the gesture's listeners are on removes them | `src/enhance/settings.ts` | `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎     clearFlag(); ⏎   });` → `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6ar | the gesture's listeners go when the flag is cleared | `src/enhance/settings.ts` | `    closedByOutside = false; ⏎     stopGesture?.(); ⏎     stopGesture = null;` → `    closedByOutside = false;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6r | the same gesture's command leaves a menu closed by an outside press closed | `src/enhance/settings.ts` | `    if (closedByOutside) {` → `    if (false as boolean) {` | `test/enhance-settings.test.ts`: 2 failed \| 44 passed (46) |
+| B6s | focus leaving the document does not close the menu | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎ ` → `(removed)` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6t | the gesture's bubbling click clears the flag | `src/enhance/settings.ts` | `onDoc('click', clearFlag, false),` → `onDoc('click', () => undefined, false),` | `test/enhance-settings.test.ts`: 3 failed \| 43 passed (46) |
+| B6aj | Tabbing out of the menu sets no flag | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎     close();` → `    if (to === null && !doc.hasFocus()) return; ⏎     setFlag(); ⏎     close();` | `test/enhance-settings.test.ts`: 2 failed \| 44 passed (46) |
+| B6ak | a cancelled press clears the flag | `src/enhance/settings.ts` | `onDoc('pointercancel', clearFlag, false),` → `onDoc('pointercancel', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6al | a key's click (detail 0) clears the flag before the host's handler | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0) clearFlag();` → `void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6am | the outside pointerdown is seen in the capture phase | `src/enhance/settings.ts` | `    }, true); ⏎     button.setAttribute('aria-expanded', 'true');` → `    }, false); ⏎     button.setAttribute('aria-expanded', 'true');` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6an | a focusout naming no element while the document has focus closes the menu (hasFocus check dropped) | `src/enhance/settings.ts` | `if (to === null && !doc.hasFocus()) return;` → `if (to === null) return;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "405bf5c18bc6443a4bcc12ef32f3f7900bb9ddf34be633182f211f89777c2fd8",
+    "src/frame/manifest.generated.ts": "af2bdc57469699fb80448e71f38d241cb6b7f855bbaf49061539734544077f52",
+    "assets/frame/bootstrap.js": "99d7acf5267291edaf3f210168580362dbb799434f4bcbb268462b41f30cfb5e",
+    "assets/frame/enhance.js": "fc34703da82c0222c2679935defadc76d0aab72ccbbe79ee9ade558998fb86a4",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6ao",
+      "guard": "a closed menu adds no document pointerdown listener",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  let stopOutside: (() => void) | null = null;",
+          "new": "  let stopOutside: (() => void) | null = onDoc('pointerdown', () => undefined, true);"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ap",
+      "guard": "every close removes the outside-press listener",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    menu.hidden = true;\n    stopListening();",
+          "new": "    menu.hidden = true;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aq",
+      "guard": "a destroy with the menu open removes the outside-press listener",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.journal.defer(() => {\n    stopListening();\n    clearFlag();\n  });",
+          "new": "  ctx.journal.defer(() => {\n    clearFlag();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aq2",
+      "guard": "a destroy while the gesture's listeners are on removes them",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.journal.defer(() => {\n    stopListening();\n    clearFlag();\n  });",
+          "new": "  ctx.journal.defer(() => {\n    stopListening();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "the gesture's click and pointercancel listeners are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ar",
+      "guard": "the gesture's listeners go when the flag is cleared",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    closedByOutside = false;\n    stopGesture?.();\n    stopGesture = null;",
+          "new": "    closedByOutside = false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "the gesture's click and pointercancel listeners are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6r",
+      "guard": "the same gesture's command leaves a menu closed by an outside press closed",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (closedByOutside) {",
+          "new": "    if (false as boolean) {"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 44 passed (46)",
+      "failing": [
+        "a button outside the root: the first press opens, the second closes, a third opens again",
+        "the pointerdown is seen even when the host stops it on its button"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6s",
+      "guard": "focus leaving the document does not close the menu",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n",
+          "new": ""
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu ope"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6t",
+      "guard": "the gesture's bubbling click clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('click', clearFlag, false),",
+          "new": "onDoc('click', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "3 failed | 43 passed (46)",
+      "failing": [
+        "the swallowed half does not outlive its gesture: a later command opens it",
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a",
+        "the gesture's click and pointercancel listeners are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aj",
+      "guard": "Tabbing out of the menu sets no flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n    close();",
+          "new": "    if (to === null && !doc.hasFocus()) return;\n    setFlag();\n    close();"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 44 passed (46)",
+      "failing": [
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a",
+        "N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ak",
+      "guard": "a cancelled press clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('pointercancel', clearFlag, false),",
+          "new": "onDoc('pointercancel', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "N1: a press that is cancelled (a touch that became a scroll) leaves no flag"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6al",
+      "guard": "a key's click (detail 0) clears the flag before the host's handler",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if ((event as MouseEvent).detail === 0) clearFlag();",
+          "new": "void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6am",
+      "guard": "the outside pointerdown is seen in the capture phase",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    }, true);\n    button.setAttribute('aria-expanded', 'true');",
+          "new": "    }, false);\n    button.setAttribute('aria-expanded', 'true');"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "the pointerdown is seen even when the host stops it on its button"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6an",
+      "guard": "a focusout naming no element while the document has focus closes the menu (hasFocus check dropped)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if (to === null && !doc.hasFocus()) return;",
+          "new": "if (to === null) return;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```

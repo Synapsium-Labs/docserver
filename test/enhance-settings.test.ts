@@ -962,3 +962,60 @@ describe('runEnhancementCommand\'s own guards (T6-c)', () => {
   });
 });
 
+describe('the settings\' document listeners exist only while they have work (fix round 3)', () => {
+  it('a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const net = (type: string): number => add.mock.calls.filter((c) => c[0] === type).length - remove.mock.calls.filter((c) => c[0] === type).length;
+    // What the other features add at startup is the same with and without the settings menu.
+    const without = mount();
+    await enhance(without, { chrome: { bar: false, settings: false } });
+    const others = add.mock.calls.filter((c) => c[0] === 'pointerdown').length;
+    await destroyEnhancement(without);
+    add.mockClear();
+    remove.mockClear();
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const base = net('pointerdown');
+    expect(add.mock.calls.filter((c) => c[0] === 'pointerdown')).toHaveLength(others); // a closed menu added none
+    runEnhancementCommand(root, 'settings');
+    expect(net('pointerdown')).toBe(base + 1);
+    runEnhancementCommand(root, 'settings'); // the command
+    expect(net('pointerdown')).toBe(base);
+    runEnhancementCommand(root, 'settings');
+    key(radio(root, 'theme', 'auto'), 'Escape'); // Escape
+    expect(net('pointerdown')).toBe(base);
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); // an outside press
+    expect(net('pointerdown')).toBe(base);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    runEnhancementCommand(root, 'settings');
+    await destroyEnhancement(root); // a destroy with the menu open: nothing is left, the other features' listeners included
+    expect(net('pointerdown')).toBe(0);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+
+  it('the gesture\'s click and pointercancel listeners are added by an outside close and gone once the gesture ends', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const net = (): number => ['click', 'pointercancel'].reduce((n, t) => n + add.mock.calls.filter((c) => c[0] === t).length - remove.mock.calls.filter((c) => c[0] === t).length, 0);
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const base = net();
+    runEnhancementCommand(root, 'settings');
+    expect(net()).toBe(base);
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(net()).toBe(base + 3);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(net()).toBe(base);
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(net()).toBe(base + 3);
+    await destroyEnhancement(root); // a destroy while the gesture's listeners are on
+    expect(net()).toBe(base);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+});
+
