@@ -198,8 +198,8 @@ describe('.npmrc', () => {
 });
 
 describe('CHANGELOG.md: the newest entry', () => {
-  // The entry of the version in package.json names the sha256 of every asset that moved since the last release, as
-  // assets/assets.json records it (the changelog's own rule), and its heading is the package's version.
+  // The entry's heading is the package's version, and every asset hash it names is the one assets/assets.json records
+  // (the changelog's own rule). Which assets moved since the last release is checked by review, not by this test.
   const changelog = readText('CHANGELOG.md');
   const version = (JSON.parse(readText('package.json')) as { version: string }).version;
   const top = changelog.slice(changelog.indexOf('## '), changelog.indexOf('\n## ', changelog.indexOf('## ') + 3));
@@ -212,15 +212,16 @@ describe('CHANGELOG.md: the newest entry', () => {
     expect(lock.packages['']?.version).toBe(version);
   });
 
-  it('names the new sha256 (and csp) of each moved asset, each equal to assets.json', () => {
-    // The moved list is what the entry itself names, one bullet per asset; each must match the manifest.
+  it('every hash bullet names a manifest asset with its sha256 and, where the manifest carries one, its csp', () => {
+    // What this measures: each `- \`assets/<path>\`: \`<sha256>\`` bullet in the entry equals assets.json for that path, and
+    // carries the csp value when the manifest has one for it (and none when it has none). It does not learn which assets
+    // moved since the last release: a bullet for an unmoved asset passes, and so does an entry with no bullet at all (a patch).
     const bullets = [...top.matchAll(/^- `assets\/([^`]+)`: `([0-9a-f]{64})`(?:, csp `([^`]+)`)?$/gm)];
-    expect(bullets.length).toBeGreaterThanOrEqual(4);
     for (const [, path, sha, csp] of bullets) {
       const file = assets.files.find((f) => f.path === path) as { sha256: string; csp?: string } | undefined;
       expect(file, path).toBeDefined();
       expect(sha, path).toBe(file!.sha256);
-      if (csp !== undefined) expect(csp, path).toBe(file!.csp);
+      expect(csp, path).toBe(file!.csp);
     }
   });
 });
