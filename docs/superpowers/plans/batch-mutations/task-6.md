@@ -1838,6 +1838,303 @@ The outside-press listener is now added when the menu opens and removed by every
 }
 ```
 
+## Fix round 4 (ledger C108): a stale outside-press flag clears on the next press
+
+An outside press that sends neither a click nor a pointercancel (a right-click, a release outside the window) used to leave the flag set, and no pointerdown listener existed while the menu was closed to clear it. The gesture's listeners, which exist only while the flag is set, now include a capture-phase pointerdown, an auxclick and a contextmenu clear (six listeners in all), so a closed menu with no flag still adds no document listener. Rows B6as, B6at and B6au (one per new clear) and B6av (the gesture's listeners added with no flag) are new and red; B6t, B6ak, B6al, B6aq2 and B6ar are measured again on this code. The count cases moved from 3 to 6 gesture listeners. (This section was written after the fact, from the round's logs and results; the generated-output hashes are those of the round-4 commit.)
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6as | the next press clears a stale flag | `src/enhance/settings.ts` | `onDoc('pointerdown', clearFlag, true),` → `onDoc('pointerdown', () => undefined, true),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6at | an auxclick clears the flag | `src/enhance/settings.ts` | `onDoc('auxclick', clearFlag, false),` → `onDoc('auxclick', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6au | a contextmenu clears the flag | `src/enhance/settings.ts` | `onDoc('contextmenu', clearFlag, false),` → `onDoc('contextmenu', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6av | the gesture's listeners are added only with the flag | `src/enhance/settings.ts` | `  let closedByOutside = false; ⏎   let stopOutside` → `  let closedByOutside = false; ⏎   onDoc('pointerdown', () => undefined, true); ⏎   let stopOutside` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+| B6t | the gesture's bubbling click clears the flag | `src/enhance/settings.ts` | `onDoc('click', clearFlag, false),` → `onDoc('click', () => undefined, false),` | `test/enhance-settings.test.ts`: 4 failed \| 47 passed (51) |
+| B6ak | a cancelled press clears the flag | `src/enhance/settings.ts` | `onDoc('pointercancel', clearFlag, false),` → `onDoc('pointercancel', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6al | a key's click (detail 0) clears the flag before the host's handler | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0) clearFlag();` → `void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6aq2 | a destroy while the gesture's listeners are on removes them | `src/enhance/settings.ts` | `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎     clearFlag(); ⏎   });` → `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6ar | the gesture's listeners go when the flag is cleared | `src/enhance/settings.ts` | `    closedByOutside = false; ⏎     stopGesture?.(); ⏎     stopGesture = null;` → `    closedByOutside = false;` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "da9123c2b4bcd5cc86f179adad13bfda9096fb4f65b9edd0a64fa14000f40bde",
+    "src/frame/manifest.generated.ts": "3068ff9749c29f90b3c59208b60ad80c67d0210f6bc1f07f4da7b42e89a4b7f5",
+    "assets/frame/bootstrap.js": "dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424",
+    "assets/frame/enhance.js": "3b2cadb728847f1c535dae80c899a4939606602e7ad0d95fcf04de2bf091e1d2",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6as",
+      "guard": "the next press clears a stale flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('pointerdown', clearFlag, true),",
+          "new": "onDoc('pointerdown', () => undefined, true),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "a press that sends nothing after it: the next press clears the flag before its click"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6at",
+      "guard": "an auxclick clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('auxclick', clearFlag, false),",
+          "new": "onDoc('auxclick', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "an auxclick ends the gesture too"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6au",
+      "guard": "a contextmenu clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('contextmenu', clearFlag, false),",
+          "new": "onDoc('contextmenu', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "a contextmenu ends the gesture too"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6av",
+      "guard": "the gesture's listeners are added only with the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  let closedByOutside = false;\n  let stopOutside",
+          "new": "  let closedByOutside = false;\n  onDoc('pointerdown', () => undefined, true);\n  let stopOutside"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does",
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6t",
+      "guard": "the gesture's bubbling click clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('click', clearFlag, false),",
+          "new": "onDoc('click', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "4 failed | 47 passed (51)",
+      "failing": [
+        "the swallowed half does not outlive its gesture: a later command opens it",
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press and Escape still close it",
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does",
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ak",
+      "guard": "a cancelled press clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('pointercancel', clearFlag, false),",
+          "new": "onDoc('pointercancel', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "N1: a press that is cancelled (a touch that became a scroll) leaves no flag"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6al",
+      "guard": "a key's click (detail 0) clears the flag before the host's handler",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if ((event as MouseEvent).detail === 0) clearFlag();",
+          "new": "void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aq2",
+      "guard": "a destroy while the gesture's listeners are on removes them",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.journal.defer(() => {\n    stopListening();\n    clearFlag();\n  });",
+          "new": "  ctx.journal.defer(() => {\n    stopListening();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ar",
+      "guard": "the gesture's listeners go when the flag is cleared",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    closedByOutside = false;\n    stopGesture?.();\n    stopGesture = null;",
+          "new": "    closedByOutside = false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does",
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```
+
 
 ## Fix round 5 (ledger C108, ruling T6-j): focusout closes only for focus moving within the document
 
