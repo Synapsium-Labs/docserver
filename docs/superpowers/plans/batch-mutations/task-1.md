@@ -1,6 +1,6 @@
 # Batch Task 1: mutation rows (the copy check names U+2028 and U+2029)
 
-Each row was measured in place on branch `ws/docserver-release-1-1` by the batch method: the bytes of `src/host/copy.ts` saved with their sha256, one edit applied, the named test files run as `./node_modules/.bin/vitest run --maxWorkers=2 --reporter=json <files>` behind `timeout -k 10 600` and a `ulimit -u` of the measured thread count plus 1500, then the file restored from the saved bytes (`cp`) and its sha256 compared. Every row exited 1; every failing test failed with an `AssertionError` (no row went red through a load or compile failure). The `copy.ts` restore sha256 for this task is `e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5`.
+Each row was measured in place on branch `ws/docserver-release-1-1` by the batch method: the bytes of `src/host/copy.ts` saved with their sha256, one edit applied, the named test files run as `./node_modules/.bin/vitest run --maxWorkers=2 --reporter=json <files>` behind `timeout -k 10 600` and a `ulimit -u` of the measured thread count plus 1500, then the file restored from the saved bytes (`cp`) and its sha256 compared. Every row exited 1; every failing test failed with an `AssertionError` (no row went red through a load or compile failure). The `copy.ts` restore sha256 for this task is `e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad`: the file at the tip of fix round FR1's behaviour half. The first text of this record named `e29884084c7c…`, the file before the first fix round rewrapped a comment in it (a comment-only change). Every row below was run again at the tip (review 1480, A3): each went red through assertions with the failed counts recorded, and the file restored to the sha256 above after each.
 
 Test files per row. Rows B1a to B1c, L3.H7c, L3.H7c1, L3.H7d, L3.H7e, L3.H7h, L3.H7i, L3.H7k and L3.H7r ran `test/host-copy.test.ts` and `test/host-links.test.ts` together (39 and 22 tests); rows L3.H7a, L3.H7b, L3.H7f, L3.H7g, L3.H7j, L3.H7l, L3.H7m, L3.H7n, L3.H7o, L3.H7p, L3.H7q and L3.H7s ran `test/host-copy.test.ts` alone (39 tests), as in the C103 record, because the links test does not depend on what they change. A row's Red cell names each file it ran; a file that stays green is stated.
 
@@ -31,7 +31,7 @@ The separator class, its width and its names (ledger C106). B1a: `test/host-link
       "test/host-copy.test.ts: L3.H7 hasHiddenChar is true for a directional mark and for a tag character, false for clean text"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -47,7 +47,7 @@ The separator class, its width and its names (ledger C106). B1a: `test/host-link
       "test/host-copy.test.ts: L3.H7 what is not hidden clean text, tab, newline, ordinary non-ASCII and the marks beside the listed ranges give nothing"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -64,7 +64,7 @@ The separator class, its width and its names (ledger C106). B1a: `test/host-link
       "test/host-copy.test.ts: L3.H7 each hidden character is reported with its index and name the separator U+2029 PARAGRAPH SEPARATOR"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   }
 ]
@@ -115,7 +115,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 indices are UTF-16 code units, in order every hidden character of a mixed text, in order"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -131,7 +131,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 each hidden character is reported with its index and name DEL, NUL, BEL, BACKSPACE, VT, FF and CR"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -153,7 +153,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length the copy check's bidi controls and zero-width characters, anywhere, in every kind of link"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -174,7 +174,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length the copy check's bidi controls and zero-width characters, anywhere, in every kind of link"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -197,7 +197,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length the copy check's bidi controls and zero-width characters, anywhere, in every kind of link"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -214,7 +214,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 what is not hidden clean text, tab, newline, ordinary non-ASCII and the marks beside the listed ranges give nothing"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -233,7 +233,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the walk is by code point (ledger C103) an index stays right after an astral visible character"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -258,7 +258,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -281,7 +281,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -302,7 +302,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the walk is by code point (ledger C103) a lone high surrogate before a tag character reads as that tag character after the surrogate"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -319,7 +319,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length the copy check's directional marks and tag characters, anywhere, in every kind of link (ledger C103)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -338,7 +338,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 hasHiddenChar is true for a directional mark and for a tag character, false for clean text"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -354,7 +354,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) the whole block: 128 entries in order, two code units apart, each with a name of its own"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -370,7 +370,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) LANGUAGE TAG and CANCEL TAG, each with its name"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -387,7 +387,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) the England flag: the flag is visible, its six tag characters are not"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -403,7 +403,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the tag characters, U+E0000 to U+E007F (ledger C103) the whole block: 128 entries in order, two code units apart, each with a name of its own"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -419,7 +419,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the walk is by code point (ledger C103) the step threshold: the mark after U+FFFF (one code unit) is not skipped"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -436,7 +436,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-links.test.ts: L3.H6 refused: controls, white space and length a mark right after U+FFFF (one code unit, no step of two) is refused (ledger C103)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -452,7 +452,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the tag names, all 95 of them, against a list derived apart from the source table (ledger C103) every U+E0020 to U+E007E is TAG plus the name of its ASCII twin"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   },
   {
@@ -469,7 +469,7 @@ Ledger C106 adds two entries to `OTHER_NAMES` and two cases to the per-character
       "test/host-copy.test.ts: L3.H7 the C1 controls are hidden too (ledger C88) every C1 control, U+0080 to U+009F, each with a name of its own"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "e29884084c7c6759415868c7b648c5b20846ab99c9f759bc858add63de62f2d5",
+    "sha256": "e22e58f8f2b1a3005a1199b5184483f5d9e7466f83c7a8533601b06f6715ecad",
     "restored": true
   }
 ]
