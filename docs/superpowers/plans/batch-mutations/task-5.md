@@ -710,3 +710,28 @@ B5b6, the reason. After ready, the `done` guard returns first, so the exception 
   }
 ]
 ```
+
+## Fix round FR1: B5b6 measured on the policy row that pins the exception before ready (review minor 2)
+
+The record of B5b6 above ran the blocked-inline exception of `onViolation` alone against `test/browser/mermaid-after-ready.test.ts` and `test/browser/frame-boot.test.ts` and called it an equivalent mutant on Chromium. The row that pins the exception before ready is L3.HB6 (`test/browser/host-policy.test.ts`: a page whose script-src lists the frame's hashes but one: ready, then error with the owning reason). B5b6x is B5b6 run on that file, Chromium only, by the same method (bytes and full sha256 of `src/frame-runtime/bootstrap.ts` saved, the generated outputs saved, `npm run build:frame` after the edit, a bounded run behind a `ulimit -u` of the measured thread count (1832) plus 1500, everything written back by byte copy, the sha256 compared equal, `node scripts/build-frame.mjs --check` green after).
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B5b6x | the blocked-inline exception alone (the `done` guard stays) | `src/frame-runtime/bootstrap.ts` | the line `if ((directive === 'script-src-elem' \| directive === 'script-src') && (blocked === 'inline' \| blocked === '')) return;` removed | `test/browser/host-policy.test.ts`: 0 failed \| 9 passed \| 9 skipped (18). Stays green: B5b6 is still an equivalent mutant on Chromium, now measured on L3.HB6 as well as on the two files above | `bootstrap.ts` sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` restored, equal; generated outputs restored from the saved bytes, `--check` green |
+
+```json
+[
+  {
+    "id": "B5b6x",
+    "guard": "the blocked-inline exception alone (the done guard stays)",
+    "file": "src/frame-runtime/bootstrap.ts",
+    "tests": "test/browser/host-policy.test.ts (Chromium)",
+    "rc": 0,
+    "red": "green: 0 failed | 9 passed | 9 skipped (18)",
+    "failing": [],
+    "assertionErrorsOnly": null,
+    "sha256": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63",
+    "restored": true
+  }
+]
+```
