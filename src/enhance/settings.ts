@@ -193,10 +193,11 @@ export function build(ctx: FeatureContext): void {
   });
   ctx.journal.listen(wrap, 'focusout', (event) => {
     const to = (event as FocusEvent).relatedTarget;
-    if (menu.hidden || contains(wrap, to)) return;
-    // Focus leaving the document itself (a frame whose parent took the focus) names no element: the menu stays open.
-    // Another element of this document, the page's own press, Escape and the command still close it.
-    if (to === null && !doc.hasFocus()) return;
+    // Only focus moving to another element of this document closes the menu (ruling T6-j). A focusout naming no element
+    // (the focus left the document, as in a frame whose parent's button took it, or went to no element) leaves it open,
+    // whatever `document.hasFocus()` says at that moment: some engines still report the focus while the event runs.
+    // The page's own press outside the menu, Escape and the command still close it.
+    if (menu.hidden || to === null || contains(wrap, to)) return;
     close();
   });
 

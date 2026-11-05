@@ -809,19 +809,23 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
     expect(menu(root).hidden).toBe(false);
   });
 
-  it('focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu open', async () => {
+  it('T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus', async () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
-    runEnhancementCommand(root, 'settings');
-    const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
-    expect(menu(root).hidden).toBe(false);
-    expect(runEnhancementCommand(root, 'settings')).toBe(true); // the command is the toggle: it closes
-    expect(menu(root).hidden).toBe(true);
-    spy.mockRestore();
+    for (const hasFocus of [false, true]) {
+      expect(runEnhancementCommand(root, 'settings')).toBe(true);
+      expect(menu(root).hidden).toBe(false);
+      // A frame whose parent's button took the focus: on some engines the document still reports the focus here.
+      const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+      radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      expect(menu(root).hidden).toBe(false);
+      spy.mockRestore();
+      expect(runEnhancementCommand(root, 'settings')).toBe(true); // the command is the toggle: it closes
+      expect(menu(root).hidden).toBe(true);
+    }
   });
 
-  it('focus moving to another element, a focusout naming no element while the document has focus, an outside press and Escape still close it', async () => {
+  it('T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it', async () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
     const other = document.createElement('button');
@@ -829,18 +833,16 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
     const out = (to: Element | null): void => {
       radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: to }));
     };
-    const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    out(null); // focus to no element: stays open
+    expect(menu(root).hidden).toBe(false);
+    out(tool(root)); // to the menu's own button, inside the wrap: stays open
     expect(menu(root).hidden).toBe(false);
     out(other);
     expect(menu(root).hidden).toBe(true);
-    spy.mockReturnValue(true); // the document keeps the focus: a focusout that names no element is a click on the page
     expect(runEnhancementCommand(root, 'settings')).toBe(true);
     expect(menu(root).hidden).toBe(false); // opened: no flag was left by the focusout above
-    out(null);
-    expect(menu(root).hidden).toBe(true);
-    expect(runEnhancementCommand(root, 'settings')).toBe(true);
-    expect(menu(root).hidden).toBe(false);
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(menu(root).hidden).toBe(true);
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -848,7 +850,6 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
     expect(menu(root).hidden).toBe(false);
     key(radio(root, 'theme', 'auto'), 'Escape');
     expect(menu(root).hidden).toBe(true);
-    spy.mockRestore();
     other.remove();
   });
 

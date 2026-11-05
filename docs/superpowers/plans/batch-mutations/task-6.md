@@ -1837,3 +1837,158 @@ The outside-press listener is now added when the menu opens and removed by every
   ]
 }
 ```
+
+
+## Fix round 5 (ledger C108, ruling T6-j): focusout closes only for focus moving within the document
+
+Ruling T6-j replaces the `document.hasFocus()` exception of T6-c: a `focusout` whose `relatedTarget` is null never closes the menu (the focus left the document, or went to no element), and a `focusout` closes it only when the focus moves to another element of the same document outside the menu. On Chromium the document still reports the focus while the menu's `focusout` runs as a parent's button takes it, which is why the T6-c rule let the menu close at the mousedown and the click's command open it again (Task 8's row B8.1b). The outside press (with its same-gesture flag), Escape and the command still close the menu. B6s, B6aj and B6an are measured again on the new code (their edits follow the new text; B6an now restores the T6-c exception, the defect itself, rather than dropping it); B6aw is new: B6s's edit, measured through a rebuild and B8.1b as well as in jsdom. B6an and B6aw mutate a build input: the frame was rebuilt with the mutant, the generated outputs were saved before and restored from the saved bytes after, and `--check` ran after each restore. Every row is red through assertions, B6an and B6aw both in jsdom and through B8.1b on Chromium. The round 4 fix (the gesture's six listeners) is unchanged by this round.
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6s | a focusout naming no element does not close the menu | `src/enhance/settings.ts` | `    if (menu.hidden \|\| to === null \|\| contains(wrap, to)) return;` → `    if (menu.hidden \|\| contains(wrap, to)) return;` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+| B6aj | Tabbing out of the menu sets no flag | `src/enhance/settings.ts` | `contains(wrap, to)) return; ⏎     close();` → `contains(wrap, to)) return; ⏎     setFlag(); ⏎     close();` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+| B6an | a focusout naming no element while the document still has focus keeps the menu open (the hasFocus exception of T6-c restored) | `src/enhance/settings.ts` | `to === null \|\|` → `(to === null && !doc.hasFocus()) \|\|` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51); `test/browser/frame-one-bar.test.ts` (Chromium, after a rebuild): 1 failed \| 5 passed \| 6 skipped (12) |
+| B6aw | a null relatedTarget closes the menu again (T6-j undone) | `src/enhance/settings.ts` | `    if (menu.hidden \|\| to === null \|\| contains(wrap, to)) return;` → `    if (menu.hidden \|\| contains(wrap, to)) return;` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51); `test/browser/frame-one-bar.test.ts` (Chromium, after a rebuild): 1 failed \| 5 passed \| 6 skipped (12) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "a7e8c2cb2badb961c01e3cf307cae0ca759954c44007182176207ebda55869d3",
+    "src/frame/manifest.generated.ts": "24b9188cec59053a5780e345ceff1b58fc3d9e68501a74d1090dccddc2325938",
+    "assets/frame/bootstrap.js": "dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424",
+    "assets/frame/enhance.js": "daa25c84fd193dc9c8a734e6ab5705bba5d6a29fc5be73d29ed478249a9ffa7f",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6s",
+      "guard": "a focusout naming no element does not close the menu",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (menu.hidden || to === null || contains(wrap, to)) return;\n",
+          "new": "    if (menu.hidden || contains(wrap, to)) return;\n"
+        }
+      ],
+      "rebuild": false,
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aj",
+      "guard": "Tabbing out of the menu sets no flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "contains(wrap, to)) return;\n    close();",
+          "new": "contains(wrap, to)) return;\n    setFlag();\n    close();"
+        }
+      ],
+      "rebuild": false,
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it",
+        "N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6an",
+      "guard": "a focusout naming no element while the document still has focus keeps the menu open (the hasFocus exception of T6-c restored)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "to === null ||",
+          "new": "(to === null && !doc.hasFocus()) ||"
+        }
+      ],
+      "rebuild": true,
+      "tests": [
+        "test/enhance-settings.test.ts",
+        "test/browser/frame-one-bar.test.ts (DOCREADER_BROWSERS=chromium)"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51); 1 failed | 5 passed | 6 skipped (12)",
+      "failing": [
+        "T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it",
+        "B8.1b: the host button's second press closes the menu although its mousedown took the focus out of the frame"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aw",
+      "guard": "a null relatedTarget closes the menu again (T6-j undone)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (menu.hidden || to === null || contains(wrap, to)) return;\n",
+          "new": "    if (menu.hidden || contains(wrap, to)) return;\n"
+        }
+      ],
+      "rebuild": true,
+      "tests": [
+        "test/enhance-settings.test.ts",
+        "test/browser/frame-one-bar.test.ts (DOCREADER_BROWSERS=chromium)"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51); 1 failed | 5 passed | 6 skipped (12)",
+      "failing": [
+        "T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it",
+        "B8.1b: the host button's second press closes the menu although its mousedown took the focus out of the frame"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```

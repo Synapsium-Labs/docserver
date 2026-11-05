@@ -131,12 +131,12 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 240_000);
 
-  // Ruling T6-c: the Aa menu in a frame does not close when the focus leaves the document, so a host button's second
-  // press, whose mousedown takes the focus out of the frame, closes it through the command. MEASURED RED on Chromium
-  // (2026-11-05): `document.hasFocus()` is still true while the menu's focusout runs, so the menu closes at the
-  // mousedown and the release's command opens it again; after the second press the menu is open. Marked `fails` so the
-  // file stays green while the controller rules on the product; remove `.fails` when the menu is fixed.
-  it.fails('B8.1b: the host button\'s second press closes the menu although its mousedown took the focus out of the frame', async () => {
+  // Ruling T6-c, made to hold on Chromium by ruling T6-j: the Aa menu in a frame does not close when the focus leaves the
+  // document, so a host button's second press, whose mousedown takes the focus out of the frame, closes it through the
+  // command. Measured red on Chromium before T6-j: `document.hasFocus()` was still true while the menu's focusout ran, so
+  // the menu closed at the mousedown and the release's command opened it again. Under T6-j a focusout naming no element
+  // never closes the menu, whatever `hasFocus()` reports.
+  it('B8.1b: the host button\'s second press closes the menu although its mousedown took the focus out of the frame', async () => {
     const { host } = await open(browser, 1200, NO_BAR);
     try {
       await host.page.click('#host-settings');
