@@ -197,3 +197,68 @@ The two `if (!ctx.live()) return;` checks in the new branch (after `load()` and 
   }
 ]
 ```
+
+## Fix round FR1: the handover keeps the reader's place (finding F1)
+
+Fix round FR1, item F1 (the review's finding F1, the coordinator's ruling): in 'after-ready' the gate (`data-docreader-mermaid`) and the state `drawing` were written by a bare `ctx.operate`, outside `ctx.position.keep` and with no relayout, so the placeholders' height (`min-height: 180px`) moved every block below a short fence above the reading line. The fix writes both inside `ctx.position.keep` and asks for `ctx.relayout('content')`, as the file's header says every change of a figure does. Measured on the fixed tree.
+
+Red before the fix: `test/enhance-mermaid-after-ready.test.ts` B2.9 failed (`expected [] to have a length of 1`, the keep that wrote the gate), and `test/browser/mermaid-after-ready.test.ts` B5.8, both of its rows, failed on Chromium on the unfixed frame: the reading block moved from 149.78 px to 507 px under the frame's top (a limit of 2 px), with native scroll anchoring on as well as off. Green after: both files pass (13 passed | 13 skipped in the browser file, the WebKit rows skipped). B5.8 reads the reading block's top before the op is posted and again after every figure has settled; its tolerance is 2 px.
+
+Method as above: bytes saved with the sha256 of the fixed file, one edit, a bounded run behind a `ulimit -u` of the measured thread count plus 1500 (2820 to 2870 threads, limits 4320 to 4370), the file restored by `cp` and its sha256 compared. B2m is a rebuild row: the generated outputs were saved before, the frame rebuilt with the mutation, and the outputs restored after.
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B2k | the handover writes the gate inside the keep | `src/enhance/diagrams.ts` | the two writes (the gate and `drawing`) moved out of `ctx.position.keep(() => { ... })`, the relayout kept | test/enhance-mermaid-after-ready.test.ts: 1 failed \| 10 passed (11). test/enhance-mermaid-after-ready.test.ts: the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal |
+| B2l | the handover asks for a relayout | `src/enhance/diagrams.ts` | `ctx.relayout('content');` removed after the keep, in the same branch | test/enhance-mermaid-after-ready.test.ts: 1 failed \| 10 passed (11). test/enhance-mermaid-after-ready.test.ts: the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal |
+| B2m | the handover keeps the reader's place (Chromium) | `src/enhance/diagrams.ts` | as B2k; the frame is rebuilt for the row (`node scripts/build-frame.mjs`) | test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium): 2 failed \| 24 skipped (26). test/browser/mermaid-after-ready.test.ts: B5.8: the reading block stays where it was across the handover, within 2 px (the block moved from 149.78125 to 507); test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root, the engine without scroll anchoring): the same | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+
+```json
+[
+  {
+    "id": "B2k",
+    "guard": "the handover writes the gate inside the keep",
+    "file": "src/enhance/diagrams.ts",
+    "change": "the two writes (the gate and `drawing`) moved out of `ctx.position.keep(() => { ... })`, the relayout kept",
+    "tests": "test/enhance-mermaid-after-ready.test.ts",
+    "rc": 1,
+    "red": "1 failed | 10 passed (11)",
+    "failing": [
+      "test/enhance-mermaid-after-ready.test.ts: the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc",
+    "restored": true
+  },
+  {
+    "id": "B2l",
+    "guard": "the handover asks for a relayout",
+    "file": "src/enhance/diagrams.ts",
+    "change": "`ctx.relayout('content');` removed after the keep, in the same branch",
+    "tests": "test/enhance-mermaid-after-ready.test.ts",
+    "rc": 1,
+    "red": "1 failed | 10 passed (11)",
+    "failing": [
+      "test/enhance-mermaid-after-ready.test.ts: the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc",
+    "restored": true
+  },
+  {
+    "id": "B2m",
+    "guard": "the handover keeps the reader's place (Chromium)",
+    "file": "src/enhance/diagrams.ts",
+    "change": "as B2k; the frame is rebuilt for the row (`node scripts/build-frame.mjs`)",
+    "tests": "test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium)",
+    "rc": 1,
+    "red": "2 failed | 24 skipped (26)",
+    "failing": [
+      "test/browser/mermaid-after-ready.test.ts: B5.8: the reading block stays where it was across the handover, within 2 px (the block moved from 149.78125 to 507)",
+      "test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root, the engine without scroll anchoring): the same"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc",
+    "restored": true
+  }
+]
+```

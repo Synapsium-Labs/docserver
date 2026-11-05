@@ -4,13 +4,42 @@
 // readable text), calls load() once and awaits it, waits for the fonts, and only then sets the gate and `drawing` and
 // draws every figure with no tap, nearest first, through the same queue as 'auto'. A null module gives every figure the
 // load note and the root `failed`; a figure that throws takes `draw-failed` (root `partial`). Rows B2.1 to B2.6, with a
-// deferred fake Mermaid.
+// deferred fake Mermaid. Row B2.9 (fix round FR1) is the handover's own: the gate and `drawing` are written inside
+// position.keep and ask for a relayout ('content'), as every change of a figure does (diagrams.ts, header).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
+import { contextOf } from '../src/enhance/lifecycle.js';
 import { NOTES } from '../src/enhance/diagrams.js';
 import { MERMAID_DRAW_VALUES, normalizeOptions } from '../src/enhance/options.js';
 import { MERMAID_DRAW } from '../src/frame/seed.js';
 import { render } from '../src/render/index.js';
+
+const hooks = vi.hoisted(() => ({
+  /** Each position.keep() while `watch` is on: whether the root held the gate before and after the callback ran. */
+  kept: [] as [boolean, boolean][],
+  watch: false,
+}));
+
+vi.mock('../src/enhance/nav.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/enhance/nav.js')>();
+  const gated = (): boolean => document.querySelector('[data-docreader-mermaid]') !== null;
+  return {
+    ...real,
+    createPosition: (env: Parameters<typeof real.createPosition>[0]) => {
+      const p = real.createPosition(env);
+      return Object.freeze({
+        ...p,
+        keep: <T,>(fn: () => T): T => {
+          if (!hooks.watch) return p.keep(fn);
+          const was = gated();
+          const out = p.keep(fn);
+          hooks.kept.push([was, gated()]);
+          return out;
+        },
+      });
+    },
+  };
+});
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const GATE = 'data-docreader-mermaid';
@@ -38,6 +67,8 @@ function mount(md: string): HTMLElement {
   return root;
 }
 afterEach(async () => {
+  hooks.watch = false;
+  hooks.kept.length = 0;
   for (const root of mounted.splice(0)) await destroyEnhancement(root).catch(() => undefined);
   document.body.replaceChildren();
 });
@@ -332,5 +363,49 @@ describe('B2.8: destroyed while waiting', () => {
     } finally {
       Reflect.deleteProperty(document, 'fonts');
     }
+  });
+});
+
+describe('B2.9: the handover keeps the reader\'s place (fix round FR1)', () => {
+  it('the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn', async () => {
+    const root = mount(THREE);
+    const d = deferred();
+    hooks.watch = true;
+    await enhance(root, d.options);
+    const ctx = contextOf(root);
+    if (ctx === undefined) throw new Error('no context');
+    const seen: { reasons: string[]; state: string | null; drawn: number }[] = [];
+    ctx.events.on('relayout', (e) => {
+      seen.push({ reasons: [...e.reasons], state: root.getAttribute(STATE), drawn: root.querySelectorAll('figure.drawn').length });
+    });
+    // Hold the first drawing, so what the handover alone asked for is visible.
+    const fake = fakeMermaid();
+    let endFirst: () => void = () => undefined;
+    const first = new Promise<void>((resolve) => {
+      endFirst = resolve;
+    });
+    const inner = fake.api.render.bind(fake.api);
+    let held = false;
+    fake.api.render = async (id, text, el) => {
+      if (!held) {
+        held = true;
+        await first;
+      }
+      return inner(id, text, el);
+    };
+    d.answer({ default: fake.api });
+    await vi.waitFor(() => {
+      expect(root.getAttribute(STATE)).toBe('drawing');
+    });
+    // The keep that wrote the gate: the root had no gate when it began and had it when it ended.
+    expect(hooks.kept.filter(([was, now]) => !was && now)).toHaveLength(1);
+    // A relayout for 'content' ran while the state was `drawing` and nothing was drawn yet (a run is one frame away).
+    await vi.waitFor(() => {
+      expect(seen.some((s) => s.reasons.includes('content') && s.state === 'drawing' && s.drawn === 0)).toBe(true);
+    });
+    endFirst();
+    await vi.waitFor(() => {
+      expect(root.getAttribute(STATE)).toBe('drawn');
+    });
   });
 });

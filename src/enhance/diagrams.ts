@@ -681,9 +681,14 @@ export async function after(ctx: FeatureContext): Promise<void> {
     await ctx.env.fonts(FONT_WAIT_MS);
     if (!ctx.live()) return;
     api = mermaidOf(module);
+    // The gate gives every undrawn source a placeholder's height (reader.css), above the reading line too, so the write
+    // is kept like each figure's own: the reader stays on their line, and the sizes are measured again (FR1, F1).
     ctx.operate(() => {
-      ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
-      ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing');
+      ctx.position.keep(() => {
+        ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)
+        ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'drawing');
+      });
+      ctx.relayout('content');
     });
   } else {
     ctx.journal.setAttribute(ctx.root, 'data-docreader-mermaid', ''); // the gate (C43)

@@ -23,6 +23,13 @@
 //         needs code running in the frame before the handover; it is known and parked, ledger C107.)
 //   B5.6  A second `mermaid` op inserts no second script.
 //   B5.7  The op is ignored in 'auto' and 'on-request' seeds, in a seed with Mermaid off, and before `settled`.
+//   B5.8  The handover keeps the reader's place (fix round FR1, finding F1): the reader is scrolled into a long document
+//         whose short Mermaid fences are above the reading block; the block's offset from the frame's top is read
+//         before the op is posted and after every figure has settled, and the two agree within TOLERANCE_PX (the
+//         drawings' own heights differ from the sources', so only a place-keeping handover holds the block). Run twice:
+//         once as the engine does it, and once with the engine's native scroll anchoring off (`overflow-anchor: none`
+//         set through the frame's CSSOM from the harness, named in the title), which is what an engine without that
+//         feature (WebKit) does for every reader.
 //   B5.U  `{ t: 'mermaid', unavailable: true }` inserts no script element and every figure shows the load note.
 // The no-script boot (an 'after-ready' seed with Mermaid on and no Mermaid script gives ready, no FAILED mermaid) is
 // frame-boot.test.ts's row (batch B5.C), and the hostile Mermaid cases drawn after the handover are frame-mermaid.test.ts's
@@ -82,6 +89,19 @@ const waitFinal = (host: FrameHost, ms = 60_000): Promise<unknown> =>
 
 /** A host page policy that allows inline style only by the hash of the frame stylesheet's exact text. */
 const hashOnlyStyle = (): string => `style-src 'sha256-${createHash('sha256').update(assets.css, 'utf8').digest('base64')}'`;
+
+/** The most the reading block may move across the handover, in px: sub-pixel rounding of the drawings' heights. */
+const TOLERANCE_PX = 2;
+
+/** Six short fences, then a heading to read at, then a long tail. */
+const LONG = [
+  '# Place',
+  '',
+  ...[1, 2, 3, 4, 5, 6].flatMap((n) => ['```mermaid', `flowchart LR\n  N${String(n)} --> X`, '```', '', `*Figure ${String(n)}. The ${String(n)}th.*`, '']),
+  '## Reading block',
+  '',
+  ...Array.from({ length: 30 }, (_, i) => `Paragraph ${String(i + 1)} of the tail, long enough to give the page a long scroll below the heading. `.repeat(4) + '\n'),
+].join('\n');
 
 const mermaidOp = (text: string): { t: 'mermaid'; text: string } => ({ t: 'mermaid', text });
 
@@ -280,6 +300,36 @@ describeBrowsers((browser) => {
       await done();
     }
   }, 120_000);
+
+  for (const anchoring of [true, false]) {
+    it(`B5.8${anchoring ? '' : ' (instrumented: `overflow-anchor: none` on the frame\'s root, the engine without scroll anchoring)'}: the reading block stays where it was across the handover, within ${String(TOLERANCE_PX)} px`, async () => {
+      await open();
+      try {
+        await mountLate(LONG);
+        const frame = host.frame();
+        if (!anchoring) await frame.evaluate(() => document.documentElement.style.setProperty('overflow-anchor', 'none'));
+        const offset = (): Promise<number> => frame.evaluate(() => (document.getElementById('reading-block') as HTMLElement).getBoundingClientRect().top);
+        // Scroll the heading to 150 px under the frame's top, with every fence above the reading line, and wait for it to hold.
+        await frame.evaluate(() => {
+          const top = (document.getElementById('reading-block') as HTMLElement).getBoundingClientRect().top;
+          window.scrollTo({ top: window.scrollY + top - 150, behavior: 'instant' });
+        });
+        await frame.waitForFunction(() => Math.abs((document.getElementById('reading-block') as HTMLElement).getBoundingClientRect().top - 150) < 1, undefined, { timeout: 10_000 });
+        await sleep(300);
+        const before = await offset();
+        expect(Math.abs(before - 150)).toBeLessThan(1);
+        expect((await shown(host)).state).toBe('waiting');
+        await host.send('main', mermaidOp(mermaidText));
+        await waitFinal(host);
+        expect((await shown(host)).state).toBe('drawn');
+        await sleep(300);
+        const after = await offset();
+        expect(Math.abs(after - before), `the block moved from ${String(before)} to ${String(after)}`).toBeLessThanOrEqual(TOLERANCE_PX);
+      } finally {
+        await done();
+      }
+    }, 120_000);
+  }
 
   it('B5.U: {t:"mermaid", unavailable:true} inserts no script element and every figure shows the load note', async () => {
     await open();
