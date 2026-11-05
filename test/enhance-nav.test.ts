@@ -473,8 +473,9 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
   it('a row with no id counts the head at its computed top when that is a length and past the bar (FR2), and at the bar when it is auto', async () => {
     const s = stage();
     let top = '50px';
+    let bar = '0px';
     vi.spyOn(window, 'getComputedStyle').mockImplementation(((target: Element) => ({
-      getPropertyValue: (prop: string) => (prop === 'top' && target.tagName === 'TH' ? top : prop === '--bar-h' ? '0px' : ''),
+      getPropertyValue: (prop: string) => (prop === 'top' && target.tagName === 'TH' ? top : prop === '--bar-h' ? bar : ''),
     })) as never);
     const root = mount('Text.\n\n| ID | What |\n|---|---|\n| R1 | One |\n');
     s.tops.set(row(root, 'R1'), 3000);
@@ -487,6 +488,12 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     top = '20px';
     goToHash(root, 'R1');
     expect(s.scrolled.at(-1)).toEqual([3000 - 20 - HEAD_GAP, 'auto']);
+    // A head whose computed top is BELOW the bar's height (a bar-on root with a table that does not fit, or with the bar slid
+    // away, computes `top: 0px`): the bar's height still counts, so the row is not left under the bar (review F1).
+    bar = '52px';
+    top = '0px';
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([3000 - 52 - HEAD_GAP, 'auto']);
   });
 
   it('a revealer that destroys the instance while it lands stops it: no pin, and enhance() rejects', async () => {

@@ -598,10 +598,12 @@ describeBrowsers((browser: BrowserName) => {
         await new Promise((r) => setTimeout(r, 400));
         const r = row.getBoundingClientRect();
         const h = (document.querySelector('.table-wrapper th') as HTMLElement).getBoundingClientRect();
-        return { rowTop: r.top, headTop: h.top, headBottom: h.bottom, margin: getComputedStyle(row).scrollMarginTop };
+        return { rowTop: r.top, headTop: h.top, headBottom: h.bottom, margin: getComputedStyle(row).scrollMarginTop, scrollY: window.scrollY };
       });
       console.warn(`host-measure: ${JSON.stringify({ row: 'B8.10', browser, got })}`);
+      expect(got.scrollY, 'the page scrolled to the row').toBeGreaterThan(0);
       expect(got.headTop, 'the head is stuck below Aa').toBeGreaterThanOrEqual(49);
+      expect(got.rowTop, `the row sits just below the head: ${JSON.stringify(got)}`).toBeLessThan(got.headBottom + 40);
       expect(got.rowTop, `the row clears the head: ${JSON.stringify(got)}`).toBeGreaterThanOrEqual(got.headBottom - 1);
     } finally {
       await host.close();
