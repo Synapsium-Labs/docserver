@@ -40,7 +40,7 @@ Item C, one header bar:
 - **Hosts with the bar off now get an Aa button at the root's top right**; `chrome.settings: false` opts out of it. (Before this release the button vanished with the bar.)
 - The frame's prelude sets `--bar-h: 0` for a root without a bar; `./enhance` hosts keep the documented 48 px.
 - On a root with no bar, the settings menu's height is bounded to its viewport (`max-height: calc(100vh - 80px)`, which keeps its bottom inside the frame from the top of the document and once Aa is stuck), where it ran up to 47 px past the bottom of a short frame. This applies to every root with no bar, framed or not.
-- On a root with no bar, the sticky figure tools and a table's sticky head stick at 50 px, below Aa's box, instead of at the bar's height, so Aa no longer covers the right end of their hit areas. `--bar-h` stays 0 in the frame, and a root with a bar is unchanged.
+- On a root with no bar that carries Aa, the sticky figure tools and a table's sticky head stick below Aa's box: the head at `max(var(--bar-h), 50px)` and the tools at `max(calc(var(--bar-h) + 6px), 50px)`, so Aa no longer covers the right end of their hit areas, and a host that sets `--bar-h` to the height of its own fixed header keeps its offset when that is larger. `--bar-h` stays 0 in the frame; a root with a bar, and a root with `chrome.settings: false` (no Aa), are unchanged.
 - In the settings menu, a `focusout` that names no element (the window loses focus, or Tab leaves the document) no longer closes Aa, on every host, bar on or off; focus moving to another element outside the menu, and Aa's own button, still close it.
 - A host command (`DocFrame.command('settings')` and the rest) acts on the menu's present state: a tap on a card's trigger while Aa is open no longer leaves a flag that makes the host's next `settings` command answer true and open nothing. A click inside the reader's root ends the gesture; a host button placed inside the root loses the same-gesture toggle, so a host keeps its own buttons outside the root, as the documented layout does.
 
@@ -50,8 +50,8 @@ The assets that moved, each with the sha256 that `assets/assets.json` records (`
 
 - `assets/frame/bootstrap.js`: `dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424`, csp `'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ='`
 - `assets/frame/enhance.js`: `655422aafe40ceb83c0e6df3a110abd61c8dd9c93a4bdabaff27d1662f4d4c2f`, csp `'sha256-ZVQiqv5Azrg8Dm3zoRCr1hyN2ck6S9q6/yfRZi9NTC8='`
-- `assets/frame/reader.css`: `262ac2013f0a2cb27634ea27b0e8fb7eb286269590842dca354e630e0c56147d`
-- `assets/reader.css`: `a6348b2134ebb1c7cde0b7f17318178cef4d670e3586c46f34a50aac268ef3cb`
+- `assets/frame/reader.css`: `3d25119259344c28abdc8bb60d64f1ed662368c56dd5a49ab86430d2d38ce58a`
+- `assets/reader.css`: `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9`
 
 ## 1.0.0
 
