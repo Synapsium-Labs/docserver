@@ -500,7 +500,7 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}, served:
 // ───────── the library page: `./host` as the parent (Task 10) ─────────
 
 /** The callbacks a library mount gives, each recorded. */
-export type LibCallback = 'onLink' | 'onHash' | 'copy' | 'changes' | 'openVersion';
+export type LibCallback = 'onLink' | 'onHash' | 'copy' | 'changes' | 'openVersion' | 'onProgress';
 
 /** One library mount: the document, the assets and the adapters, as plain data the page turns into adapters. */
 export interface LibMountSpec {
@@ -519,7 +519,9 @@ export interface LibMountSpec {
   /** Give the mount an in-page store (a Map behind Web Storage's interface). */
   readonly store?: boolean;
   readonly docKey?: string;
-  /** The callbacks to give, beside onReady and onFallback (always given); default all five. */
+  /** The layout's switches as plain data (FrameFeatures), for a mount that turns the bar off or the top space off. */
+  readonly features?: unknown;
+  /** The callbacks to give, beside onReady and onFallback (always given); default the five but onProgress. */
   readonly callbacks?: readonly LibCallback[];
   /** What the changes adapter answers; default null. */
   readonly changesReply?: unknown;
@@ -554,6 +556,7 @@ interface LibApi {
   mount(spec: LibMountSpec): void;
   update(d: RenderInput): void;
   setPrefs(p: unknown): void;
+  command(name: string): void;
   destroy(): void;
   releaseLoader(): void;
   record(): LibRecord;
@@ -561,7 +564,7 @@ interface LibApi {
 
 declare global {
   interface Window {
-    __docHostLib?: { readonly mountDocFrame: (el: HTMLElement, o: { document: unknown; adapters: unknown }) => { update(d: unknown): void; setPrefs(p: unknown): void; destroy(): void } };
+    __docHostLib?: { readonly mountDocFrame: (el: HTMLElement, o: { document: unknown; adapters: unknown }) => { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; destroy(): void } };
     __libHost?: LibApi;
   }
 }
@@ -594,7 +597,7 @@ function libMain(): void {
     },
     true,
   );
-  let frame: { update(d: unknown): void; setPrefs(p: unknown): void; destroy(): void } | null = null;
+  let frame: { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; destroy(): void } | null = null;
   let release: () => void = () => undefined;
   const plain = (v: unknown): unknown => JSON.parse(JSON.stringify(v ?? null)) as unknown;
   const api = {
@@ -611,6 +614,7 @@ function libMain(): void {
       docKey?: string;
       callbacks?: string[];
       changesReply?: unknown;
+      features?: unknown;
     }): void {
       const log =
         (kind: string) =>
@@ -656,8 +660,10 @@ function libMain(): void {
       }
       if (spec.store === true) adapters['store'] = store;
       if (spec.docKey !== undefined) adapters['docKey'] = spec.docKey;
+      if (spec.features !== undefined) adapters['features'] = spec.features;
       if (callbacks.includes('onLink')) adapters['onLink'] = log('onLink');
       if (callbacks.includes('onHash')) adapters['onHash'] = log('onHash');
+      if (callbacks.includes('onProgress')) adapters['onProgress'] = log('onProgress');
       if (callbacks.includes('copy')) adapters['copy'] = (text: string, check: unknown) => log('copy')({ text, check });
       if (callbacks.includes('openVersion')) adapters['openVersion'] = log('openVersion');
       if (callbacks.includes('changes')) {
@@ -676,6 +682,9 @@ function libMain(): void {
     },
     setPrefs(p: unknown): void {
       frame?.setPrefs(p);
+    },
+    command(name: string): void {
+      frame?.command(name);
     },
     destroy(): void {
       frame?.destroy();
@@ -742,6 +751,8 @@ export interface LibHost {
   mount(spec: LibMountSpec): Promise<void>;
   update(d: RenderInput): Promise<void>;
   setPrefs(p: unknown): Promise<void>;
+  /** DocFrame.command, called from the page (a host button's handler runs this). */
+  command(name: string): Promise<void>;
   destroy(): Promise<void>;
   /** Settle the deferred `loadMermaid` of the latest mount (spec.loader 'deferred') with spec.mermaidText. */
   releaseLoader(): Promise<void>;
@@ -792,6 +803,7 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
     mount: (spec) => p.evaluate((s) => (window.__libHost as LibApi).mount(s), spec),
     update: (d) => p.evaluate((x) => (window.__libHost as LibApi).update(x), d),
     setPrefs: (x) => p.evaluate((v) => (window.__libHost as LibApi).setPrefs(v), x),
+    command: (name) => p.evaluate((n) => (window.__libHost as LibApi).command(n), name),
     destroy: () => p.evaluate(() => (window.__libHost as LibApi).destroy()),
     releaseLoader: () => p.evaluate(() => (window.__libHost as LibApi).releaseLoader()),
     lib,
