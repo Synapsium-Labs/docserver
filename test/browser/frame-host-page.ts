@@ -103,6 +103,8 @@ export interface InitHow {
   readonly forgeRegister?: 'other' | 'inserted' | 'text';
   /** The B5.7 'before settled' row: the frame's font-face probe is held for a second, so the frame stays unsettled. */
   readonly holdSettled?: boolean;
+  /** A context with touch input (page.tap works), for the rows that tap a host button. */
+  readonly touch?: boolean;
 }
 
 /** How the host page itself is served. */
@@ -387,6 +389,7 @@ async function openContext(browser: Browser, how: InitHow, files: ReadonlyMap<st
     viewport: { width: 1200, height: 900 },
     deviceScaleFactor: 1,
     colorScheme: 'light',
+    ...(how.touch === true ? { hasTouch: true } : {}),
     // No `serviceWorkers: 'block'`: Playwright enforces it with a script that reads navigator.serviceWorker in every
     // frame, which throws in a sandboxed opaque-origin frame and would show as the frame's own error.
   });
@@ -582,6 +585,9 @@ function libMain(): void {
   const container = document.createElement('div');
   container.className = 'mount';
   document.body.append(container);
+  for (const b of Array.from(document.querySelectorAll<HTMLElement>('[data-host-command]'))) {
+    b.addEventListener('click', () => frame?.command(b.dataset['hostCommand'] ?? ''));
+  }
   const rec = {
     events: [] as { kind: string; value: unknown; at: number }[],
     loads: [] as { at: number; readyBefore: number }[],
@@ -738,6 +744,13 @@ export interface LibPageHow {
   readonly policy?: string;
   /** A nonce the page's two scripts carry (for a policy whose script-src names it). */
   readonly scriptNonce?: string;
+  /**
+   * A host's header bar in miniature (batch 1.1, one header bar): two buttons above the iframe, `#host-settings` and
+   * `#host-contents`, each calling DocFrame.command from its own click handler, and an iframe as wide as the page and as
+   * tall as what is left under the bar, so a row sets the viewport before the mount and the frame is laid out at that
+   * width from its first frame.
+   */
+  readonly hostBar?: boolean;
 }
 
 export interface LibHost {
@@ -778,7 +791,7 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
 <link rel="stylesheet" href="/host-page.css">
 </head>
 <body>
-<script${nonce} src="/host.js"></script>
+${served.hostBar === true ? '<div class="host-bar"><button id="host-settings" data-host-command="settings">settings</button><button id="host-contents" data-host-command="contents">contents</button></div>\n' : ''}<script${nonce} src="/host.js"></script>
 <script${nonce} src="/host-page.js"></script>
 </body>
 </html>
@@ -787,7 +800,9 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
     ['/', { body: page, type: 'text/html; charset=utf-8' }],
     ['/host.js', { body: await hostBundle(), type: 'text/javascript; charset=utf-8' }],
     ['/host-page.js', { body: `(${libMain.toString()})();\n`, type: 'text/javascript; charset=utf-8' }],
-    ['/host-page.css', { body: 'body { margin: 0; }\niframe { width: 1000px; height: 760px; border: 0; display: block; }\n', type: 'text/css' }],
+    ['/host-page.css', { body: served.hostBar === true
+        ? 'body { margin: 0; }\n.host-bar { height: 40px; display: flex; gap: 8px; align-items: center; }\niframe { width: 100%; height: calc(100vh - 40px); border: 0; display: block; }\n'
+        : 'body { margin: 0; }\niframe { width: 1000px; height: 760px; border: 0; display: block; }\n', type: 'text/css' }],
   ]);
   const o = await openContext(browser, how, files, served.policy, 'window.__libHost !== undefined');
   const p = o.page;
