@@ -114,7 +114,7 @@ export function build(ctx: FeatureContext): void {
   // own button, run synchronously from its click handler), which must find the menu closed and leave it so, or a second
   // press on that button would open it again. The flag is cleared after the gesture's click has been dispatched (a
   // bubbling listener on the document runs after the target's own), by a key's click (detail 0, before the target's
-  // handler), by a cancelled press (pointercancel), when the menu opens, and when the command consumes it. A focus
+  // handler), by a cancelled press (pointercancel), by the next press (pointerdown), an auxclick or a contextmenu, when the menu opens, and when the command consumes it. A focus
   // leaving the menu (Tab) never sets it: no click follows to clear it.
   // The document's listeners are there only while they have work, as the pin's are (nav.ts), so an instance with a closed
   // menu adds none: the outside-press listener while the menu is open, the gesture's while the flag is set. They are
@@ -143,6 +143,11 @@ export function build(ctx: FeatureContext): void {
       }, true),
       onDoc('click', clearFlag, false),
       onDoc('pointercancel', clearFlag, false),
+      // A press that sends no click (a right-click, a release outside the window): the next press, or its auxclick or
+      // contextmenu, ends the gesture. These are the gesture's own listeners, so a closed menu with no flag adds none.
+      onDoc('pointerdown', clearFlag, true),
+      onDoc('auxclick', clearFlag, false),
+      onDoc('contextmenu', clearFlag, false),
     ];
     stopGesture = () => {
       for (const end of ends) end();

@@ -987,8 +987,9 @@ describe('the settings\' document listeners exist only while they have work (fix
     expect(net('pointerdown')).toBe(base);
     runEnhancementCommand(root, 'settings');
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); // an outside press
-    expect(net('pointerdown')).toBe(base);
+    expect(net('pointerdown')).toBe(base + 1); // the outside-press listener is gone; the gesture's own pointerdown clear is on
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(net('pointerdown')).toBe(base); // and gone with the click
     runEnhancementCommand(root, 'settings');
     await destroyEnhancement(root); // a destroy with the menu open: nothing is left, the other features' listeners included
     expect(net('pointerdown')).toBe(0);
@@ -996,26 +997,89 @@ describe('the settings\' document listeners exist only while they have work (fix
     remove.mockRestore();
   });
 
-  it('the gesture\'s click and pointercancel listeners are added by an outside close and gone once the gesture ends', async () => {
+  it('the gesture\'s listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends', async () => {
     const add = vi.spyOn(document, 'addEventListener');
     const remove = vi.spyOn(document, 'removeEventListener');
-    const net = (): number => ['click', 'pointercancel'].reduce((n, t) => n + add.mock.calls.filter((c) => c[0] === t).length - remove.mock.calls.filter((c) => c[0] === t).length, 0);
+    const net = (): number => ['click', 'pointercancel', 'pointerdown', 'auxclick', 'contextmenu'].reduce((n, t) => n + add.mock.calls.filter((c) => c[0] === t).length - remove.mock.calls.filter((c) => c[0] === t).length, 0);
     const root = mount();
     await enhance(root, { chrome: { bar: false } });
     const base = net();
     runEnhancementCommand(root, 'settings');
-    expect(net()).toBe(base);
+    expect(net()).toBe(base + 1); // the outside-press listener
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(net()).toBe(base + 3);
+    expect(net()).toBe(base + 6); // it is gone, and the gesture's six are on
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
     expect(net()).toBe(base);
     runEnhancementCommand(root, 'settings');
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(net()).toBe(base + 3);
+    expect(net()).toBe(base + 6);
     await destroyEnhancement(root); // a destroy while the gesture's listeners are on
-    expect(net()).toBe(base);
+    expect(net()).toBe(0);
     add.mockRestore();
     remove.mockRestore();
+  });
+});
+
+describe('a stale outside-press flag clears on the next press (fix round 4)', () => {
+  const down = (el: Element): void => void el.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+  const open = async (): Promise<HTMLElement> => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    return root;
+  };
+
+  it('a right-click outside (pointerdown, contextmenu, no click), then the host button\'s press: the command opens the menu', async () => {
+    const root = await open();
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    down(document.body);
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new Event('contextmenu', { bubbles: true }));
+    down(host);
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+
+  it('a press that sends nothing after it: the next press clears the flag before its click', async () => {
+    const root = await open();
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    down(document.body);
+    down(host);
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+
+  it('an auxclick ends the gesture too', async () => {
+    const root = await open();
+    down(document.body);
+    document.body.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('a contextmenu ends the gesture too', async () => {
+    const root = await open();
+    down(document.body);
+    document.body.dispatchEvent(new Event('contextmenu', { bubbles: true }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('the same-gesture toggle still closes', async () => {
+    const root = await open();
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    down(host);
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(menu(root).hidden).toBe(true);
+    host.remove();
   });
 });
 
