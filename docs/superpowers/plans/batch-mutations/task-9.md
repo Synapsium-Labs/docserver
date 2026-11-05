@@ -83,3 +83,33 @@ The changelog guard matched hash bullets with a regex and checked the matches, s
   }
 ]
 ```
+
+## Fix round FR2: the B9 rows on the final changelog bytes (review 1494)
+
+The changelog moved again in this round (the keep's limit, the in-root click, the floors' table-row clause), so every B9 row is run again on its final bytes, as fix round FR1 did: `CHANGELOG.md` sha256 `e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5`, `test/package.test.ts` sha256 `dcb9f32dd7ef5804146beb8a50067ad4209da72dc1aba0af1a54b4820d4b7d5e`, `package-lock.json` sha256 `6068765b09ae93be9b84d6d4e8ff268cb91cc38c91e827e22066e7660d10737c`. Method as above: one edit, a bounded run of `test/package.test.ts` (23 tests) behind a `ulimit -u` of the measured thread count plus 1500 (2524 to 2597 threads), every changed file restored by byte copy and its sha256 compared equal. The edits are those of the FR1 rows, B9a to B9f, B9x and B9y, made inside the top entry; B9d edits the lockfile's root package entry. The sha256 and the counts below replace those of the FR1 and B9z records above, which were measured on earlier bytes of the changelog.
+
+| Row | Result on the final bytes |
+|---|---|
+| B9a | 1 failed \| 22 passed (23); "every hash bullet names a manifest asset with its sha256 and, where the manifest carries one, its csp" |
+| B9b | 1 failed \| 22 passed (23); "is headed by the package's version, which assets.json and the lockfile's root share" |
+| B9c | 1 failed \| 22 passed (23); the "every hash bullet" test |
+| B9d | 1 failed \| 22 passed (23); the "is headed by" test |
+| B9e | 1 failed \| 22 passed (23); the "every hash bullet" test |
+| B9f | 1 failed \| 22 passed (23); the "every hash bullet" test |
+| B9x | green: 23 passed (23), by design |
+| B9y | green: 23 passed (23), by design |
+| B9z | with the assertion: 1 failed \| 22 passed (23), the "every hash bullet" test (the line named in the message); with the assertion line removed (the old test): green, 23 passed (23) |
+
+```json
+[
+  {"id": "B9a", "rc": 1, "red": "1 failed | 22 passed (23)", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9b", "rc": 1, "red": "1 failed | 22 passed (23)", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9c", "rc": 1, "red": "1 failed | 22 passed (23)", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9d", "rc": 1, "red": "1 failed | 22 passed (23)", "sha256": "6068765b09ae93be9b84d6d4e8ff268cb91cc38c91e827e22066e7660d10737c", "restored": true},
+  {"id": "B9e", "rc": 1, "red": "1 failed | 22 passed (23)", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9f", "rc": 1, "red": "1 failed | 22 passed (23)", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9x", "rc": 0, "red": "none: 23 passed (23), by design", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9y", "rc": 0, "red": "none: 23 passed (23), by design", "sha256": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "restored": true},
+  {"id": "B9z", "rc": 1, "red": "1 failed | 22 passed (23)", "against_old_test": {"rc": 0, "red": "none: 23 passed (23), the assertion line removed"}, "sha256": {"changelog": "e743cbba360af2aab13a98633afa6ca7fec53a27b92a35163824543d38bf02c5", "test": "dcb9f32dd7ef5804146beb8a50067ad4209da72dc1aba0af1a54b4820d4b7d5e"}, "restored": true}
+]
+```

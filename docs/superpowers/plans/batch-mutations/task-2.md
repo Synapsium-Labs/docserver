@@ -210,7 +210,9 @@ Method as above: bytes saved with the sha256 of the fixed file, one edit, a boun
 |---|---|---|---|---|---|
 | B2k | the handover writes the gate inside the keep | `src/enhance/diagrams.ts` | the two writes (the gate and `drawing`) moved out of `ctx.position.keep(() => { ... })`, the relayout kept | test/enhance-mermaid-after-ready.test.ts: 1 failed \| 10 passed (11). test/enhance-mermaid-after-ready.test.ts: the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal |
 | B2l | the handover asks for a relayout | `src/enhance/diagrams.ts` | `ctx.relayout('content');` removed after the keep, in the same branch | test/enhance-mermaid-after-ready.test.ts: 1 failed \| 10 passed (11). test/enhance-mermaid-after-ready.test.ts: the gate and `drawing` are written inside one position.keep, and a relayout (content) is asked for before any figure is drawn | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal |
-| B2m | the handover keeps the reader's place (Chromium) | `src/enhance/diagrams.ts` | as B2k; the frame is rebuilt for the row (`node scripts/build-frame.mjs`) | test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium): 2 failed \| 24 skipped (26). test/browser/mermaid-after-ready.test.ts: B5.8: the reading block stays where it was across the handover, within 2 px (the block moved from 149.78125 to 507); test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root, the engine without scroll anchoring): the same | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B2m | the handover keeps the reader's place (Chromium) | `src/enhance/diagrams.ts` | as B2k; the frame is rebuilt for the row (`node scripts/build-frame.mjs`) | test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium): 3 failed \| 27 skipped (30). test/browser/mermaid-after-ready.test.ts: B5.8: the reading block stays where it was across the handover, within 2 px (the block moved from 149.78125 to 508); test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root, the engine without scroll anchoring): the same; test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root and the frame's `scrollTo` dropping a position's fraction of a pixel, the engine that keeps whole pixels): the reading block stays where it was across the handover, within 2 px (the block moved from 150.78125 to 509) | sha256 `a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+
+Re-run at fix round FR2 on the tip's bytes (review 1494, F5): B2m, with `src/enhance/diagrams.ts` at the sha256 above (3 failed | 27 skipped (30), the third B5.8 row having been added since; 2713 threads, limit 4213). The counts of the table row are those of this re-run.
 
 ```json
 [
@@ -251,10 +253,11 @@ Method as above: bytes saved with the sha256 of the fixed file, one edit, a boun
     "change": "as B2k; the frame is rebuilt for the row (`node scripts/build-frame.mjs`)",
     "tests": "test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium)",
     "rc": 1,
-    "red": "2 failed | 24 skipped (26)",
+    "red": "3 failed | 27 skipped (30)",
     "failing": [
-      "test/browser/mermaid-after-ready.test.ts: B5.8: the reading block stays where it was across the handover, within 2 px (the block moved from 149.78125 to 507)",
-      "test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root, the engine without scroll anchoring): the same"
+      "test/browser/mermaid-after-ready.test.ts: B5.8: the reading block stays where it was across the handover, within 2 px (the block moved from 149.78125 to 508)",
+      "test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root, the engine without scroll anchoring): the same",
+      "test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root and the frame's `scrollTo` dropping a position's fraction of a pixel, the engine that keeps whole pixels): the reading block stays where it was across the handover, within 2 px (the block moved from 150.78125 to 509)"
     ],
     "assertionErrorsOnly": true,
     "sha256": "a37947c6c91d54028c827bd35e806b2df4f1636f8131c2abab8cabfd25d631bc",
@@ -265,7 +268,7 @@ Method as above: bytes saved with the sha256 of the fixed file, one edit, a boun
 
 ## Fix round FR1: on WebKit the keeps added up a fraction of a pixel each (finding F1, the CI failure of B5.8)
 
-CI (both Node legs, WebKit only) failed both B5.8 rows: the reading block moved from 150.671875 to 153.453125 px, 2.78 px over a limit of 2. The gate's keep held; the cause is in `position.keep` (`src/enhance/nav.ts`). An engine keeps a scroll position in whole pixels, and WebKit drops the fraction it is asked for (the row's own first scroll, asked to put the block at 150, left it at 150.67: more than half a pixel, and below, so the fraction was dropped, not rounded). Each kept change of a fractional height (the gate, then six drawings) left the block up to a pixel lower, and the next keep anchored it where it was left, so the fractions added up. Chromium rounds to the nearest pixel, which hid it (0.78 px over the same seven changes). The fix: a keep that anchors the block the last keep put back, less than a pixel from the offset that keep aimed at, with the page not scrolled since, aims at that offset again. The tolerance stays 2 px: with the fix the error is at most one engine step, whatever the number of changes.
+CI (both Node legs, WebKit only) failed both B5.8 rows: the reading block moved from 150.671875 to 153.453125 px, 2.78 px over a limit of 2. The gate's keep held; the cause is in `position.keep` (`src/enhance/nav.ts`). An engine keeps a scroll position in whole pixels, and WebKit drops the fraction it is asked for (the row's own first scroll, asked to put the block at 150, left it at 150.67: more than half a pixel, and below, so the fraction was dropped, not rounded). Each kept change of a fractional height (the gate, then six drawings) left the block up to a pixel lower, and the next keep anchored it where it was left, so the fractions added up. Chromium rounds to the nearest pixel, which hid it (0.78 px over the same seven changes). The fix: a keep that anchors the block the last keep put back, less than a pixel from the offset that keep aimed at, with the page not scrolled since, aims at that offset again. The tolerance stays 2 px: with the fix the error stays under one engine step, whatever the number of changes, on an engine whose scroll step is at most one CSS pixel; at browser zoom below 100% (a step above one CSS pixel) the drift adds up as it did before the fix, no worse (review 1494, F3, ledger C113).
 
 Red before the fix: `test/enhance-nav.test.ts` (new case, a stage whose `scrollTo` drops the fraction: 4.5 px over six keeps) and a third B5.8 row with the frame's `scrollTo` wrapped to drop the fraction (5.22 px on Chromium). Green after: `test/enhance-nav.test.ts` 53 passed; `test/browser/mermaid-after-ready.test.ts` 15 passed | 15 skipped on Chromium (WebKit rows skipped; WebKit is proved in CI).
 
@@ -273,11 +276,13 @@ Method as above: `src/enhance/nav.ts` saved with its sha256, one edit, a bounded
 
 | Row | Guard | File | Change | Red | Restore |
 |---|---|---|---|---|---|
-| B2n | a keep aims at the offset the last keep aimed at, so whole-pixel fractions do not add up | `src/enhance/nav.ts` | `at = Object.freeze({ line: at.line, offset: aimed.offset, y: at.y });` → `void 0;` | test/enhance-nav.test.ts: 1 failed | 52 passed (53). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 4.5 to be less than 1) | sha256 `ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f` restored, equal |
-| B2o | the same, in the frame (Chromium) | `src/enhance/nav.ts` | as B2n; the frame is rebuilt for the row (`node scripts/build-frame.mjs`) | test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium): 1 failed | 2 passed | 27 skipped (30). test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root and the frame's `scrollTo` dropping a position's fraction of a pixel, the engine that keeps whole pixels): the reading block stays where it was across the handover, within 2 px (the block moved from 150.78125 to 156) | sha256 `ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
-| B2p | only while the page has not scrolled since | `src/enhance/nav.ts` | `at.y === aimed.y && ` removed from the condition | test/enhance-nav.test.ts: 1 failed | 52 passed (53). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 150.75 to be 151) | sha256 `ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f` restored, equal |
-| B2q | only for a fraction: less than a pixel off | `src/enhance/nav.ts` | ` && Math.abs(at.offset - aimed.offset) < 1` removed from the condition | test/enhance-nav.test.ts: 1 failed | 52 passed (53). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 151 to be 181) | sha256 `ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f` restored, equal |
-| B2r | only for the same block | `src/enhance/nav.ts` | `at.line === aimed.line && ` removed from the condition | test/enhance-nav.test.ts: 1 failed | 52 passed (53). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 181 to be 181.5) | sha256 `ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f` restored, equal |
+| B2n | a keep aims at the offset the last keep aimed at, so whole-pixel fractions do not add up | `src/enhance/nav.ts` | `at = Object.freeze({ line: at.line, offset: aimed.offset, y: at.y });` → `void 0;` | test/enhance-nav.test.ts: 1 failed \| 53 passed (54). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 4.5 to be less than 1) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal |
+| B2o | the same, in the frame (Chromium) | `src/enhance/nav.ts` | as B2n; the frame is rebuilt for the row (`node scripts/build-frame.mjs`) | test/browser/mermaid-after-ready.test.ts -t B5.8 (Chromium): 1 failed \| 2 passed \| 27 skipped (30). test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root and the frame's `scrollTo` dropping a position's fraction of a pixel, the engine that keeps whole pixels): the reading block stays where it was across the handover, within 2 px (the block moved from 150.78125 to 156) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B2p | only while the page has not scrolled since | `src/enhance/nav.ts` | `at.y === aimed.y && ` removed from the condition | test/enhance-nav.test.ts: 1 failed \| 53 passed (54). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 150.75 to be 151) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal |
+| B2q | only for a fraction: less than a pixel off | `src/enhance/nav.ts` | ` && Math.abs(at.offset - aimed.offset) < 1` removed from the condition | test/enhance-nav.test.ts: 1 failed \| 53 passed (54). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 151 to be 181) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal |
+| B2r | only for the same block | `src/enhance/nav.ts` | `at.line === aimed.line && ` removed from the condition | test/enhance-nav.test.ts: 1 failed \| 53 passed (54). test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 181 to be 181.5) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal |
+
+Re-run at fix round FR2 on the tip's bytes (review 1494, F5): `src/enhance/nav.ts` at sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d`; B2n, B2p, B2q and B2r on `test/enhance-nav.test.ts` (1 failed | 53 passed (54) each; 2961, 2996, 2587 and 2587 threads, limits 1500 above), B2o on the frame rebuilt (1 failed | 2 passed | 27 skipped (30); 2803 threads, limit 4303). Each file restored by byte copy with the sha256 equal, the generated outputs of B2o restored from the saved bytes, and `node scripts/build-frame.mjs --check` green after each. The sha256 and the counts of the rows are these; the earlier ones (`ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f`, 53 cases) were those of the file before a later comment edit and the cases added since.
 
 ```json
 [
@@ -288,12 +293,12 @@ Method as above: `src/enhance/nav.ts` saved with its sha256, one edit, a bounded
     "change": "`at = Object.freeze({ line: at.line, offset: aimed.offset, y: at.y });` → `void 0;`",
     "tests": "test/enhance-nav.test.ts",
     "rc": 1,
-    "red": "1 failed | 52 passed (53)",
+    "red": "1 failed | 53 passed (54)",
     "failing": [
       "test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 4.5 to be less than 1)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f",
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
     "restored": true
   },
   {
@@ -308,7 +313,7 @@ Method as above: `src/enhance/nav.ts` saved with its sha256, one edit, a bounded
       "test/browser/mermaid-after-ready.test.ts: B5.8 (instrumented: `overflow-anchor: none` on the frame's root and the frame's `scrollTo` dropping a position's fraction of a pixel, the engine that keeps whole pixels): the reading block stays where it was across the handover, within 2 px (the block moved from 150.78125 to 156)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f",
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
     "restored": true
   },
   {
@@ -318,12 +323,12 @@ Method as above: `src/enhance/nav.ts` saved with its sha256, one edit, a bounded
     "change": "`at.y === aimed.y && ` removed from the condition",
     "tests": "test/enhance-nav.test.ts",
     "rc": 1,
-    "red": "1 failed | 52 passed (53)",
+    "red": "1 failed | 53 passed (54)",
     "failing": [
       "test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 150.75 to be 151)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f",
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
     "restored": true
   },
   {
@@ -333,12 +338,12 @@ Method as above: `src/enhance/nav.ts` saved with its sha256, one edit, a bounded
     "change": "` && Math.abs(at.offset - aimed.offset) < 1` removed from the condition",
     "tests": "test/enhance-nav.test.ts",
     "rc": 1,
-    "red": "1 failed | 52 passed (53)",
+    "red": "1 failed | 53 passed (54)",
     "failing": [
       "test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 151 to be 181)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f",
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
     "restored": true
   },
   {
@@ -348,12 +353,12 @@ Method as above: `src/enhance/nav.ts` saved with its sha256, one edit, a bounded
     "change": "`at.line === aimed.line && ` removed from the condition",
     "tests": "test/enhance-nav.test.ts",
     "rc": 1,
-    "red": "1 failed | 52 passed (53)",
+    "red": "1 failed | 53 passed (54)",
     "failing": [
       "test/enhance-nav.test.ts: position.keep > an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1) (expected 181 to be 181.5)"
     ],
     "assertionErrorsOnly": true,
-    "sha256": "ab3857928c514e20e4923fca83d94318f49fa36aa6d8fec38259192e4041b22f",
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
     "restored": true
   }
 ]

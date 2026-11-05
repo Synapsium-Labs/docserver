@@ -2300,14 +2300,14 @@ Method as in the first section of this file: bytes saved with the sha256 of the 
 
 | Row | Guard | File | Change | Red | Restore |
 |---|---|---|---|---|---|
-| B6au | a click inside the root ends the gesture (FR1, F2) | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0 \|\| contains(ctx.root, event.target)) clearFlag();` -> `if ((event as MouseEvent).detail === 0) clearFlag();` in the gesture's capture-phase click listener | test/enhance-settings.test.ts: 2 failed \| 52 passed (54). test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
-| B6av | the clear is made in the capture phase, before the root's own capture listeners | `src/enhance/settings.ts` | the gesture's first click listener registered for the bubble phase (`}, true),` -> `}, false),`) | test/enhance-settings.test.ts: 3 failed \| 51 passed (54). test/enhance-settings.test.ts: N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first; test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
-| B6aw | a click outside the root keeps the flag for the host's command | `src/enhance/settings.ts` | `\|\| contains(ctx.root, event.target)) clearFlag();` -> `\|\| !contains(ctx.root, event.target)) clearFlag();` (the clear made for an outside click instead of an inside one) | test/enhance-settings.test.ts: 6 failed \| 48 passed (54). test/enhance-settings.test.ts: a button outside the root: the first press opens, the second closes, a third opens again; test/enhance-settings.test.ts: the pointerdown is seen even when the host stops it on its button; test/enhance-settings.test.ts: the same-gesture toggle still closes; test/enhance-settings.test.ts: a click outside the root, the host button's, keeps the flag for its command: the same gesture still closes; test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6az | a click inside the root ends the gesture (FR1, F2) | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0 \|\| contains(ctx.root, event.target)) clearFlag();` -> `if ((event as MouseEvent).detail === 0) clearFlag();` in the gesture's capture-phase click listener | test/enhance-settings.test.ts: 2 failed \| 52 passed (54). test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6ba | the clear is made in the capture phase, before the root's own capture listeners | `src/enhance/settings.ts` | the gesture's first click listener registered for the bubble phase (`}, true),` -> `}, false),`) | test/enhance-settings.test.ts: 3 failed \| 51 passed (54). test/enhance-settings.test.ts: N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first; test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6bb | a click outside the root keeps the flag for the host's command | `src/enhance/settings.ts` | `\|\| contains(ctx.root, event.target)) clearFlag();` -> `\|\| !contains(ctx.root, event.target)) clearFlag();` (the clear made for an outside click instead of an inside one) | test/enhance-settings.test.ts: 6 failed \| 48 passed (54). test/enhance-settings.test.ts: a button outside the root: the first press opens, the second closes, a third opens again; test/enhance-settings.test.ts: the pointerdown is seen even when the host stops it on its button; test/enhance-settings.test.ts: the same-gesture toggle still closes; test/enhance-settings.test.ts: a click outside the root, the host button's, keeps the flag for its command: the same gesture still closes; test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
 
 ```json
 [
   {
-    "id": "B6au",
+    "id": "B6az",
     "guard": "a click inside the root ends the gesture (FR1, F2)",
     "file": "src/enhance/settings.ts",
     "change": "`if ((event as MouseEvent).detail === 0 || contains(ctx.root, event.target)) clearFlag();` -> `if ((event as MouseEvent).detail === 0) clearFlag();` in the gesture's capture-phase click listener",
@@ -2323,7 +2323,7 @@ Method as in the first section of this file: bytes saved with the sha256 of the 
     "restored": true
   },
   {
-    "id": "B6av",
+    "id": "B6ba",
     "guard": "the clear is made in the capture phase, before the root's own capture listeners",
     "file": "src/enhance/settings.ts",
     "change": "the gesture's first click listener registered for the bubble phase (`}, true),` -> `}, false),`)",
@@ -2340,7 +2340,7 @@ Method as in the first section of this file: bytes saved with the sha256 of the 
     "restored": true
   },
   {
-    "id": "B6aw",
+    "id": "B6bb",
     "guard": "a click outside the root keeps the flag for the host's command",
     "file": "src/enhance/settings.ts",
     "change": "`|| contains(ctx.root, event.target)) clearFlag();` -> `|| !contains(ctx.root, event.target)) clearFlag();` (the clear made for an outside click instead of an inside one)",

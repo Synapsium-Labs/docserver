@@ -671,8 +671,10 @@ Plan line 170 asks that each guard the batch left in place carry a case that goe
 
 | Row | Guard | Change | Tests | Verdict |
 |---|---|---|---|---|
-| B5b5 | the `done` guard alone (the exception stays) | `    if (done) return;` removed from `onViolation` | `test/browser/mermaid-after-ready.test.ts`: 1 failed \| 13 passed \| 14 skipped (28) | red through B5.4b (new): `AssertionError: expected 'serif' to be 'sans'`. A violation of another kind after ready (an image from another origin, img-src) is not a blocked inline script, so only this guard keeps it from ending the boot (state failed), after which the port's handler ignores the prefs op |
-| B5b6 | the blocked-inline exception alone (the `done` guard stays) | the `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` line removed | `test/browser/mermaid-after-ready.test.ts` and `test/browser/frame-boot.test.ts`: 0 failed \| 53 passed \| 53 skipped (106) | green: an equivalent mutant on Chromium (ledger C107, with the reason below) |
+| B5b5 | the `done` guard alone (the exception stays) | `    if (done) return;` removed from `onViolation` | `test/browser/mermaid-after-ready.test.ts`: 1 failed \| 14 passed \| 15 skipped (30) | red through B5.4b (new): `AssertionError: expected 'serif' to be 'sans'`. A violation of another kind after ready (an image from another origin, img-src) is not a blocked inline script, so only this guard keeps it from ending the boot (state failed), after which the port's handler ignores the prefs op |
+| B5b6 | the blocked-inline exception alone (the `done` guard stays) | the `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` line removed | `test/browser/mermaid-after-ready.test.ts` and `test/browser/frame-boot.test.ts`: 0 failed \| 53 passed \| 53 skipped (106) | green: an equivalent mutant on Chromium (ledger C107, with the reason below); superseded: red at fix round FR2 (section below, row B5b6s) |
+
+Re-run at fix round FR2 on the tip's bytes (review 1494, F5): B5b5, `src/frame-runtime/bootstrap.ts` at sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` (the same as recorded, restored equal), the frame rebuilt, `test/browser/mermaid-after-ready.test.ts` on Chromium: 1 failed | 14 passed | 15 skipped (30), red through B5.4b (2820 threads, limit 4320); the generated outputs restored from the saved bytes and `node scripts/build-frame.mjs --check` green. The counts of the B5b5 row are these (the file had 28 cases when the row was first run). B5b6's record above is superseded by B5b6s.
 
 B5b6, the reason. After ready, the `done` guard returns first, so the exception has no work there. Before ready the exception is for a blocked inline script of the frame's own (a tampered enhance script, a Mermaid build the policy refuses), whose failure the check that owns it reports with its own reason (`assets`, `mermaid`). On Chromium, as the code reads and the green rows below bear out (the ordering itself was not instrumented), that violation is delivered after the DOMContentLoaded handler has already run `start`, which settles the boot as failed with the owning reason, and a failed state is final (`fail` returns at once when the state is already failed), so a later `fail('boot')` changes nothing. The rows that would show it, frame-boot's flipped-enhance rows (error `assets`, not `boot`), stay green without the exception. This rests on Chromium's ordering; a case that needs the violation to arrive before DOMContentLoaded would need another engine's ordering, and WebKit is run in CI only. The guard stays as defence in depth against that ordering.
 
@@ -684,7 +686,7 @@ B5b6, the reason. After ready, the `done` guard returns first, so the exception 
     "edits": [{"file": "src/frame-runtime/bootstrap.ts", "old": "    if (done) return;\n    const directive", "new": "    const directive"}],
     "tests": ["test/browser/mermaid-after-ready.test.ts"],
     "rc": 1,
-    "red": "1 failed | 13 passed | 14 skipped (28)",
+    "red": "1 failed | 14 passed | 15 skipped (30)",
     "failing": ["test/browser/mermaid-after-ready.test.ts > chromium > B5.4b: a policy violation of another kind after ready (an image from another origin) leaves the frame alive: the bootstrap's `done` guard of onViolation, alone"],
     "assertionErrorsOnly": true,
     "sha256": {"src/frame-runtime/bootstrap.ts": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63"},
@@ -706,7 +708,7 @@ B5b6, the reason. After ready, the `done` guard returns first, so the exception 
     "restored": true,
     "generatedOutputsUnchanged": true,
     "checkAfterRestore": 0,
-    "verdict": "equivalent mutant on Chromium: the violation of a blocked inline script arrives after the boot has failed with its owner's reason, and a failed state is final (ledger C107)"
+    "verdict": "equivalent mutant on Chromium: the violation of a blocked inline script arrives after the boot has failed with its owner's reason, and a failed state is final (ledger C107); superseded: red at fix round FR2 (section below, row B5b6s)"
   }
 ]
 ```
@@ -717,7 +719,7 @@ The record of B5b6 above ran the blocked-inline exception of `onViolation` alone
 
 | Row | Guard | File | Change | Red | Restore |
 |---|---|---|---|---|---|
-| B5b6x | the blocked-inline exception alone (the `done` guard stays) | `src/frame-runtime/bootstrap.ts` | the line `if ((directive === 'script-src-elem' \| directive === 'script-src') && (blocked === 'inline' \| blocked === '')) return;` removed | `test/browser/host-policy.test.ts`: 0 failed \| 9 passed \| 9 skipped (18). Stays green: B5b6 is still an equivalent mutant on Chromium, now measured on L3.HB6 as well as on the two files above | `bootstrap.ts` sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` restored, equal; generated outputs restored from the saved bytes, `--check` green |
+| B5b6x | the blocked-inline exception alone (the `done` guard stays) | `src/frame-runtime/bootstrap.ts` | the line `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` removed | `test/browser/host-policy.test.ts`: 0 failed \| 9 passed \| 9 skipped (18). Stays green: B5b6 is still an equivalent mutant on Chromium, now measured on L3.HB6 as well as on the two files above. Superseded: red at fix round FR2 (section below, row B5b6s) | `bootstrap.ts` sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` restored, equal; generated outputs restored from the saved bytes, `--check` green |
 
 ```json
 [
@@ -731,7 +733,8 @@ The record of B5b6 above ran the blocked-inline exception of `onViolation` alone
     "failing": [],
     "assertionErrorsOnly": null,
     "sha256": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63",
-    "restored": true
+    "restored": true,
+    "verdict": "superseded: red at fix round FR2 (section below, row B5b6s)"
   }
 ]
 ```
