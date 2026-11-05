@@ -44,7 +44,10 @@
 //                      the page (nothing above can move) nothing is anchored; while a pin holds, the pin is applied
 //                      after instead; and for SMOOTH_MS after a smooth jump began nothing is anchored or restored,
 //                      since a scroll made then would stop it halfway. A keep inside a keep only runs `fn`. Relayout
-//                      runs inside it.
+//                      runs inside it. A scroll position is whole pixels in an engine (WebKit drops the fraction it is
+//                      asked for), so a restore can leave the block up to a pixel off; the next keep, when it anchors
+//                      that block less than a pixel from that offset and the page has not scrolled since, aims at the
+//                      same offset again, so a run of keeps never adds those fractions up.
 //   position.holdBar() keep the phone bar shown for BAR_HOLD_MS (a jump just moved the page); position.barHeld()
 //                      says whether that hold is still on (scroll.ts reads it).
 // And, for the reading position (position.ts) and goToHash, through placeOf(ctx.nav):
@@ -431,9 +434,18 @@ export function createNavigation(args: NavArgs): Navigation {
 
   // ── keep
   let keeping = 0;
+  /** Where the last keep put its block: its line, the offset it aimed at, and the scroll position it left (aimed). */
+  let aimed: Anchor | null = null;
   const keep = <T>(fn: () => T): T => {
     if (keeping > 0) return fn();
-    const at = pinned !== null || env.now() < smoothUntil || env.viewport().scrollY < 1 ? null : anchor();
+    let at = pinned !== null || env.now() < smoothUntil || env.viewport().scrollY < 1 ? null : anchor();
+    // An engine keeps a scroll position in whole pixels (WebKit drops the fraction it is asked for), so a restore can
+    // leave its block up to a pixel off the offset it aimed at. The next keep of that block, with the page not scrolled
+    // since, aims at the same offset again rather than at where the block was left, so those fractions never add up
+    // across a run of keeps (fix round FR1, F1: seven kept changes moved the reading line 2.78 px on WebKit).
+    if (at !== null && aimed !== null && at.line === aimed.line && at.y === aimed.y && Math.abs(at.offset - aimed.offset) < 1) {
+      at = Object.freeze({ line: at.line, offset: aimed.offset, y: at.y });
+    }
     keeping += 1;
     try {
       return fn();
@@ -442,7 +454,10 @@ export function createNavigation(args: NavArgs): Navigation {
       // After a destroy `fn` asked for (its teardown waits for the operation), neither scrolls: reach and env.scrollTo
       // check live().
       if (pinned !== null) hold();
-      else if (at !== null) restore(at);
+      else if (at !== null) {
+        restore(at);
+        aimed = Object.freeze({ line: at.line, offset: at.offset, y: env.viewport().scrollY });
+      }
     }
   };
 

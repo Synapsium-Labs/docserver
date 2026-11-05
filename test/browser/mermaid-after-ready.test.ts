@@ -32,7 +32,11 @@
 //         drawings' own heights differ from the sources', so only a place-keeping handover holds the block). Run twice:
 //         once as the engine does it, and once with the engine's native scroll anchoring off (`overflow-anchor: none`
 //         set through the frame's CSSOM from the harness, named in the title), which is what an engine without that
-//         feature (WebKit) does for every reader.
+//         feature (WebKit) does for every reader. And a third time, with anchoring off and the frame's `scrollTo` wrapped
+//         to drop a position's fraction of a pixel (named in the title): WebKit keeps a scroll position in whole pixels
+//         and drops the fraction it is asked for, so each kept change of a fractional height left the block up to a pixel
+//         lower, and the next keep anchored it there (on WebKit in CI the block moved 2.78 px over the seven kept changes:
+//         the gate and six drawings). The row holds that the keeps do not add those fractions up.
 //   B5.U  `{ t: 'mermaid', unavailable: true }` inserts no script element and every figure shows the load note.
 // The no-script boot (an 'after-ready' seed with Mermaid on and no Mermaid script gives ready, no FAILED mermaid) is
 // frame-boot.test.ts's row (batch B5.C), and the hostile Mermaid cases drawn after the handover are frame-mermaid.test.ts's
@@ -330,13 +334,30 @@ describeBrowsers((browser) => {
     }
   }, 120_000);
 
-  for (const anchoring of [true, false]) {
-    it(`B5.8${anchoring ? '' : ' (instrumented: `overflow-anchor: none` on the frame\'s root, the engine without scroll anchoring)'}: the reading block stays where it was across the handover, within ${String(TOLERANCE_PX)} px`, async () => {
+  const B58 = [
+    { anchoring: true, whole: false, named: '' },
+    { anchoring: false, whole: false, named: ' (instrumented: `overflow-anchor: none` on the frame\'s root, the engine without scroll anchoring)' },
+    {
+      anchoring: false,
+      whole: true,
+      named: " (instrumented: `overflow-anchor: none` on the frame's root and the frame's `scrollTo` dropping a position's fraction of a pixel, the engine that keeps whole pixels)",
+    },
+  ] as const;
+  for (const { anchoring, whole, named } of B58) {
+    it(`B5.8${named}: the reading block stays where it was across the handover, within ${String(TOLERANCE_PX)} px`, async () => {
       await open();
       try {
         await mountLate(LONG);
         const frame = host.frame();
         if (!anchoring) await frame.evaluate(() => document.documentElement.style.setProperty('overflow-anchor', 'none'));
+        if (whole) {
+          await frame.evaluate(() => {
+            const scroll = window.scrollTo.bind(window);
+            window.scrollTo = ((o: ScrollToOptions) => {
+              scroll({ ...o, top: Math.trunc(o.top ?? 0) });
+            }) as typeof window.scrollTo;
+          });
+        }
         const offset = (): Promise<number> => frame.evaluate(() => (document.getElementById('reading-block') as HTMLElement).getBoundingClientRect().top);
         // Scroll the heading to 150 px under the frame's top, with every fence above the reading line, and wait for it to hold.
         await frame.evaluate(() => {

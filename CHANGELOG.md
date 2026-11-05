@@ -49,7 +49,7 @@ The conformance corpus: `conformance/bridge-cases.json` gained the new operation
 The assets that moved, each with the sha256 that `assets/assets.json` records (`assets/assets.json` also records the new `version`); `assets/frame/guard.js`, the fonts and both Mermaid builds did not move:
 
 - `assets/frame/bootstrap.js`: `dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424`, csp `'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ='`
-- `assets/frame/enhance.js`: `655422aafe40ceb83c0e6df3a110abd61c8dd9c93a4bdabaff27d1662f4d4c2f`, csp `'sha256-ZVQiqv5Azrg8Dm3zoRCr1hyN2ck6S9q6/yfRZi9NTC8='`
+- `assets/frame/enhance.js`: `5dd0785476a6471a08f9bc7e56ed824c8bdd67614f8d337b28d1af1e5538ba28`, csp `'sha256-XdB4VHamRxoI+bx+Vu2CTIvdZ2FPjTN7KNGvHlU4uig='`
 - `assets/frame/reader.css`: `3d25119259344c28abdc8bb60d64f1ed662368c56dd5a49ab86430d2d38ce58a`
 - `assets/reader.css`: `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9`
 

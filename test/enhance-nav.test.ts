@@ -735,6 +735,50 @@ describe('position.keep', () => {
     expect([s.scrolled.length, s.points]).toEqual([1, []]);
   });
 
+  it('an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1)', async () => {
+    const s = stage();
+    let whole = true;
+    vi.spyOn(window, 'scrollTo').mockImplementation(((o: ScrollToOptions) => {
+      s.scrolled.push([o.top ?? 0, o.behavior ?? 'auto']);
+      s.y = Math.max(0, whole ? Math.trunc(o.top ?? 0) : (o.top ?? 0));
+    }) as never);
+    const root = mount();
+    await enhance(root);
+    const { position } = ctxOf(root);
+    const para = blockAfter(root, '3-plan');
+    let top = 1150.75;
+    s.tops.set(para, top);
+    s.y = 1000;
+    s.hit = para;
+    const offset = (): number => (s.tops.get(para) ?? 0) - s.y;
+    for (let i = 0; i < 6; i += 1) {
+      position.keep(() => {
+        top += 10.75; // a figure above drawn, its height a fraction of a pixel off the whole
+        s.tops.set(para, top);
+      });
+    }
+    expect(s.scrolled).toHaveLength(6);
+    expect(Math.abs(offset() - 150.75)).toBeLessThan(1);
+    expect(offset()).toBe(151.25);
+    // On an engine that keeps fractions, the reader scrolls a quarter of a pixel: the next keep keeps the block where the
+    // reader put it, not where the keeps before aimed.
+    whole = false;
+    s.y += 0.25;
+    position.keep(() => undefined);
+    expect(offset()).toBe(151);
+    // A block moved by a pixel or more with the page not scrolled (a change no keep made): the next keep keeps it there.
+    top += 30;
+    s.tops.set(para, top);
+    position.keep(() => undefined);
+    expect(offset()).toBe(181);
+    // Another block at the reading line, less than a pixel from where the last keep aimed: it keeps its own offset.
+    const other = el(root, 'h2', '3-plan');
+    s.tops.set(other, s.y + 181.5);
+    s.hit = other;
+    position.keep(() => undefined);
+    expect((s.tops.get(other) ?? 0) - s.y).toBe(181.5);
+  });
+
   it('nothing hit: back to the scroll position; a throwing fn still restores, then throws', async () => {
     const s = stage();
     const root = mount();
