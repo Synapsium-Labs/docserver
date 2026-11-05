@@ -1084,3 +1084,64 @@ describe('a stale outside-press flag clears on the next press (fix round 4)', ()
   });
 });
 
+
+describe('a host command acts on the menu\'s present state, never on a flag left by a gesture whose click never arrived (fix round FR1, F2)', () => {
+  const CARDS = ['# Cards', '', '## 1. Decisions', '', '| ID | Decision | Status |', '|---|---|---|', '| D1 | Keep the fold | Agreed |', '| D2 | Mark a section, as D1 says | Pending |', '', 'D1 and D2 are named here.'].join('\n');
+  const pointer = (el: Element, type: string, pointerType: string): void => void el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType }));
+  /** A tap as a touch device sends it: pointerdown, then the click (a PointerEvent, detail 1). */
+  const tap = (el: Element): MouseEvent => {
+    pointer(el, 'pointerdown', 'touch');
+    const click = new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1, pointerType: 'touch' });
+    el.dispatchEvent(click);
+    return click;
+  };
+  const trigger = (root: Element): HTMLAnchorElement => {
+    const found = root.querySelector('a.xref');
+    if (found === null) throw new Error('no card trigger');
+    return found as HTMLAnchorElement;
+  };
+
+  it('Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu', async () => {
+    const root = mount(CARDS);
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    // The precondition: the tap's click never reaches a bubbling listener on the document (the root's capture stops it).
+    let reached = 0;
+    const seen = (): void => void (reached += 1);
+    document.addEventListener('click', seen);
+    const click = tap(trigger(root));
+    document.removeEventListener('click', seen);
+    expect([reached, click.defaultPrevented]).toEqual([0, true]);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('the same after a tap on any other element of the root whose click is stopped there', async () => {
+    const root = mount(CARDS);
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    root.addEventListener('click', (e) => e.stopPropagation(), true);
+    const para = root.querySelector(':scope > p');
+    if (para === null) throw new Error('no paragraph');
+    tap(para);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('a click outside the root, the host button\'s, keeps the flag for its command: the same gesture still closes', async () => {
+    const root = mount(CARDS);
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    tap(host);
+    expect(menu(root).hidden).toBe(true);
+    tap(host);
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+});

@@ -114,7 +114,8 @@ export function build(ctx: FeatureContext): void {
   // own button, run synchronously from its click handler), which must find the menu closed and leave it so, or a second
   // press on that button would open it again. The flag is cleared after the gesture's click has been dispatched (a
   // bubbling listener on the document runs after the target's own), by a key's click (detail 0, before the target's
-  // handler), by a cancelled press (pointercancel), by the next press (pointerdown), an auxclick or a contextmenu, when the menu opens, and when the command consumes it. A focus
+  // handler), by a click inside the reader's root (seen in the capture phase, so a card that stops the click in the root
+  // cannot leave the flag set: a host command is never the second half of a gesture that ended inside the reader), by a cancelled press (pointercancel), by the next press (pointerdown), an auxclick or a contextmenu, when the menu opens, and when the command consumes it. A focus
   // leaving the menu (Tab) never sets it: no click follows to clear it.
   // The document's listeners are there only while they have work, as the pin's are (nav.ts), so an instance with a closed
   // menu adds none: the outside-press listener while the menu is open, the gesture's while the flag is set. They are
@@ -138,8 +139,12 @@ export function build(ctx: FeatureContext): void {
     closedByOutside = true;
     if (stopGesture !== null) return;
     const ends = [
+      // The first click of the page, in the capture phase (before the root's own capture listeners, so a card that stops
+      // the click there cannot hide it): a key's click, and any click whose target is inside this reader, end the gesture:
+      // it ended inside the reader, so no host command can be its second half. A click outside the root is kept: the host's
+      // own button, whose handler runs the command in the same gesture.
       onDoc('click', (event) => {
-        if ((event as MouseEvent).detail === 0) clearFlag();
+        if ((event as MouseEvent).detail === 0 || contains(ctx.root, event.target)) clearFlag();
       }, true),
       onDoc('click', clearFlag, false),
       onDoc('pointercancel', clearFlag, false),
