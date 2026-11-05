@@ -422,3 +422,65 @@ The rows B8h, B8i and B8j of the previous section named the rules as they were b
   }
 ]
 ```
+
+## Fix round FR2: a jump to a table row clears the head stuck below Aa (review F1)
+
+Fix round FR2, review F1 (measured on Chromium by the reviewer, and again here): a row with no id is a jump target (a link `#R14`, a quick jump, a card, an Index entry), and `marginOf` in `src/enhance/nav.ts` counted its sticky head at the bar's height, which is 0 in a frame, while the head sticks at `max(var(--bar-h), 50px)` on a bar-off root with Aa. Bar off with Aa at 390 px, a 40-row table, a click on a link `#R14`: before the change (B8.9 red) the row sat at 36.1 to 77.7 px and the head at 50 to 85.6 px, so the row was under the head; after (B8.9 green) the row clears the head. `marginOf` now reads the computed `top` of the table's head cell and counts the larger of it and the bar's height (`auto`, a head that does not stick, leaves the bar's height). The `tr[id]` rule (a row with an id of the host's own) has the same omission: one rule beside the FR1-e rules gives it the floor too (B8.10: before, margin 36px and the row at 36.1 px under a head ending at 85.6 px; after, green). The earlier statement in the FR1 section that no row of a test can show a row jump is superseded by B8.9 and B8.10.
+
+Method as in the sections above: for each row the target file's bytes and sha256 saved, the generated outputs saved, the edit made, `npm run build:frame` where the row says so, a bounded run (`ulimit -u` the measured thread count plus 1500 in the subshell, `timeout -k 10 600`, `./node_modules/.bin/vitest run --maxWorkers=2` on the named file with Chromium), the file restored from the saved bytes by copy, its sha256 compared equal, the generated outputs restored from the saved bytes, `node scripts/build-frame.mjs --check` green. The sha256 is that of the final `src/enhance/nav.ts` or `assets/reader.css`.
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B8m | a jump to a table row with no id counts the head at its computed top (review F1) | `src/enhance/nav.ts` | `Math.max(barH, stuckAt ?? 0) + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP)` -> `barH + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP)` (the margin of a `tr` back to the bar's height), then `npm run build:frame` | test/browser/frame-one-bar.test.ts -t B8.9 (Chromium): 1 failed \| 27 skipped (28). test/browser/frame-one-bar.test.ts: B8.9 (FR2, F1): bar off with Aa at 390 px, a jump to a table row with no id lands the row clear of the sticky head (row top 36.1, head bottom 85.6) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B8m2 | the same guard at unit level (a head with a computed top past the bar, and with auto) | `src/enhance/nav.ts` | the same edit as B8m, no rebuild (the unit file imports the source) | test/enhance-nav.test.ts (the unit project): 1 failed \| 53 passed (54). test/enhance-nav.test.ts: a row with no id counts the head at its computed top when that is a length and past the bar (FR2), and at the bar when it is auto (expected a scroll to 2910, got 2960) | sha256 `8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d` restored, equal ; no generated output moves (no build input is edited); `node scripts/build-frame.mjs --check` green |
+| B8n | a row with an id of its own clears the head stuck below Aa (the tr[id] rule, review F1) | `assets/reader.css` | in the rule `... .table-wrapper tr[id] { scroll-margin-top: ... }` under the bar-off root with Aa, `calc(max(var(--bar-h), 50px) + var(--thead-h, 40px))` -> `calc(var(--bar-h) + var(--thead-h, 40px))`, then `npm run build:frame` | test/browser/frame-one-bar.test.ts -t B8.10 (Chromium): 1 failed \| 27 skipped (28). test/browser/frame-one-bar.test.ts: B8.10 (FR2, F1): bar off with Aa at 390 px, a table row with an id of its own scrolled to the top lands clear of the sticky head (row top 36.1, head bottom 85.6, margin 36px) | sha256 `9643075331610addc88df72d55289be749fb4c991607c96c22f7bde63e22eeb5` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+
+```json
+[
+  {
+    "id": "B8m",
+    "guard": "a jump to a table row with no id counts the head at its computed top (review F1)",
+    "file": "src/enhance/nav.ts",
+    "change": "`Math.max(barH, stuckAt ?? 0) + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP)` -> `barH + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP)` (the margin of a `tr` back to the bar's height), then `npm run build:frame`",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.9 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 27 skipped (28)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.9 (FR2, F1): bar off with Aa at 390 px, a jump to a table row with no id lands the row clear of the sticky head (row top 36.1, head bottom 85.6)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
+    "restored": true
+  },
+  {
+    "id": "B8m2",
+    "guard": "the same guard at unit level (a head with a computed top past the bar, and with auto)",
+    "file": "src/enhance/nav.ts",
+    "change": "the same edit as B8m, no rebuild (the unit file imports the source)",
+    "tests": "test/enhance-nav.test.ts (the unit project)",
+    "rc": 1,
+    "red": "1 failed | 53 passed (54)",
+    "failing": [
+      "test/enhance-nav.test.ts: a row with no id counts the head at its computed top when that is a length and past the bar (FR2), and at the bar when it is auto (expected a scroll to 2910, got 2960)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "8645cac2225073b6671cbc0a118bad7317a7d5c78cf8ffd3e03f6936fba3234d",
+    "restored": true
+  },
+  {
+    "id": "B8n",
+    "guard": "a row with an id of its own clears the head stuck below Aa (the tr[id] rule, review F1)",
+    "file": "assets/reader.css",
+    "change": "in the rule `... .table-wrapper tr[id] { scroll-margin-top: ... }` under the bar-off root with Aa, `calc(max(var(--bar-h), 50px) + var(--thead-h, 40px))` -> `calc(var(--bar-h) + var(--thead-h, 40px))`, then `npm run build:frame`",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.10 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 27 skipped (28)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.10 (FR2, F1): bar off with Aa at 390 px, a table row with an id of its own scrolled to the top lands clear of the sticky head (row top 36.1, head bottom 85.6, margin 36px)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "9643075331610addc88df72d55289be749fb4c991607c96c22f7bde63e22eeb5",
+    "restored": true
+  }
+]
+```

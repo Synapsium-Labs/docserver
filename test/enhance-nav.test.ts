@@ -470,6 +470,25 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     expect(s.scrolled.at(-1)).toEqual([3000 - HEAD_GAP, 'auto']);
   });
 
+  it('a row with no id counts the head at its computed top when that is a length and past the bar (FR2), and at the bar when it is auto', async () => {
+    const s = stage();
+    let top = '50px';
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(((target: Element) => ({
+      getPropertyValue: (prop: string) => (prop === 'top' && target.tagName === 'TH' ? top : prop === '--bar-h' ? '0px' : ''),
+    })) as never);
+    const root = mount('Text.\n\n| ID | What |\n|---|---|\n| R1 | One |\n');
+    s.tops.set(row(root, 'R1'), 3000);
+    defineRow('R1');
+    await enhance(root, { initialHash: 'R1' });
+    expect(s.scrolled).toEqual([[3000 - 50 - HEAD_GAP, 'auto']]); // the head sticks at 50px on a root with no bar: below it
+    top = 'auto';
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([3000 - HEAD_GAP, 'auto']); // a head that does not stick: the bar's height (0)
+    top = '20px';
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([3000 - 20 - HEAD_GAP, 'auto']);
+  });
+
   it('a revealer that destroys the instance while it lands stops it: no pin, and enhance() rejects', async () => {
     const s = stage();
     hooks.before.push({

@@ -35,7 +35,8 @@
 // no id (a row or a rule, LD6) gets the margin it would have with one, computed here, and the window is scrolled
 // (env.scrollTo): the `[id]` margin (`--bar-h` + ID_GAP), as the browser resolves it on the document's first heading
 // (whatever unit the host gave `--bar-h`); for a table row, the bar's height that margin implies (never below 0) plus
-// the table head's height (`--thead-h`, HEAD_GAP when unset), as `tr[id]`'s margin is. With no heading, the bar's height
+// the table head's height (`--thead-h`, HEAD_GAP when unset), as `tr[id]`'s margin is; the bar's height there is the larger
+// of that and the head's own computed `top` when it is a length (a root with no bar sticks it below Aa). With no heading, the bar's height
 // is `--bar-h` read as a length in px (0 when it is not one).
 //
 // The position seam (`ctx.position`, for every feature):
@@ -298,7 +299,13 @@ export function createNavigation(args: NavArgs): Navigation {
       break;
     }
     const barH = idMargin === null ? (px(env.computed(root, '--bar-h')) ?? 0) : Math.max(0, idMargin - ID_GAP);
-    if (el.localName === 'tr') return barH + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP);
+    if (el.localName === 'tr') {
+      // The head sticks at its own computed `top`, which is below Aa on a root with no bar (the stylesheet's floor): count it
+      // there when it is a length and larger than the bar's height; `auto` (the head does not stick) leaves the bar's.
+      const head = el.closest('table')?.querySelector('th') ?? null;
+      const stuckAt = head === null ? null : px(env.computed(head, 'top'));
+      return Math.max(barH, stuckAt ?? 0) + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP);
+    }
     return idMargin ?? barH + ID_GAP;
   };
 

@@ -36,6 +36,10 @@
 //          root whose host sets `--bar-h: 64px` (its own fixed header, as an ./enhance host does; set here as an inline
 //          custom property on the root) keeps the head at 64 px and the tools at 70; (b) a bar-off root with
 //          `chrome.settings: false` (no Aa) keeps the head at 0 px and the tools at 6.
+//   B8.9   fix round FR2 (review F1): a jump to a table row that has no id, on a bar-off root that carries Aa, at 390 px,
+//          lands the row clear of the sticky head, which sticks at the floor below Aa and not at the bar's height (0).
+//   B8.10  the same for a row a host gave an id (set here from the frame's side), brought to the top with scrollIntoView, which
+//          applies the stylesheet's `tr[id]` scroll margin.
 //
 // Waits are polls on a condition with a load-tolerant cap, and a row that must see that something did NOT happen ends
 // with a command that travels the same port after it (an ordered barrier), never a fixed sleep.
@@ -82,6 +86,19 @@ const A6_MD = [
   PARA,
   '',
   ...['```mermaid', 'flowchart TD', ...Array.from({ length: 14 }, (_, i) => `  N${String(i)} --> N${String(i + 1)}`), '```', '', '*Figure 1. A tall chain.*', ''],
+  PARA,
+  '',
+  ...['| Name | Status |', '|---|---|', ...Array.from({ length: 40 }, (_, i) => `| R${String(i + 1)} | Open |`), ''],
+  PARA,
+  '',
+].join('\n');
+
+/** The B8.9 document: a link to the 14th row of a 40-row two-column table (its rows carry no id), the table, then text. */
+const ROW_MD = [
+  '# B8.9',
+  '',
+  'Jump to [row fourteen](#R14).',
+  '',
   PARA,
   '',
   ...['| Name | Status |', '|---|---|', ...Array.from({ length: 40 }, (_, i) => `| R${String(i + 1)} | Open |`), ''],
@@ -526,4 +543,68 @@ describeBrowsers((browser: BrowserName) => {
       }
     }, 300_000);
   }
+
+  it('B8.9 (FR2, F1): bar off with Aa at 390 px, a jump to a table row with no id lands the row clear of the sticky head', async () => {
+    const host = await openLibHost(await browserFor(browser), { touch: false }, { hostBar: true });
+    try {
+      await host.page.setViewportSize({ width: 390, height: 844 });
+      await host.mount({ document: { ...input(ROW_MD), initialHash: null }, assets, watchdogMs: 60_000, features: NO_BAR });
+      await until(async () => (await host.lib()).events.some((e) => e.kind === 'ready'), 'the frame is ready');
+      const frame = host.frame();
+      expect(await barH(host)).toBe('0px');
+      expect(await frame.evaluate(() => document.querySelector('.table-wrapper')?.classList.contains('fits') === true), 'the table fits, so its head sticks').toBe(true);
+      expect(await frame.evaluate(() => document.getElementById('R14')), 'the row has no id').toBeNull();
+      await frame.evaluate(() => (document.querySelector('a[href="#R14"]') as HTMLElement).click());
+      // The jump may be smooth: wait until the row's top has held still for five samples.
+      const rowTop = (): Promise<number> => frame.evaluate(() => (Array.from(document.querySelectorAll('tbody tr')).find((r) => r.querySelector('td')?.textContent?.trim() === 'R14') as HTMLElement).getBoundingClientRect().top);
+      let last = Number.NaN;
+      let still = 0;
+      await until(
+        async () => {
+          const now = await rowTop();
+          still = Math.abs(now - last) < 0.5 ? still + 1 : 0;
+          last = now;
+          return still >= 5;
+        },
+        'the jump has settled',
+        rowTop,
+      );
+      const got = await frame.evaluate(() => {
+        const row = Array.from(document.querySelectorAll('tbody tr')).find((r) => r.querySelector('td')?.textContent?.trim() === 'R14') as HTMLElement;
+        const head = document.querySelector('.table-wrapper th') as HTMLElement;
+        const r = row.getBoundingClientRect();
+        const h = head.getBoundingClientRect();
+        return { rowTop: r.top, rowBottom: r.bottom, headTop: h.top, headBottom: h.bottom, scrollY: window.scrollY };
+      });
+      console.warn(`host-measure: ${JSON.stringify({ row: 'B8.9', browser, got })}`);
+      expect(got.scrollY, 'the page scrolled to the row').toBeGreaterThan(0);
+      expect(got.headTop, 'the head is stuck below Aa').toBeGreaterThanOrEqual(49);
+      expect(got.rowTop, `the row clears the head: ${JSON.stringify(got)}`).toBeGreaterThanOrEqual(got.headBottom - 1);
+    } finally {
+      await host.close();
+    }
+  }, 300_000);
+
+  it('B8.10 (FR2, F1): bar off with Aa at 390 px, a table row with an id of its own scrolled to the top lands clear of the sticky head', async () => {
+    const host = await openLibHost(await browserFor(browser), { touch: false }, { hostBar: true });
+    try {
+      await host.page.setViewportSize({ width: 390, height: 844 });
+      await host.mount({ document: { ...input(ROW_MD), initialHash: null }, assets, watchdogMs: 60_000, features: NO_BAR });
+      await until(async () => (await host.lib()).events.some((e) => e.kind === 'ready'), 'the frame is ready');
+      const got = await host.frame().evaluate(async () => {
+        const row = Array.from(document.querySelectorAll('tbody tr')).find((r) => r.querySelector('td')?.textContent?.trim() === 'R14') as HTMLElement;
+        row.id = 'host-row';
+        row.scrollIntoView({ block: 'start', behavior: 'instant' });
+        await new Promise((r) => setTimeout(r, 400));
+        const r = row.getBoundingClientRect();
+        const h = (document.querySelector('.table-wrapper th') as HTMLElement).getBoundingClientRect();
+        return { rowTop: r.top, headTop: h.top, headBottom: h.bottom, margin: getComputedStyle(row).scrollMarginTop };
+      });
+      console.warn(`host-measure: ${JSON.stringify({ row: 'B8.10', browser, got })}`);
+      expect(got.headTop, 'the head is stuck below Aa').toBeGreaterThanOrEqual(49);
+      expect(got.rowTop, `the row clears the head: ${JSON.stringify(got)}`).toBeGreaterThanOrEqual(got.headBottom - 1);
+    } finally {
+      await host.close();
+    }
+  }, 300_000);
 });

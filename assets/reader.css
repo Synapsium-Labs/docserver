@@ -9,7 +9,8 @@
    or when the system is dark and data-theme is not "light". A host may override any token on the root. One is
    measured: --bar-h, the height sticky table heads and anchor jumps clear, is the reader's own bar's (48px, or what
    the reader measures when something makes the bar taller); a host that builds its own bar instead (chrome.bar false)
-   may set it to the height of a fixed header of its own.
+   may set it to the height of a fixed header of its own, as a length: `0px`, never a unitless `0`, because the sticky floors
+   `max(var(--bar-h), 50px)` below are invalid with a unitless 0.
 
    Ids and classes. The reader's own popups and panels (the settings menu, the preview card, the quick jump, the keys
    sheet, the contents panels, the full-screen figure) are keyed on CLASSES here, never on ids: a rendered document's
@@ -778,6 +779,7 @@
    host that sets --bar-h to the height of its own fixed header keeps the head at that height and the tools 6px under it, as
    before. A root without Aa (chrome.settings false) keeps its rules. --bar-h stays what the host or the frame says. */
 [data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)):has(> .aa-wrap) .table-wrapper.fits th { top: max(var(--bar-h), 50px); }
+[data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)):has(> .aa-wrap) .table-wrapper tr[id] { scroll-margin-top: calc(max(var(--bar-h), 50px) + var(--thead-h, 40px)); }
 [data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)):has(> .aa-wrap) figure.mermaid-figure .tools { top: max(calc(var(--bar-h) + 6px), 50px); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu[hidden] { display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
