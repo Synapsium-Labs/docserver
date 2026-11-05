@@ -747,7 +747,7 @@ Method: the bytes and full sha256 of `src/frame-runtime/bootstrap.ts` saved, the
 
 | Row | Guard | File | Change | Red | Restore |
 |---|---|---|---|---|---|
-| B5b6s | the blocked-inline exception alone (the `done` guard stays), on the case that delivers the violation before the start | `src/frame-runtime/bootstrap.ts` | the line `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` removed, then `npm run build:frame` | `test/browser/frame-boot.test.ts -t B5.4c` (Chromium): 1 failed \| 79 skipped (80). B5.4c: a blocked-inline violation delivered before the bootstrap's DOMContentLoaded handler leaves the owning reason: ready, then error assets, not boot (received `error boot`) | sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` restored, equal; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B5b6s | the blocked-inline exception alone (the `done` guard stays), on the case that delivers the violation before the start | `src/frame-runtime/bootstrap.ts` | the line `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` removed, then `npm run build:frame` | `test/browser/frame-boot.test.ts -t B5.4c` (Chromium): 1 failed \| 79 skipped (80). B5.4c: a blocked-inline violation delivered before the bootstrap's DOMContentLoaded handler leaves the owning reason: ready, then error assets, not boot (received `error boot`). Re-run at the review fix-ups with the required members (the test page's violation event now passes `documentURI`, `violatedDirective`, `originalPolicy`, `disposition` and `statusCode` as the CSP3 interface requires, so an engine that enforces them still gets the event): the same 1 failed \| 79 skipped (80), received `error boot` (2157 threads, limit 3657) | sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` restored, equal; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
 
 ```json
 [
@@ -763,6 +763,7 @@ Method: the bytes and full sha256 of `src/frame-runtime/bootstrap.ts` saved, the
     ],
     "assertionErrorsOnly": true,
     "sha256": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63",
+    "rerunAtReviewFixups": "with the required members of the violation event; 1 failed | 79 skipped (80), received error boot; 2157 threads, limit 3657",
     "restored": true
   }
 ]

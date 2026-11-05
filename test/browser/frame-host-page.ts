@@ -310,7 +310,7 @@ function initScript(how: InitHow): string | null {
   }
   if (${String(how.violationBeforeStart === true)}) {
     document.addEventListener('DOMContentLoaded', () => {
-      document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'script-src-elem', blockedURI: 'inline' }));
+      document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { documentURI: location.href, violatedDirective: 'script-src-elem', effectiveDirective: 'script-src-elem', originalPolicy: '', disposition: 'enforce', blockedURI: 'inline', statusCode: 0 }));
     });
   }
   if (${String(how.holdSettled === true)}) {
