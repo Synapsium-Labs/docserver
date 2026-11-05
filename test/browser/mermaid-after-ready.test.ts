@@ -14,6 +14,9 @@
 //   B5.4  A text with one character changed is blocked by the policy (a script-src refusal, for a script that WAS
 //         inserted): every figure shows the load note, the frame stays mounted, sends no error, and a prefs op posted
 //         after it still takes effect (the frame is alive inside).
+//   B5.4b A violation of another kind after ready (an image from another origin) leaves the frame alive: a prefs op still
+//         takes effect (the `done` guard of the bootstrap's onViolation, which B5.4 alone does not tell from the blocked-inline
+//         exception: each holds the blocked script's violation after ready).
 //   B5.5  A `docserver:register` dispatched by other code in the frame is ignored. From inside a capture listener on the
 //         frame's document for the real event, within the synchronous appendChild window, a forged one is dispatched
 //         (a) on another element, (b) on the inserted element itself, and (c) after stopping the real event there, on
@@ -233,6 +236,32 @@ describeBrowsers((browser) => {
       expect(opsOf(rec, ['error'])).toEqual([]);
       expect(rec.loads).toHaveLength(1);
       expect(rec.closes).toEqual([]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await done();
+    }
+  }, 120_000);
+
+  it("B5.4b: a policy violation of another kind after ready (an image from another origin) leaves the frame alive: the bootstrap's `done` guard of onViolation, alone", async () => {
+    await open();
+    try {
+      const nonce = await mountLate(DIAGRAMS);
+      // The violation is of img-src, not a blocked inline script, so the exception for inline scripts does not cover it: only
+      // the `done` guard keeps a violation after ready from ending the boot (state failed) and with it the port's handling.
+      await host.frame().evaluate(() => {
+        const image = new Image();
+        image.src = 'https://example.invalid/blocked.png';
+      });
+      for (let i = 0; i < 50 && refusals(host, /img-src/).length === 0; i += 1) await sleep(100);
+      expect(refusals(host, /img-src/)).not.toEqual([]);
+      const font = (): Promise<string | null> => host.frame().evaluate(() => document.body.querySelector(':scope > article')?.getAttribute('data-font') ?? null);
+      expect(await font()).toBe('serif');
+      await host.send('main', { t: 'prefs', font: 'sans' });
+      await host.frame().waitForFunction(() => document.body.querySelector(':scope > article')?.getAttribute('data-font') === 'sans', undefined, { timeout: 10_000 }).catch(() => undefined);
+      expect(await font()).toBe('sans');
+      const rec = await host.record();
+      expect(data(rec)[0]).toEqual(readyOf(nonce));
+      expect(opsOf(rec, ['error'])).toEqual([]);
       expect(host.errors).toEqual([]);
     } finally {
       await done();

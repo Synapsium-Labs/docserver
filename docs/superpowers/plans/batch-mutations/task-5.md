@@ -15,7 +15,7 @@ Added by the the wave's rulings and the fix round: B5i (the count check of `late
 Every row is red through assertions except as noted:
 
 - B5g2 stays green: an equivalent mutant (above).
-- B5b3 and B5b4 stay green on this path, and are not called equivalent mutants. The blocked script's violation arrives after `ready`, and `onViolation` has two guards that each keep it from failing the frame there: `if (done) return` and the exception for a blocked inline script. Dropping either alone leaves the other, so each survives because the other guard also holds after ready. The guards' own jobs lie elsewhere: B5b3's `done` guard also stops a non-inline violation after ready from failing the frame, and B5b4's exception's job is before ready. No row in this batch measures either; parked (ledger C107). B5b drops both (the brief's first form, "fail the frame on that violation"), and goes red through B5.4's prefs op: the failed frame drops it (`data-font` stays `serif`).
+- B5b3 and B5b4 stay green on this path (superseded: fix round FR1 gave B5b3 a case of its own and recorded B5b4 as an equivalent mutant on Chromium, B5b5 and B5b6 below). The blocked script's violation arrives after `ready`, and `onViolation` has two guards that each keep it from failing the frame there: `if (done) return` and the exception for a blocked inline script. Dropping either alone leaves the other, so each survives because the other guard also holds after ready. The guards' own jobs lie elsewhere: B5b3's `done` guard also stops a non-inline violation after ready from failing the frame, and B5b4's exception's job is before ready. No row in this batch measures either; parked (ledger C107). B5b drops both (the brief's first form, "fail the frame on that violation"), and goes red through B5.4's prefs op: the failed frame drops it (`data-font` stays `serif`).
 - B5h is red by a renderer crash, not an assertion: the test's `frame.evaluate` rejected with `Target crashed`. It reproduced on a second run (row B5h-rerun). The cause is not established; the plain drop inserts a script whose text is the empty string (the `textContent` setter makes `undefined` empty, as in B5h2), and no further explanation is claimed. B5h2 reads the unavailable op's missing text as an empty script explicitly, and is the assertion red for the guard (B5.U's script count, 5 against 4).
 - B5b2 is the form that leaves the figures `waiting` when the blocked script registers nothing (B5.4's state assertion).
 
@@ -663,4 +663,50 @@ Known and parked (ledger C107): a forger that runs in the frame before the hando
     }
   ]
 }
+```
+
+## Fix round FR1: each pre-existing `onViolation` guard alone (review 1480, A9)
+
+Plan line 170 asks that each guard the batch left in place carry a case that goes red when that guard alone is removed, or a recorded equivalent mutant. B5b dropped the two guards of `onViolation` (`if (done) return;` and the exception for a blocked inline script) together, and B5b3 and B5b4 each stayed green alone on the after-ready path, because each of the two holds that path by itself. Fix round FR1 gives the first its own case and records the second as an equivalent mutant on Chromium. Method as above: one row at a time, on Chromium, the bytes and full sha256 of `src/frame-runtime/bootstrap.ts` saved, the generated outputs (`assets/assets.json`, `src/frame/manifest.generated.ts`, `assets/frame/*`, `assets/reader.css`) saved, `npm run build:frame` run after the edit, the named files run behind `timeout -k 10 600` with `ulimit -u` at the measured thread count plus 1500, every saved file written back by byte copy, the source's sha256 compared equal, and `node scripts/build-frame.mjs --check` run after the restore ("the outputs equal a fresh build" for both rows); the working tree then showed no change to any generated output. The source's sha256 before and after both rows: `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63`.
+
+| Row | Guard | Change | Tests | Verdict |
+|---|---|---|---|---|
+| B5b5 | the `done` guard alone (the exception stays) | `    if (done) return;` removed from `onViolation` | `test/browser/mermaid-after-ready.test.ts`: 1 failed \| 13 passed \| 14 skipped (28) | red through B5.4b (new): `AssertionError: expected 'serif' to be 'sans'`. A violation of another kind after ready (an image from another origin, img-src) is not a blocked inline script, so only this guard keeps it from ending the boot (state failed), after which the port's handler ignores the prefs op |
+| B5b6 | the blocked-inline exception alone (the `done` guard stays) | the `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` line removed | `test/browser/mermaid-after-ready.test.ts` and `test/browser/frame-boot.test.ts`: 0 failed \| 53 passed \| 53 skipped (106) | green: an equivalent mutant on Chromium (ledger C107, with the reason below) |
+
+B5b6, the reason. After ready, the `done` guard returns first, so the exception has no work there. Before ready the exception is for a blocked inline script of the frame's own (a tampered enhance script, a Mermaid build the policy refuses), whose failure the check that owns it reports with its own reason (`assets`, `mermaid`). On Chromium, as the code reads and the green rows below bear out (the ordering itself was not instrumented), that violation is delivered after the DOMContentLoaded handler has already run `start`, which settles the boot as failed with the owning reason, and a failed state is final (`fail` returns at once when the state is already failed), so a later `fail('boot')` changes nothing. The rows that would show it, frame-boot's flipped-enhance rows (error `assets`, not `boot`), stay green without the exception. This rests on Chromium's ordering; a case that needs the violation to arrive before DOMContentLoaded would need another engine's ordering, and WebKit is run in CI only. The guard stays as defence in depth against that ordering.
+
+```json
+[
+  {
+    "id": "B5b5",
+    "guard": "the `if (done) return` of onViolation alone (the blocked-inline exception still holds)",
+    "edits": [{"file": "src/frame-runtime/bootstrap.ts", "old": "    if (done) return;\n    const directive", "new": "    const directive"}],
+    "tests": ["test/browser/mermaid-after-ready.test.ts"],
+    "rc": 1,
+    "red": "1 failed | 13 passed | 14 skipped (28)",
+    "failing": ["test/browser/mermaid-after-ready.test.ts > chromium > B5.4b: a policy violation of another kind after ready (an image from another origin) leaves the frame alive: the bootstrap's `done` guard of onViolation, alone"],
+    "assertionErrorsOnly": true,
+    "sha256": {"src/frame-runtime/bootstrap.ts": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63"},
+    "sha256After": {"src/frame-runtime/bootstrap.ts": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63"},
+    "restored": true,
+    "generatedOutputsUnchanged": true,
+    "checkAfterRestore": 0
+  },
+  {
+    "id": "B5b6",
+    "guard": "the blocked-inline exception of onViolation alone (`if (done) return` still holds)",
+    "edits": [{"file": "src/frame-runtime/bootstrap.ts", "old": "    if ((directive === 'script-src-elem' || directive === 'script-src') && (blocked === 'inline' || blocked === '')) return;\n", "new": ""}],
+    "tests": ["test/browser/mermaid-after-ready.test.ts", "test/browser/frame-boot.test.ts"],
+    "rc": 0,
+    "red": "0 failed | 53 passed | 53 skipped (106)",
+    "failing": [],
+    "sha256": {"src/frame-runtime/bootstrap.ts": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63"},
+    "sha256After": {"src/frame-runtime/bootstrap.ts": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63"},
+    "restored": true,
+    "generatedOutputsUnchanged": true,
+    "checkAfterRestore": 0,
+    "verdict": "equivalent mutant on Chromium: the violation of a blocked inline script arrives after the boot has failed with its owner's reason, and a failed state is final (ledger C107)"
+  }
+]
 ```
