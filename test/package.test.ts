@@ -196,3 +196,31 @@ describe('.npmrc', () => {
     expect(lines).toContain('engine-strict=true');
   });
 });
+
+describe('CHANGELOG.md: the newest entry', () => {
+  // The entry of the version in package.json names the sha256 of every asset that moved since the last release, as
+  // assets/assets.json records it (the changelog's own rule), and its heading is the package's version.
+  const changelog = readText('CHANGELOG.md');
+  const version = (JSON.parse(readText('package.json')) as { version: string }).version;
+  const top = changelog.slice(changelog.indexOf('## '), changelog.indexOf('\n## ', changelog.indexOf('## ') + 3));
+  const assets = readJson('assets/assets.json') as { version: string; files: { path: string; sha256: string }[] };
+
+  it("is headed by the package's version, which assets.json and the lockfile's root share", () => {
+    expect(top.startsWith(`## ${version}\n`)).toBe(true);
+    expect(assets.version).toBe(version);
+    expect((lock as unknown as { version: string }).version).toBe(version);
+    expect(lock.packages['']?.version).toBe(version);
+  });
+
+  it('names the new sha256 (and csp) of each moved asset, each equal to assets.json', () => {
+    // The moved list is what the entry itself names, one bullet per asset; each must match the manifest.
+    const bullets = [...top.matchAll(/^- `assets\/([^`]+)`: `([0-9a-f]{64})`(?:, csp `([^`]+)`)?$/gm)];
+    expect(bullets.length).toBeGreaterThanOrEqual(4);
+    for (const [, path, sha, csp] of bullets) {
+      const file = assets.files.find((f) => f.path === path) as { sha256: string; csp?: string } | undefined;
+      expect(file, path).toBeDefined();
+      expect(sha, path).toBe(file!.sha256);
+      if (csp !== undefined) expect(csp, path).toBe(file!.csp);
+    }
+  });
+});

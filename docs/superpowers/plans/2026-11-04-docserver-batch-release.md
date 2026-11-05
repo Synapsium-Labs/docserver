@@ -485,9 +485,11 @@ Numbered `BX-<n>` while the wave runs; each is folded into a C-ruling by Task 9 
 
 | ID | Task | What departed and why | Ruling |
 |---|---|---|---|
-| BX-1 | 2 | The typecheck forced two edits outside Task 2's file list: the `draw` docstring in src/frame/document.ts:136 and the type pin at test/frame-document.test.ts:176 (both files are Tasks 3 and 7's), because FrameOptions.mermaid.draw is the seed's MermaidDraw | Accepted: a docstring and a type pin only; Tasks 3 and 7 write after it (controller) |
-| BX-2 | 3 | The :359 conditional moved into adapters.ts as mermaidOption()/arrivesLate() so B3.6/B3.7 are unit-testable; pin.ts (the reservation helper) and test/frame-build.test.ts touched; README's policy-hash quote synced (stale since Task 2) | Accepted (controller) |
+| BX-1 | 2 | The typecheck forced two edits outside Task 2's file list: the `draw` docstring in src/frame/document.ts:136 and the type pin at test/frame-document.test.ts:176 (both files are Tasks 3 and 7's), because FrameOptions.mermaid.draw is the seed's MermaidDraw | Accepted: a docstring and a type pin only; Tasks 3 and 7 write after it (controller); folded into C107 |
+| BX-2 | 3 | The :359 conditional moved into adapters.ts as mermaidOption()/arrivesLate() so B3.6/B3.7 are unit-testable; pin.ts (the reservation helper) and test/frame-build.test.ts touched; README's policy-hash quote synced (stale since Task 2) | Accepted (controller); folded into C107 |
 | BX-3 | 3 | Late registration accepted only as exactly one register from the inserted element with initialize and render; else load() null: the stricter reading of BD4's "only from the element it inserted, once" | Accepted (controller); folded into C107 |
+| BX-4 | 8 | `test/browser/host-frame.test.ts` is left unchanged although Task 8's brief lists it: it pins no adapter list, no `DocFrame` shape, no `--bar-h` and no command, so the one-bar rows live in `test/browser/frame-one-bar.test.ts`, which drives the same host page | Accepted (controller); folded into C108 |
+| BX-5 | 9 | The brief asked for an empty mutation record and `test/pack.test.ts` was Task 6's; Task 9 moved the tarball name pinned in `test/pack.test.ts` (it names the version), added a test in `test/package.test.ts` that pins the changelog's top entry to the package version, the lockfile root and `assets/assets.json`, and recorded that test's rows (B9a and onward) in `batch-mutations/task-9.md` | Accepted (controller); folded into C109 |
 
 ---
 
