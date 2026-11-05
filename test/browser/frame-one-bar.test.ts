@@ -23,20 +23,28 @@
 //   B8.4   onProgress is given values within 0 to 1, and scrolling to the end reports 1 last.
 //   B8.5   a measurement, not an assertion: pixels from the iframe's top to the title's top at 390 px wide, with
 //          chrome.topSpace true and false (bar off), and with the bar on for reference. Printed as `host-measure:` lines.
+//   B8.6   fix round FR1 (advisory A6), bar off at 390 px wide inside the frame, with a drawn figure and a two-column
+//          table (three or more columns stack on a phone, with no head to stick): (a) the open settings menu ends inside the frame's bottom edge (its max-height counts the bar, which
+//          `--bar-h: 0` zeroes, so the sticky Aa's own top and height must be counted too), at two frame heights; (b) the
+//          sticky Aa covers no control's hit area: at the centre of the stuck figure tools' last button, and of the stuck
+//          table head's last cell, the element found is not Aa. The numbers are printed as `host-measure:` lines.
 //
 // Waits are polls on a condition with a load-tolerant cap, and a row that must see that something did NOT happen ends
 // with a command that travels the same port after it (an ordered barrier), never a fixed sleep.
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { FrameAssets } from '../../src/frame/index.js';
-import { render } from '../../src/render/index.js';
+import { render, scanRefs } from '../../src/render/index.js';
 import { openLibHost, type LibHost, type LibMountSpec } from './frame-host-page.js';
 import { input, loadFrame, sleep } from './frame-shared.js';
 import { browserFor, closeBrowsers, describeBrowsers, type BrowserName } from './harness.js';
 
 let assets: FrameAssets;
+let mermaidText = '';
 
 beforeAll(async () => {
-  assets = (await loadFrame()).assets;
+  const built = await loadFrame();
+  assets = built.assets;
+  mermaidText = built.mermaid;
 }, 300_000);
 
 afterAll(closeBrowsers);
@@ -312,4 +320,84 @@ describeBrowsers((browser: BrowserName) => {
     console.warn(`host-measure: ${JSON.stringify({ row: 'B8.5', browser, viewportWidth: 390, titleTopFromIframeTop: rows })}`);
     for (const r of Object.values(rows)) expect(Number.isFinite(r.title)).toBe(true);
   }, 240_000);
+  it('B8.6 (A6): bar off at 390 px, the open menu ends inside the frame and the sticky Aa covers neither the stuck figure tools nor the stuck table head', async () => {
+    const figure = ['```mermaid', 'flowchart TD', ...Array.from({ length: 14 }, (_, i) => `  N${String(i)} --> N${String(i + 1)}`), '```', '', '*Figure 1. A tall chain.*', ''];
+    // Two columns: a table of three or more stacks into cards on a phone, and then has no head to stick.
+    const table = ['| Name | Status |', '|---|---|', ...Array.from({ length: 40 }, (_, i) => `| R${String(i + 1)} | Open |`), ''];
+    const md = ['# A6', '', PARA, '', ...figure, PARA, '', ...table, PARA, ''].join('\n');
+    const numbers: Record<string, unknown> = {};
+    const overflows: string[] = [];
+    for (const [name, height, features] of [['top space', 844, NO_BAR], ['top space', 560, NO_BAR], ['no top space', 560, NO_BAR_NO_SPACE]] as const) {
+      const host = await openLibHost(await browserFor(browser), { touch: false }, { hostBar: true });
+      try {
+        await host.page.setViewportSize({ width: 390, height });
+        await host.mount({
+          document: { ...input(md), initialHash: null, scan: { mermaid: scanRefs(md).mermaid } },
+          assets,
+          watchdogMs: 60_000,
+          features,
+          mermaidDraw: 'after-ready',
+          loader: 'immediate',
+          mermaidText,
+        });
+        await until(async () => (await host.lib()).events.some((e) => e.kind === 'ready'), 'the frame is ready');
+        const frame = host.frame();
+        await until(() => frame.evaluate(() => document.querySelector('[data-docreader-root]')?.getAttribute('data-docreader-diagrams') === 'drawn'), 'the figure is drawn');
+        expect(await barH(host)).toBe('0px');
+        // (b) the stuck figure tools: scroll into the figure until its tools stick, then find what is at the last button's centre.
+        const stuckTools = await frame.evaluate(async () => {
+          const fig = document.querySelector('figure.mermaid-figure') as HTMLElement;
+          window.scrollTo({ top: window.scrollY + fig.getBoundingClientRect().top + 120, behavior: 'instant' });
+          await new Promise((r) => setTimeout(r, 300));
+          const tools = fig.querySelector('.tools') as HTMLElement;
+          const buttons = Array.from(tools.querySelectorAll('button'));
+          const last = buttons.at(-1) as HTMLElement;
+          const r = last.getBoundingClientRect();
+          const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          const aa = (document.querySelector('.aa-btn') as HTMLElement).getBoundingClientRect();
+          return { aa: [aa.left, aa.top, aa.right, aa.bottom].map(Math.round), overlapPx: Math.round(Math.max(0, Math.min(r.right, aa.right) - Math.max(r.left, aa.left))) * Math.round(Math.max(0, Math.min(r.bottom, aa.bottom) - Math.max(r.top, aa.top))), toolsTop: tools.getBoundingClientRect().top, button: last.textContent, rect: [r.left, r.top, r.right, r.bottom].map(Math.round), hit: at === null ? null : `${at.tagName.toLowerCase()}.${String(at.className)}`, coveredByAa: at?.closest('.aa-wrap') != null, buttons: buttons.length };
+        });
+        // The stuck table head: scroll into the table, then the last head cell's centre.
+        const stuckHead = await frame.evaluate(async () => {
+          const wrapper = document.querySelector('.table-wrapper') as HTMLElement;
+          window.scrollTo({ top: window.scrollY + wrapper.getBoundingClientRect().top + 200, behavior: 'instant' });
+          await new Promise((r) => setTimeout(r, 300));
+          const ths = Array.from(wrapper.querySelectorAll('th'));
+          const last = ths.at(-1) as HTMLElement;
+          const r = last.getBoundingClientRect();
+          const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          const aa = (document.querySelector('.aa-btn') as HTMLElement).getBoundingClientRect();
+          return { aa: [aa.left, aa.top, aa.right, aa.bottom].map(Math.round), overlapPx: Math.round(Math.max(0, Math.min(r.right, aa.right) - Math.max(r.left, aa.left))) * Math.round(Math.max(0, Math.min(r.bottom, aa.bottom) - Math.max(r.top, aa.top))), fits: wrapper.classList.contains('fits'), thTop: r.top, rect: [r.left, r.top, r.right, r.bottom].map(Math.round), hit: at === null ? null : `${at.tagName.toLowerCase()}.${String(at.className)}`, coveredByAa: at?.closest('.aa-wrap') != null };
+        });
+        // (a) the open menu, from the stuck position and from the top of the document: its bottom against the frame's.
+        const menuNow = (): Promise<{ top: number; bottom: number; frameH: number; scrollH: number; clientH: number; aaTop: number; maxHeight: string }> =>
+          frame.evaluate(() => {
+            const m = document.querySelector('.aa-menu') as HTMLElement;
+            const r = m.getBoundingClientRect();
+            const aa = (document.querySelector('.aa-wrap') as HTMLElement).getBoundingClientRect();
+            return { top: r.top, bottom: r.bottom, frameH: window.innerHeight, scrollH: m.scrollHeight, clientH: m.clientHeight, aaTop: aa.top, maxHeight: getComputedStyle(m).maxHeight };
+          });
+        const menus: Record<string, Awaited<ReturnType<typeof menuNow>>> = {};
+        for (const where of ['stuck', 'top'] as const) {
+          if (where === 'top') await frame.evaluate(async () => {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            await new Promise((r) => setTimeout(r, 300));
+          });
+          await host.command('settings');
+          await until(() => menuOpen(host), `the menu is open (${where})`);
+          menus[where] = await menuNow();
+          await host.command('settings');
+          await until(async () => !(await menuOpen(host)), `the menu is closed (${where})`);
+        }
+        numbers[`${name}, frame ${String(height - 40)} px high`] = { stuckTools, stuckHead, menus, pastBottomBy: Object.fromEntries(Object.entries(menus).map(([k, m]) => [k, Math.round((m.bottom - m.frameH) * 10) / 10])) };
+        expect(stuckTools.coveredByAa, `the stuck tools: ${JSON.stringify(stuckTools)}`).toBe(false);
+        expect(stuckHead.coveredByAa, `the stuck head: ${JSON.stringify(stuckHead)}`).toBe(false);
+        for (const [where, m] of Object.entries(menus)) if (m.bottom > m.frameH) overflows.push(`${name}, frame ${String(height - 40)} px high, ${where}: ${JSON.stringify(m)}`);
+      } finally {
+        console.warn(`host-measure: ${JSON.stringify({ row: 'B8.6', browser, viewportWidth: 390, numbers })}`);
+        await host.close();
+      }
+    }
+    expect(overflows, 'a menu runs past the frame\'s bottom edge').toEqual([]);
+  }, 300_000);
 });

@@ -208,3 +208,55 @@ Ruling T6-j's other half is row B8.1c: with the focus away from the frame the me
   ]
 }
 ```
+
+## Fix round FR1: the bar-off menu ends inside the frame (advisory A6)
+
+Fix round FR1, item A6 (the review's advisory A6): with the bar off inside the frame, the frame's prelude sets `--bar-h` to 0 (question Q10: it stays 0), the settings menu's `max-height` is `calc(100vh - var(--bar-h) - 24px)`, and the sticky Aa sits 8px from the top and 34px high. Does the menu run past the frame's bottom, and does Aa cover a control? Measured in Chromium (`test/browser/frame-one-bar.test.ts`, B8.6), bar off, 390 px wide, inside the frame, with a drawn two-column-table document: the figure's tools stuck at the top (a tall figure scrolled into) and the table's head stuck (a 40-row two-column table scrolled into; a table of three or more columns stacks into cards on a phone and has no head).
+
+(a) The menu: its natural height is 628px, so in a frame 804px high (viewport 844px, the host's 40px bar above the iframe) it ends inside: top 51px, bottom 681px (122.8px to spare, stuck) and top 71px, bottom 701px (102.8px to spare, at the top of the document, where Aa has not stuck and sits 28px down). In a frame 520px high (viewport 560px) the menu's `max-height` is 496px and it runs past the frame's bottom edge: stuck, top 51px, bottom 547px, 27px past; at the top, top 71px, bottom 567px, 47px past; with `chrome.topSpace` false, top 51px and bottom 547px in both positions, 27px past. TRUE for a frame shorter than about 650px. Fix, CSS only: a rule for a root with no bar, `max-height: calc(100vh - 80px)` (the menu starts at most 71px down), in `assets/reader.css`; `--bar-h` stays 0.
+
+(b) Aa over a control: Aa is the box 343px to 378px across and 8px to 35px down. At the centre of the stuck figure tools' last button (`Full screen`, 297px to 367px across and 13px to 36px down) `elementFromPoint` finds the button itself, not Aa: not covered at its centre, so by the measure asked for the answer is no and nothing is changed for it. Aa does overlap the button's right 24px (about a third of its width), a measured fact left to the coordinator. At the centre of the stuck table head's last cell (179px to 374px across, 0px to 36px down) it finds the `th`, not Aa; the cell is not a control, and Aa overlaps its right 31px. The assertions of B8.6 pin the centres.
+
+Red before the fix: B8.6 failed on the unfixed stylesheet with `a menu runs past the frame's bottom edge` (four entries: stuck and at the top, in the 520px frame with top space and in the one without; the 804px frame is clean). Green after: `test/browser/frame-one-bar.test.ts` 9 passed | 9 skipped (WebKit).
+
+Method as above, with a rebuild for each row (the stylesheet feeds the frame build): the bytes of `assets/reader.css` saved with the sha256 of the fixed file, one edit, the frame rebuilt, a bounded run behind a `ulimit -u` of the measured thread count plus 1500 (2003 and 2207 threads, limits 3503 and 3707), the file and the generated outputs restored by `cp` and every sha256 compared, then `node scripts/build-frame.mjs --check`.
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B8f | the bar-off menu's own max-height (FR1, A6) | `assets/reader.css` | the rule `... > .aa-wrap .aa-menu { max-height: calc(100vh - 80px); }` removed | test/browser/frame-one-bar.test.ts -t B8.6 (Chromium): 1 failed \| 17 skipped (18). test/browser/frame-one-bar.test.ts: B8.6 (A6): bar off at 390 px, the open menu ends inside the frame and the sticky Aa covers neither the stuck figure tools nor the stuck table head (a menu runs past the frame's bottom edge: 4 entries) | sha256 `191c50eaa2a2a297a50d8eb4975163843d8a6aecb8b0ed432078438e4223148b` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B8g | the bar-off menu's max-height leaves room for Aa | `assets/reader.css` | `max-height: calc(100vh - 80px)` -> `max-height: calc(100vh - 24px)` (the room of the rule it overrides, with the bar's height gone) | test/browser/frame-one-bar.test.ts -t B8.6 (Chromium): 1 failed \| 17 skipped (18). test/browser/frame-one-bar.test.ts: B8.6 (A6): bar off at 390 px, the open menu ends inside the frame and the sticky Aa covers neither the stuck figure tools nor the stuck table head (a menu runs past the frame's bottom edge: 4 entries) | sha256 `191c50eaa2a2a297a50d8eb4975163843d8a6aecb8b0ed432078438e4223148b` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+
+```json
+[
+  {
+    "id": "B8f",
+    "guard": "the bar-off menu's own max-height (FR1, A6)",
+    "file": "assets/reader.css",
+    "change": "the rule `... > .aa-wrap .aa-menu { max-height: calc(100vh - 80px); }` removed",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.6 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 17 skipped (18)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.6 (A6): bar off at 390 px, the open menu ends inside the frame and the sticky Aa covers neither the stuck figure tools nor the stuck table head (a menu runs past the frame's bottom edge: 4 entries)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "191c50eaa2a2a297a50d8eb4975163843d8a6aecb8b0ed432078438e4223148b",
+    "restored": true
+  },
+  {
+    "id": "B8g",
+    "guard": "the bar-off menu's max-height leaves room for Aa",
+    "file": "assets/reader.css",
+    "change": "`max-height: calc(100vh - 80px)` -> `max-height: calc(100vh - 24px)` (the room of the rule it overrides, with the bar's height gone)",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.6 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 17 skipped (18)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.6 (A6): bar off at 390 px, the open menu ends inside the frame and the sticky Aa covers neither the stuck figure tools nor the stuck table head (a menu runs past the frame's bottom edge: 4 entries)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "191c50eaa2a2a297a50d8eb4975163843d8a6aecb8b0ed432078438e4223148b",
+    "restored": true
+  }
+]
+```

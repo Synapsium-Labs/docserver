@@ -765,6 +765,11 @@
 /* ─── reading settings ───────────────────────────────────────────────────── */
 [data-docreader-root] .aa-wrap { position: relative; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu { position: absolute; right: 0; top: calc(100% + 9px); z-index: 2200; width: 252px; max-height: calc(100vh - var(--bar-h) - 24px); overflow-y: auto; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--pop-shadow); padding: 12px 14px 14px; font-family: var(--sans); }
+/* The menu of a root with no bar: Aa is the root's own sticky child (above), so the menu starts at most 71px under the top of its
+   viewport (Aa's top is 28px before it sticks, 8px once stuck, its height 34px and the menu's offset 9px) and the bar's
+   height, which a frame sets to 0, is no part of that. Measured at 390px wide in a 520px frame (FR1, A6): the rule above ran
+   27px past the frame's bottom edge when stuck and 47px before. 80px keeps its bottom inside the viewport in every state. */
+[data-docreader-root][data-docreader-root][data-docreader-root]:not(:has(> .topbar)) > .aa-wrap .aa-menu { max-height: calc(100vh - 80px); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu[hidden] { display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset + fieldset { margin-top: 12px; }
