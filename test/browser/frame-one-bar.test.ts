@@ -32,6 +32,10 @@
 //          the whole width of the stuck figure tools' last button, and of the sticky table head's last cell, finds that
 //          control and never Aa; both sit below Aa. A root with the bar on keeps its own tops (the bar's height plus 6 px
 //          for the tools, the bar's height for the head; 6 px and 0 while the bar is slid away).
+//   B8.8   fix round FR1 (ruling FR1-e): the offset below Aa is a floor, and only for a root that carries Aa. (a) A bar-off
+//          root whose host sets `--bar-h: 64px` (its own fixed header, as an ./enhance host does; set here as an inline
+//          custom property on the root) keeps the head at 64 px and the tools at 70; (b) a bar-off root with
+//          `chrome.settings: false` (no Aa) keeps the head at 0 px and the tools at 6.
 //
 // Waits are polls on a condition with a load-tolerant cap, and a row that must see that something did NOT happen ends
 // with a command that travels the same port after it (an ordered barrier), never a fixed sleep.
@@ -482,4 +486,44 @@ describeBrowsers((browser: BrowserName) => {
       }
     }
   }, 300_000);
+
+  for (const [label, features, barH, expected] of [
+    ["(a) a host's own --bar-h of 64px: the head stays at 64px and the tools at 70px", NO_BAR, '64px', { aa: true, head: 64, tools: 70 }],
+    ['(b) chrome.settings false, no Aa: the head stays at 0px and the tools at 6px', { chrome: { bar: false, settings: false } }, null, { aa: false, head: 0, tools: 6 }],
+  ] as const) {
+    it(`B8.8 ${label}`, async () => {
+      const host = await openLibHost(await browserFor(browser), { touch: false }, { hostBar: true });
+      try {
+        await host.page.setViewportSize({ width: 390, height: 844 });
+        await host.mount({
+          document: { ...input(A6_MD), initialHash: null, scan: { mermaid: scanRefs(A6_MD).mermaid } },
+          assets,
+          watchdogMs: 60_000,
+          features,
+          mermaidDraw: 'after-ready',
+          loader: 'immediate',
+          mermaidText,
+        });
+        await until(async () => (await host.lib()).events.some((e) => e.kind === 'ready'), 'the frame is ready');
+        const frame = host.frame();
+        await until(() => frame.evaluate(() => document.querySelector('[data-docreader-root]')?.getAttribute('data-docreader-diagrams') === 'drawn'), 'the figure is drawn');
+        if (barH !== null) await frame.evaluate((v) => (document.querySelector('[data-docreader-root]') as HTMLElement).style.setProperty('--bar-h', v), barH);
+        const got = await frame.evaluate(async () => {
+          const stuck = async (el: Element, plus: number): Promise<void> => {
+            window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top + plus, behavior: 'instant' });
+            await new Promise((r) => setTimeout(r, 400));
+          };
+          await stuck(document.querySelector('figure.mermaid-figure') as Element, 120);
+          const tools = (document.querySelector('figure.mermaid-figure .tools') as HTMLElement).getBoundingClientRect().top;
+          await stuck(document.querySelector('.table-wrapper') as Element, 200);
+          const head = (document.querySelector('.table-wrapper th') as HTMLElement).getBoundingClientRect().top;
+          return { aa: document.querySelector('[data-docreader-root] > .aa-wrap') !== null, head: Math.round(head), tools: Math.round(tools) };
+        });
+        console.warn(`host-measure: ${JSON.stringify({ row: 'B8.8', browser, label, got })}`);
+        expect(got).toEqual(expected);
+      } finally {
+        await host.close();
+      }
+    }, 300_000);
+  }
 });

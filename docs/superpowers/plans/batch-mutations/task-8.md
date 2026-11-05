@@ -326,3 +326,99 @@ Method as above, each a rebuild row on the final stylesheet (2161 to 2237 thread
   }
 ]
 ```
+
+## Fix round FR1: the offset below Aa is a floor, and only for a root with Aa (ruling FR1-e)
+
+Fix round FR1, ruling FR1-e on the commit above (the review found that its `top: 50px` rules put the sticky head and the figure tools under the header of an `./enhance` host that sets `--bar-h` to its own fixed header, and applied with `chrome.settings: false`, where there is no Aa). The two rules are now `top: max(var(--bar-h), 50px)` (head) and `top: max(calc(var(--bar-h) + 6px), 50px)` (tools), and apply only to a bar-off root that carries Aa (`:has(> .aa-wrap)`). The 50px is a floor below Aa; a host's own `--bar-h` is kept. A bar-on root and a root without Aa keep the rules they had since 1.0.0. The comment on the menu's 80px bound now claims only what holds, a frame and a root that fills the viewport.
+
+Positions, Chromium, bar off, 390 px wide (B8.8; an `./enhance` host's own `--bar-h` is set here as an inline custom property on the root). At the tip before this change (B8.8 red): (a) `--bar-h: 64px` with Aa: head 50px and tools 50px, under the host's header, against 64px and 70px wanted; (b) `chrome.settings: false`, no Aa: head 50px and tools 50px, against 0px and 6px wanted. After (B8.8 and B8.7 green): (a) head 64px, tools 70px; (b) head 0px, tools 6px; the frame case of B8.7 (Aa, `--bar-h: 0`) still sticks both below Aa with no point of the last controls found on Aa, and a bar-on root keeps its tops.
+
+The rows B8h, B8i and B8j of the previous section named the rules as they were before this change, so they are measured again here on the final rules as B8h2, B8i2 and B8j2 (the same edits made to the new text). B8k and B8l are the two new guards (the floor, the scoping). Method as above, each a rebuild row on the final stylesheet (1811 to 2004 threads, limits 3311 to 3504); the sha256 is that of the final `assets/reader.css`.
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B8k | the offset below Aa is a floor (max with the bar height) | `assets/reader.css` | in both rules `max(var(--bar-h), 50px)` and `max(calc(var(--bar-h) + 6px), 50px)` -> `50px` | test/browser/frame-one-bar.test.ts -t B8.8 (Chromium): 1 failed \| 1 passed \| 22 skipped (24). test/browser/frame-one-bar.test.ts: B8.8 (a) a host's own --bar-h of 64px: the head stays at 64px and the tools at 70px (expected head 64, tools 70; got 50 and 50) | sha256 `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B8l | the rules apply only to a root that carries Aa | `assets/reader.css` | `:has(> .aa-wrap)` removed from the selector of both rules | test/browser/frame-one-bar.test.ts -t B8.8 (Chromium): 1 failed \| 1 passed \| 22 skipped (24). test/browser/frame-one-bar.test.ts: B8.8 (b) chrome.settings false, no Aa: the head stays at 0px and the tools at 6px (expected head 0, tools 6; got 50 and 50) | sha256 `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B8h2 | what sticks at the top of a bar-off root with Aa sticks below Aa (B8h, again on the FR1-e rules) | `assets/reader.css` | both rules removed | test/browser/frame-one-bar.test.ts -t B8.7 (Chromium): 1 failed \| 23 skipped (24). test/browser/frame-one-bar.test.ts: B8.7 (A6b): bar off at 390 px, points across the stuck figure tools' last button and the sticky head's last cell find the control, never Aa; a bar-on root keeps its tops (Aa takes points of the stuck tools' last button) | sha256 `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B8i2 | the stuck figure tools stick below Aa (B8i, again) | `assets/reader.css` | the tools rule's floor `50px` -> `0px` | test/browser/frame-one-bar.test.ts -t B8.7 (Chromium): 1 failed \| 23 skipped (24). test/browser/frame-one-bar.test.ts: B8.7 (A6b): bar off at 390 px, points across the stuck figure tools' last button and the sticky head's last cell find the control, never Aa; a bar-on root keeps its tops (Aa takes points of the stuck tools' last button) | sha256 `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+| B8j2 | the sticky table head sticks below Aa (B8j, again) | `assets/reader.css` | the head rule's floor `50px` -> `0px` | test/browser/frame-one-bar.test.ts -t B8.7 (Chromium): 1 failed \| 23 skipped (24). test/browser/frame-one-bar.test.ts: B8.7 (A6b): bar off at 390 px, points across the stuck figure tools' last button and the sticky head's last cell find the control, never Aa; a bar-on root keeps its tops (Aa takes points of the sticky head's last cell) | sha256 `ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9` restored, equal ; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+
+```json
+[
+  {
+    "id": "B8k",
+    "guard": "the offset below Aa is a floor (max with the bar height)",
+    "file": "assets/reader.css",
+    "change": "in both rules `max(var(--bar-h), 50px)` and `max(calc(var(--bar-h) + 6px), 50px)` -> `50px`",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.8 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 1 passed | 22 skipped (24)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.8 (a) a host's own --bar-h of 64px: the head stays at 64px and the tools at 70px (expected head 64, tools 70; got 50 and 50)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9",
+    "restored": true
+  },
+  {
+    "id": "B8l",
+    "guard": "the rules apply only to a root that carries Aa",
+    "file": "assets/reader.css",
+    "change": "`:has(> .aa-wrap)` removed from the selector of both rules",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.8 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 1 passed | 22 skipped (24)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.8 (b) chrome.settings false, no Aa: the head stays at 0px and the tools at 6px (expected head 0, tools 6; got 50 and 50)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9",
+    "restored": true
+  },
+  {
+    "id": "B8h2",
+    "guard": "what sticks at the top of a bar-off root with Aa sticks below Aa (B8h, again on the FR1-e rules)",
+    "file": "assets/reader.css",
+    "change": "both rules removed",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.7 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 23 skipped (24)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.7 (A6b): bar off at 390 px, points across the stuck figure tools' last button and the sticky head's last cell find the control, never Aa; a bar-on root keeps its tops (Aa takes points of the stuck tools' last button)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9",
+    "restored": true
+  },
+  {
+    "id": "B8i2",
+    "guard": "the stuck figure tools stick below Aa (B8i, again)",
+    "file": "assets/reader.css",
+    "change": "the tools rule's floor `50px` -> `0px`",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.7 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 23 skipped (24)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.7 (A6b): bar off at 390 px, points across the stuck figure tools' last button and the sticky head's last cell find the control, never Aa; a bar-on root keeps its tops (Aa takes points of the stuck tools' last button)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9",
+    "restored": true
+  },
+  {
+    "id": "B8j2",
+    "guard": "the sticky table head sticks below Aa (B8j, again)",
+    "file": "assets/reader.css",
+    "change": "the head rule's floor `50px` -> `0px`",
+    "tests": "test/browser/frame-one-bar.test.ts -t B8.7 (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 23 skipped (24)",
+    "failing": [
+      "test/browser/frame-one-bar.test.ts: B8.7 (A6b): bar off at 390 px, points across the stuck figure tools' last button and the sticky head's last cell find the control, never Aa; a bar-on root keeps its tops (Aa takes points of the sticky head's last cell)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ffcd93b3268a5b34f0f5bcb04e6adab82bfdda952f1bda25fa630c2d19af50b9",
+    "restored": true
+  }
+]
+```
