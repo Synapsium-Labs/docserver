@@ -216,7 +216,11 @@ describe('CHANGELOG.md: the newest entry', () => {
     // What this measures: each `- \`assets/<path>\`: \`<sha256>\`` bullet in the entry equals assets.json for that path, and
     // carries the csp value when the manifest has one for it (and none when it has none). It does not learn which assets
     // moved since the last release: a bullet for an unmoved asset passes, and so does an entry with no bullet at all (a patch).
-    const bullets = [...top.matchAll(/^- `assets\/([^`]+)`: `([0-9a-f]{64})`(?:, csp `([^`]+)`)?$/gm)];
+    // A line that starts like a hash bullet and does not match the whole pattern (a short or upper-case sha, a csp without
+    // backticks) fails on its own, so a malformed bullet is never skipped.
+    const pattern = /^- `assets\/([^`]+)`: `([0-9a-f]{64})`(?:, csp `([^`]+)`)?$/;
+    for (const line of top.split('\n')) if (line.startsWith('- `assets/')) expect(line, line).toMatch(pattern);
+    const bullets = [...top.matchAll(new RegExp(pattern.source, 'gm'))];
     for (const [, path, sha, csp] of bullets) {
       const file = assets.files.find((f) => f.path === path) as { sha256: string; csp?: string } | undefined;
       expect(file, path).toBeDefined();

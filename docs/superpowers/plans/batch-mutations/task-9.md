@@ -49,3 +49,37 @@ The test's check was `bullets.length >= 4`, with the csp group optional. It now 
   {"id": "B9y", "file": "CHANGELOG.md", "old": "the four asset bullets", "new": "(removed)", "tests": "test/package.test.ts", "rc": 0, "red": "none: 23 passed (23), by design (a patch entry names no asset)", "failing": []}
 ]
 ```
+
+## Fix round FR2: B9z, a malformed hash bullet (review F11)
+
+The changelog guard matched hash bullets with a regex and checked the matches, so a bullet that stopped matching (63 hex digits, an upper-case digit, a csp without backticks) was skipped and the test stayed green while the changelog printed a wrong hash. The test now also asserts, one `expect` per line, that every line of the top entry starting with ``- `assets/`` matches the whole bullet pattern. B9z is the probe: the sha of the `assets/frame/enhance.js` bullet of the top entry shortened to 63 hex digits. Method as above (`test/package.test.ts`: 23 tests, a bounded run, `ulimit -u` at the measured thread count (2312 and 2303) plus 1500, restore by byte copy, sha256 equal: `CHANGELOG.md` 3c4896bf94f0a2a05a4b6b4ab829c924aa4fbe297889c58736493d186ff3d938, `test/package.test.ts` dcb9f32dd7ef5804146beb8a50067ad4209da72dc1aba0af1a54b4820d4b7d5e, both the committed bytes of the fix-round tip before the probe; the changelog's hash lines had moved with the FR2 asset build, so the rows above were measured on earlier bytes of it). The probe was run twice: on the test with the new assertion (red), and on the same test with only that assertion line removed (the test as it was; green), then the test file was restored from the saved bytes. Control: the unmutated changelog with the new test passes (the package and README files together: 70 passed).
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B9z | a malformed hash bullet fails the test (a short sha is not skipped) | `CHANGELOG.md` | the `assets/frame/enhance.js` bullet's sha shortened by its last digit, 63 hex digits | with the new assertion: 1 failed \| 22 passed (23); "every hash bullet names a manifest asset with its sha256 and, where the manifest carries one, its csp" (the line named in the message). With the assertion line removed (the old test): green, 23 passed (23) | sha256 equal for both files |
+
+```json
+[
+  {
+    "id": "B9z",
+    "file": "CHANGELOG.md",
+    "old": "the assets/frame/enhance.js bullet's sha, 64 hex digits",
+    "new": "the same sha with its last digit removed (63)",
+    "tests": "test/package.test.ts",
+    "rc": 1,
+    "red": "1 failed | 22 passed (23)",
+    "failing": [
+      "CHANGELOG.md: the newest entry > every hash bullet names a manifest asset with its sha256 and, where the manifest carries one, its csp"
+    ],
+    "against_old_test": {
+      "rc": 0,
+      "red": "none: 23 passed (23), the assertion line removed"
+    },
+    "sha256": {
+      "changelog": "3c4896bf94f0a2a05a4b6b4ab829c924aa4fbe297889c58736493d186ff3d938",
+      "test": "dcb9f32dd7ef5804146beb8a50067ad4209da72dc1aba0af1a54b4820d4b7d5e"
+    },
+    "restored": true
+  }
+]
+```
