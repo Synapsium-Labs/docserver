@@ -103,6 +103,12 @@ export interface InitHow {
   readonly forgeRegister?: 'other' | 'inserted' | 'text';
   /** The B5.7 'before settled' row: the frame's font-face probe is held for a second, so the frame stays unsettled. */
   readonly holdSettled?: boolean;
+  /**
+   * The B5.4c row (the bootstrap's blocked-inline exception): a DOMContentLoaded listener, added before the bootstrap's own,
+   * that dispatches a `securitypolicyviolation` event for a blocked inline script (`script-src-elem`, `inline`) on the
+   * document, so the violation reaches the bootstrap before its start runs.
+   */
+  readonly violationBeforeStart?: boolean;
   /** A context with touch input (page.tap works), for the rows that tap a host button. */
   readonly touch?: boolean;
 }
@@ -240,7 +246,7 @@ const PAGE = `<!doctype html>
 
 /** The init script, or null when nothing is asked for: in the srcdoc document only, each part opt-in. */
 function initScript(how: InitHow): string | null {
-  if (how.forgeRegister === undefined && how.holdSettled !== true && how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true && how.posts !== true) return null;
+  if (how.forgeRegister === undefined && how.holdSettled !== true && how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true && how.posts !== true && how.violationBeforeStart !== true) return null;
   return `(() => {
   if (location.href !== 'about:srcdoc') return;
   const rec = { dcl: null, root: null, closed: 0, diagrams: [], ready: [], posts: [], wallOffset: 0, forged: { dispatched: 0, fakeCalls: 0 } };
@@ -301,6 +307,11 @@ function initScript(how: InitHow): string | null {
         busy = false;
       }
     }, true);
+  }
+  if (${String(how.violationBeforeStart === true)}) {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'script-src-elem', blockedURI: 'inline' }));
+    });
   }
   if (${String(how.holdSettled === true)}) {
     const load = FontFaceSet.prototype.load;

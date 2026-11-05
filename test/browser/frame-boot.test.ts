@@ -155,6 +155,16 @@ describeBrowsers((browser) => {
     }
   });
 
+  it("L3.B5 (B5.4c): a blocked-inline violation delivered before the bootstrap's DOMContentLoaded handler leaves the owning reason: ready, then error assets, not boot", async () => {
+    await open({ violationBeforeStart: true });
+    try {
+      const nonce = freshNonce();
+      await expectReadyThenError(flippedEnhance(nonce), frameCsp(), nonce, 'assets');
+    } finally {
+      await done();
+    }
+  });
+
   it('L3.B4 (P4): hellos with no port, an extra key or two ports get no answer; the first valid one binds; a second gets nothing', async () => {
     await open();
     try {

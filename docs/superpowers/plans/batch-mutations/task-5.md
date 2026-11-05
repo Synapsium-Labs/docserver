@@ -735,3 +735,32 @@ The record of B5b6 above ran the blocked-inline exception of `onViolation` alone
   }
 ]
 ```
+
+## Fix round FR2: B5b6 separated (review F2)
+
+Fix round FR2, review F2: the blocked-inline exception of `onViolation` is not an equivalent mutant. A blocked inline script's violation delivered before the bootstrap's DOMContentLoaded handler runs `start` reaches `onViolation` while the state is still `boot`, `fail('boot')` runs first and `start` then returns at `state !== 'boot'`, so the frame posts `error boot` instead of the owning reason. Case B5.4c (`test/browser/frame-boot.test.ts`, next to the L3.B5 rows; it opens its frame through `openFrameHost` with one new `InitHow` flag, `violationBeforeStart`, in `test/browser/frame-host-page.ts`) mounts the srcdoc with one enhance byte flipped, and the init script adds a DOMContentLoaded listener before the bootstrap's, which dispatches `new SecurityPolicyViolationEvent('securitypolicyviolation', { effectiveDirective: 'script-src-elem', blockedURI: 'inline' })` on the document. At the tip: ready, then `error assets` (green). With the exception line removed alone (the `done` guard stays): ready, then `error boot` (red). B5b6 and B5b6x above are the earlier records of the same edit, measured on rows that do not deliver the violation before the start; they are left as written.
+
+Method: the bytes and full sha256 of `src/frame-runtime/bootstrap.ts` saved, the generated outputs saved, `npm run build:frame` after the edit, a bounded run behind a `ulimit -u` of the measured thread count (2217) plus 1500, `timeout -k 10 600`, everything written back by byte copy, the sha256 compared equal, `node scripts/build-frame.mjs --check` green after.
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B5b6s | the blocked-inline exception alone (the `done` guard stays), on the case that delivers the violation before the start | `src/frame-runtime/bootstrap.ts` | the line `if ((directive === 'script-src-elem' \|\| directive === 'script-src') && (blocked === 'inline' \|\| blocked === '')) return;` removed, then `npm run build:frame` | `test/browser/frame-boot.test.ts -t B5.4c` (Chromium): 1 failed \| 79 skipped (80). B5.4c: a blocked-inline violation delivered before the bootstrap's DOMContentLoaded handler leaves the owning reason: ready, then error assets, not boot (received `error boot`) | sha256 `9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63` restored, equal; the generated outputs (assets/assets.json, src/frame/manifest.generated.ts, assets/frame/*) saved before and restored from the saved bytes after, each sha256 equal, then `node scripts/build-frame.mjs --check` green |
+
+```json
+[
+  {
+    "id": "B5b6s",
+    "guard": "the blocked-inline exception alone (the done guard stays), on the case that delivers the violation before the start",
+    "file": "src/frame-runtime/bootstrap.ts",
+    "tests": "test/browser/frame-boot.test.ts -t B5.4c (Chromium)",
+    "rc": 1,
+    "red": "1 failed | 79 skipped (80)",
+    "failing": [
+      "test/browser/frame-boot.test.ts: L3.B5 (B5.4c): a blocked-inline violation delivered before the bootstrap's DOMContentLoaded handler leaves the owning reason: ready, then error assets, not boot (received error boot)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "9b78ce600933eeb92cc6e6719d12c09fbee4ab7d4d7db7cd54d561dc9e32ea63",
+    "restored": true
+  }
+]
+```
