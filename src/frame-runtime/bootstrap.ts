@@ -53,7 +53,8 @@
 // On the port (inbound.ts; anything malformed is ignored): `prefs` goes to setEnhancementPrefs, and `changes.result`
 // to the outbox's changes slot, which hands it to L2's `changes` callback (L2's readChangeSet checks it again).
 // `command` (batch 1.1, C108) goes to the reader's runEnhancementCommand(root, name), only once settled; the reader's
-// boolean (it answers false for a tool that is off, another overlay open, and so on) is ignored: there is no reply op.
+// boolean (it answers false for a tool that is off, another overlay open, and so on) is ignored: there is no reply op,
+// and a throw is contained. The routing of every accepted message is dispatch.ts's (a unit case drives it).
 // The reader's `onProgress` is handed over only when the seed's bridge asks for progress (adapters.ts); it sends
 // `progress` through the outbox, one value per 250 ms window.
 //
@@ -76,6 +77,7 @@ import { BRIDGE_LIMITS, type ErrorWhy, type ParentToFrame } from '../frame/proto
 import { validateSeed, type Seed } from '../frame/seed.js';
 import { arrivesLate, createAdapters, FRAME_DOC_KEY, FRAME_NAMESPACE, lateApi, type LateRegistration, mermaidOption, probesInlineStyle, waitsForDrawing } from './adapters.js';
 import { contentIntrinsics, materialise } from './content.js';
+import { dispatchParentMessage, type ReaderApi } from './dispatch.js';
 import { FACES, FONT_WAIT_MS, probeFaces } from './fonts.js';
 import { parseParentMessage } from './inbound.js';
 import { createOutbox } from './outbox.js';
@@ -86,12 +88,9 @@ import { probeInlineStyle, styleIntrinsics } from './styles.js';
 declare const DOCSERVER_FREE_GLOBALS: readonly string[];
 
 /** What enhance-entry.ts registers. */
-interface EnhanceApi {
+interface EnhanceApi extends ReaderApi<HTMLElement> {
   enhance(root: HTMLElement, options: unknown): Promise<void>;
   destroyEnhancement(root: HTMLElement): unknown;
-  setEnhancementPrefs(root: HTMLElement, prefs: unknown): void;
-  /** Absent from an enhance script that predates the commands; the frame and the script ship together, so it is there. */
-  runEnhancementCommand?(root: HTMLElement, name: string): unknown;
 }
 
 (() => {
@@ -224,26 +223,7 @@ interface EnhanceApi {
     if (state !== 'settled' || mismatch) return;
     const m = parseParentMessage(dataOf.call(e));
     if (m === null) return;
-    if (m.t === 'changes.result') {
-      outbox.answer(m);
-    } else if (m.t === 'mermaid') {
-      offerMermaid(m);
-    } else if (m.t === 'command') {
-      if (root !== null && api !== null) {
-        try {
-          api.runEnhancementCommand?.(root, m.name);
-        } catch {
-          // a command that throws changes nothing for the parent, which gets no reply either way
-        }
-      }
-    } else if (m.t === 'prefs' && root !== null && api !== null) {
-      const { t: _t, ...prefs } = m;
-      try {
-        api.setEnhancementPrefs(root, prefs);
-      } catch {
-        // a refused change leaves the prefs as they were
-      }
-    }
+    dispatchParentMessage(m, { root, api, answer: (r) => outbox.answer(r), offerMermaid: (x) => offerMermaid(x) });
   };
 
   // 5 (first). The hello listener and the guard's link listener, installed even on a failed boot, so the failure can

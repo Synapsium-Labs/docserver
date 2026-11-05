@@ -22,8 +22,9 @@
 // edge: the first goes at once and opens a 250 ms window, and the latest of those asked for within it goes when it ends
 // (which opens the next). progress is coalesced the same way over its own window (BRIDGE_LIMITS.progressWindowMs, 250
 // ms, batch 1.1): the first value at once, the window's latest at its end, so the final value always arrives, at most
-// four a second, and a navigate asked for in the middle of a burst still waits at most for the pacer, never for the
-// progress window (a lane of its own). hash is coalesced over 100 ms: the latest id when the window that the first opened ends.
+// four a second. A progress still waiting in the pacer's line takes the newer value in place (as store.set does for its
+// key), so at most one progress ever waits there and a navigate asked for later is never queued behind stale values
+// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends.
 //
 // The changes slot: one request in flight, one queued. A request is in flight from the instant it is posted; its
 // answer (answer(), matched by sha) or 35 s without one (frameChangesTimeoutMs, longer than the parent's own 30 s)
@@ -198,13 +199,13 @@ export function createOutbox(o: OutboxOptions): Outbox {
     }
   };
 
-  /** Into the pacer's line; a store.set still waiting for its key takes the newer value in place. */
+  /** Into the pacer's line; a store.set still waiting for its key, or a progress still waiting, takes the newer value in place. */
   function enqueue(e: Entry): void {
-    if (e.kind === 'op' && e.op.t === 'store.set') {
-      const key = e.op.key;
-      const waiting = line.find((x) => x.kind === 'op' && x.op.t === 'store.set' && x.op.key === key);
+    if (e.kind === 'op' && (e.op.t === 'store.set' || e.op.t === 'progress')) {
+      const mine = e.op;
+      const waiting = line.find((x) => x.kind === 'op' && x.op.t === mine.t && (mine.t !== 'store.set' || (x.op.t === 'store.set' && x.op.key === mine.key)));
       if (waiting !== undefined && waiting.kind === 'op') {
-        waiting.op = e.op;
+        waiting.op = mine;
         return;
       }
     }

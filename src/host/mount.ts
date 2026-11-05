@@ -112,9 +112,10 @@ export interface HostAdapters {
   changes?(sha: string): Promise<{ ranges: readonly (readonly [number, number])[]; removedAfter?: readonly number[] } | null>;
   openVersion?(v: { sha?: string; only?: string }): void;
   /**
-   * How far the document has been read, a number from 0 to 1 (the frame's thousandths over 1000): at most four calls a
-   * second, the first at once and the latest of each 250 ms window at its end, so the final value arrives. Giving it
-   * is what asks the frame to send progress at all (batch 1.1, C108).
+   * How far the document has been read, a number from 0 to 1 (the frame's thousandths over 1000). The frame sends at most
+   * four reports a second, the first at once and the latest of each 250 ms window at its end, so the final value
+   * arrives; ./host trusts the frame's pacer and does not throttle (only the bridge's general limits bind a frame that
+   * does not keep it). Giving it is what asks the frame to send progress at all (batch 1.1, C108).
    */
   onProgress?(share: number): void;
   onReady?(): void;

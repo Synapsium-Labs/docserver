@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_DELETIONS, MAX_RANGES } from '../src/enhance/changes.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, type FrameToParent } from '../src/frame/protocol.js';
 import { createAdapters, fromBridgeKey, toBridgeKey } from '../src/frame-runtime/adapters.js';
+import { dispatchParentMessage, type DispatchTargets, type ReaderApi } from '../src/frame-runtime/dispatch.js';
 import { checkVocabulary, contentIntrinsics, materialise, MISSING_CLASS } from '../src/frame-runtime/content.js';
 import { FACES, FONT_WAIT_MS, probeFaces } from '../src/frame-runtime/fonts.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES, parseParentMessage } from '../src/frame-runtime/inbound.js';
@@ -479,25 +480,109 @@ describe('B7.2 adapters: onProgress exists only when the seed\'s bridge asks for
   });
 });
 
-describe('B7.4 the bootstrap passes a command to the reader and the reader\'s onProgress on (structure; the browser rows are test/browser)', () => {
+describe("B7.4 the frame's port: a command reaches the reader, and a command that fails never stops the port (batch 1.1, C108)", () => {
   const file = path.join(ROOT, 'src/frame-runtime/bootstrap.ts');
   const source = readFileSync(file, 'utf8');
+  const ROOT_EL = { id: 'root' };
 
-  it('onPortMessage runs runEnhancementCommand(root, m.name) for a command, only once settled (the guard before it is the state check)', () => {
+  /** The reader's API as the dispatcher sees it, recording every call; `over` replaces members. */
+  function reader(over: Partial<ReaderApi<typeof ROOT_EL>> = {}): { api: ReaderApi<typeof ROOT_EL>; calls: [string, unknown[]][] } {
+    const calls: [string, unknown[]][] = [];
+    const api: ReaderApi<typeof ROOT_EL> = {
+      setEnhancementPrefs: (...a) => void calls.push(['prefs', a]),
+      runEnhancementCommand: (...a) => (calls.push(['command', a]), true),
+      ...over,
+    };
+    return { api, calls };
+  }
+  function targets(r: ReturnType<typeof reader> | null, root: typeof ROOT_EL | null = ROOT_EL) {
+    const seen: string[] = [];
+    return {
+      seen,
+      to: {
+        root,
+        api: r === null ? null : r.api,
+        answer: (m: { sha: string }) => void seen.push(`answer ${m.sha.slice(0, 4)}`),
+        offerMermaid: (m: { t: 'mermaid' }) => void seen.push(`mermaid ${m.t}`),
+      } as DispatchTargets<typeof ROOT_EL>,
+    };
+  }
+  const ANSWER = { t: 'changes.result', sha: SHA40, unavailable: true } as const;
+
+  it("onPortMessage keeps the state check first, then the parser, then the dispatcher (structure)", () => {
     const sf = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true);
     let found = 0;
     const visit = (n: ts.Node): void => {
       if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === 'onPortMessage' && n.initializer !== undefined) {
         const text = n.initializer.getText(sf);
-        expect(text).toMatch(/if \(state !== 'settled' \|\| mismatch\) return;/);
-        expect(text).toMatch(/m\.t === 'command'/);
-        expect(text).toMatch(/runEnhancementCommand\??\.?\(root, m\.name\)/);
+        const at = (needle: string): number => text.indexOf(needle);
+        expect(at("if (state !== 'settled' || mismatch) return;")).toBeGreaterThan(0);
+        expect(at('parseParentMessage(')).toBeGreaterThan(at("if (state !== 'settled' || mismatch) return;"));
+        expect(at('dispatchParentMessage(m,')).toBeGreaterThan(at('if (m === null) return;'));
         found += 1;
       }
       ts.forEachChild(n, visit);
     };
     visit(sf);
     expect(found).toBe(1);
+  });
+
+  it('a command runs the reader\'s runEnhancementCommand(root, name), once, with that root and name', () => {
+    const r = reader();
+    const t = targets(r);
+    for (const name of ['jump', 'settings', 'contents', 'outline'] as const) dispatchParentMessage({ t: 'command', name }, t.to);
+    expect(r.calls.map(([k]) => k)).toEqual(['command', 'command', 'command', 'command']);
+    expect(r.calls.map(([, a]) => a)).toEqual(['jump', 'settings', 'contents', 'outline'].map((n) => [ROOT_EL, n]));
+    expect((r.calls[0]?.[1] as unknown[])[0] === ROOT_EL).toBe(true);
+  });
+
+  it('a command that throws is contained, and the port keeps working: a later prefs, answer and mermaid still apply, and nothing is sent', () => {
+    const r = reader({
+      runEnhancementCommand: () => {
+        throw new Error('boom');
+      },
+    });
+    const t = targets(r);
+    expect(() => dispatchParentMessage({ t: 'command', name: 'jump' }, t.to)).not.toThrow();
+    dispatchParentMessage({ t: 'prefs', theme: 'dark' }, t.to);
+    dispatchParentMessage(ANSWER, t.to);
+    dispatchParentMessage({ t: 'mermaid', unavailable: true }, t.to);
+    expect(r.calls).toEqual([['prefs', [ROOT_EL, { theme: 'dark' }]]]);
+    expect(t.seen).toEqual(['answer aaaa', 'mermaid mermaid']);
+  });
+
+  it('a reader that never registered, or has no runEnhancementCommand, makes a command nothing: no throw, and later ops still apply', () => {
+    const noApi = targets(null);
+    expect(() => dispatchParentMessage({ t: 'command', name: 'jump' }, noApi.to)).not.toThrow();
+    dispatchParentMessage(ANSWER, noApi.to);
+    expect(noApi.seen).toEqual(['answer aaaa']);
+    const oldCalls: [string, unknown[]][] = [];
+    // A reader script that predates the commands: the API has no runEnhancementCommand at all.
+    const old = { calls: oldCalls, api: { setEnhancementPrefs: (...a: unknown[]) => void oldCalls.push(['prefs', a]) } as ReaderApi<typeof ROOT_EL> };
+    const t = targets(old);
+    expect(() => dispatchParentMessage({ t: 'command', name: 'jump' }, t.to)).not.toThrow();
+    dispatchParentMessage({ t: 'prefs', font: 'sans' }, t.to);
+    expect(old.calls).toEqual([['prefs', [ROOT_EL, { font: 'sans' }]]]);
+  });
+
+  it('before the reader enhanced (no root) a command and a prefs reach nothing, and the reader is not called with a null root', () => {
+    const r = reader();
+    const t = targets(r, null);
+    dispatchParentMessage({ t: 'command', name: 'jump' }, t.to);
+    dispatchParentMessage({ t: 'prefs', theme: 'light' }, t.to);
+    expect(r.calls).toEqual([]);
+  });
+
+  it("a prefs the reader refuses (a throw) leaves the port working too", () => {
+    const r = reader({
+      setEnhancementPrefs: () => {
+        throw new Error('refused');
+      },
+    });
+    const t = targets(r);
+    expect(() => dispatchParentMessage({ t: 'prefs', theme: 'dark' }, t.to)).not.toThrow();
+    dispatchParentMessage({ t: 'command', name: 'settings' }, t.to);
+    expect(r.calls).toEqual([['command', [ROOT_EL, 'settings']]]);
   });
 
   it("adapters' onProgress goes to enhance's options only when it exists", () => {

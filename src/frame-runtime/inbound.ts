@@ -68,7 +68,8 @@ export function parseParentMessage(data: unknown): ParentToFrame | null {
   for (const k of m.keys()) if (!allowed.includes(k)) return null;
   if (t === 'command') {
     const name = m.get('name');
-    return m.size === 2 && typeof name === 'string' && (COMMAND_OPS as readonly string[]).includes(name) ? { t: 'command', name: name as CommandOp } : null;
+    // Another key is already refused by the key set above, and a missing `name` is not a string.
+    return typeof name === 'string' && (COMMAND_OPS as readonly string[]).includes(name) ? { t: 'command', name: name as CommandOp } : null;
   }
   if (t === 'mermaid') {
     const hasText = m.has('text');

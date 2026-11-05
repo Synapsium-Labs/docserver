@@ -389,7 +389,7 @@ A mount checks the adapters (own data properties only; an unknown key or a bad v
 | `copy` | `copy(text, { hidden })`: the text to copy and every character in it a reader cannot see (controls, bidi controls, directional marks, the line and paragraph separators U+2028 and U+2029, zero-width characters, tag characters), each with its index, code point and name, so the host can show them before writing. |
 | `changes` | `changes(sha)`: a promise of `{ ranges, removedAfter? }` or `null`; a throw, a rejection, a malformed answer or 30 s without one answers the frame "unavailable". |
 | `openVersion` | `openVersion({ sha?, only? })`: show that version; no keys is the latest. |
-| `onProgress` | `onProgress(share)`: how far the document has been read, a number from 0 to 1 (the frame's thousandths over 1000), at most four times a second: the first value at once, then the latest of each 250 ms window when it ends, so the final value always arrives. Giving it is what asks the frame to send progress: a host with no `onProgress` is sent none. A throw is caught and logged, never counted against the frame. |
+| `onProgress` | `onProgress(share)`: how far the document has been read, a number from 0 to 1 (the frame's thousandths over 1000). The frame sends at most four reports a second: the first value at once, then the latest of each 250 ms window when it ends, so the final value always arrives; `./host` trusts the frame's pacer and does not throttle further (the bridge's general limits still bind a frame that does not keep it). Giving it is what asks the frame to send progress: a host with no `onProgress` is sent none. A throw is caught and logged, never counted against the frame. |
 | `onReady` | The frame said ready. |
 | `onFallback` | Required: the frame is gone, for one reason: `'timeout'`, `'nonce'`, `'error'`, `'protocol'`, `'refusals'`, `'navigated'`, `'assets'`, `'too-large'` or `'invalid-input'`. Called once per mount; the mount never remounts by itself. The frame's own error reason never reaches it. |
 
@@ -424,7 +424,7 @@ settingsButton.addEventListener('click', () => frame.command('settings'));
 This version's frame policy, whose four hash sources a page's `script-src` lists:
 
 ```text
-default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-mdes9SZyke2vPyEBaFgDYtu3mUNPS8uyaEYrQfMM+14=' 'sha256-/DRwPagsAiLCZ5k13vrcdtCqtyzLvnnumt5ViZj7hqQ=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
+default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ=' 'sha256-/DRwPagsAiLCZ5k13vrcdtCqtyzLvnnumt5ViZj7hqQ=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
 ```
 
 A page that blocks any of them gets a fallback; the frame is never left partly working:
@@ -445,7 +445,7 @@ The frame and its parent speak over one `MessageChannel` port, protocol 1 (`BRID
 | `prefs` | parent to frame | `theme`, `width`, `font` | Each optional, each one of its values. |
 | `changes.result` | parent to frame | `sha`, `ranges`, `removedAfter`, or `unavailable` | Only for the one request in flight. |
 | `mermaid` | parent to frame | `text`, or `unavailable` | Only to a frame whose seed draws `'after-ready'`, once, after ready; any other `mermaid` message is ignored. `text` is run as one inline script, and runs only if the frame's policy lists its hash (any of the frame's own scripts posted as `text` qualifies, runs inertly and ends in the load note); the frame takes Mermaid's API only from exactly one registration by that script; `unavailable: true` says the host has no build. |
-| `command` | parent to frame | `name` | One of `'jump'`, `'settings'`, `'contents'`, `'outline'` (`COMMAND_OPS`), each a toggle of that reader tool; an unknown name, a non-string or another key is ignored. A protocol-1 frame older than this release ignores the whole op, as it ignores every op it does not know. |
+| `command` | parent to frame | `name` | One of `'jump'`, `'settings'`, `'contents'`, `'outline'`, each a toggle of that reader tool; an unknown name, a non-string or another key is ignored. A protocol-1 frame older than this release ignores the whole op, as it ignores every op it does not know. |
 | `ready` | frame to parent | `v`, `nonce` | Once; echoes the seed's nonce. The parent drops every other op before it. |
 | `error` | frame to parent | `why`: `boot`, `render`, `mermaid`, `assets` or `protocol` | At most once, right after ready; terminal by itself. |
 | `store.set` | frame to parent | `key`, `value` | A key on the allow-list below; JSON text of at most 64 KiB; the JSON literal `null` (the string `'null'`) deletes. |

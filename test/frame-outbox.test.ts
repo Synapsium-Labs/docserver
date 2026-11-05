@@ -302,6 +302,38 @@ describe('B7.3 progress: at most one per 250 ms window, the first at once and th
     expect(maxInWindow(posted.map((p) => p.at), BRIDGE_LIMITS.frameWindowMs + TRANSIT_MARGIN_MS)).toBeLessThanOrEqual(16);
   });
 
+  it('ruling T7-b: with the pacer saturated by other ops, at most one progress waits in the line, and a navigate asked for later leaves within 250 ms of the pacer freeing', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    // 12 ops at t=0 (the pacer's share of the 16): 8 store.set, a navigate, a version, the first progress, a changes.
+    for (const key of ['pref:prefs', 'pref:ui', 'doc:pos', 'doc:folds', 'doc:ixfold', 'doc:marks', 'doc:outline', 'doc:seen'] as const) {
+      box.send({ t: 'store.set', key, value: '1' });
+    }
+    box.send({ t: 'navigate', href: 'a.md' });
+    box.send({ t: 'version' });
+    box.send({ t: 'progress', p: '1' });
+    void box.changes(SHA(1));
+    expect(posted).toHaveLength(12);
+    // A progress burst while nothing can go: the windows end at 250, 500, 750 and 1000.
+    for (let i = 2; i <= 990; i++) {
+      clock.advance(i);
+      box.send({ t: 'progress', p: String(i) });
+    }
+    clock.advance(1000);
+    const askedAt = clock.t;
+    box.send({ t: 'navigate', href: 'b.md' });
+    clock.advance(1100);
+    expect(posted).toHaveLength(12);
+    clock.advance(1500);
+    const late = posted.filter((p) => p.at > 0);
+    // At most one progress was queued, and it is the latest value, not four stale ones.
+    expect(late.filter((p) => p.msg.t === 'progress').map((p) => p.msg)).toEqual([P(990)]);
+    const nav = late.find((p) => p.msg.t === 'navigate');
+    expect(nav?.msg).toEqual({ t: 'navigate', href: 'b.md' });
+    expect((nav?.at ?? Infinity) - askedAt).toBeLessThanOrEqual(250);
+    expect(maxInWindow(posted.map((p) => p.at), BRIDGE_LIMITS.frameWindowMs + TRANSIT_MARGIN_MS)).toBeLessThanOrEqual(16);
+  });
+
   it('before ready the queue keeps the latest progress only, and open() sends it at once, as the first of its window', () => {
     const { clock, box, posted } = setup();
     box.send({ t: 'progress', p: '5' });
@@ -322,10 +354,12 @@ describe('B7.3 progress: at most one per 250 ms window, the first at once and th
     box.open();
     box.send({ t: 'progress', p: '1' });
     box.send({ t: 'progress', p: '2' });
+    // The progress window's timer is cleared at once, not left to run out.
+    expect(clock.pending).toBeGreaterThan(0);
     box.dispose();
+    expect(clock.pending).toBe(0);
     clock.advance(1000);
     expect(posted.map((p) => p.msg)).toEqual([P(1)]);
-    expect(clock.pending).toBe(0);
   });
 });
 

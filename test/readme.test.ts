@@ -453,7 +453,7 @@ describe('README: one header bar over the bridge (batch 1.1, ledger C108)', () =
   it('Hosting: the onProgress row, DocFrame.command, and the title recipe that reads result.meta.title (Q9)', () => {
     const s = section('Hosting');
     const row = /\n\| `onProgress` \|[^\n]*/.exec(s)?.[0] ?? '';
-    for (const part of ['`onProgress(share)`', 'a number from 0 to 1', 'at most four times a second', 'the latest of each 250 ms window', 'the final value always arrives', 'no `onProgress`']) {
+    for (const part of ['`onProgress(share)`', 'a number from 0 to 1', 'The frame sends at most four reports a second', 'does not throttle', 'the latest of each 250 ms window', 'the final value always arrives', 'no `onProgress`']) {
       expect(row, part).toContain(part);
     }
     const command = /\n\*\*`command\(name\)`\*\*[^\n]*/.exec(s)?.[0] ?? '';
@@ -471,6 +471,8 @@ describe('README: one header bar over the bridge (batch 1.1, ledger C108)', () =
     const s = section('The bridge');
     const command = /\n\| `command` \| parent to frame \|[^\n]*/.exec(s)?.[0] ?? '';
     for (const part of ['`name`', "`'jump'`", "`'outline'`", 'ignored']) expect(command, part).toContain(part);
+    // ./frame exports no list of the command names, so the row names the four and no constant.
+    expect(command).not.toContain('COMMAND_OPS');
     const progress = /\n\| `progress` \| frame to parent \|[^\n]*/.exec(s)?.[0] ?? '';
     for (const part of ['`p`', 'Thousandths', "`'0'` to `'1000'`", 'no sign', `${String(BRIDGE_LIMITS.progressWindowMs)} ms`, 'bridge.progress']) expect(progress, part).toContain(part);
     expect(s).toContain('`progress` carries `p`');

@@ -861,6 +861,7 @@ describe('B7.4 DocFrame.command(name): drops before ready and after destroy, thr
 
   it('after destroy() it posts and focuses nothing, and calls no adapter', async () => {
     const m = await ready();
+    const focusSpy = vi.spyOn(m.iframe, 'focus');
     m.frame.destroy();
     const other = document.createElement('button');
     document.body.append(other);
@@ -869,7 +870,21 @@ describe('B7.4 DocFrame.command(name): drops before ready and after destroy, thr
     m.frame.command('jump');
     expect(frameBound(m)).toEqual([]);
     expect(document.activeElement === other).toBe(true);
+    // The iframe is gone: it is not focused either (the spy sees a call on a detached element, which moves nothing).
+    expect(focusSpy).not.toHaveBeenCalled();
     expect(m.seen.events).toHaveLength(before);
+  });
+
+  it('after an update whose document is refused there is no mount: a command posts nothing on the old port and focuses no iframe', async () => {
+    const m = await ready();
+    const focusSpy = vi.spyOn(m.iframe, 'focus');
+    const d = input(PLAIN);
+    m.frame.update({ ...d, result: { ...d.result, outcome: 'failed' } });
+    expect(m.fallbacks()).toEqual(['invalid-input']);
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(iframes()).toBe(0);
   });
 
   it('after update() the new mount is not ready: it posts nothing, on the old port or the new one, until its own ready', async () => {
@@ -891,8 +906,10 @@ describe('B7.4 DocFrame.command(name): drops before ready and after destroy, thr
     const m = await ready();
     m.say({ t: 'error', why: 'render' });
     expect(m.fallbacks()).toEqual(['error']);
+    const focusSpy = vi.spyOn(m.iframe, 'focus');
     m.frame.command('jump');
     expect(frameBound(m)).toEqual([]);
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 
   it("host code that runs at the focus (a focusout that destroys the frame) leaves the command unposted, and nothing throws", async () => {
@@ -1664,6 +1681,22 @@ describe("B4 mermaidDraw 'after-ready': the build is fetched in parallel with th
     const frame = mountDocFrame(el, { document: doc, adapters: adaptersFor({ events: [] }, { focus: false, watchdogMs: 120_000, ...over }) });
     return { frame, made };
   }
+
+  it("B7.4: DocFrame.command's handle does not retain a mount: after a destroy, or an update whose document is refused, the old iframe is collectable", async () => {
+    const collected = async (r: WeakRef<object> | undefined): Promise<boolean> => {
+      await collect();
+      return r?.deref() === undefined;
+    };
+    const destroyed = weakMount(input(PLAIN), {});
+    destroyed.frame.destroy();
+    expect(await collected(destroyed.made[0]), 'destroyed').toBe(true);
+
+    const refused = weakMount(input(PLAIN), {});
+    const d = input(PLAIN);
+    refused.frame.update({ ...d, result: { ...d.result, outcome: 'failed' } });
+    expect(await collected(refused.made[0]), 'replaced by a refused document (no new mount takes the handle over)').toBe(true);
+    refused.frame.destroy();
+  });
 
   it('B4.10: while the loader stays pending, a replaced or destroyed mount is not retained: only the current mount can be reached from the verdict hook', async () => {
     const collected = async (r: WeakRef<object> | undefined): Promise<boolean> => {
