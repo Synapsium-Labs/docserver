@@ -416,14 +416,24 @@ describeBrowsers((browser) => {
       { name: 'too-long, maxTextSize 120', md: layoutCase('too-long'), mermaid: { maxTextSize: 120 }, over: [0] },
       { name: 'edges, maxEdges 3', md: layoutCase('edges'), mermaid: { maxEdges: 3 }, over: [0] },
     ];
-    for (const m of mounts) {
+    // Each mount twice: Mermaid inline ('auto') and Mermaid evaluating after content, the same documents drawn after the
+    // handover ('after-ready', batch B5: the build is posted after ready), so the frame's other guards are shown to hold there.
+    for (const [m, late] of mounts.flatMap((x) => [[x, false], [x, true]] as const)) {
       const host = await openFrameHost(handle);
       try {
         const nonce = freshNonce();
-        await host.mount(srcdocFor(withMermaid(), m.md, nonce, { mermaid: m.mermaid }), frameCsp());
-        await waitProgress(host, 1, `L3.B15 ${browser} ${m.name}`, 30_000);
+        const label = `${m.name}${late ? ' (after-ready)' : ''}`;
+        if (late) {
+          await host.mount(srcdocFor(assets, m.md, nonce, { mermaid: { ...m.mermaid, draw: 'after-ready' } }), frameCsp());
+          await waitProgress(host, 1, `L3.B15 ${browser} ${label}`, 30_000);
+          await host.send('main', { t: 'mermaid', text: mermaidText });
+          await host.frame().waitForFunction(() => ['drawn', 'failed', 'partial'].includes(document.body.querySelector(':scope > article')?.getAttribute('data-docreader-diagrams') ?? ''), undefined, { timeout: 60_000 });
+        } else {
+          await host.mount(srcdocFor(withMermaid(), m.md, nonce, { mermaid: m.mermaid }), frameCsp());
+          await waitProgress(host, 1, `L3.B15 ${browser} ${label}`, 30_000);
+        }
         await sleep(300);
-        expect({ mount: m.name, messages: data(await host.record()), violations: host.cspConsole, errors: host.errors }).toEqual({ mount: m.name, messages: [readyOf(nonce)], violations: [], errors: [] });
+        expect({ mount: label, messages: data(await host.record()), violations: host.cspConsole, errors: host.errors }).toEqual({ mount: label, messages: [readyOf(nonce)], violations: [], errors: [] });
         const got = await host.frame().evaluate(() => {
           const root = document.body.querySelector(':scope > article');
           const figs = Array.from(document.querySelectorAll('figure.mermaid-figure'));
@@ -438,19 +448,19 @@ describeBrowsers((browser) => {
             figures: figs.map((f) => ({ svg: f.querySelector('svg') !== null, failed: f.classList.contains('draw-failed'), source: f.querySelector('.fig-error .fig-src code')?.textContent ?? null })),
           };
         });
-        expect(got.fixed, m.name).toEqual([]);
-        for (const text of got.styles) expect(text, m.name).not.toMatch(/position:\s*fixed|monospace|#ff0000/i);
-        expect(got.handlers, m.name).toEqual([]);
-        expect(got.scriptLinks, m.name).toEqual([]);
-        expect(got.scripts, m.name).toBe(0);
+        expect(got.fixed, label).toEqual([]);
+        for (const text of got.styles) expect(text, label).not.toMatch(/position:\s*fixed|monospace|#ff0000/i);
+        expect(got.handlers, label).toEqual([]);
+        expect(got.scriptLinks, label).toEqual([]);
+        expect(got.scripts, label).toBe(0);
         const sources = [hostile[0], hostile[1], hostile[2], longText, manyEdges];
         got.figures.forEach((f, i) => {
           if (m.over.includes(i)) {
             const src = m.mermaid.maxTextSize !== undefined || m.mermaid.maxEdges !== undefined ? sourceOf(m.md) : sources[i];
             // The note shows the source as render() wrote its pre: the fence's text, its last line break included.
-            expect({ figure: i, ...f }, m.name).toEqual({ figure: i, svg: false, failed: true, source: src?.endsWith('\n') === true ? src : `${src ?? ''}\n` });
+            expect({ figure: i, ...f }, label).toEqual({ figure: i, svg: false, failed: true, source: src?.endsWith('\n') === true ? src : `${src ?? ''}\n` });
           } else {
-            expect({ figure: i, svg: f.svg, failed: f.failed }, m.name).toEqual({ figure: i, svg: true, failed: false });
+            expect({ figure: i, svg: f.svg, failed: f.failed }, label).toEqual({ figure: i, svg: true, failed: false });
           }
         });
         if (m.name === 'at the ceilings') {
@@ -478,7 +488,7 @@ describeBrowsers((browser) => {
         await host.close();
       }
     }
-  }, 300_000);
+  }, 600_000);
 
   it("L3.D5 (frame half): with mermaid.draw 'on-request', a document heavy with diagrams readies before anything is drawn; a tap draws that figure alone under frameCsp() with zero violations", async () => {
     const host = await openFrameHost(await browserFor(browser));

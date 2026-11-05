@@ -179,6 +179,18 @@ describeBrowsers((browser) => {
       } finally {
         await without.close();
       }
+      // chrome.topSpace false (batch 1.1, C108): 8px with no bar, at both widths; with the bar on the option changes nothing.
+      for (const [chrome, want] of [
+        [{ bar: false, topSpace: false }, '8px'],
+        [{ topSpace: false }, `${String(pad)}px`],
+      ] as const) {
+        const trimmed = await open(DOC, browser, viewport, { chrome });
+        try {
+          expect(await rootTopPadding(trimmed.page), JSON.stringify(chrome)).toBe(want);
+        } finally {
+          await trimmed.close();
+        }
+      }
       const doc = await open(DOC, browser, viewport);
       try {
         const b = await boxes(doc.page);

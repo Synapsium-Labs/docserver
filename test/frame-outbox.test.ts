@@ -234,6 +234,135 @@ describe('the outbox after ready: the pacer', () => {
   });
 });
 
+describe('B7.3 progress: at most one per 250 ms window, the first at once and the last at the end (batch 1.1, C108)', () => {
+  const P = (n: number): FrameToParent => ({ t: 'progress', p: String(n) });
+
+  it('the first value goes at once; the latest of the window goes when it ends, which opens the next window', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'progress', p: '10' });
+    clock.advance(10);
+    box.send({ t: 'progress', p: '20' });
+    box.send({ t: 'progress', p: '30' });
+    clock.advance(249);
+    expect(posted.map((p) => p.msg)).toEqual([P(10)]);
+    clock.advance(250);
+    expect(posted.map((p) => [p.at, p.msg])).toEqual([
+      [0, P(10)],
+      [250, P(30)],
+    ]);
+    // The window the last value opened: a value asked for within it waits for its end.
+    box.send({ t: 'progress', p: '40' });
+    clock.advance(499);
+    expect(posted).toHaveLength(2);
+    clock.advance(500);
+    expect(posted.map((p) => [p.at, p.msg])).toEqual([
+      [0, P(10)],
+      [250, P(30)],
+      [500, P(40)],
+    ]);
+    // Then quiet: no window runs on, and the next value goes at once.
+    clock.advance(2000);
+    box.send({ t: 'progress', p: '50' });
+    expect(posted.at(-1)).toEqual({ at: 2000, msg: P(50) });
+  });
+
+  it('a scroll burst of one value a millisecond for 3 seconds sends at most 4 a second, and the final value always arrives', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    for (let i = 1; i <= 3000; i++) {
+      clock.advance(i);
+      box.send({ t: 'progress', p: String(Math.min(1000, Math.floor(i / 3))) });
+    }
+    clock.advance(3000 + 250);
+    const times = posted.map((p) => p.at);
+    expect(maxInWindow(times, 999)).toBeLessThanOrEqual(4);
+    expect(posted.at(-1)?.msg).toEqual(P(1000));
+    expect(posted[0]?.msg).toEqual(P(0));
+    // One per window, windows of 250 ms.
+    for (let i = 1; i < times.length; i++) expect((times[i] as number) - (times[i - 1] as number)).toBeGreaterThanOrEqual(250);
+  });
+
+  it("a navigate asked in the middle of a progress burst leaves within 250 ms, and the frame stays within 16 messages in 1.1 s", () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    let navAt = -1;
+    for (let i = 1; i <= 2000; i++) {
+      clock.advance(i);
+      box.send({ t: 'progress', p: String(i % 1000) });
+      if (i === 1003) {
+        navAt = clock.t;
+        box.send({ t: 'navigate', href: 'next.md' });
+      }
+    }
+    clock.advance(2000 + 300);
+    const nav = posted.find((p) => p.msg.t === 'navigate');
+    expect(nav).toBeDefined();
+    expect((nav?.at ?? Infinity) - navAt).toBeLessThanOrEqual(250);
+    expect(maxInWindow(posted.map((p) => p.at), BRIDGE_LIMITS.frameWindowMs + TRANSIT_MARGIN_MS)).toBeLessThanOrEqual(16);
+  });
+
+  it('ruling T7-b: with the pacer saturated by other ops, at most one progress waits in the line, and a navigate asked for later leaves within 250 ms of the pacer freeing', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    // 12 ops at t=0 (the pacer's share of the 16): 8 store.set, a navigate, a version, the first progress, a changes.
+    for (const key of ['pref:prefs', 'pref:ui', 'doc:pos', 'doc:folds', 'doc:ixfold', 'doc:marks', 'doc:outline', 'doc:seen'] as const) {
+      box.send({ t: 'store.set', key, value: '1' });
+    }
+    box.send({ t: 'navigate', href: 'a.md' });
+    box.send({ t: 'version' });
+    box.send({ t: 'progress', p: '1' });
+    void box.changes(SHA(1));
+    expect(posted).toHaveLength(12);
+    // A progress burst while nothing can go: the windows end at 250, 500, 750 and 1000.
+    for (let i = 2; i <= 990; i++) {
+      clock.advance(i);
+      box.send({ t: 'progress', p: String(i) });
+    }
+    clock.advance(1000);
+    const askedAt = clock.t;
+    box.send({ t: 'navigate', href: 'b.md' });
+    clock.advance(1100);
+    expect(posted).toHaveLength(12);
+    clock.advance(1500);
+    const late = posted.filter((p) => p.at > 0);
+    // At most one progress was queued, and it is the latest value, not four stale ones.
+    expect(late.filter((p) => p.msg.t === 'progress').map((p) => p.msg)).toEqual([P(990)]);
+    const nav = late.find((p) => p.msg.t === 'navigate');
+    expect(nav?.msg).toEqual({ t: 'navigate', href: 'b.md' });
+    expect((nav?.at ?? Infinity) - askedAt).toBeLessThanOrEqual(250);
+    expect(maxInWindow(posted.map((p) => p.at), BRIDGE_LIMITS.frameWindowMs + TRANSIT_MARGIN_MS)).toBeLessThanOrEqual(16);
+  });
+
+  it('before ready the queue keeps the latest progress only, and open() sends it at once, as the first of its window', () => {
+    const { clock, box, posted } = setup();
+    box.send({ t: 'progress', p: '5' });
+    box.send({ t: 'progress', p: '7' });
+    clock.advance(1000);
+    expect(posted).toEqual([]);
+    box.open();
+    expect(posted.map((p) => p.msg)).toEqual([P(7)]);
+    box.send({ t: 'progress', p: '8' });
+    clock.advance(1249);
+    expect(posted.map((p) => p.msg)).toEqual([P(7)]);
+    clock.advance(1250);
+    expect(posted.map((p) => p.msg)).toEqual([P(7), P(8)]);
+  });
+
+  it('dispose drops the held value and its timer', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'progress', p: '1' });
+    box.send({ t: 'progress', p: '2' });
+    // The progress window's timer is cleared at once, not left to run out.
+    expect(clock.pending).toBeGreaterThan(0);
+    box.dispose();
+    expect(clock.pending).toBe(0);
+    clock.advance(1000);
+    expect(posted.map((p) => p.msg)).toEqual([P(1)]);
+  });
+});
+
 describe('the changes slot and its terminal rule (Reference §6.5)', () => {
   it('one in flight, one queued: a third supersedes the queued one (null at once); answers end each exactly once', async () => {
     const { clock, box, posted } = setup();
@@ -367,8 +496,10 @@ async function randomRun(seed: number, calls: number): Promise<Run> {
   const outbox = box;
   const a = createAdapters(outbox, {
     snapshot: [],
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: true },
   });
+  // Progress calls come from a generator of their own, so the sequence of the other calls is unchanged.
+  const pr = rng(seed + 7919);
   const l2Keys = ['docreader:prefs', 'docreader:ui', 'docreader:pos:doc', 'docreader:doc:doc:folds', 'docreader:doc:doc:marks', 'docreader:doc:doc:seen', 'docreader:doc:doc:outline', 'docreader:doc:doc:ixfold', 'docreader:other'];
   const copyDelays: number[] = [];
   let changesCalls = 0;
@@ -382,6 +513,7 @@ async function randomRun(seed: number, calls: number): Promise<Run> {
     // Bursts and gaps: most calls come in quick runs, some after a pause.
     const gap = r() < 0.9 ? Math.floor(r() * 8) : Math.floor(r() * 3000);
     clock.advance(clock.t + gap);
+    if (pr() < 0.5) a.onProgress?.(pr());
     const pick = r();
     if (pick < 0.45) a.storage.set(l2Keys[Math.floor(r() * l2Keys.length)] ?? 'docreader:ui', r() < 0.1 ? null : JSON.stringify({ i }));
     else if (pick < 0.6) a.onLink?.(`doc-${String(i)}.md`, { newTab: r() < 0.5 });

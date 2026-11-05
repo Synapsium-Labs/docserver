@@ -31,14 +31,18 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { frameCsp, frameDocument, type FrameAssets } from '../../src/frame/index.js';
+import { scanRefs } from '../../src/render/index.js';
 import { openFrameHost, openLibHost, type LibHost, type LibMountSpec, type LibRecord } from './frame-host-page.js';
-import { freshNonce, input, loadFrame, PLAIN, ROOT, sleep, waitProgress } from './frame-shared.js';
+import { DIAGRAMS, freshNonce, input, loadFrame, PLAIN, ROOT, sleep, waitProgress } from './frame-shared.js';
 import { browserFor, closeBrowsers, describeBrowsers, type BrowserName } from './harness.js';
 
 let assets: FrameAssets;
+let mermaidText = '';
 
 beforeAll(async () => {
-  assets = (await loadFrame()).assets;
+  const built = await loadFrame();
+  assets = built.assets;
+  mermaidText = built.mermaid;
 }, 300_000);
 
 afterAll(closeBrowsers);
@@ -212,6 +216,38 @@ describeBrowsers((browser: BrowserName) => {
       await host.close();
     }
   }, 180_000);
+
+  it("B5.9: mountDocFrame with mermaidDraw 'after-ready' and a deferred loadMermaid: the text shows and onReady fires before the loader resolves, then every figure draws", async () => {
+    const host = await openLibHost(await browserFor(browser));
+    try {
+      // The scan is what lets the Mermaid gate admit the document (./host reads it; frameDocument never does).
+      await host.mount(spec(DIAGRAMS, { document: { ...input(DIAGRAMS), scan: { mermaid: scanRefs(DIAGRAMS).mermaid } }, mermaidDraw: 'after-ready', loader: 'deferred', mermaidText }));
+      const r = await events(host, 2, 'B5.9 ready');
+      // The loader was asked for at once (in parallel with the boot), and ready did not wait for it.
+      expect(kinds(r).sort()).toEqual(['loader', 'ready']);
+      const inFrame = (): Promise<{ state: string | null; heading: string; svgs: number; sources: number }> =>
+        host.frame().evaluate(() => ({
+          state: document.body.querySelector(':scope > article')?.getAttribute('data-docreader-diagrams') ?? null,
+          heading: document.querySelector('article h1')?.textContent ?? '',
+          svgs: document.querySelectorAll('figure.mermaid-figure svg').length,
+          sources: document.querySelectorAll('figure.mermaid-figure pre.mermaid, figure.mermaid-figure pre').length,
+        }));
+      const waiting = await inFrame();
+      expect({ state: waiting.state, heading: waiting.heading, svgs: waiting.svgs }).toEqual({ state: 'waiting', heading: 'Diagrams', svgs: 0 });
+      expect(waiting.sources).toBeGreaterThan(0);
+      // Still pending: nothing draws until the loader's promise settles.
+      await sleep(500);
+      expect((await inFrame()).svgs).toBe(0);
+      await host.releaseLoader();
+      await until(async () => (await inFrame()).state === 'drawn', 'B5.9 drawn', 60_000);
+      expect((await inFrame()).svgs).toBe(3);
+      expect(kinds(await host.lib()).filter((k) => k === 'ready' || k === 'fallback')).toEqual(['ready']);
+      expect(host.cspConsole).toEqual([]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
 
   it('L3.H1: with focus off the iframe is not the active element after mount', async () => {
     const host = await openLibHost(await browserFor(browser));

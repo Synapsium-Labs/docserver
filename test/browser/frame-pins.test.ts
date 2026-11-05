@@ -89,6 +89,53 @@ describeBrowsers((browser) => {
     }
   }, 300_000);
 
+  it("B5.8 (extends L3.B3p): a document with anchors `fastdom`, `injected` and every name of the free-global list draws in 'after-ready': the same SVG text as the clean document, the reserved names are not the anchors", async () => {
+    const handle = await browserFor(browser);
+    const late = (md: string, nonce: string): string => frameDocument(input(md), { csp: frameCsp(), nonce, assets, mermaid: { draw: 'after-ready' } });
+    const final = (h: FrameHost): Promise<unknown> =>
+      h.frame().waitForFunction(() => ['drawn', 'failed', 'partial'].includes(document.body.querySelector(':scope > article')?.getAttribute('data-docreader-diagrams') ?? ''), undefined, { timeout: 60_000 });
+    let clean: string[] = [];
+    let host: FrameHost = await openFrameHost(handle);
+    try {
+      const nonce = freshNonce();
+      await host.mount(late(KINDS_DOC, nonce), frameCsp());
+      await waitProgress(host, 1, `B5.8 clean ${browser}`, 30_000);
+      await host.send('main', { t: 'mermaid', text: mermaidText });
+      await final(host);
+      const drawn = await host.frame().evaluate(() => Array.from(document.querySelectorAll('figure.mermaid-figure'), (f) => f.querySelector('svg') !== null));
+      expect(drawn, 'every kind draws in the clean document').toEqual(KINDS.map(() => true));
+      clean = await svgTexts(host);
+    } finally {
+      await host.close();
+    }
+    host = await openFrameHost(handle);
+    try {
+      const nonce = freshNonce();
+      const names = [...new Set(['fastdom', 'injected', ...freeGlobals])];
+      const anchors = names.map((n) => `<!-- id:${n} -->\n\nText about ${n}.\n`).join('\n');
+      await host.mount(late(`# Pinned\n\n${anchors}\n${KINDS_DOC.replace(/^# Kinds\n/, '## Kinds\n')}`, nonce), frameCsp());
+      await waitProgress(host, 1, `B5.8 anchored ${browser}`, 30_000);
+      await host.send('main', { t: 'mermaid', text: mermaidText });
+      await final(host);
+      await sleep(300);
+      expect({ messages: data(await host.record()), violations: host.cspConsole, errors: host.errors }).toEqual({ messages: [readyOf(nonce)], violations: [], errors: [] });
+      // The clobbering is real: every name is an element id in the frame, and the two names Mermaid writes are reserved own properties.
+      const state = await host.frame().evaluate((ns) => ({
+        missing: ns.filter((n) => document.getElementById(n) === null),
+        reserved: ['fastdom', 'injected'].map((n) => {
+          const d = Object.getOwnPropertyDescriptor(window, n);
+          return { own: d !== undefined, element: (window as unknown as Record<string, unknown>)[n] instanceof Element };
+        }),
+      }), names);
+      expect(state.missing).toEqual([]);
+      expect(state.reserved).toEqual([{ own: true, element: false }, { own: true, element: false }]);
+      expect(await svgTexts(host)).toEqual(clean);
+      figure('B5.8', browser, 'anchoredNames', names.length);
+    } finally {
+      await host.close();
+    }
+  }, 300_000);
+
   it('L3.B8s: pref:prefs, pref:ui and doc:folds written in one mount come back through the snapshot on the next, and the reader starts from them', async () => {
     const handle = await browserFor(browser);
     // A document by L2's measure (an h1 and more than two h2s), so its sections fold, with a table of defined IDs, so

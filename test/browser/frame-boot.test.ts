@@ -155,6 +155,16 @@ describeBrowsers((browser) => {
     }
   });
 
+  it("L3.B5 (B5.4c): a blocked-inline violation delivered before the bootstrap's DOMContentLoaded handler leaves the owning reason: ready, then error assets, not boot", async () => {
+    await open({ violationBeforeStart: true });
+    try {
+      const nonce = freshNonce();
+      await expectReadyThenError(flippedEnhance(nonce), frameCsp(), nonce, 'assets');
+    } finally {
+      await done();
+    }
+  });
+
   it('L3.B4 (P4): hellos with no port, an extra key or two ports get no answer; the first valid one binds; a second gets nothing', async () => {
     await open();
     try {
@@ -496,6 +506,30 @@ describeBrowsers((browser) => {
       expect(data(rec)).toEqual([{ t: 'ready', v: 1, nonce }, { t: 'error', why: 'mermaid' }]);
       expect(refusals(host, /script-src/)).not.toEqual([]);
       expect((await host.record()).loads).toHaveLength(1);
+    } finally {
+      await host.close();
+    }
+  }, 120_000);
+});
+
+describeBrowsers((browser) => {
+  it("L3.B6/B3.6 (batch B5.C): an 'after-ready' seed with Mermaid on carries no Mermaid script and boots to ready, with no FAILED mermaid and no error; nothing is drawn", async () => {
+    const host = await openFrameHost(await browserFor(browser));
+    try {
+      const nonce = freshNonce();
+      const srcdoc = frameDocument(input(DIAGRAMS), { csp: frameCsp(), nonce, assets, mermaid: { draw: 'after-ready' } });
+      // The srcdoc holds the guard, the seed, the bootstrap and enhance: no fifth script, so nothing registers as Mermaid.
+      expect(srcdoc.split('<script').length - 1).toBe(4);
+      await host.mount(srcdoc, frameCsp());
+      expect(data(await host.waitMessages(1, 30_000))).toEqual([{ t: 'ready', v: 1, nonce }]);
+      await sleep(500);
+      expect(data(await host.record())).toEqual([{ t: 'ready', v: 1, nonce }]);
+      expect(host.errors).toEqual([]);
+      const shown = await host.frame().evaluate(() => ({
+        state: document.body.querySelector(':scope > article')?.getAttribute('data-docreader-diagrams') ?? null,
+        svgs: document.querySelectorAll('figure.mermaid-figure svg').length,
+      }));
+      expect(shown).toEqual({ state: 'waiting', svgs: 0 });
     } finally {
       await host.close();
     }

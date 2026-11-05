@@ -16,6 +16,7 @@ import {
   FRAME_OPS,
   isBridgeStoreKey,
   isFullSha,
+  isProgressThousandths,
   OP_KEYS,
   type ErrorWhy,
   type FrameToParent,
@@ -53,6 +54,7 @@ const REQUIRED_KEYS: Readonly<Record<FrameOp, readonly string[]>> = Object.freez
   changes: Object.freeze(['sha']),
   hash: Object.freeze(['id']),
   version: Object.freeze([]),
+  progress: Object.freeze(['p']),
 });
 
 /** Own keys no message may carry: an own `__proto__`, `constructor` or `prototype` (checked before the key set). */
@@ -185,6 +187,11 @@ function judge(data: unknown, nonce: string): ParsedBridgeMessage {
     case 'hash': {
       const id = str('id');
       return isFragmentId(id) ? { ok: true, msg: { t: 'hash', id } } : refuse('hash');
+    }
+    case 'progress': {
+      // The share in thousandths, a string inside PROGRESS_SOURCE; a string outside it is refused as `type` (no new reason, batch 1.1).
+      const p = str('p');
+      return isProgressThousandths(p) ? { ok: true, msg: { t: 'progress', p } } : refuse('type');
     }
     case 'version': {
       const msg: { t: 'version'; sha?: string; only?: string } = { t: 'version' };

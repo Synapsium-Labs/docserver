@@ -1,5 +1,5 @@
-// What the frame accepts on its port (docserver L3, Task 5; plan Reference §6.5 and §8.2): `prefs` and
-// `changes.result`. Anything else, or anything malformed, is ignored (null): the frame keeps no refusal count. `hello`
+// What the frame accepts on its port (docserver L3, Task 5; plan Reference §6.5 and §8.2): `prefs`,
+// `changes.result`, `mermaid` and `command`. Anything else, or anything malformed, is ignored (null): the frame keeps no refusal count. `hello`
 // comes on the window, never on the port, and is the bootstrap's own check. Bundled into the bootstrap; DOM-free.
 //
 // A message is read as `./host`'s parser reads one: a plain object (prototype Object.prototype or null), own string
@@ -12,7 +12,13 @@
 //                   unit row pins the equality), so a huge or sparse array costs nothing; then each element, by index,
 //                   so a hole (which a structured clone keeps) is refused. L2's readChangeSet checks the ranges again
 //                   when the answer reaches it.
-import { FRAME_PREF_VALUES, isFullSha, OP_KEYS, type ParentToFrame } from '../frame/protocol.js';
+//   mermaid         exactly one of `text` (a string of at most BRIDGE_LIMITS.mermaidMaxChars UTF-16 code units, counted
+//                   by length) or `unavailable: true`; both, neither, another key, a non-string text or any other
+//                   `unavailable` is ignored. Whether the frame acts on it (its seed draws 'after-ready', it has
+//                   settled, it is the first) is the bootstrap's own check; this file judges the shape only (C107).
+//   command         exactly `name`, a string that is one of COMMAND_OPS; any other name, a non-string or another key is
+//                   ignored (batch 1.1, C108). Whether the reader has that tool is the reader's own answer.
+import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type CommandOp, type ParentToFrame } from '../frame/protocol.js';
 
 const getProto = Object.getPrototypeOf;
 const ownKeys = Reflect.ownKeys;
@@ -57,9 +63,21 @@ export function parseParentMessage(data: unknown): ParentToFrame | null {
   const m = own(data);
   if (m === null) return null;
   const t = m.get('t');
-  if (t !== 'prefs' && t !== 'changes.result') return null;
+  if (t !== 'prefs' && t !== 'changes.result' && t !== 'mermaid' && t !== 'command') return null;
   const allowed: readonly string[] = OP_KEYS[t];
   for (const k of m.keys()) if (!allowed.includes(k)) return null;
+  if (t === 'command') {
+    const name = m.get('name');
+    // Another key is already refused by the key set above, and a missing `name` is not a string.
+    return typeof name === 'string' && (COMMAND_OPS as readonly string[]).includes(name) ? { t: 'command', name: name as CommandOp } : null;
+  }
+  if (t === 'mermaid') {
+    const hasText = m.has('text');
+    if (hasText === m.has('unavailable')) return null;
+    if (!hasText) return m.get('unavailable') === true ? { t: 'mermaid', unavailable: true } : null;
+    const text = m.get('text');
+    return typeof text === 'string' && text.length <= BRIDGE_LIMITS.mermaidMaxChars ? { t: 'mermaid', text } : null;
+  }
   if (t === 'prefs') {
     const out: Record<string, string> = { t: 'prefs' };
     for (const [k, v] of m) {

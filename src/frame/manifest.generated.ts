@@ -3,8 +3,8 @@
 // (`chars`, from which src/frame/document.ts derives the srcdoc size default), and, for a script, its CSP hash source.
 export const FRAME_MANIFEST = {
   guard: { path: "frame/guard.js", sha256: "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d", bytes: 3643, chars: 3643, csp: "'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0='" },
-  bootstrap: { path: "frame/bootstrap.js", sha256: "7660d62d5edc48db520205fd2d24041f409b35270b2739d5f43497abef06310c", bytes: 27689, chars: 27689, csp: "'sha256-dmDWLV7cSNtSAgX9LSQEH0CbNScLJznV9DSXq+8GMQw='" },
-  enhance: { path: "frame/enhance.js", sha256: "0079625cc30a573a36959fbf93573d5ca50ec2cd6e2541391517db6ccaaf2929", bytes: 195638, chars: 195619, csp: "'sha256-AHliXMMKVzo2lZ+/k1c9XKUOws1uJUE5FRfbbMqvKSk='" },
-  css: { path: "frame/reader.css", sha256: "99c87d57f9e2a944e2cec431705e5aa6004a4daf9af9738b32e1ed9d45a97489", bytes: 548463, chars: 546219, csp: null },
+  bootstrap: { path: "frame/bootstrap.js", sha256: "dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424", bytes: 30153, chars: 30153, csp: "'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ='" },
+  enhance: { path: "frame/enhance.js", sha256: "6bcf14892e483f442f701c0ca9ff521c86e482c219485102b81927db9070eb64", bytes: 198234, chars: 198215, csp: "'sha256-a88UiS5IP0QvcBwMqf9SHIbkgsIZSFECuBkn25Bw62Q='" },
+  css: { path: "frame/reader.css", sha256: "b065ff8f9e7d20cfd39bd33b9d4be8414554d4c2bfec8d18636efecad83f5c97", bytes: 551313, chars: 549069, csp: null },
   mermaid: { path: "mermaid/mermaid.frame.js", sha256: "7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3", bytes: 3747084, chars: 3746940, csp: "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='" },
 } as const;

@@ -12,12 +12,47 @@ How versions move:
 
 Each release is built once from a signed tag, attested, and published with provenance through npm trusted publishing; the README's Release verification section gives the commands that check a published version.
 
-## 1.0.1
+## 1.1.0
 
-A patch. Bridge protocol 1 and seed schema 1 are unchanged, and no asset hash moved: `assets/assets.json` differs from 1.0.0's only in its `version`.
+A minor: new options and operations, and four asset hashes moved. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows additively (the new operations are `mermaid`, `command` and `progress`), and the seed gains keys and one draw value that only its own release's bootstrap reads. An earlier 1.0.1 was prepared and never tagged; its change is folded in first below, so no 1.0.1 exists.
 
-- `./host`'s copy check (`copy(text, { hidden })`) also lists the directional marks U+200E LEFT-TO-RIGHT MARK, U+200F RIGHT-TO-LEFT MARK and U+061C ARABIC LETTER MARK, and every code point of the tag block U+E0000 to U+E007F, by its Unicode name (`LANGUAGE TAG`, `CANCEL TAG`, `TAG LATIN SMALL LETTER G` and so on; the code point label `<reserved-E0000>` form for an unassigned one). A tag character is outside the BMP, so its `index` is still its first UTF-16 code unit and it takes two: a host that marks a listed character in place reads the width from `codePoint`.
-- `onLink`: an href holding any of these characters is now refused before the host sees it, through the same table.
+**A host that serves the frame re-pins its page policy to this release.** `frameCsp()` now lists a new bootstrap hash and a new enhance hash (the `csp` fields below), and `MAX_SRCDOC_CHARS_DEFAULT` moved with the assets' lengths. A host that pins the frame's page policy by hand and does not re-pin it gets no `ready`: the bootstrap is blocked, and `onFallback('timeout')` follows when the watchdog runs out.
+
+The change prepared as 1.0.1, the directional marks and the tag characters:
+
+- The copy check names them. `./host`'s `copy(text, { hidden })` lists U+200E LEFT-TO-RIGHT MARK, U+200F RIGHT-TO-LEFT MARK and U+061C ARABIC LETTER MARK, and every code point of the tag block U+E0000 to U+E007F by its Unicode name (`LANGUAGE TAG`, `CANCEL TAG`, `TAG LATIN SMALL LETTER G` and so on; `<reserved-E0000>` for an unassigned one). A tag character is outside the BMP, so its `index` is its first UTF-16 code unit and it takes two: a host that marks a listed character in place reads the width from `codePoint`. `onLink` refuses an href holding any of these characters, through the same table that the copy check reads.
+
+Item A, the line and paragraph separators:
+
+- `copy(text, { hidden })` also lists U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR. (`onLink` already refused an href holding either, as white space; it still does.) This item moves no asset hash.
+
+Item B, Mermaid drawn after `ready`:
+
+- `mermaidDraw` takes a third value, `'after-ready'`. The default stays `'auto'`. In this mode the frame mounts and sends `ready` with no Mermaid script in its document, every figure a readable source, and draws the figures once the host hands the build over, in `'auto'`'s order: the figures within one and a half screens of the reader first, in document order, then the rest by distance. (A figure in view can wait behind earlier figures up to one and a half screens away.) The write that turns drawing on is kept like each figure's own, so the reader's place in the text does not move at the handover.
+- `mountDocFrame` takes `loadMermaid()`, a promise of the text of `mermaid/mermaid.frame.js`, used only with `'after-ready'` (when both it and `assets.mermaid` are given, it wins). It is called at mount, in parallel with the frame's boot, at most once per `DocFrame` and only for a document the Mermaid gate admits. Its text is checked against the bridge's size cap and the shipped build's sha256, and is posted after each mount's valid `ready`. `mountDocFrame` throws a `TypeError` for `'after-ready'` with neither `loadMermaid` nor `assets.mermaid`, or with a `loadMermaid` that is not a function.
+- The new operation `mermaid` (parent to frame) carries the build, or says it is unavailable. The frame inserts it as one inline script and accepts exactly one registration, from that element. A host policy that blocks Mermaid's hash leaves the sources with the load note and the frame mounted. A host that never hands the build over leaves the root `waiting` with readable sources.
+- `./enhance` has the matching draw mode, and the root's `data-docreader-diagrams` gains `waiting`.
+
+Item C, one header bar:
+
+- `chrome.bar: false`, which already existed (in `./enhance`'s options, and in `mountDocFrame` as `features: { chrome: { bar: false } }`), now leaves a host a working reader without the bar. New: `chrome.topSpace` (default true; `false` trims the root's top padding to 8 px on a root with no bar), and `onProgress(share)`, how far the root has been read, from 0 to 1 (in `mountDocFrame`, the `onProgress` adapter).
+- `runEnhancementCommand(root, name)` and `DocFrame.command(name)` run `'jump'`, `'settings'`, `'contents'` or `'outline'` as a toggle, so a host's own buttons reach the bar's tools. `DocFrame.command(name)` throws on an unknown name. The new operations are `command` (parent to frame) and `progress` (frame to parent, at most four a second, off unless the seed's `bridge.progress` is true).
+- **Hosts with the bar off now get an Aa button at the root's top right**; `chrome.settings: false` opts out of it. (Before this release the button vanished with the bar.)
+- The frame's prelude sets `--bar-h: 0` for a root without a bar; `./enhance` hosts keep the documented 48 px.
+- On a root with no bar, the settings menu's height is bounded to its viewport (`max-height: calc(100vh - 80px)`, which keeps its bottom inside the frame from the top of the document and once Aa is stuck), where it ran up to 47 px past the bottom of a short frame. This applies to every root with no bar, framed or not.
+- On a root with no bar that carries Aa, the sticky figure tools and a table's sticky head stick below Aa's box: the head at `max(var(--bar-h), 50px)` and the tools at `max(calc(var(--bar-h) + 6px), 50px)`, so Aa no longer covers the right end of their hit areas, and a host that sets `--bar-h` to the height of its own fixed header keeps its offset when that is larger. `--bar-h` stays 0 in the frame; a root with a bar, and a root with `chrome.settings: false` (no Aa), are unchanged. A jump to a table row (an in-document link, the quick jump, a card, a glossary term or an Index entry) clears the head stuck below Aa.
+- On every host and for every feature, a run of kept layout changes no longer drifts the reading block on an engine that truncates scroll fractions (WebKit): a keep reuses the offset the last restore aimed at while the scroll position is unchanged and the block is less than a pixel off, so the error stays under one engine step however many changes are kept, on an engine whose scroll step is at most one CSS pixel. At browser zoom below 100% (a step above one CSS pixel) the drift adds up as it did before, no worse.
+- In the settings menu, a `focusout` that names no element (the window loses focus, or Tab leaves the document) no longer closes Aa, on every host, bar on or off; focus moving to another element outside the menu, and Aa's own button, still close it.
+- A host command (`DocFrame.command('settings')` and the rest) is no longer swallowed by a stale flag after a tap inside the reader: a tap on a card's trigger while Aa is open no longer leaves a flag that makes the host's next `settings` command answer true and open nothing. A click inside the reader's root ends the gesture; a host button placed inside the root loses the same-gesture toggle, so a host keeps its own buttons outside the root, as the documented layout does.
+
+The conformance corpus: `conformance/bridge-cases.json` gained the new operations' cases. Every `conformance/frame-mutants/*.html` file (17 files) moved, each changed only by the seed's new `"progress":false` key; no verdict moved, and no hostile case lost its expected verdict.
+
+The assets that moved, each with the sha256 that `assets/assets.json` records (`assets/assets.json` also records the new `version`); `assets/frame/guard.js`, the fonts and both Mermaid builds did not move:
+
+- `assets/frame/bootstrap.js`: `dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424`, csp `'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ='`
+- `assets/frame/enhance.js`: `6bcf14892e483f442f701c0ca9ff521c86e482c219485102b81927db9070eb64`, csp `'sha256-a88UiS5IP0QvcBwMqf9SHIbkgsIZSFECuBkn25Bw62Q='`
+- `assets/frame/reader.css`: `b065ff8f9e7d20cfd39bd33b9d4be8414554d4c2bfec8d18636efecad83f5c97`
+- `assets/reader.css`: `9643075331610addc88df72d55289be749fb4c991607c96c22f7bde63e22eeb5`
 
 ## 1.0.0
 

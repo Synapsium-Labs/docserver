@@ -3,8 +3,9 @@
 // window: it only hands the host a HostLink, or drops the link.
 //
 // Refused (null): an href that is empty or over BRIDGE_LIMITS.hrefMaxChars (4096) code units; a control (C0, DEL, C1),
-// a hidden character of the copy check (the bidi controls, the directional marks, the zero-width characters and the
-// tag characters, copy.ts) or white space of any kind anywhere; a backslash anywhere, raw or percent-encoded; a
+// a hidden character of the copy check (the bidi controls, the directional marks, the line and paragraph separators,
+// the zero-width characters and the tag characters, copy.ts) or white space of any kind anywhere; a backslash
+// anywhere, raw or percent-encoded; a
 // protocol-relative form (`//`); `javascript:`, `data:`,
 // `vbscript:` and every scheme but http, https and mailto, in any case; an http or https link without its `//`, with
 // nothing after it, or with no host; a mailto address whose domain the URL parser refuses, or that holds more than a

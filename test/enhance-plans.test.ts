@@ -8,7 +8,7 @@
 // before or right after `plans` (so a probe sees what plans built before any later feature runs). The position seam is
 // wrapped too, so a case sees what changed inside keep().
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { destroyEnhancement, enhance, type EnhanceOptions, type ReaderStorage } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, type EnhanceOptions, type ReaderStorage } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { CHROME_ATTR, chrome } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
@@ -681,17 +681,20 @@ describe('outline mode (the reference layout, section 23)', () => {
     expect(sets).toEqual([[docKey('k', OUTLINE), null]]);
   });
 
-  it('a stored outline is applied only when the reader can turn it off: with neither the bar nor the keyboard it is left as stored', async () => {
+  it('a stored outline is applied whatever the bar and the keyboard are: the outline command can always leave it (T6-g)', async () => {
     const opts = (o: EnhanceOptions): EnhanceOptions => ({ ...o, storage: storageWith('true').storage, storageKey: 'k' });
     const neither = mount();
     const { storage, sets } = storageWith('true');
     await enhance(neither, { chrome: { bar: false }, keyboard: false, storage, storageKey: 'k' });
-    expect(neither.classList.contains('outline')).toBe(false);
+    expect(neither.classList.contains('outline')).toBe(true);
     expect(neither.querySelector('.outline-btn')).toBeNull();
     key(document.body, 'o');
+    expect(neither.classList.contains('outline')).toBe(true); // no key
+    expect(sets).toEqual([]);
+    expect(runEnhancementCommand(neither, 'outline')).toBe(true); // one command clears it
     expect(neither.classList.contains('outline')).toBe(false);
+    expect(sets).toEqual([[docKey('k', OUTLINE), null]]);
     await destroyEnhancement(neither);
-    expect(sets).toEqual([]); // left as stored, for a reader that can leave it
     const keysOnly = mount();
     await enhance(keysOnly, opts({ chrome: { bar: false } }));
     expect(keysOnly.classList.contains('outline')).toBe(true);
@@ -990,5 +993,39 @@ describe('teardown, names and safety', () => {
     expect(ctxOf(root).state.readDoc(OUTLINE)).toBe(true);
     key(document.body, 'o');
     expect(ctxOf(root).state.readDoc(OUTLINE)).toBeNull();
+  });
+});
+
+describe('commands without the bar: outline (B6.2, B6.3)', () => {
+  it('B6.2: the outline command toggles a plan\'s Outline with the bar off', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(root.querySelector('.topbar')).toBeNull();
+    expect(root.classList.contains('outline')).toBe(false);
+    expect(runEnhancementCommand(root, 'outline')).toBe(true);
+    expect(root.classList.contains('outline')).toBe(true);
+    expect(runEnhancementCommand(root, 'outline')).toBe(true);
+    expect(root.classList.contains('outline')).toBe(false);
+  });
+
+  it('B6.3: a document that is no plan has no outline command', async () => {
+    const root = mount('# Not a plan\n\n## 1. One\n\nText.\n\n## 2. Two\n\nText.\n\n## 3. Three\n\nText.\n');
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'outline')).toBe(false);
+    expect(root.classList.contains('outline')).toBe(false);
+  });
+});
+
+describe('commands during startup (S-F3)', () => {
+  it('a command called from a feature build, before the instance is active, answers false and changes nothing', async () => {
+    const seen: boolean[] = [];
+    afterPlans((ctx) => {
+      seen.push(runEnhancementCommand(ctx.root, 'outline'));
+      seen.push(ctx.root.classList.contains('outline'));
+    });
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(seen).toEqual([false, false]);
+    expect(runEnhancementCommand(root, 'outline')).toBe(true);
   });
 });

@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, EnhanceError, setEnhancementPrefs, type EnhanceOptions } from '../src/enhance/index.js';
 import { createHost, HOST_CALLBACKS, type HostCallback, type HostCallbacks } from '../src/enhance/host.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
-import { LIMITS, normalizeOptions, OPTION_KEYS, PREF_VALUES } from '../src/enhance/options.js';
+import { LIMITS, MERMAID_DRAW_VALUES, normalizeOptions, OPTION_KEYS, PREF_VALUES } from '../src/enhance/options.js';
+import { MERMAID_DRAW } from '../src/frame/seed.js';
 import { defaultPrefs, PREFS_KEY } from '../src/enhance/state.js';
 import type { FeatureContext } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
@@ -42,6 +43,12 @@ function verdict(options: unknown): string {
   }
 }
 
+/** The draw value normalizeOptions kept for `draw`, or the verdict when it refused it. */
+function normalizeOptionsDraw(draw: string): string {
+  const v = verdict({ mermaid: { load: noop, draw } });
+  return v === 'accepted' ? draw : v;
+}
+
 /** How a promise settled: 'resolved', an EnhanceError's code, or the other error's text. */
 async function outcome(p: Promise<unknown>): Promise<string> {
   try {
@@ -70,7 +77,7 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
   it('the defaults, with no options at all and with an empty object', () => {
     for (const o of [undefined, {}]) {
       const n = normalizeOptions(o);
-      expect([n.posKey, n.keyboard, n.chrome, n.rules, n.initialHash, n.mermaid]).toEqual([null, true, { bar: true, rail: true, settings: true }, false, null, null]);
+      expect([n.posKey, n.keyboard, n.chrome, n.rules, n.initialHash, n.mermaid]).toEqual([null, true, { bar: true, rail: true, settings: true, topSpace: true }, false, null, null]);
       expect(Object.values(n.callbacks)).toEqual(HOST_CALLBACKS.map(() => null));
     }
   });
@@ -89,7 +96,7 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
       info: { sha: SHA40, draft: true, commits: [entry()], only: SHA64 },
     };
     const n = normalizeOptions(options);
-    expect([n.posKey, n.keyboard, n.chrome, n.rules, n.initialHash]).toEqual(['project-a:specs:x.md#pos', false, { bar: false, rail: true, settings: true }, true, '2-design']);
+    expect([n.posKey, n.keyboard, n.chrome, n.rules, n.initialHash]).toEqual(['project-a:specs:x.md#pos', false, { bar: false, rail: true, settings: true, topSpace: true }, true, '2-design']);
     expect(n.mermaid).toEqual({ maxTextSize: 20_000, maxEdges: 300, secure: ['look', 'handDrawnSeed'], draw: 'auto' });
     for (const [name, fn] of Object.entries(fns)) expect(n.callbacks[name as HostCallback]).toEqual({ fn, self: options });
     expect(n.callbacks.mermaid).toEqual({ fn: load, self: options.mermaid });
@@ -112,9 +119,17 @@ describe('options: every option of §3.2 is accepted, normalized, with its defau
   });
 
   it('chrome fields default to true one by one; a mermaid object without limits leaves them to the library', () => {
-    expect(normalizeOptions({ chrome: {} }).chrome).toEqual({ bar: true, rail: true, settings: true });
-    expect(normalizeOptions({ chrome: { settings: false } }).chrome).toEqual({ bar: true, rail: true, settings: false });
+    expect(normalizeOptions({ chrome: {} }).chrome).toEqual({ bar: true, rail: true, settings: true, topSpace: true });
+    expect(normalizeOptions({ chrome: { settings: false } }).chrome).toEqual({ bar: true, rail: true, settings: false, topSpace: true });
     expect(normalizeOptions({ mermaid: { load } }).mermaid).toEqual({ maxTextSize: null, maxEdges: null, secure: [], draw: 'auto' });
+  });
+
+  it("mermaid.draw: 'after-ready' is accepted and kept, and the values are the seed's list, held equal", () => {
+    expect(verdict({ mermaid: { load, draw: 'after-ready' } })).toBe('accepted');
+    expect(verdict({ mermaid: { load, draw: 'lazy' } })).toMatch(/^invalid-options: docreader: mermaid\.draw must be one of 'auto', 'on-request', 'after-ready'$/);
+    expect(verdict({ mermaid: { load, draw: null } })).toMatch(/^invalid-options: docreader: mermaid\.draw must be one of/);
+    expect([...MERMAID_DRAW_VALUES]).toEqual([...MERMAID_DRAW]);
+    expect(MERMAID_DRAW_VALUES.map((d) => normalizeOptionsDraw(d))).toEqual(['auto', 'on-request', 'after-ready']);
   });
 
   it('what features read is frozen: chrome, the mermaid limits and keys, commits and their entries', () => {
@@ -168,6 +183,9 @@ describe('options: a wrong type is refused, and nothing is reserved', () => {
     ['chrome.bar a string', { chrome: { bar: 'no' } }],
     ['chrome.rail a number', { chrome: { rail: 0 } }],
     ['chrome.settings null', { chrome: { settings: null } }],
+    ['chrome.topSpace a string', { chrome: { topSpace: 'no' } }],
+    ['onProgress a string', { onProgress: 'x' }],
+    ['onProgress null', { onProgress: null }],
     ['initialHash a number', { initialHash: 7 }],
     ['initialHash an object', { initialHash: {} }],
     ...(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink'] as const).flatMap((k): [string, unknown][] => [
@@ -234,7 +252,7 @@ describe('options: a wrong type is refused, and nothing is reserved', () => {
 describe('options: getters are refused unread, unknown keys refused, inherited properties ignored', () => {
   const withGetter = (target: object, key: string, spy: () => unknown): object => Object.defineProperty(target, key, { get: spy, enumerable: true });
 
-  it.each(['posKey', 'keyboard', 'chrome', 'rules', 'initialHash', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid'])('a getter for %s', (key) => {
+  it.each(['posKey', 'keyboard', 'chrome', 'rules', 'initialHash', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'mermaid'])('a getter for %s', (key) => {
     const spy = vi.fn(() => undefined);
     expect(verdict(withGetter({}, key, spy))).toMatch(/^invalid-options: .*not a getter/);
     expect(spy).not.toHaveBeenCalled();
@@ -319,7 +337,7 @@ describe('options: no host function runs while the options are read', () => {
 
   it('neither normalizeOptions nor the whole startup touches a function option, mermaid.load included', async () => {
     const log: string[] = [];
-    const names = ['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink'];
+    const names = ['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress'];
     const options = { ...Object.fromEntries(names.map((n) => [n, watched(log, n)])), mermaid: { load: watched(log, 'load') } };
     normalizeOptions(options);
     expect(log).toEqual([]);
@@ -526,10 +544,11 @@ function callAll(h: ReturnType<typeof harness>['host']): unknown[] {
     h.onHash('2-design', { push: true, from: null }),
     h.itemLink('KEY-1'),
     h.loadMermaid(),
+    h.onProgress(0.5),
   ];
 }
 
-const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink'];
+const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink', 'onProgress'];
 
 describe('host: one wrapper per host callback', () => {
   it('absent: present is empty, each wrapper calls nothing, enters no operation and answers null', async () => {
@@ -612,8 +631,9 @@ describe('host: one wrapper per host callback', () => {
       onHash: () => 'ignored',
       itemLink: () => 'https://tracker.example/KEY-1',
       mermaid: () => Promise.resolve({ default: 'module' }),
+      onProgress: () => 'ignored',
     });
-    expect(await Promise.all(callAll(host))).toEqual([undefined, { changed: [[1, 2]] }, undefined, undefined, undefined, 'https://tracker.example/KEY-1', { default: 'module' }]);
+    expect(await Promise.all(callAll(host))).toEqual([undefined, { changed: [[1, 2]] }, undefined, undefined, undefined, 'https://tracker.example/KEY-1', { default: 'module' }, undefined]);
     const plain = harness({ copy: noop, changes: () => 7, mermaid: () => 'sync' });
     expect(await Promise.all([plain.host.copy('t'), plain.host.changes(SHA40), plain.host.loadMermaid()])).toEqual([undefined, 7, 'sync']);
   });
@@ -855,7 +875,7 @@ describe('README: the options of ./enhance', () => {
   it('each stated default is the one normalizeOptions applies', () => {
     const n = normalizeOptions({});
     for (const k of ['keyboard', 'rules', 'folds'] as const) expect([k, row(k)[0]]).toEqual([k, `\`${String(n[k])}\``]);
-    expect(Object.values(n.chrome)).toEqual([true, true, true]);
+    expect(Object.values(n.chrome)).toEqual([true, true, true, true]);
     expect(row('chrome')[0]).toBe('each `true`');
     expect(normalizeOptions({ storageKey: 'k' }).posKey).toBe('k');
     expect(row('posKey')[0]).toBe('`storageKey`');
@@ -900,5 +920,41 @@ describe('README: the options of ./enhance', () => {
     expect(section).toContain('`lens`: `all` or `product`');
     expect(section).toContain('`docreader:pos:<posKey>`');
     expect(section).toContain('`docreader:ui`');
+  });
+});
+
+describe('options: chrome.topSpace and onProgress (B6.5)', () => {
+  it('chrome.topSpace defaults to true, takes false, and onProgress is kept as a host callback', () => {
+    expect(normalizeOptions({}).chrome.topSpace).toBe(true);
+    expect(normalizeOptions({ chrome: { topSpace: false } }).chrome.topSpace).toBe(false);
+    expect(normalizeOptions({ chrome: { topSpace: false } }).chrome.bar).toBe(true);
+    expect(normalizeOptions({}).callbacks.onProgress).toBeNull();
+    expect(normalizeOptions({ onProgress: noop }).callbacks.onProgress?.fn).toBe(noop);
+  });
+
+  it('chrome.topSpace false puts a root class; true leaves the root as it was', async () => {
+    const off = mount();
+    await enhance(off, { chrome: { topSpace: false } });
+    expect(off.classList.contains('no-top-space')).toBe(true);
+    const on = mount();
+    await enhance(on, { chrome: { bar: false } });
+    expect(on.classList.contains('no-top-space')).toBe(false);
+    await destroyEnhancement(off);
+    expect(off.classList.contains('no-top-space')).toBe(false);
+  });
+});
+
+describe('chrome.topSpace takes effect only on a root with no bar (T6-b)', () => {
+  const css = readFileSync(path.join(import.meta.dirname, '..', 'assets', 'reader.css'), 'utf8');
+
+  it('with the bar on and topSpace false the root has its bar and the class; the stylesheet trims only a root with no bar', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { topSpace: false } });
+    expect(root.querySelector(':scope > .topbar')).not.toBeNull();
+    expect(root.classList.contains('no-top-space')).toBe(true);
+    const rule = css.split('\n').find((l) => l.includes('.no-top-space') && l.includes('padding-top: 8px'));
+    expect(rule).toBeDefined();
+    expect(rule).toContain('.no-top-space:not(:has(> .topbar))');
+    expect(css.split('\n').filter((l) => l.includes('.no-top-space') && l.includes('padding-top')).length).toBe(1);
   });
 });

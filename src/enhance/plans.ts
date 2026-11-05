@@ -292,6 +292,9 @@ export function build(ctx: FeatureContext): void {
       setOutline(!outlined);
     });
   }
+  ctx.commands.register('outline', () => {
+    setOutline(!outlined);
+  });
   ctx.keys.bind({
     key: 'o',
     label: 'Outline: step titles only',
@@ -316,9 +319,8 @@ export function build(ctx: FeatureContext): void {
     if (o !== undefined) openTask(o, true);
   });
 
-  // With neither the tool nor the key the reader could not leave a stored outline: it is left as stored, unread.
-  if (ctx.slots === null && !ctx.options.keyboard) return;
-
+  // (The outline command is registered above whatever the bar and the keyboard are, so a reader can always leave a
+  // stored outline.)
   // A stored outline, applied now, so the full plan is never shown first. Reading it may run host code (a getter of
   // the snapshot) that destroys the instance: then the journal refuses the root's class, and the tool, which is not
   // in the root yet (the bar goes in once every feature is built, and the build stops first), goes with the chrome.

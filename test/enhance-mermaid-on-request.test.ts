@@ -13,12 +13,14 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { COMMAND_NAMES } from '../src/enhance/commands.js';
 import { NOTES } from '../src/enhance/diagrams.js';
 import { destroyEnhancement, enhance, EnhanceError, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR } from '../src/enhance/journal.js';
 import { MERMAID_DRAW_VALUES, normalizeOptions } from '../src/enhance/options.js';
+import { COMMAND_OPS } from '../src/frame/protocol.js';
 import { MERMAID_DRAW, type MermaidDraw, type SeedMermaid } from '../src/frame/seed.js';
-import { enhanceMermaid, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
+import { arrivesLate, enhanceMermaid, lateApi, mermaidOption, probesInlineStyle, waitsForDrawing } from '../src/frame-runtime/adapters.js';
 import { probeInlineStyle, STYLE_PROBE_ATTR, STYLE_PROBE_TEXT, styleIntrinsics } from '../src/frame-runtime/styles.js';
 import { render } from '../src/render/index.js';
 
@@ -343,7 +345,7 @@ describe('L3.D3: draws run one at a time', () => {
   });
 });
 
-describe("L3.D4: draw absent is 'auto'; only 'auto' and 'on-request' are accepted", () => {
+describe("L3.D4: draw absent is 'auto'; only 'auto', 'on-request' and 'after-ready' are accepted", () => {
   it("normalizeOptions: absent and 'auto' give 'auto', 'on-request' is kept", () => {
     const load = (): Promise<unknown> => Promise.resolve(null);
     expect(normalizeOptions({ mermaid: { load } }).mermaid?.draw).toBe('auto');
@@ -407,23 +409,104 @@ describe("L3.D4: draw absent is 'auto'; only 'auto' and 'on-request' are accepte
     expectTypeOf<NonNullable<EnhanceOptions['mermaid']>['draw']>().toEqualTypeOf<MermaidDraw | undefined>();
     expect([...MERMAID_DRAW_VALUES]).toEqual([...MERMAID_DRAW]);
   });
+
+  it("B7.8: the wire's COMMAND_OPS (src/frame/protocol.ts) equals L2's COMMAND_NAMES (src/enhance/commands.ts), value for value and in order", () => {
+    // L2 may import only its own siblings, so the frame's wire keeps a twin of the names, held equal here (C94(2), C108).
+    expect([...COMMAND_OPS]).toEqual([...COMMAND_NAMES]);
+    expectTypeOf<(typeof COMMAND_OPS)[number]>().toEqualTypeOf<(typeof COMMAND_NAMES)[number]>();
+  });
 });
 
 describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/adapters.ts; the unit half of L3.D5)", () => {
   const api = { initialize: (): void => {}, run: (): Promise<void> => Promise.resolve() };
 
-  it("enhanceMermaid passes the seed's caps, secure keys and draw, with a load that answers the registered API", async () => {
+  it("enhanceMermaid passes the seed's caps, secure keys and draw, with the load it is given", async () => {
     const seed: SeedMermaid = { maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request' };
-    const m = enhanceMermaid(seed, api);
+    const load = (): Promise<unknown> => Promise.resolve(api);
+    const m = enhanceMermaid(seed, load);
     expect({ ...m, load: typeof m.load }).toEqual({ maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request', load: 'function' });
+    expect(m.load).toBe(load);
     expect(await m.load()).toBe(api);
-    const bare = enhanceMermaid({ secure: [], draw: 'auto' }, api);
+    const bare = enhanceMermaid({ secure: [], draw: 'auto' }, load);
     expect(Object.keys(bare).sort()).toEqual(['draw', 'load', 'secure']);
+  });
+
+  it("the inline modes' load answers the registered API, and 'after-ready' answers what arrives later (B3.7)", async () => {
+    for (const draw of ['auto', 'on-request'] as const) {
+      const opt = mermaidOption({ secure: [], draw }, api, () => Promise.reject(new Error('the late build is not asked for')));
+      expect(opt.mermaid?.draw, draw).toBe(draw);
+      expect(await opt.mermaid?.load(), draw).toBe(api);
+    }
+    // 'after-ready', no module registered at boot: the option is still built, and its load is pending until the build arrives.
+    let arrive: (v: unknown) => void = () => undefined;
+    const late = new Promise<unknown>((resolve) => {
+      arrive = resolve;
+    });
+    const opt = mermaidOption({ maxEdges: 9, secure: ['look'], draw: 'after-ready' }, null, () => late);
+    expect(opt.mermaid).toBeDefined();
+    expect({ ...opt.mermaid, load: typeof opt.mermaid?.load }).toEqual({ maxEdges: 9, secure: ['look'], draw: 'after-ready', load: 'function' });
+    let settled = false;
+    const answer = opt.mermaid?.load().then((v) => {
+      settled = true;
+      return v;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    arrive(api);
+    expect(await answer).toBe(api);
+    // The late answer may be null (no build): still the option, with a load that answers null.
+    const none = mermaidOption({ secure: [], draw: 'after-ready' }, null, () => Promise.resolve(null));
+    expect(await none.mermaid?.load()).toBeNull();
+  });
+
+  it('an inline mode with no registered module builds no option at all; Mermaid off builds none either', () => {
+    const late = (): Promise<unknown> => Promise.resolve(null);
+    expect(mermaidOption({ secure: [], draw: 'auto' }, null, late)).toEqual({});
+    expect(mermaidOption({ secure: [], draw: 'on-request' }, null, late)).toEqual({});
+    expect(mermaidOption(null, api, late)).toEqual({});
+    expect(mermaidOption(null, null, late)).toEqual({});
+  });
+
+  it('lateApi (BX-3): one registration from the inserted element, Mermaid\'s own, with initialize and render, gives the API; every other observation gives null', () => {
+    const el = { id: 'inserted' };
+    const other = { id: 'another element' };
+    const build = { initialize: (): void => {}, render: (): Promise<void> => Promise.resolve() };
+    const reg = (target: unknown, detail: unknown): { target: unknown; detail: unknown } => ({ target, detail });
+    const good = reg(el, { name: 'mermaid', api: build });
+    expect(lateApi([good], el)).toBe(build);
+    // zero registrations
+    expect(lateApi([], el)).toBeNull();
+    // two registrations: a forged one on the same element beside the real one, in either order
+    const forged = reg(el, { name: 'mermaid', api: { initialize: (): void => {}, render: (): void => {} } });
+    expect(lateApi([forged, good], el)).toBeNull();
+    expect(lateApi([good, forged], el)).toBeNull();
+    expect(lateApi([good, good], el)).toBeNull();
+    // the target is not the inserted element
+    expect(lateApi([reg(other, { name: 'mermaid', api: build })], el)).toBeNull();
+    expect(lateApi([reg(null, { name: 'mermaid', api: build })], el)).toBeNull();
+    // a script that is not Mermaid's (a replayed enhance script registers as 'enhance')
+    expect(lateApi([reg(el, { name: 'enhance', api: build })], el)).toBeNull();
+    // the API lacks initialize or render, or either is not a function, or there is no API, or no plain detail
+    expect(lateApi([reg(el, { name: 'mermaid', api: { initialize: build.initialize } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: { render: build.render } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: { initialize: 1, render: build.render } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: { initialize: build.initialize, render: 'render' } })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid', api: null })], el)).toBeNull();
+    expect(lateApi([reg(el, { name: 'mermaid' })], el)).toBeNull();
+    expect(lateApi([reg(el, null)], el)).toBeNull();
+  });
+
+  it("only 'after-ready' arrives late (B3.6's predicate; the browser half is the frame's boot)", () => {
+    expect(arrivesLate(null)).toBe(false);
+    expect(arrivesLate({ secure: [], draw: 'auto' })).toBe(false);
+    expect(arrivesLate({ secure: [], draw: 'on-request' })).toBe(false);
+    expect(arrivesLate({ secure: [], draw: 'after-ready' })).toBe(true);
   });
 
   it('what it builds is what L2 accepts: each seed draw reaches the normalized options unchanged', () => {
     for (const draw of MERMAID_DRAW) {
-      const n = normalizeOptions({ mermaid: enhanceMermaid({ maxTextSize: 100, secure: ['look'], draw }, api) });
+      const n = normalizeOptions({ mermaid: enhanceMermaid({ maxTextSize: 100, secure: ['look'], draw }, () => Promise.resolve(api)) });
       expect(n.mermaid).toEqual({ maxTextSize: 100, maxEdges: null, secure: ['look'], draw });
     }
   });
@@ -432,21 +515,49 @@ describe("the bootstrap's pass-through of the seed's draw (src/frame-runtime/ada
     expect(waitsForDrawing(null)).toBe(false);
     expect(waitsForDrawing({ secure: [], draw: 'auto' })).toBe(true);
     expect(waitsForDrawing({ secure: [], draw: 'on-request' })).toBe(false);
+    expect(waitsForDrawing({ secure: [], draw: 'after-ready' })).toBe(false);
   });
 
-  it('the bootstrap builds its mermaid option with enhanceMermaid and gates its drawing wait on waitsForDrawing', () => {
+  it('the bootstrap builds its mermaid option with mermaidOption, handing it the deferred load, and gates its drawing wait on waitsForDrawing', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
-    expect(src).toMatch(/mermaid:\s*enhanceMermaid\(seed\.mermaid,\s*mermaidModule\)/);
+    expect(src).toMatch(/\.\.\.mermaidOption\(seed\.mermaid,\s*mermaidModule,\s*\(\)\s*=>\s*lateBuild\)/);
+    expect(src.match(/mermaidOption\(/g)).toHaveLength(1);
+    expect(src).not.toMatch(/mermaid:\s*enhanceMermaid\(/);
     expect(src).toMatch(/if\s*\(waitsForDrawing\(seed\.mermaid\)\)\s*await diagramsSettled\(root\)/);
     expect(src.match(/diagramsSettled\(root\)/g)).toHaveLength(1);
+  });
+
+  it("the bootstrap's late listener only records, the target through the captured accessor, and lateApi decides (BX-3)", () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+    expect(src).toMatch(/seen\.push\(\{\s*target:\s*target\.call\(e\),\s*detail:/);
+    expect(src.match(/seen\.push\(/g)).toHaveLength(1);
+    expect(src).toMatch(/settleLate\(lateApi\(seen,\s*inserted\)\)/);
+    expect(src).not.toMatch(/\be\.target\b|\.target\s*[=!]==/);
+  });
+
+  it("the bootstrap requires a registered API only for the inline modes (B3.6): both fail('mermaid') checks sit behind !arrivesLate", () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'frame-runtime', 'bootstrap.ts'), 'utf8').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+    expect(src.match(/fail\('mermaid'\)/g)).toHaveLength(2);
+    expect(src).toMatch(/if\s*\(seed\.mermaid\s*!==\s*null\s*&&\s*!arrivesLate\(seed\.mermaid\)\)\s*\{\s*if\s*\(mermaidModule\s*===\s*null\)\s*\{\s*fail\('mermaid'\);\s*return;\s*\}\s*if\s*\(typeof mermaidModule\['initialize'\]\s*!==\s*'function'\s*\|\|\s*typeof mermaidModule\['render'\]\s*!==\s*'function'\)\s*\{\s*fail\('mermaid'\);\s*return;\s*\}\s*\}/);
   });
 });
 
 describe('L3.D6: on request, the bootstrap asks for inline style before ready (fix round, review S1; Reference §11.5, ruling R7)', () => {
-  it('probesInlineStyle: only with Mermaid on and drawn on request', () => {
+  it('probesInlineStyle: not with Mermaid off or drawn automatically, yes when drawn on request', () => {
     expect(probesInlineStyle(null)).toBe(false);
     expect(probesInlineStyle({ secure: [], draw: 'auto' })).toBe(false);
     expect(probesInlineStyle({ secure: [], draw: 'on-request' })).toBe(true);
+  });
+
+  it("probesInlineStyle (B3.5): true for 'on-request' and 'after-ready', false for 'auto' and Mermaid off; waitsForDrawing only for 'auto'", () => {
+    expect(probesInlineStyle({ secure: [], draw: 'on-request' })).toBe(true);
+    expect(probesInlineStyle({ secure: [], draw: 'after-ready' })).toBe(true);
+    expect(probesInlineStyle({ secure: [], draw: 'auto' })).toBe(false);
+    expect(probesInlineStyle(null)).toBe(false);
+    expect(waitsForDrawing({ secure: [], draw: 'auto' })).toBe(true);
+    expect(waitsForDrawing({ secure: [], draw: 'on-request' })).toBe(false);
+    expect(waitsForDrawing({ secure: [], draw: 'after-ready' })).toBe(false);
+    expect(waitsForDrawing(null)).toBe(false);
   });
 
   it('probeInlineStyle connects one <style> element with a comment for text and a style attribute (both checks a drawing makes); its remover takes it out once', () => {

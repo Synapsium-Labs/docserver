@@ -173,7 +173,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
   it('exports the types a host names (checked by the typecheck)', () => {
     expectTypeOf<FrameErrorCode>().toEqualTypeOf<'not-rendered' | 'invalid-input' | 'nonce' | 'asset-mismatch' | 'unsafe-asset' | 'csp' | 'missing-asset' | 'too-large'>();
     expectTypeOf<FramePrefs>().toEqualTypeOf<{ theme: 'auto' | 'light' | 'dark'; width: 'standard' | 'wide'; font: 'serif' | 'sans' }>();
-    expectTypeOf<NonNullable<FrameOptions['mermaid']>['draw']>().toEqualTypeOf<'auto' | 'on-request' | undefined>();
+    expectTypeOf<NonNullable<FrameOptions['mermaid']>['draw']>().toEqualTypeOf<'auto' | 'on-request' | 'after-ready' | undefined>();
     expectTypeOf<FrameOptions['prefs']>().toEqualTypeOf<Partial<FramePrefs> | undefined>();
     expectTypeOf<FrameOptions['features']>().toEqualTypeOf<FrameFeatures | undefined>();
     expectTypeOf<keyof NonNullable<FrameOptions['snapshot']>>().toEqualTypeOf<BridgeStoreKey>();
@@ -643,7 +643,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     expect(seed['prefs']).toEqual({ theme: 'dark', width: 'wide', font: 'sans' });
     expect(seed['snapshot']).toEqual([['pref:prefs', '{"theme":"dark"}'], ['doc:pos', '{"y":120}'], ['pref:ui', 'null']]);
     expect(seed['features']).toEqual(o.features);
-    expect(seed['bridge']).toEqual({ links: false, hash: true, copy: true, changes: false, versions: true });
+    expect(seed['bridge']).toEqual({ links: false, hash: true, copy: true, changes: false, versions: true, progress: false });
     expect(seed['mermaid']).toEqual({ maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request' });
     expect(validateSeed(seed)).toEqual({ ok: true, seed });
   });
@@ -658,7 +658,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
       snapshot: [],
       features: {},
       mermaid: null,
-      bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+      bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
     });
   });
 
@@ -686,6 +686,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     ['an unknown chrome key', (r) => r, { features: { chrome: { footer: false } as unknown as NonNullable<FrameFeatures['chrome']> } }],
     ['a vocabulary word list of 201 words', (r) => r, { features: { vocabulary: { qualifiers: Array.from({ length: 201 }, (_, i) => `w${String(i)}`) } } }],
     ['a bridge switch that is not a boolean', (r) => r, { bridge: { links: 'no' as unknown as boolean } }],
+    ['the progress switch that is not a boolean', (r) => r, { bridge: { progress: 'yes' as unknown as boolean } }],
     ['an unknown bridge key', (r) => r, { bridge: { open: true } as unknown as NonNullable<FrameOptions['bridge']> }],
     ['a title that is not a string', (r) => ({ ...r, result: { ...r.result, meta: { ...r.result.meta, title: 1 as unknown as string } } }), {}],
     ['a frontList entry of the wrong shape', (r) => ({ ...r, result: { ...r.result, meta: { ...r.result.meta, frontList: [{ key: 'a' }] as unknown as null } } }), {}],
@@ -828,6 +829,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
       ['version an array', () => frame({ ...d, version: [] as unknown as NonNullable<RenderInput['version']> })],
       ['bridge a string', () => frame(d, { bridge: 'none' as unknown as NonNullable<FrameOptions['bridge']> })],
       ['a bridge switch null', () => frame(d, { bridge: { links: null as unknown as boolean } })],
+      ['the progress switch null', () => frame(d, { bridge: { progress: null as unknown as boolean } })],
       ['mermaid a string', () => frame(d, { assets: withMermaid(), mermaid: 'on' as unknown as NonNullable<FrameOptions['mermaid']> })],
       ['images an array', () => frame({ ...d, images: [['a.png', PNG]] as unknown as Record<string, string> })],
       ['options null', () => frameDocument(d, null as unknown as FrameOptions)],
@@ -844,8 +846,38 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     expect(refusal(run)).toBe('no refusal');
     const seed = seedOf(run());
     expect(seed['version']).toEqual({ sha: null, draft: true, commits: null, only: null });
-    expect(seed['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true });
+    expect(seed['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
     expect(seed['features']).toEqual({});
+  });
+});
+
+describe("B7.2 the progress switch: absent is false while every other bridge switch defaults to true (batch 1.1, C108)", () => {
+  const d = (): RenderInput => plain();
+  const OTHERS = { links: true, hash: true, copy: true, changes: true, versions: true };
+
+  it('no bridge at all seeds progress false and the other switches true', () => {
+    expect(seedOf(frame(d()))['bridge']).toEqual({ ...OTHERS, progress: false });
+  });
+
+  it('a bridge that leaves progress out seeds it false, whatever it sets of the others', () => {
+    expect(seedOf(frame(d(), { bridge: {} }))['bridge']).toEqual({ ...OTHERS, progress: false });
+    expect(seedOf(frame(d(), { bridge: { links: false } }))['bridge']).toEqual({ ...OTHERS, links: false, progress: false });
+    expect(seedOf(frame(d(), { bridge: { copy: true, hash: true } }))['bridge']).toEqual({ ...OTHERS, progress: false });
+  });
+
+  it('progress: true and progress: false are seeded as given; the others keep their defaults', () => {
+    expect(seedOf(frame(d(), { bridge: { progress: true } }))['bridge']).toEqual({ ...OTHERS, progress: true });
+    expect(seedOf(frame(d(), { bridge: { progress: false } }))['bridge']).toEqual({ ...OTHERS, progress: false });
+    expect(seedOf(frame(d(), { bridge: { progress: true, links: false, versions: false } }))['bridge']).toEqual({ ...OTHERS, links: false, versions: false, progress: true });
+  });
+
+  it('a seed with progress true passes the validator', () => {
+    const seed = seedOf(frame(d(), { bridge: { progress: true } }));
+    expect(validateSeed(seed)).toEqual({ ok: true, seed });
+  });
+
+  it("the bridge's own keys stay closed: an unknown one is still invalid-input (B7.6)", () => {
+    expect(refusal(() => frame(d(), { bridge: { command: true } as unknown as NonNullable<FrameOptions['bridge']> }))).toBe('invalid-input');
   });
 });
 
@@ -857,7 +889,7 @@ describe('L3.M7 Task 3 the default keys: frameDocument\'s seed holds every schem
     images: [],
     snapshot: [],
     features: {},
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
   };
 
   it('mermaid off: exactly SEED_KEYS, each new key at its default, and the seed passes validateSeed', () => {
@@ -1083,6 +1115,44 @@ describe('L3.M8 Mermaid in the skeleton (the prototype\'s P7)', () => {
   it('mermaid on without assets.mermaid: missing-asset; with a flipped byte: asset-mismatch', () => {
     expect(refusal(() => frame(plain(), { mermaid: {} }))).toBe('missing-asset');
     expect(refusal(() => frame(plain(), { mermaid: {}, assets: { ...assets, mermaid: `${mermaidText.slice(0, 10)}~${mermaidText.slice(11)}` } }))).toBe('asset-mismatch');
+  });
+  it("'after-ready' (B3.1): no Mermaid script, no assets.mermaid needed, the seed says so", () => {
+    const out = frame(plain(), { mermaid: { draw: 'after-ready' } });
+    const kids = tree(out).head.childNodes.filter(isElement);
+    expect(kids.map((e) => e.tagName)).toEqual(['meta', 'script', 'script', 'script', 'style', 'script']);
+    expect(out.endsWith(`<script>${assets.enhance}</script>`)).toBe(true);
+    expect(seedOf(out)['mermaid']).toEqual({ secure: [], draw: 'after-ready' });
+    // The policy still lists Mermaid's hash: the late script is allowed by it, and by nothing wider.
+    expect(frameCsp()).toContain(FRAME_MANIFEST.mermaid.csp);
+    // A supplied build is verified all the same, and never inlined: the srcdoc is the one without it.
+    const supplied = frame(plain(), { assets: withMermaid(), mermaid: { draw: 'after-ready' } });
+    expect(supplied).toBe(out);
+    expect(supplied).not.toContain(mermaidText);
+    expect(refusal(() => frame(plain(), { assets: { ...assets, mermaid: `${mermaidText.slice(0, 10)}~${mermaidText.slice(11)}` }, mermaid: { draw: 'after-ready' } }))).toBe('asset-mismatch');
+  });
+  it("'after-ready' (B3.1): the inline modes still inline the build and still need it", () => {
+    for (const draw of ['auto', 'on-request'] as const) {
+      const out = frame(plain(), { assets: withMermaid(), mermaid: { draw } });
+      expect(out, draw).toContain(mermaidText);
+      expect(refusal(() => frame(plain(), { mermaid: { draw } })), draw).toBe('missing-asset');
+    }
+  });
+  it("'after-ready' (B3.2): a policy lacking Mermaid's hash is refused with missing-hash, as in the inline modes", () => {
+    const csp = frameCsp().replace(` ${FRAME_MANIFEST.mermaid.csp}`, '');
+    expect(csp).not.toContain(FRAME_MANIFEST.mermaid.csp);
+    const why = (draw: 'auto' | 'on-request' | 'after-ready'): string => {
+      try {
+        frameDocument(plain(), { csp, nonce: NONCE, assets: withMermaid(), mermaid: { draw } });
+      } catch (e) {
+        return e instanceof FrameError ? `${e.code}: ${e.message}` : 'not a FrameError';
+      }
+      return 'no refusal';
+    };
+    for (const draw of ['auto', 'on-request', 'after-ready'] as const) expect(why(draw), draw).toMatch(/^csp: .*missing-hash/);
+    // The hash is required with no build supplied at all, too: 'after-ready' needs no text, never a weaker policy.
+    expect(refusal(() => frame(plain(), { csp, mermaid: { draw: 'after-ready' } }))).toBe('csp');
+    // Mermaid off: the hash is not required (the existing M6 case).
+    expect(refusal(() => frame(plain(), { csp }))).toBe('no refusal');
   });
   it('the Mermaid frame file passes the byte rules and carries no ELK and no free require', () => {
     expect(rules.scriptHazards(mermaidText)).toEqual([]);

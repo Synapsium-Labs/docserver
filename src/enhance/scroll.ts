@@ -35,6 +35,9 @@
 //                the day view is on (the root class DAY_VIEW, Task 22's), and it shows while position.barHeld() (a jump
 //                just moved the page). In a wider window it never hides. Each write happens only when its value
 //                changes.
+//   progress     the share above is also computed, with no bar, when the host gave onProgress (batch 1.1, C108), and
+//                reported to it, as a number from 0 to 1, whenever the written width would change; with neither the bar
+//                nor onProgress no rect is read for it.
 //   --bar-h      at every relayout, with chrome.bar: the bar's height without its padding (the stylesheet pads the bar
 //                below with the root's own top padding, so the reading column starts that padding below the bar's row
 //                and line, where it would under a page-level bar: see the bar block of reader.css), written on the root
@@ -197,11 +200,13 @@ export function build(ctx: FeatureContext): void {
     journal.toggleClass(root, 'bar-hidden', on);
   };
 
+  const reportsProgress = ctx.host.present.has('onProgress');
   let scheduledSpy: Cancel | null = null;
   const spy = (consumeScheduled = true): void => {
     if (consumeScheduled) scheduledSpy = null;
     const vh = env.viewport().h;
-    if (slots !== null) {
+    // The share is computed when the bar draws it or the host asked for it (and never otherwise: no rect is read).
+    if (slots !== null || reportsProgress) {
       const box = root.getBoundingClientRect();
       // How far the reader has scrolled: the root's top above the window's (the page's scroll, for a root at its top).
       const y = -box.top;
@@ -212,21 +217,29 @@ export function build(ctx: FeatureContext): void {
       const w = `${String(Math.round(share * 1000) / 1000)}%`;
       if (w !== width) {
         width = w;
-        journal.setStyle(slots.progress, 'width', w);
+        if (slots !== null) journal.setStyle(slots.progress, 'width', w);
+        // Reported only on a change, and with the bar's line or without it. The host's callback runs inside an
+        // operation and may destroy the instance: the frame then stops.
+        if (reportsProgress) {
+          ctx.host.onProgress(Math.round(share * 1000) / 100000);
+          if (!ctx.live()) return;
+        }
       }
-      const past = h1 !== null ? h1.getBoundingClientRect().bottom < TITLE_GONE : y > SCROLLED_NO_TITLE;
-      if (past !== scrolled) {
-        scrolled = past;
-        journal.toggleClass(root, 'scrolled', past);
+      if (slots !== null) {
+        const past = h1 !== null ? h1.getBoundingClientRect().bottom < TITLE_GONE : y > SCROLLED_NO_TITLE;
+        if (past !== scrolled) {
+          scrolled = past;
+          journal.toggleClass(root, 'scrolled', past);
+        }
+        // A phone: a window of at most 700 px (a literal: the walls refuse a query built at run time).
+        if (!env.matches('(max-width: 700px)')) hide(false);
+        else if (position.barHeld()) hide(false);
+        else if (!overlays.any() && !root.classList.contains(DAY_VIEW)) {
+          if (y > lastY + SCROLL_SLACK && y > HIDE_AFTER) hide(true);
+          else if (y < lastY - SCROLL_SLACK || y < HIDE_AFTER) hide(false);
+        }
+        lastY = y;
       }
-      // A phone: a window of at most 700 px (a literal: the walls refuse a query built at run time).
-      if (!env.matches('(max-width: 700px)')) hide(false);
-      else if (position.barHeld()) hide(false);
-      else if (!overlays.any() && !root.classList.contains(DAY_VIEW)) {
-        if (y > lastY + SCROLL_SLACK && y > HIDE_AFTER) hide(true);
-        else if (y < lastY - SCROLL_SLACK || y < HIDE_AFTER) hide(false);
-      }
-      lastY = y;
     }
 
     const line = Math.max(LINE_MIN, vh * LINE_SHARE);

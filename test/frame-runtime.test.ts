@@ -12,11 +12,12 @@ import { describe, expect, it } from 'vitest';
 import { MAX_DELETIONS, MAX_RANGES } from '../src/enhance/changes.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, type FrameToParent } from '../src/frame/protocol.js';
 import { createAdapters, fromBridgeKey, toBridgeKey } from '../src/frame-runtime/adapters.js';
+import { dispatchParentMessage, type DispatchTargets, type ReaderApi } from '../src/frame-runtime/dispatch.js';
 import { checkVocabulary, contentIntrinsics, materialise, MISSING_CLASS } from '../src/frame-runtime/content.js';
 import { FACES, FONT_WAIT_MS, probeFaces } from '../src/frame-runtime/fonts.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES, parseParentMessage } from '../src/frame-runtime/inbound.js';
 import type { Outbox } from '../src/frame-runtime/outbox.js';
-import { pinFreeGlobals } from '../src/frame-runtime/pin.js';
+import { pinFreeGlobals, RESERVED_GLOBALS, reserveGlobals } from '../src/frame-runtime/pin.js';
 import { INPUT_ATTRIBUTES, STYLE_VALUE_SOURCE, VOCABULARY_ATTRIBUTES, VOCABULARY_TAGS } from '../src/frame-runtime/vocabulary.js';
 import { render } from '../src/render/index.js';
 
@@ -186,7 +187,8 @@ describe('L3.M22: pinFreeGlobals', () => {
         }
         if (n.expression.text === 'createAdapters') at['adapters']?.push(n.getStart(sf));
       }
-      if (ts.isCallExpression(n) && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'docserver:register') && /\badd\.call\b/.test(n.expression.getText(sf))) at['register']?.push(n.getStart(sf));
+      // The document's own listener (`add.call(doc, ...)`); the late insertion's, on the inserted element, is another site.
+      if (ts.isCallExpression(n) && n.arguments[0]?.getText(sf) === 'doc' && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'docserver:register') && /\badd\.call\b/.test(n.expression.getText(sf))) at['register']?.push(n.getStart(sf));
       if (ts.isCallExpression(n) && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'DOMContentLoaded')) at['start']?.push(n.getStart(sf));
       ts.forEachChild(n, visit);
     };
@@ -201,6 +203,88 @@ describe('L3.M22: pinFreeGlobals', () => {
     const before = Object.getOwnPropertyNames(win).length;
     pinFreeGlobals(win, []);
     expect(Object.getOwnPropertyNames(win).length).toBe(before);
+  });
+});
+
+describe('BD5: reserveGlobals, the names Mermaid writes while it evaluates', () => {
+  it('reserves the two names, in every mode (the build\'s allowlist is held equal to them in test/frame-build.test.ts)', () => {
+    expect([...RESERVED_GLOBALS].sort()).toEqual(['fastdom', 'injected']);
+  });
+
+  it('defines an absent name as an own, writable, non-configurable property holding undefined; leaves an own one as it is', () => {
+    const win = freshWindow();
+    const w = win as unknown as Record<string, unknown>;
+    w['ownThing'] = 7;
+    const ownBefore = Object.getOwnPropertyDescriptor(win, 'ownThing');
+    expect(Object.hasOwn(win, 'fastdom')).toBe(false);
+    reserveGlobals(win, ['fastdom', 'injected', 'ownThing']);
+    for (const name of ['fastdom', 'injected']) {
+      expect(Object.getOwnPropertyDescriptor(win, name), name).toEqual({ value: undefined, writable: true, enumerable: false, configurable: false });
+    }
+    expect(Object.getOwnPropertyDescriptor(win, 'ownThing')).toEqual(ownBefore);
+    expect(() => {
+      Object.defineProperty(win, 'fastdom', { value: 1, configurable: true });
+    }).toThrow(TypeError);
+    expect(Reflect.deleteProperty(win, 'fastdom')).toBe(false);
+  });
+
+  it("an element with that id cannot stand in for it, and Mermaid's own writes still land (`??=` and `x = x || ...`)", () => {
+    const win = freshWindow();
+    const w = win as unknown as Record<string, unknown>;
+    reserveGlobals(win, RESERVED_GLOBALS);
+    for (const id of [...RESERVED_GLOBALS, 'docserverControl']) {
+      const a = win.document.createElement('a');
+      a.id = id;
+      win.document.body.append(a);
+    }
+    // The control: an unreserved name is clobbered by its element; the reserved ones read undefined, not an element.
+    expect(w['docserverControl']).toBe(win.document.getElementById('docserverControl'));
+    expect(w['fastdom']).toBeUndefined();
+    expect(w['injected']).toBeUndefined();
+    expect(() => {
+      'use strict';
+      w['injected'] ??= { markdown: true };
+    }).not.toThrow();
+    expect(() => {
+      'use strict';
+      w['fastdom'] = w['fastdom'] ?? { read: 1 };
+    }).not.toThrow();
+    expect(w['injected']).toEqual({ markdown: true });
+    expect(w['fastdom']).toEqual({ read: 1 });
+  });
+
+  it('without the reservation an element does stand in for the name (the control of the case above)', () => {
+    const win = freshWindow();
+    const w = win as unknown as Record<string, unknown>;
+    const a = win.document.createElement('a');
+    a.id = 'fastdom';
+    win.document.body.append(a);
+    expect(w['fastdom']).toBe(a);
+  });
+
+  it('the bootstrap reserves RESERVED_GLOBALS in Phase S: once, right after the pin, before the adapters, the listeners and any content', () => {
+    const file = path.join(ROOT, 'src/frame-runtime/bootstrap.ts');
+    const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true);
+    const at: Record<string, number[]> = { pin: [], reserve: [], adapters: [], register: [], start: [] };
+    const visit = (n: ts.Node): void => {
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
+        if (n.expression.text === 'pinFreeGlobals') at['pin']?.push(n.getStart(sf));
+        if (n.expression.text === 'reserveGlobals') {
+          expect(n.arguments.map((a) => a.getText(sf))).toEqual(['win', 'RESERVED_GLOBALS']);
+          at['reserve']?.push(n.getStart(sf));
+        }
+        if (n.expression.text === 'createAdapters') at['adapters']?.push(n.getStart(sf));
+      }
+      // The document's own listener (`add.call(doc, ...)`); the late insertion's, on the inserted element, is another site.
+      if (ts.isCallExpression(n) && n.arguments[0]?.getText(sf) === 'doc' && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'docserver:register') && /\badd\.call\b/.test(n.expression.getText(sf))) at['register']?.push(n.getStart(sf));
+      if (ts.isCallExpression(n) && n.arguments.some((a) => ts.isStringLiteral(a) && a.text === 'DOMContentLoaded')) at['start']?.push(n.getStart(sf));
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    expect(at['pin']).toHaveLength(1);
+    expect(at['reserve']).toHaveLength(1);
+    expect(at['pin']?.[0]).toBeLessThan(at['reserve']?.[0] ?? -1);
+    for (const k of ['adapters', 'register', 'start']) expect(at['reserve']?.[0], k).toBeLessThan(at[k]?.[0] ?? -1);
   });
 });
 
@@ -272,7 +356,7 @@ function recordingOutbox(): { box: Outbox; sent: FrameToParent[]; copies: string
   return { box, sent, copies, asked };
 }
 
-const ALL = { links: true, hash: true, copy: true, changes: true, versions: true } as const;
+const ALL = { links: true, hash: true, copy: true, changes: true, versions: true, progress: true } as const;
 const SHA40 = 'a'.repeat(40);
 
 describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.3; row L3.B8 unit half)', () => {
@@ -358,11 +442,151 @@ describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.
 
   it('each callback exists only when the seed\'s bridge allows it; storage always does', () => {
     const { box, sent } = recordingOutbox();
-    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false } });
-    expect([a.onLink, a.onHash, a.copy, a.changes, a.openVersion]).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false } });
+    expect([a.onLink, a.onHash, a.copy, a.changes, a.openVersion, a.onProgress]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
     a.link('x.md');
     expect(sent).toEqual([]);
     expect(typeof a.storage.set).toBe('function');
+  });
+});
+
+describe('B7.2 adapters: onProgress exists only when the seed\'s bridge asks for progress (batch 1.1, C108)', () => {
+  it('progress false: no onProgress, whatever else the bridge allows (B7h)', () => {
+    const { box, sent } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: { ...ALL, progress: false } });
+    expect(a.onProgress).toBeUndefined();
+    expect(a.onLink).toBeDefined();
+    expect(sent).toEqual([]);
+  });
+
+  it("progress true: onProgress(share) sends the share in thousandths as a string, rounded and clamped to 0..1000", () => {
+    const { box, sent } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: { ...ALL, progress: true } });
+    for (const share of [0, 0.5, 1, 0.1234, 0.0004, 0.0005, 0.99949, 0.9996, -0.2, 3, 0.37]) a.onProgress?.(share);
+    expect(sent).toEqual(['0', '500', '1000', '123', '0', '1', '999', '1000', '0', '1000', '370'].map((p) => ({ t: 'progress', p })));
+  });
+
+  it('a share that is not a finite number sends nothing', () => {
+    const { box, sent } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: ALL });
+    for (const bad of [NaN, Infinity, -Infinity, '0.5' as unknown as number, null as unknown as number, undefined as unknown as number]) a.onProgress?.(bad);
+    expect(sent).toEqual([]);
+  });
+
+  it('a seed that predates the switch (no progress key) builds no onProgress', () => {
+    const { box } = recordingOutbox();
+    const a = createAdapters(box, { snapshot: [], bridge: { links: true, hash: true, copy: true, changes: true, versions: true } as never });
+    expect(a.onProgress).toBeUndefined();
+  });
+});
+
+describe("B7.4 the frame's port: a command reaches the reader, and a command that fails never stops the port (batch 1.1, C108)", () => {
+  const file = path.join(ROOT, 'src/frame-runtime/bootstrap.ts');
+  const source = readFileSync(file, 'utf8');
+  const ROOT_EL = { id: 'root' };
+
+  /** The reader's API as the dispatcher sees it, recording every call; `over` replaces members. */
+  function reader(over: Partial<ReaderApi<typeof ROOT_EL>> = {}): { api: ReaderApi<typeof ROOT_EL>; calls: [string, unknown[]][] } {
+    const calls: [string, unknown[]][] = [];
+    const api: ReaderApi<typeof ROOT_EL> = {
+      setEnhancementPrefs: (...a) => void calls.push(['prefs', a]),
+      runEnhancementCommand: (...a) => (calls.push(['command', a]), true),
+      ...over,
+    };
+    return { api, calls };
+  }
+  function targets(r: ReturnType<typeof reader> | null, root: typeof ROOT_EL | null = ROOT_EL) {
+    const seen: string[] = [];
+    return {
+      seen,
+      to: {
+        root,
+        api: r === null ? null : r.api,
+        answer: (m: { sha: string }) => void seen.push(`answer ${m.sha.slice(0, 4)}`),
+        offerMermaid: (m: { t: 'mermaid' }) => void seen.push(`mermaid ${m.t}`),
+      } as DispatchTargets<typeof ROOT_EL>,
+    };
+  }
+  const ANSWER = { t: 'changes.result', sha: SHA40, unavailable: true } as const;
+
+  it("onPortMessage keeps the state check first, then the parser, then the dispatcher (structure)", () => {
+    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true);
+    let found = 0;
+    const visit = (n: ts.Node): void => {
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === 'onPortMessage' && n.initializer !== undefined) {
+        const text = n.initializer.getText(sf);
+        const at = (needle: string): number => text.indexOf(needle);
+        expect(at("if (state !== 'settled' || mismatch) return;")).toBeGreaterThan(0);
+        expect(at('parseParentMessage(')).toBeGreaterThan(at("if (state !== 'settled' || mismatch) return;"));
+        expect(at('dispatchParentMessage(m,')).toBeGreaterThan(at('if (m === null) return;'));
+        found += 1;
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    expect(found).toBe(1);
+  });
+
+  it('a command runs the reader\'s runEnhancementCommand(root, name), once, with that root and name', () => {
+    const r = reader();
+    const t = targets(r);
+    for (const name of ['jump', 'settings', 'contents', 'outline'] as const) dispatchParentMessage({ t: 'command', name }, t.to);
+    expect(r.calls.map(([k]) => k)).toEqual(['command', 'command', 'command', 'command']);
+    expect(r.calls.map(([, a]) => a)).toEqual(['jump', 'settings', 'contents', 'outline'].map((n) => [ROOT_EL, n]));
+    expect((r.calls[0]?.[1] as unknown[])[0] === ROOT_EL).toBe(true);
+  });
+
+  it('a command that throws is contained, and the port keeps working: a later prefs, answer and mermaid still apply, and nothing is sent', () => {
+    const r = reader({
+      runEnhancementCommand: () => {
+        throw new Error('boom');
+      },
+    });
+    const t = targets(r);
+    expect(() => dispatchParentMessage({ t: 'command', name: 'jump' }, t.to)).not.toThrow();
+    dispatchParentMessage({ t: 'prefs', theme: 'dark' }, t.to);
+    dispatchParentMessage(ANSWER, t.to);
+    dispatchParentMessage({ t: 'mermaid', unavailable: true }, t.to);
+    expect(r.calls).toEqual([['prefs', [ROOT_EL, { theme: 'dark' }]]]);
+    expect(t.seen).toEqual(['answer aaaa', 'mermaid mermaid']);
+  });
+
+  it('a reader that never registered, or has no runEnhancementCommand, makes a command nothing: no throw, and later ops still apply', () => {
+    const noApi = targets(null);
+    expect(() => dispatchParentMessage({ t: 'command', name: 'jump' }, noApi.to)).not.toThrow();
+    dispatchParentMessage(ANSWER, noApi.to);
+    expect(noApi.seen).toEqual(['answer aaaa']);
+    const oldCalls: [string, unknown[]][] = [];
+    // A reader script that predates the commands: the API has no runEnhancementCommand at all.
+    const old = { calls: oldCalls, api: { setEnhancementPrefs: (...a: unknown[]) => void oldCalls.push(['prefs', a]) } as ReaderApi<typeof ROOT_EL> };
+    const t = targets(old);
+    expect(() => dispatchParentMessage({ t: 'command', name: 'jump' }, t.to)).not.toThrow();
+    dispatchParentMessage({ t: 'prefs', font: 'sans' }, t.to);
+    expect(old.calls).toEqual([['prefs', [ROOT_EL, { font: 'sans' }]]]);
+  });
+
+  it('before the reader enhanced (no root) a command and a prefs reach nothing, and the reader is not called with a null root', () => {
+    const r = reader();
+    const t = targets(r, null);
+    dispatchParentMessage({ t: 'command', name: 'jump' }, t.to);
+    dispatchParentMessage({ t: 'prefs', theme: 'light' }, t.to);
+    expect(r.calls).toEqual([]);
+  });
+
+  it("a prefs the reader refuses (a throw) leaves the port working too", () => {
+    const r = reader({
+      setEnhancementPrefs: () => {
+        throw new Error('refused');
+      },
+    });
+    const t = targets(r);
+    expect(() => dispatchParentMessage({ t: 'prefs', theme: 'dark' }, t.to)).not.toThrow();
+    dispatchParentMessage({ t: 'command', name: 'settings' }, t.to);
+    expect(r.calls).toEqual([['command', [ROOT_EL, 'settings']]]);
+  });
+
+  it("adapters' onProgress goes to enhance's options only when it exists", () => {
+    expect(source).toMatch(/\.\.\.\(adapters\.onProgress === undefined \? \{\} : \{ onProgress: adapters\.onProgress \}\)/);
   });
 });
 
@@ -420,6 +644,101 @@ describe('parseParentMessage: what the frame accepts on the port (Reference §6.
     expect(parseParentMessage({ t: 'changes.result', sha: SHA40, ranges: new Array(2 ** 32 - 1) })).toBeNull();
     expect(parseParentMessage({ t: 'changes.result', sha: SHA40, ranges: [], removedAfter: new Array(2 ** 32 - 1) })).toBeNull();
     expect(performance.now() - t0).toBeLessThan(1000);
+  });
+
+  it("mermaid: exactly one of text (a string within the cap) or unavailable: true (B3.4)", () => {
+    expect(parseParentMessage({ t: 'mermaid', text: '(function(){})();' })).toEqual({ t: 'mermaid', text: '(function(){})();' });
+    expect(parseParentMessage({ t: 'mermaid', unavailable: true })).toEqual({ t: 'mermaid', unavailable: true });
+    expect(parseParentMessage({ t: 'mermaid', text: '' })).toEqual({ t: 'mermaid', text: '' });
+    for (const bad of [
+      { t: 'mermaid' },
+      { t: 'mermaid', text: 1 },
+      { t: 'mermaid', text: null },
+      { t: 'mermaid', text: ['x'] },
+      { t: 'mermaid', unavailable: false },
+      { t: 'mermaid', unavailable: 'true' },
+      { t: 'mermaid', unavailable: 1 },
+      { t: 'mermaid', text: 'x', unavailable: true },
+      { t: 'mermaid', text: 'x', src: 'y' },
+      { t: 'mermaid', unavailable: true, src: 'y' },
+    ]) {
+      expect(parseParentMessage(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it('mermaid: the text is capped at mermaidMaxChars UTF-16 code units, counted by length', () => {
+    expect(BRIDGE_LIMITS.mermaidMaxChars).toBe(8_388_608);
+    expect(parseParentMessage({ t: 'mermaid', text: 'a'.repeat(BRIDGE_LIMITS.mermaidMaxChars) })).not.toBeNull();
+    expect(parseParentMessage({ t: 'mermaid', text: 'a'.repeat(BRIDGE_LIMITS.mermaidMaxChars + 1) })).toBeNull();
+    // Code units, not code points or bytes: 4,194,305 astral characters are 8,388,610 code units.
+    expect(parseParentMessage({ t: 'mermaid', text: '\u{1F600}'.repeat(BRIDGE_LIMITS.mermaidMaxChars / 2 + 1) })).toBeNull();
+    expect(parseParentMessage({ t: 'mermaid', text: '\u{1F600}'.repeat(BRIDGE_LIMITS.mermaidMaxChars / 2) })).not.toBeNull();
+  });
+
+  it("mermaid: every parent-to-frame fixture of the op is judged as its verdict says, by the frame's own parser", () => {
+    interface Case {
+      label: string;
+      direction: string;
+      channel?: string;
+      ports?: number;
+      message: Record<string, unknown> | null;
+      fill?: Record<string, { prefix?: string; unit: string; times: number; suffix?: string }>;
+      verdict: 'accept' | 'refuse';
+    }
+    const cases = (JSON.parse(readText('conformance/bridge-cases.json')) as { messages: Case[] }).messages.filter(
+      (c) => c.direction === 'parent-to-frame' && c.message?.['t'] === 'mermaid' && c.channel === 'port' && (c.ports ?? 0) === 0,
+    );
+    expect(cases.filter((c) => c.verdict === 'accept').length).toBeGreaterThanOrEqual(3);
+    expect(cases.filter((c) => c.verdict === 'refuse').length).toBeGreaterThanOrEqual(8);
+    for (const c of cases) {
+      const m: Record<string, unknown> = { ...(c.message ?? {}) };
+      for (const [k, f] of Object.entries(c.fill ?? {})) m[k] = `${f.prefix ?? ''}${f.unit.repeat(f.times)}${f.suffix ?? ''}`;
+      const got = parseParentMessage(m);
+      if (c.verdict === 'accept') expect(got, c.label).toEqual(m);
+      else expect(got, c.label).toBeNull();
+    }
+  });
+
+  it('command: exactly {name}, one of the four command names (B7a, B7b)', () => {
+    for (const name of ['jump', 'settings', 'contents', 'outline']) expect(parseParentMessage({ t: 'command', name }), name).toEqual({ t: 'command', name });
+    for (const bad of [
+      { t: 'command' },
+      { t: 'command', name: 'print' },
+      { t: 'command', name: 'Jump' },
+      { t: 'command', name: '' },
+      { t: 'command', name: 'toString' },
+      { t: 'command', name: 'constructor' },
+      { t: 'command', name: 1 },
+      { t: 'command', name: null },
+      { t: 'command', name: ['jump'] },
+      { t: 'command', name: 'jump', extra: 'x' },
+      { t: 'command', name: 'jump', arg: 1 },
+      Object.defineProperty({ t: 'command' }, 'name', { get: () => 'jump', enumerable: true }),
+      JSON.parse('{"t":"command","name":"jump","__proto__":{}}') as unknown,
+    ]) {
+      expect(parseParentMessage(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("command: every parent-to-frame fixture of the op is judged as its verdict says, by the frame's own parser (B7.1)", () => {
+    interface Case {
+      label: string;
+      direction: string;
+      channel?: string;
+      ports?: number;
+      message: Record<string, unknown> | null;
+      verdict: 'accept' | 'refuse';
+    }
+    const cases = (JSON.parse(readText('conformance/bridge-cases.json')) as { messages: Case[] }).messages.filter(
+      (c) => c.direction === 'parent-to-frame' && c.message?.['t'] === 'command' && c.channel === 'port' && (c.ports ?? 0) === 0,
+    );
+    expect(cases.filter((c) => c.verdict === 'accept')).toHaveLength(4);
+    expect(cases.filter((c) => c.verdict === 'refuse').length).toBeGreaterThanOrEqual(3);
+    for (const c of cases) {
+      const got = parseParentMessage(c.message);
+      if (c.verdict === 'accept') expect(got, c.label).toEqual(c.message);
+      else expect(got, c.label).toBeNull();
+    }
   });
 
   it('ignores hello, a frame op, an unknown op, a non-plain object, a prototype key and a getter', () => {

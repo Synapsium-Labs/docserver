@@ -406,6 +406,16 @@ export function build(ctx: FeatureContext): void {
   ctx.keys.bind({ key: '/', label: LABEL, run: openJump });
   ctx.keys.bind({ key: CHORD, label: LABEL, listed: false, run: openJump });
 
+  ctx.commands.register('jump', () => {
+    if (isOpen()) {
+      close();
+      return true;
+    }
+    if (ctx.overlays.any()) return false;
+    openJump();
+    return true;
+  });
+
   if (ctx.slots !== null) {
     const keyboard = ctx.options.keyboard;
     const btn = chrome(

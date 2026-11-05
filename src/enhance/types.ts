@@ -1,6 +1,7 @@
 // The types of `./enhance`: the public ones (re-exported by index.ts) and the context every feature builds with.
 // Import-inert: declarations only.
 import type { BarSlots } from './bar.js';
+import type { Commands } from './commands.js';
 import type { Cancel, Env } from './env.js';
 import type { Folds } from './folds.js';
 import type { HeadCtl } from './headctl.js';
@@ -92,6 +93,8 @@ export interface ChromeOptions {
   readonly rail?: boolean;
   /** The reading settings menu. */
   readonly settings?: boolean;
+  /** Room above the text: default true; false trims the root's top padding to 8px, for a root with no bar (`bar: false`) only: with the bar it changes nothing. */
+  readonly topSpace?: boolean;
 }
 
 /** Drawing Mermaid figures. The host passes the module, never a URL. */
@@ -109,12 +112,15 @@ export interface MermaidOptions {
    * called once. 'on-request': load() is not called and nothing is drawn until a reader asks; each drawable figure
    * shows its source with a Render button, a tap draws that figure only (the first tap calls load() once), and draws
    * run one at a time. A figure longer than maxTextSize has no button and shows its source with the reader's note.
+   * 'after-ready' (ledger C107): the second phase reads `waiting`, with no gate, so every source stays readable, while
+   * load() (called once) answers; then, after the fonts wait, it sets the gate and `drawing` and draws every figure
+   * with no tap, near ones first, and settles as 'auto' does. enhance() does not wait for any of it.
    */
   readonly draw?: MermaidDraw;
 }
 
 /** When Mermaid figures are drawn (MermaidOptions.draw). */
-export type MermaidDraw = 'auto' | 'on-request';
+export type MermaidDraw = 'auto' | 'on-request' | 'after-ready';
 
 /**
  * The words a host's documents use, for the parts of the layout that read them (docserver L2, Task 8; LD9). Each list
@@ -215,6 +221,11 @@ export interface EnhanceOptions {
    * history; `from` is an opaque token for the place being left, which the host hands back when it returns there.
    */
   onHash?(id: string | null, entry: { readonly push: boolean; readonly from: string | null }): void;
+  /**
+   * How far the root has been read, a number from 0 to 1: the share the bar's progress line draws, with or without
+   * the bar. Called once when the reader starts, then on every change (batch 1.1, C108).
+   */
+  onProgress?(share: number): void;
   /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
   copy?(text: string): void | Promise<void>;
   /** The document's changes since commit `sha`, for "what changed". Absent: no comparison. */
@@ -382,6 +393,8 @@ export interface FeatureContext {
   readonly headCtl: HeadCtl;
   /** The bar's skeleton: bar, tools, running head, progress, skip link (bar.ts); null without chrome.bar. */
   readonly slots: BarSlots | null;
+  /** The commands a host runs with runEnhancementCommand: the bar's tools without the bar (commands.ts). */
+  readonly commands: Commands;
   /** The folds' members API (folds.ts): empty without folds. */
   readonly folds: Folds;
   /**

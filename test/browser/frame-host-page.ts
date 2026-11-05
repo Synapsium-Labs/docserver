@@ -41,6 +41,11 @@
 //     the frame's console (a `docserver-test-post ` line, with the console method captured before any frame script
 //     runs), which the parent's console channel collects as `framePosts`: `./host` removes the frame at an error, so
 //     the record in the frame may be gone before a row can read it.
+//   - `forgeRegister` (B5.5): a capture listener on the document that, from inside the real Mermaid registration of a
+//     late insertion, dispatches a forged `docserver:register` carrying a fake API (on the body, on the inserted
+//     element, or, after stopping the real event, on the inserted script's Text child), and counts the fake's calls;
+//   - `holdSettled` (B5.7): holds the font-face probe for a second (it wraps FontFaceSet.prototype.load before the
+//     bootstrap captures it), so the frame is still booting when an early op reaches its port.
 // The record sits under a symbol key, so no authored id can shadow it.
 //
 // The library page (Task 10, `openLibHost`): the same context, route and violation channel, but the parent is
@@ -88,6 +93,24 @@ export interface InitHow {
   readonly diagramsAtReady?: boolean;
   readonly stepWallClock?: boolean;
   readonly posts?: boolean;
+  /**
+   * The B5.5 rows (the late Mermaid insertion): a capture listener on the frame's document for the real
+   * `docserver:register` of Mermaid's build. From inside it, so within the synchronous appendChild window, it
+   * dispatches a forged `docserver:register` carrying a fake Mermaid API, on `other` (the body) or on `inserted`
+   * (the real event's own target, the inserted script element), or, for `text`, after stopping the real event, on the
+   * inserted script's Text child (the forged event bubbles to the element). The fake's calls are counted in the record.
+   */
+  readonly forgeRegister?: 'other' | 'inserted' | 'text';
+  /** The B5.7 'before settled' row: the frame's font-face probe is held for a second, so the frame stays unsettled. */
+  readonly holdSettled?: boolean;
+  /**
+   * The B5.4c row (the bootstrap's blocked-inline exception): a DOMContentLoaded listener, added before the bootstrap's own,
+   * that dispatches a `securitypolicyviolation` event for a blocked inline script (`script-src-elem`, `inline`) on the
+   * document, so the violation reaches the bootstrap before its start runs.
+   */
+  readonly violationBeforeStart?: boolean;
+  /** A context with touch input (page.tap works), for the rows that tap a host button. */
+  readonly touch?: boolean;
 }
 
 /** How the host page itself is served. */
@@ -103,6 +126,8 @@ export interface MountHow {
   readonly sandbox?: string | null;
   /** Set the csp attribute; default true. False is L3.HB1's control: a bare iframe bound by no policy of its own. */
   readonly cspAttribute?: boolean;
+  /** Messages posted on the main port right after the hello, in the same task (they reach a frame that is still booting). */
+  readonly early?: readonly unknown[];
 }
 
 /** The in-frame record the init script keeps. */
@@ -117,12 +142,14 @@ export interface FrameRecord {
   readonly diagrams: readonly { readonly state: string | null; readonly at: number }[];
   /** One entry per `ready` op the frame posted: the root's `data-docreader-diagrams` at the post (null: absent), and when. */
   readonly ready: readonly { readonly state: string | null; readonly at: number }[];
+  /** With `forgeRegister`: how many forged events were dispatched, and how often the fake API's functions were called. */
+  readonly forged: { readonly dispatched: number; readonly fakeCalls: number };
   /** Every op the frame posted on a MessagePort (with `posts`): its `t`, and an error's `why`. */
   readonly posts: readonly { readonly t: string; readonly why?: string }[];
 }
 
 interface HostApi {
-  mount(srcdoc: string, csp: string | null, hello: HelloMode, sandbox: string | null): void;
+  mount(srcdoc: string, csp: string | null, hello: HelloMode, sandbox: string | null, early: readonly unknown[]): void;
   secondHello(): void;
   send(port: string, data: unknown): void;
   record(): HostRecord;
@@ -160,7 +187,7 @@ function hostMain(): void {
     return ch.port2;
   };
   const api = {
-    mount(srcdoc: string, csp: string | null, hello: 'auto' | 'none' | 'battery' | 'v2', sandbox: string | null): void {
+    mount(srcdoc: string, csp: string | null, hello: 'auto' | 'none' | 'battery' | 'v2', sandbox: string | null, early: readonly unknown[]): void {
       const f = document.createElement('iframe');
       if (sandbox !== null) f.setAttribute('sandbox', sandbox);
       f.setAttribute('referrerpolicy', 'no-referrer');
@@ -179,6 +206,7 @@ function hostMain(): void {
           w.postMessage({ t: 'hello', v: 1 }, '*', [channel('two-a'), channel('two-b')]);
         }
         w.postMessage({ t: 'hello', v: hello === 'v2' ? 2 : 1 }, '*', [channel('main')]);
+        for (const m of early) ends['main']?.postMessage(m);
       });
       iframe = f;
       rec.inserted = performance.now();
@@ -218,10 +246,10 @@ const PAGE = `<!doctype html>
 
 /** The init script, or null when nothing is asked for: in the srcdoc document only, each part opt-in. */
 function initScript(how: InitHow): string | null {
-  if (how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true && how.posts !== true) return null;
+  if (how.forgeRegister === undefined && how.holdSettled !== true && how.measure !== true && how.countCloses !== true && how.observeDiagrams !== true && how.diagramsAtReady !== true && how.stepWallClock !== true && how.posts !== true && how.violationBeforeStart !== true) return null;
   return `(() => {
   if (location.href !== 'about:srcdoc') return;
-  const rec = { dcl: null, root: null, closed: 0, diagrams: [], ready: [], posts: [], wallOffset: 0 };
+  const rec = { dcl: null, root: null, closed: 0, diagrams: [], ready: [], posts: [], wallOffset: 0, forged: { dispatched: 0, fakeCalls: 0 } };
   Object.defineProperty(window, Symbol.for('frame-test.record'), { value: rec });
   if (${String(how.stepWallClock === true)}) {
     const now = Date.now;
@@ -254,6 +282,42 @@ function initScript(how: InitHow): string | null {
         rec.ready.push({ state: root === null ? null : getAttribute.call(root, 'data-docreader-diagrams'), at: perfNow.call(perf) });
       }
       return post.apply(this, args);
+    };
+  }
+  if (${String(how.forgeRegister !== undefined)}) {
+    const mode = ${JSON.stringify(how.forgeRegister ?? null)};
+    let busy = false;
+    const fake = {
+      initialize() { rec.forged.fakeCalls++; },
+      render() { rec.forged.fakeCalls++; return Promise.resolve({ svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>' }); },
+    };
+    document.addEventListener('docserver:register', (e) => {
+      const d = e.detail;
+      if (busy || typeof d !== 'object' || d === null || d.name !== 'mermaid') return;
+      busy = true;
+      try {
+        rec.forged.dispatched++;
+        let to = mode === 'other' ? document.body : e.target;
+        if (mode === 'text') {
+          Event.prototype.stopPropagation.call(e);
+          to = e.target.firstChild;
+        }
+        to.dispatchEvent(new CustomEvent('docserver:register', { detail: { name: 'mermaid', api: fake }, bubbles: true }));
+      } finally {
+        busy = false;
+      }
+    }, true);
+  }
+  if (${String(how.violationBeforeStart === true)}) {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.dispatchEvent(new SecurityPolicyViolationEvent('securitypolicyviolation', { documentURI: location.href, violatedDirective: 'script-src-elem', effectiveDirective: 'script-src-elem', originalPolicy: '', disposition: 'enforce', blockedURI: 'inline', statusCode: 0 }));
+    });
+  }
+  if (${String(how.holdSettled === true)}) {
+    const load = FontFaceSet.prototype.load;
+    FontFaceSet.prototype.load = function (...args) {
+      const self = this;
+      return new Promise((resolve) => setTimeout(resolve, 1000)).then(() => load.apply(self, args));
     };
   }
   if (${String(how.posts === true)}) {
@@ -336,6 +400,7 @@ async function openContext(browser: Browser, how: InitHow, files: ReadonlyMap<st
     viewport: { width: 1200, height: 900 },
     deviceScaleFactor: 1,
     colorScheme: 'light',
+    ...(how.touch === true ? { hasTouch: true } : {}),
     // No `serviceWorkers: 'block'`: Playwright enforces it with a script that reads navigator.serviceWorker in every
     // frame, which throws in a sandboxed opaque-origin frame and would show as the frame's own error.
   });
@@ -407,8 +472,8 @@ async function openContext(browser: Browser, how: InitHow, files: ReadonlyMap<st
       frame().evaluate(() => {
         const r = (window as unknown as Record<symbol, FrameRecord | undefined>)[Symbol.for('frame-test.record')];
         return r === undefined
-          ? { dcl: null, root: null, closed: -1, origin: -1, diagrams: [], ready: [], posts: [] }
-          : { dcl: r.dcl, root: r.root, closed: r.closed, origin: performance.timeOrigin, diagrams: [...r.diagrams], ready: [...r.ready], posts: [...r.posts] };
+          ? { dcl: null, root: null, closed: -1, origin: -1, diagrams: [], ready: [], posts: [], forged: { dispatched: 0, fakeCalls: 0 } }
+          : { dcl: r.dcl, root: r.root, closed: r.closed, origin: performance.timeOrigin, diagrams: [...r.diagrams], ready: [...r.ready], posts: [...r.posts], forged: { ...r.forged } };
       }),
   };
 }
@@ -426,8 +491,8 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}, served:
     errors: o.errors,
     mount: (srcdoc, csp, how = 'auto') => {
       const m: MountHow = typeof how === 'string' ? { hello: how } : how;
-      const args = [srcdoc, m.cspAttribute === false ? null : csp, m.hello ?? 'auto', m.sandbox === undefined ? 'allow-scripts' : m.sandbox] as const;
-      return p.evaluate(([s, c, h, sb]) => (window.__frameHost as HostApi).mount(s, c, h, sb), args);
+      const args = [srcdoc, m.cspAttribute === false ? null : csp, m.hello ?? 'auto', m.sandbox === undefined ? 'allow-scripts' : m.sandbox, m.early ?? []] as const;
+      return p.evaluate(([s, c, h, sb, ea]) => (window.__frameHost as HostApi).mount(s, c, h, sb, ea), args);
     },
     secondHello: () => p.evaluate(() => (window.__frameHost as HostApi).secondHello()),
     send: (port, data) => p.evaluate(([n, d]) => (window.__frameHost as HostApi).send(n, d), [port, data] as const),
@@ -449,7 +514,7 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}, served:
 // ───────── the library page: `./host` as the parent (Task 10) ─────────
 
 /** The callbacks a library mount gives, each recorded. */
-export type LibCallback = 'onLink' | 'onHash' | 'copy' | 'changes' | 'openVersion';
+export type LibCallback = 'onLink' | 'onHash' | 'copy' | 'changes' | 'openVersion' | 'onProgress';
 
 /** One library mount: the document, the assets and the adapters, as plain data the page turns into adapters. */
 export interface LibMountSpec {
@@ -458,11 +523,19 @@ export interface LibMountSpec {
   readonly watchdogMs: number;
   readonly focus?: boolean;
   readonly title?: string;
-  readonly mermaidDraw?: 'auto' | 'on-request';
+  readonly mermaidDraw?: 'auto' | 'on-request' | 'after-ready';
+  /**
+   * The 'after-ready' loader (B5.9): `deferred` is a loadMermaid whose promise the row settles with `releaseLoader`;
+   * `immediate` answers `mermaidText` at once. Absent, no loader is given (the build is assets.mermaid's, when given).
+   */
+  readonly loader?: 'deferred' | 'immediate';
+  readonly mermaidText?: string;
   /** Give the mount an in-page store (a Map behind Web Storage's interface). */
   readonly store?: boolean;
   readonly docKey?: string;
-  /** The callbacks to give, beside onReady and onFallback (always given); default all five. */
+  /** The layout's switches as plain data (FrameFeatures), for a mount that turns the bar off or the top space off. */
+  readonly features?: unknown;
+  /** The callbacks to give, beside onReady and onFallback (always given); default the five but onProgress. */
   readonly callbacks?: readonly LibCallback[];
   /** What the changes adapter answers; default null. */
   readonly changesReply?: unknown;
@@ -470,7 +543,7 @@ export interface LibMountSpec {
 
 /** One thing a library mount's adapters saw. */
 export interface LibEvent {
-  readonly kind: 'ready' | 'fallback' | LibCallback;
+  readonly kind: 'ready' | 'fallback' | 'loader' | LibCallback;
   readonly value: unknown;
   /** ms since the page's latest mount call. */
   readonly at: number;
@@ -497,13 +570,15 @@ interface LibApi {
   mount(spec: LibMountSpec): void;
   update(d: RenderInput): void;
   setPrefs(p: unknown): void;
+  command(name: string): void;
   destroy(): void;
+  releaseLoader(): void;
   record(): LibRecord;
 }
 
 declare global {
   interface Window {
-    __docHostLib?: { readonly mountDocFrame: (el: HTMLElement, o: { document: unknown; adapters: unknown }) => { update(d: unknown): void; setPrefs(p: unknown): void; destroy(): void } };
+    __docHostLib?: { readonly mountDocFrame: (el: HTMLElement, o: { document: unknown; adapters: unknown }) => { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; destroy(): void } };
     __libHost?: LibApi;
   }
 }
@@ -521,6 +596,9 @@ function libMain(): void {
   const container = document.createElement('div');
   container.className = 'mount';
   document.body.append(container);
+  for (const b of Array.from(document.querySelectorAll<HTMLElement>('[data-host-command]'))) {
+    b.addEventListener('click', () => frame?.command(b.dataset['hostCommand'] ?? ''));
+  }
   const rec = {
     events: [] as { kind: string; value: unknown; at: number }[],
     loads: [] as { at: number; readyBefore: number }[],
@@ -536,7 +614,8 @@ function libMain(): void {
     },
     true,
   );
-  let frame: { update(d: unknown): void; setPrefs(p: unknown): void; destroy(): void } | null = null;
+  let frame: { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; destroy(): void } | null = null;
+  let release: () => void = () => undefined;
   const plain = (v: unknown): unknown => JSON.parse(JSON.stringify(v ?? null)) as unknown;
   const api = {
     mount(spec: {
@@ -546,10 +625,13 @@ function libMain(): void {
       focus?: boolean;
       title?: string;
       mermaidDraw?: string;
+      loader?: string;
+      mermaidText?: string;
       store?: boolean;
       docKey?: string;
       callbacks?: string[];
       changesReply?: unknown;
+      features?: unknown;
     }): void {
       const log =
         (kind: string) =>
@@ -580,10 +662,25 @@ function libMain(): void {
       if (spec.focus !== undefined) adapters['focus'] = spec.focus;
       if (spec.title !== undefined) adapters['title'] = spec.title;
       if (spec.mermaidDraw !== undefined) adapters['mermaidDraw'] = spec.mermaidDraw;
+      if (spec.loader === 'deferred') {
+        adapters['loadMermaid'] = () => {
+          log('loader')();
+          return new Promise<string>((resolve) => {
+            release = () => resolve(spec.mermaidText ?? '');
+          });
+        };
+      } else if (spec.loader === 'immediate') {
+        adapters['loadMermaid'] = () => {
+          log('loader')();
+          return Promise.resolve(spec.mermaidText ?? '');
+        };
+      }
       if (spec.store === true) adapters['store'] = store;
       if (spec.docKey !== undefined) adapters['docKey'] = spec.docKey;
+      if (spec.features !== undefined) adapters['features'] = spec.features;
       if (callbacks.includes('onLink')) adapters['onLink'] = log('onLink');
       if (callbacks.includes('onHash')) adapters['onHash'] = log('onHash');
+      if (callbacks.includes('onProgress')) adapters['onProgress'] = log('onProgress');
       if (callbacks.includes('copy')) adapters['copy'] = (text: string, check: unknown) => log('copy')({ text, check });
       if (callbacks.includes('openVersion')) adapters['openVersion'] = log('openVersion');
       if (callbacks.includes('changes')) {
@@ -603,8 +700,14 @@ function libMain(): void {
     setPrefs(p: unknown): void {
       frame?.setPrefs(p);
     },
+    command(name: string): void {
+      frame?.command(name);
+    },
     destroy(): void {
       frame?.destroy();
+    },
+    releaseLoader(): void {
+      release();
     },
     record() {
       const f = container.querySelector('iframe');
@@ -652,6 +755,13 @@ export interface LibPageHow {
   readonly policy?: string;
   /** A nonce the page's two scripts carry (for a policy whose script-src names it). */
   readonly scriptNonce?: string;
+  /**
+   * A host's header bar in miniature (batch 1.1, one header bar): two buttons above the iframe, `#host-settings` and
+   * `#host-contents`, each calling DocFrame.command from its own click handler, and an iframe as wide as the page and as
+   * tall as what is left under the bar, so a row sets the viewport before the mount and the frame is laid out at that
+   * width from its first frame.
+   */
+  readonly hostBar?: boolean;
 }
 
 export interface LibHost {
@@ -665,7 +775,11 @@ export interface LibHost {
   mount(spec: LibMountSpec): Promise<void>;
   update(d: RenderInput): Promise<void>;
   setPrefs(p: unknown): Promise<void>;
+  /** DocFrame.command, called from the page (a host button's handler runs this). */
+  command(name: string): Promise<void>;
   destroy(): Promise<void>;
+  /** Settle the deferred `loadMermaid` of the latest mount (spec.loader 'deferred') with spec.mermaidText. */
+  releaseLoader(): Promise<void>;
   /** What the page recorded. */
   lib(): Promise<LibRecord>;
   /** The page's record in the frame host's shape (the adapters' events as messages), for waitProgress. */
@@ -688,7 +802,7 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
 <link rel="stylesheet" href="/host-page.css">
 </head>
 <body>
-<script${nonce} src="/host.js"></script>
+${served.hostBar === true ? '<div class="host-bar"><button id="host-settings" data-host-command="settings">settings</button><button id="host-contents" data-host-command="contents">contents</button></div>\n' : ''}<script${nonce} src="/host.js"></script>
 <script${nonce} src="/host-page.js"></script>
 </body>
 </html>
@@ -697,7 +811,9 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
     ['/', { body: page, type: 'text/html; charset=utf-8' }],
     ['/host.js', { body: await hostBundle(), type: 'text/javascript; charset=utf-8' }],
     ['/host-page.js', { body: `(${libMain.toString()})();\n`, type: 'text/javascript; charset=utf-8' }],
-    ['/host-page.css', { body: 'body { margin: 0; }\niframe { width: 1000px; height: 760px; border: 0; display: block; }\n', type: 'text/css' }],
+    ['/host-page.css', { body: served.hostBar === true
+        ? 'body { margin: 0; }\n.host-bar { height: 40px; display: flex; gap: 8px; align-items: center; }\niframe { width: 100%; height: calc(100vh - 40px); border: 0; display: block; }\n'
+        : 'body { margin: 0; }\niframe { width: 1000px; height: 760px; border: 0; display: block; }\n', type: 'text/css' }],
   ]);
   const o = await openContext(browser, how, files, served.policy, 'window.__libHost !== undefined');
   const p = o.page;
@@ -713,7 +829,9 @@ export async function openLibHost(browser: Browser, how: InitHow = {}, served: L
     mount: (spec) => p.evaluate((s) => (window.__libHost as LibApi).mount(s), spec),
     update: (d) => p.evaluate((x) => (window.__libHost as LibApi).update(x), d),
     setPrefs: (x) => p.evaluate((v) => (window.__libHost as LibApi).setPrefs(v), x),
+    command: (name) => p.evaluate((n) => (window.__libHost as LibApi).command(n), name),
     destroy: () => p.evaluate(() => (window.__libHost as LibApi).destroy()),
+    releaseLoader: () => p.evaluate(() => (window.__libHost as LibApi).releaseLoader()),
     lib,
     async record() {
       const r = await lib();

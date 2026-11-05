@@ -3,7 +3,8 @@
 // its root-local radio groups and close behavior, fold controls, Product lens peeks, and
 // the marks that direct a reader to the document's pending work.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { destroyEnhancement, enhance, setEnhancementPrefs } from '../src/enhance/index.js';
+import { COMMAND_NAMES, createCommands } from '../src/enhance/commands.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, setEnhancementPrefs } from '../src/enhance/index.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import type { ReaderStorage } from '../src/enhance/types.js';
 import { render } from '../src/render/index.js';
@@ -704,5 +705,466 @@ describe('attention', () => {
     expect(entry.status).toBe('wait');
     expect(pill.querySelector('br')).not.toBeNull();
     expect(entry.target.classList.contains('attn')).toBe(true);
+  });
+});
+
+describe('commands without the bar: settings (B6.1, B6.3)', () => {
+  it('B6.1: with the bar off, Aa is built on the root, and the settings command opens then closes it; Escape closes it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(root.querySelector('.topbar')).toBeNull();
+    expect(root.querySelector('.aa-btn')).not.toBeNull();
+    expect(tool(root).closest('.aa-wrap')?.parentElement).toBe(root);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    expect(tool(root).getAttribute('aria-expanded')).toBe('true');
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    key(radio(root, 'theme', 'auto'), 'Escape');
+    expect(menu(root).hidden).toBe(true);
+  });
+
+  it('with the bar on, the same command works and Aa stays in the bar tray', async () => {
+    const root = mount();
+    await enhance(root, {});
+    expect(tool(root).closest('.bar-tools')).not.toBeNull();
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('B6.3: chrome.settings false answers false and builds nothing; an unknown name or root answers false', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false, settings: false } });
+    expect(runEnhancementCommand(root, 'settings')).toBe(false);
+    expect(root.querySelectorAll('.aa-wrap')).toHaveLength(0);
+    const on = mount();
+    await enhance(on, { chrome: { bar: false } });
+    expect(runEnhancementCommand(on, 'nope')).toBe(false);
+    expect(runEnhancementCommand(on, '__proto__')).toBe(false);
+    expect(menu(on).hidden).toBe(true);
+    expect(runEnhancementCommand(mount(), 'settings')).toBe(false);
+  });
+});
+
+describe('the command registry (B6.3)', () => {
+  it('names four commands, runs a registered one only while live, and answers false otherwise', () => {
+    expect([...COMMAND_NAMES]).toEqual(['jump', 'settings', 'contents', 'outline']);
+    let alive = true;
+    const commands = createCommands(() => alive);
+    const ran: string[] = [];
+    commands.register('jump', () => void ran.push('jump'));
+    expect(commands.run('jump')).toBe(true);
+    expect(commands.run('settings')).toBe(false); // known, but no tool registered it
+    expect(commands.run('open')).toBe(false); // unknown
+    expect(commands.run('constructor')).toBe(false);
+    expect(() => commands.register('jump', () => undefined)).toThrow(/registers once/);
+    expect(() => commands.register('nope' as 'jump', () => undefined)).toThrow(/one of/);
+    alive = false;
+    expect(commands.run('jump')).toBe(false);
+    expect(ran).toEqual(['jump']);
+    let later = false;
+    const dead = createCommands(() => later);
+    dead.register('jump', () => void ran.push('dead'));
+    later = true;
+    expect(dead.run('jump')).toBe(false); // a registration made while not live is dropped
+    expect(ran).toEqual(['jump']);
+  });
+});
+
+describe('a host\'s own button toggles the settings (T6-c)', () => {
+  /** A press as a browser dispatches it: pointerdown, then (after the focus moves) click. */
+  const press = (el: Element): void => {
+    el.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1 }));
+  };
+
+  it('a button outside the root: the first press opens, the second closes, a third opens again', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    press(host);
+    expect(menu(root).hidden).toBe(false);
+    press(host);
+    expect(menu(root).hidden).toBe(true);
+    press(host);
+    expect(menu(root).hidden).toBe(false);
+    press(host);
+    expect(menu(root).hidden).toBe(true);
+    host.remove();
+  });
+
+  it('the swallowed half does not outlive its gesture: a later command opens it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })); // the gesture's click, no command in it
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    for (const hasFocus of [false, true]) {
+      expect(runEnhancementCommand(root, 'settings')).toBe(true);
+      expect(menu(root).hidden).toBe(false);
+      // A frame whose parent's button took the focus: on some engines the document still reports the focus here.
+      const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+      radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      expect(menu(root).hidden).toBe(false);
+      spy.mockRestore();
+      expect(runEnhancementCommand(root, 'settings')).toBe(true); // the command is the toggle: it closes
+      expect(menu(root).hidden).toBe(true);
+    }
+  });
+
+  it('T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7)', async () => {
+    const root = mount();
+    await enhance(root, {});
+    expect(tool(root).closest('.bar-tools')).not.toBeNull();
+    for (const hasFocus of [false, true]) {
+      click(tool(root));
+      expect(menu(root).hidden).toBe(false);
+      const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+      radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      expect(menu(root).hidden).toBe(false);
+      spy.mockRestore();
+      // Aa's own button, Escape and the focus moving to another element still close it.
+      click(tool(root));
+      expect(menu(root).hidden).toBe(true);
+    }
+    click(tool(root));
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: outside }));
+    expect(menu(root).hidden).toBe(true);
+    outside.remove();
+  });
+
+  it('T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const other = document.createElement('button');
+    document.body.append(other);
+    const out = (to: Element | null): void => {
+      radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: to }));
+    };
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    out(null); // focus to no element: stays open
+    expect(menu(root).hidden).toBe(false);
+    out(tool(root)); // to the menu's own button, inside the wrap: stays open
+    expect(menu(root).hidden).toBe(false);
+    out(other);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false); // opened: no flag was left by the focusout above
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    key(radio(root, 'theme', 'auto'), 'Escape');
+    expect(menu(root).hidden).toBe(true);
+    other.remove();
+  });
+
+  it('N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const other = document.createElement('button');
+    document.body.append(other);
+    runEnhancementCommand(root, 'settings');
+    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: other }));
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    other.remove();
+  });
+
+  it('N1: a press that is cancelled (a touch that became a scroll) leaves no flag', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new Event('pointercancel', { bubbles: true }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('N1: a key\'s click (detail 0) on the host\'s button after a press that sent no click clears the flag first', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); // closes, flags; no click follows
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 })); // Enter on the host's button
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+
+  it('the pointerdown is seen even when the host stops it on its button', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const host = document.createElement('button');
+    host.addEventListener('pointerdown', (e) => e.stopPropagation());
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    runEnhancementCommand(root, 'settings');
+    host.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+    expect(menu(root).hidden).toBe(true); // closed by the press itself, before any click
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1 }));
+    expect(menu(root).hidden).toBe(true); // and the command in the same gesture leaves it closed
+    host.remove();
+  });
+});
+
+describe('commands never open over another overlay (T6-d)', () => {
+  it('settings answers false and changes nothing while the drawer is open; closing its own still works', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(root.classList.contains('toc-open')).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(false);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'jump')).toBe(false);
+    expect(root.classList.contains('toc-open')).toBe(true);
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    expect(runEnhancementCommand(root, 'contents')).toBe(false); // the other order
+    expect(root.classList.contains('toc-open')).toBe(false);
+    expect(runEnhancementCommand(root, 'jump')).toBe(false);
+  });
+});
+
+describe('runEnhancementCommand\'s own guards (T6-c)', () => {
+  it('answers false for a root that is no element, a name that is no string, and a destroyed root', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand({} as HTMLElement, 'settings')).toBe(false);
+    expect(runEnhancementCommand(root, 42 as unknown as string)).toBe(false);
+    expect(runEnhancementCommand(root, undefined as unknown as string)).toBe(false);
+    const gone = destroyEnhancement(root);
+    expect(runEnhancementCommand(root, 'settings')).toBe(false); // while the teardown is pending
+    await gone;
+    expect(runEnhancementCommand(root, 'settings')).toBe(false); // after it
+    expect(root.querySelector('.aa-menu')).toBeNull();
+  });
+
+  it('a destroy requested by a host listener while the command runs waits for the command to return', async () => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    let gone: Promise<void> | null = null;
+    const seen: boolean[] = [];
+    const onFocusIn = (): void => {
+      gone ??= destroyEnhancement(root);
+      // The command is still running: its own writes (the menu's `aria-expanded`) are not yet undone.
+      seen.push(root.querySelector('.aa-btn')?.getAttribute('aria-expanded') === 'true');
+    };
+    document.addEventListener('focusin', onFocusIn);
+    try {
+      expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    } finally {
+      document.removeEventListener('focusin', onFocusIn);
+    }
+    expect(gone).not.toBeNull();
+    expect(seen).toEqual([true]); // mid-command the teardown had not run
+    expect(root.hasAttribute('data-docreader-root')).toBe(false); // torn down as the command returned
+    expect(root.querySelector('.aa-wrap')).toBeNull();
+    await gone;
+  });
+});
+
+describe('the settings\' document listeners exist only while they have work (fix round 3)', () => {
+  it('a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const net = (type: string): number => add.mock.calls.filter((c) => c[0] === type).length - remove.mock.calls.filter((c) => c[0] === type).length;
+    // What the other features add at startup is the same with and without the settings menu.
+    const without = mount();
+    await enhance(without, { chrome: { bar: false, settings: false } });
+    const others = add.mock.calls.filter((c) => c[0] === 'pointerdown').length;
+    await destroyEnhancement(without);
+    add.mockClear();
+    remove.mockClear();
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const base = net('pointerdown');
+    expect(add.mock.calls.filter((c) => c[0] === 'pointerdown')).toHaveLength(others); // a closed menu added none
+    runEnhancementCommand(root, 'settings');
+    expect(net('pointerdown')).toBe(base + 1);
+    runEnhancementCommand(root, 'settings'); // the command
+    expect(net('pointerdown')).toBe(base);
+    runEnhancementCommand(root, 'settings');
+    key(radio(root, 'theme', 'auto'), 'Escape'); // Escape
+    expect(net('pointerdown')).toBe(base);
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); // an outside press
+    expect(net('pointerdown')).toBe(base + 1); // the outside-press listener is gone; the gesture's own pointerdown clear is on
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(net('pointerdown')).toBe(base); // and gone with the click
+    runEnhancementCommand(root, 'settings');
+    await destroyEnhancement(root); // a destroy with the menu open: nothing is left, the other features' listeners included
+    expect(net('pointerdown')).toBe(0);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+
+  it('the gesture\'s listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends', async () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const net = (): number => ['click', 'pointercancel', 'pointerdown', 'auxclick', 'contextmenu'].reduce((n, t) => n + add.mock.calls.filter((c) => c[0] === t).length - remove.mock.calls.filter((c) => c[0] === t).length, 0);
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    const base = net();
+    runEnhancementCommand(root, 'settings');
+    expect(net()).toBe(base + 1); // the outside-press listener
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(net()).toBe(base + 6); // it is gone, and the gesture's six are on
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(net()).toBe(base);
+    runEnhancementCommand(root, 'settings');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(net()).toBe(base + 6);
+    await destroyEnhancement(root); // a destroy while the gesture's listeners are on
+    expect(net()).toBe(0);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+});
+
+describe('a stale outside-press flag clears on the next press (fix round 4)', () => {
+  const down = (el: Element): void => void el.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+  const open = async (): Promise<HTMLElement> => {
+    const root = mount();
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    return root;
+  };
+
+  it('a right-click outside (pointerdown, contextmenu, no click), then the host button\'s press: the command opens the menu', async () => {
+    const root = await open();
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    down(document.body);
+    expect(menu(root).hidden).toBe(true);
+    document.body.dispatchEvent(new Event('contextmenu', { bubbles: true }));
+    down(host);
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+
+  it('a press that sends nothing after it: the next press clears the flag before its click', async () => {
+    const root = await open();
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    down(document.body);
+    down(host);
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
+  });
+
+  it('an auxclick ends the gesture too', async () => {
+    const root = await open();
+    down(document.body);
+    document.body.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('a contextmenu ends the gesture too', async () => {
+    const root = await open();
+    down(document.body);
+    document.body.dispatchEvent(new Event('contextmenu', { bubbles: true }));
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('the same-gesture toggle still closes', async () => {
+    const root = await open();
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    down(host);
+    host.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(menu(root).hidden).toBe(true);
+    host.remove();
+  });
+});
+
+
+describe('a host command acts on the menu\'s present state, never on a flag left by a gesture whose click never arrived (fix round FR1, F2)', () => {
+  const CARDS = ['# Cards', '', '## 1. Decisions', '', '| ID | Decision | Status |', '|---|---|---|', '| D1 | Keep the fold | Agreed |', '| D2 | Mark a section, as D1 says | Pending |', '', 'D1 and D2 are named here.'].join('\n');
+  const pointer = (el: Element, type: string, pointerType: string): void => void el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType }));
+  /** A tap as a touch device sends it: pointerdown, then the click (a PointerEvent, detail 1). */
+  const tap = (el: Element): MouseEvent => {
+    pointer(el, 'pointerdown', 'touch');
+    const click = new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1, pointerType: 'touch' });
+    el.dispatchEvent(click);
+    return click;
+  };
+  const trigger = (root: Element): HTMLAnchorElement => {
+    const found = root.querySelector('a.xref');
+    if (found === null) throw new Error('no card trigger');
+    return found as HTMLAnchorElement;
+  };
+
+  it('Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu', async () => {
+    const root = mount(CARDS);
+    await enhance(root, { chrome: { bar: false } });
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+    // The precondition: the tap's click never reaches a bubbling listener on the document (the root's capture stops it).
+    let reached = 0;
+    const seen = (): void => void (reached += 1);
+    document.addEventListener('click', seen);
+    const click = tap(trigger(root));
+    document.removeEventListener('click', seen);
+    expect([reached, click.defaultPrevented]).toEqual([0, true]);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('the same after a tap on any other element of the root whose click is stopped there', async () => {
+    const root = mount(CARDS);
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    root.addEventListener('click', (e) => e.stopPropagation(), true);
+    const para = root.querySelector(':scope > p');
+    if (para === null) throw new Error('no paragraph');
+    tap(para);
+    expect(menu(root).hidden).toBe(true);
+    expect(runEnhancementCommand(root, 'settings')).toBe(true);
+    expect(menu(root).hidden).toBe(false);
+  });
+
+  it('a click outside the root, the host button\'s, keeps the flag for its command: the same gesture still closes', async () => {
+    const root = mount(CARDS);
+    await enhance(root, { chrome: { bar: false } });
+    runEnhancementCommand(root, 'settings');
+    const host = document.createElement('button');
+    host.addEventListener('click', () => void runEnhancementCommand(root, 'settings'));
+    document.body.append(host);
+    tap(host);
+    expect(menu(root).hidden).toBe(true);
+    tap(host);
+    expect(menu(root).hidden).toBe(false);
+    host.remove();
   });
 });

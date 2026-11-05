@@ -9,7 +9,8 @@
    or when the system is dark and data-theme is not "light". A host may override any token on the root. One is
    measured: --bar-h, the height sticky table heads and anchor jumps clear, is the reader's own bar's (48px, or what
    the reader measures when something makes the bar taller); a host that builds its own bar instead (chrome.bar false)
-   may set it to the height of a fixed header of its own.
+   may set it to the height of a fixed header of its own, as a length: `0px`, never a unitless `0`, because the sticky floors
+   `max(var(--bar-h), 50px)` below are invalid with a unitless 0.
 
    Ids and classes. The reader's own popups and panels (the settings menu, the preview card, the quick jump, the keys
    sheet, the contents panels, the full-screen figure) are keyed on CLASSES here, never on ids: a rendered document's
@@ -225,6 +226,11 @@
 [data-docreader-root][data-docreader-root]:not(i) { overflow-wrap: break-word; max-width: none; margin: 0; padding: 52px var(--pad) 96px; }
 /* every block sits in the reading column, centred; the wide ones break out (below) */
 [data-docreader-root][data-docreader-root]:not(i) > * { max-width: var(--measure); margin-left: auto; margin-right: auto; }
+/* chrome.topSpace false (the root class no-top-space): the root's top padding is 8px, for a host that supplies its own space above the text.
+   Only for a root with no bar: the bar's own block (below) relies on the root's top padding being its --bar-gap. */
+[data-docreader-root][data-docreader-root]:not(i).no-top-space:not(:has(> .topbar)) { padding-top: 8px; }
+/* The reading settings button without the bar (chrome.bar false): the root's own child, sticky at its top right, taking no room. */
+[data-docreader-root][data-docreader-root]:not(i) > .aa-wrap { position: sticky; top: 8px; z-index: 100; width: max-content; max-width: none; height: 34px; margin: 0 calc(12px - var(--pad)) -34px auto; }
 [data-docreader-root][data-docreader-root]:not(i) p { margin-top: 0; margin-bottom: 1.05em; hyphens: manual; -webkit-hyphens: manual; hanging-punctuation: first; }
 [data-docreader-root][data-docreader-root]:not(i) ul,
 [data-docreader-root][data-docreader-root]:not(i) ol { padding-left: 1.4em; margin-top: 0; margin-bottom: 1.1em; }
@@ -760,6 +766,21 @@
 /* ─── reading settings ───────────────────────────────────────────────────── */
 [data-docreader-root] .aa-wrap { position: relative; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu { position: absolute; right: 0; top: calc(100% + 9px); z-index: 2200; width: 252px; max-height: calc(100vh - var(--bar-h) - 24px); overflow-y: auto; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--pop-shadow); padding: 12px 14px 14px; font-family: var(--sans); }
+/* The menu of a root with no bar: Aa is the root's own sticky child (above), so the menu starts at most 71px under the top of its
+   viewport (Aa's top is 28px before it sticks, 8px once stuck, its height 34px and the menu's offset 9px), and the bar's
+   height, which a frame sets to 0, is no part of that. This holds for a frame and for a root that fills the viewport, which is
+   what a frame is: a root placed lower in its page has its own offset, which no rule here knows. Measured at 390px wide in a
+   520px frame (FR1, A6): the rule above ran 27px past the frame's bottom edge when stuck and 47px before. 80px keeps its bottom
+   inside the frame in every state. */
+[data-docreader-root][data-docreader-root][data-docreader-root]:not(:has(> .topbar)) > .aa-wrap .aa-menu { max-height: calc(100vh - 80px); }
+/* What sticks at the top of a root with no bar sticks below Aa, when the root has Aa (FR1, A6 and ruling FR1-e): Aa is sticky at
+   8px and 34px high, so the figure tools (6px under the bar's height) and a table's head (at the bar's height) would sit under
+   its box and lose the right end of their hit areas to it. 50px is Aa's bottom (42px) and a gap of 8px, and it is a floor: a
+   host that sets --bar-h to the height of its own fixed header keeps the head at that height and the tools 6px under it, as
+   before. A root without Aa (chrome.settings false) keeps its rules. --bar-h stays what the host or the frame says. */
+[data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)):has(> .aa-wrap) .table-wrapper.fits th { top: max(var(--bar-h), 50px); }
+[data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)):has(> .aa-wrap) .table-wrapper tr[id] { scroll-margin-top: calc(max(var(--bar-h), 50px) + var(--thead-h, 40px)); }
+[data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)):has(> .aa-wrap) figure.mermaid-figure .tools { top: max(calc(var(--bar-h) + 6px), 50px); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu[hidden] { display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset + fieldset { margin-top: 12px; }

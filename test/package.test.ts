@@ -196,3 +196,36 @@ describe('.npmrc', () => {
     expect(lines).toContain('engine-strict=true');
   });
 });
+
+describe('CHANGELOG.md: the newest entry', () => {
+  // The entry's heading is the package's version, and every asset hash it names is the one assets/assets.json records
+  // (the changelog's own rule). Which assets moved since the last release is checked by review, not by this test.
+  const changelog = readText('CHANGELOG.md');
+  const version = (JSON.parse(readText('package.json')) as { version: string }).version;
+  const top = changelog.slice(changelog.indexOf('## '), changelog.indexOf('\n## ', changelog.indexOf('## ') + 3));
+  const assets = readJson('assets/assets.json') as { version: string; files: { path: string; sha256: string }[] };
+
+  it("is headed by the package's version, which assets.json and the lockfile's root share", () => {
+    expect(top.startsWith(`## ${version}\n`)).toBe(true);
+    expect(assets.version).toBe(version);
+    expect((lock as unknown as { version: string }).version).toBe(version);
+    expect(lock.packages['']?.version).toBe(version);
+  });
+
+  it('every hash bullet names a manifest asset with its sha256 and, where the manifest carries one, its csp', () => {
+    // What this measures: each `- \`assets/<path>\`: \`<sha256>\`` bullet in the entry equals assets.json for that path, and
+    // carries the csp value when the manifest has one for it (and none when it has none). It does not learn which assets
+    // moved since the last release: a bullet for an unmoved asset passes, and so does an entry with no bullet at all (a patch).
+    // A line that starts like a hash bullet and does not match the whole pattern (a short or upper-case sha, a csp without
+    // backticks) fails on its own, so a malformed bullet is never skipped.
+    const pattern = /^- `assets\/([^`]+)`: `([0-9a-f]{64})`(?:, csp `([^`]+)`)?$/;
+    for (const line of top.split('\n')) if (line.startsWith('- `assets/')) expect(line, line).toMatch(pattern);
+    const bullets = [...top.matchAll(new RegExp(pattern.source, 'gm'))];
+    for (const [, path, sha, csp] of bullets) {
+      const file = assets.files.find((f) => f.path === path) as { sha256: string; csp?: string } | undefined;
+      expect(file, path).toBeDefined();
+      expect(sha, path).toBe(file!.sha256);
+      expect(csp, path).toBe(file!.csp);
+    }
+  });
+});

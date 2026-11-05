@@ -87,12 +87,15 @@ const IMAGE_DATA_URL = new RegExp(IMAGE_DATA_URL_SOURCE);
 export const SECURE_KEY_SOURCE = '^[A-Za-z][A-Za-z0-9_]{0,63}$';
 const SECURE_KEY = new RegExp(SECURE_KEY_SOURCE);
 
-/** How Mermaid draws: every figure after enhance, or one figure on its Render tap (FD13). */
-export const MERMAID_DRAW = Object.freeze(['auto', 'on-request'] as const);
+/** How Mermaid draws: every figure after enhance, one figure on its Render tap (FD13), or every figure once load() answers, after ready (C107). */
+export const MERMAID_DRAW = Object.freeze(['auto', 'on-request', 'after-ready'] as const);
 export type MermaidDraw = (typeof MERMAID_DRAW)[number];
 
-/** The ops the parent answers, each a boolean in the seed (FrameOptions.bridge, default all true). */
-export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions'] as const);
+/**
+ * The ops the parent answers, each a boolean in the seed (FrameOptions.bridge: each defaults to true but `progress`,
+ * which defaults to false, because a parent that never asked for progress should never be sent it; batch 1.1, C108).
+ */
+export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress'] as const);
 
 /**
  * The keys of `features`: three flags, `chrome`'s flags and `vocabulary`'s word lists, in groups (`status`,
@@ -101,7 +104,7 @@ export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'v
  */
 export const FEATURE_KEYS = Object.freeze({
   flags: Object.freeze(['rules', 'folds', 'keyboard'] as const),
-  chrome: Object.freeze(['bar', 'rail', 'settings'] as const),
+  chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),
   groups: Object.freeze({
     status: Object.freeze(['ok', 'wait', 'no', 'info'] as const),
     attention: Object.freeze(['status', 'who', 'question', 'openAnswers', 'blocking', 'risk', 'openStatus'] as const),

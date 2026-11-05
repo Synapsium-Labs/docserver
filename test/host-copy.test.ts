@@ -1,10 +1,11 @@
 // `./host`'s hidden-character check for a copy (docserver L3, Task 9; plan Reference §11.3, row L3.H7; mirrors the first
-// consumer's M8.19, widened by ledger C88 and by the operator's ruling of 2026-11-02, ledger C103). hiddenChars lists every
-// character a reader cannot see in copied text: C0 controls but tab and newline (ESC among them), DEL, the C1 controls
-// U+0080 to U+009F, the bidi controls U+202A to U+202E and U+2066 to U+2069, the directional marks U+200E, U+200F and
-// U+061C, the zero-width characters U+200B to U+200D, U+2060 and U+FEFF, and the tag characters U+E0000 to U+E007F; each
-// with its UTF-16 index, its code point and its Unicode name. `./host` never touches the clipboard: it passes the text
-// and this list to the host's own copy adapter.
+// consumer's M8.19, widened by ledger C88, by the operator's ruling of 2026-11-02, ledger C103, and by ledger C106, which
+// adds the two separators). hiddenChars lists every character a reader cannot see in copied text: C0 controls but tab and
+// newline (ESC among them), DEL, the C1 controls U+0080 to U+009F, the bidi controls U+202A to U+202E and U+2066 to
+// U+2069, the directional marks U+200E, U+200F and U+061C, the line and paragraph separators U+2028 and U+2029, the
+// zero-width characters U+200B to U+200D, U+2060 and U+FEFF, and the tag characters U+E0000 to U+E007F; each with its
+// UTF-16 index, its code point and its Unicode name. `./host` never touches the clipboard: it passes the text and this
+// list to the host's own copy adapter.
 import { describe, expect, it } from 'vitest';
 import { hasHiddenChar, hiddenChars } from '../src/host/copy.js';
 
@@ -23,6 +24,10 @@ const MARKS: readonly [number, string][] = [
   [0x061c, 'ARABIC LETTER MARK'],
   [0x200e, 'LEFT-TO-RIGHT MARK'],
   [0x200f, 'RIGHT-TO-LEFT MARK'],
+];
+const SEPARATORS: readonly [number, string][] = [
+  [0x2028, 'LINE SEPARATOR'],
+  [0x2029, 'PARAGRAPH SEPARATOR'],
 ];
 const ZERO_WIDTH: readonly [number, string][] = [
   [0x200b, 'ZERO WIDTH SPACE'],
@@ -45,6 +50,12 @@ describe('L3.H7 each hidden character is reported with its index and name', () =
 
   for (const [cp, name] of MARKS) {
     it(`the directional mark U+${cp.toString(16).toUpperCase().padStart(4, '0')} ${name}`, () => {
+      expect(hiddenChars(`ab${String.fromCharCode(cp)}c`)).toEqual([{ index: 2, codePoint: cp, name }]);
+    });
+  }
+
+  for (const [cp, name] of SEPARATORS) {
+    it(`the separator U+${cp.toString(16).toUpperCase()} ${name}`, () => {
       expect(hiddenChars(`ab${String.fromCharCode(cp)}c`)).toEqual([{ index: 2, codePoint: cp, name }]);
     });
   }
@@ -96,7 +107,7 @@ describe('L3.H7 what is not hidden', () => {
     expect(hiddenChars('')).toEqual([]);
     expect(hiddenChars('const a = 1;\n\tb();\n')).toEqual([]);
     expect(hiddenChars('caf\u00e9 \u4e2d\u6587 \u{1F600} \u00a0')).toEqual([]);
-    for (const cp of [0x2029, 0x2030, 0x2065, 0x206a, 0x200a, 0x205f, 0x061b, 0x061d, 0x2010, 0x2061, 0xfefe, 0xff00, 0x7e, 0xa0, 0xa1]) {
+    for (const cp of [0x2027, 0x202f, 0x2030, 0x2065, 0x206a, 0x200a, 0x205f, 0x061b, 0x061d, 0x2010, 0x2061, 0xfefe, 0xff00, 0x7e, 0xa0, 0xa1]) {
       expect(hiddenChars(String.fromCharCode(cp)), cp.toString(16)).toEqual([]);
     }
   });
@@ -229,6 +240,8 @@ describe('L3.H7 hasHiddenChar', () => {
     expect(hasHiddenChar('a\u061cb')).toBe(true);
     expect(hasHiddenChar('a\u{E0041}b')).toBe(true);
     expect(hasHiddenChar('a\u{E007F}')).toBe(true);
+    expect(hasHiddenChar('a\u2028b')).toBe(true);
+    expect(hasHiddenChar('a\u2029b')).toBe(true);
     expect(hasHiddenChar('\u{1F3F4} ab \ud800')).toBe(false);
     expect(hasHiddenChar('')).toBe(false);
   });

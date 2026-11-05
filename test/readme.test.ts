@@ -113,9 +113,9 @@ describe('README', () => {
     expect(README).toContain('Goldens-moved: <id>, <id>');
   });
 
-  it('names every runtime export of ./enhance, including goToHash', () => {
+  it('names every runtime export of ./enhance, including goToHash and runEnhancementCommand', () => {
     const names = Object.keys(enhance).sort();
-    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'setEnhancementPrefs']);
+    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementPrefs']);
     expect(names.filter((name) => !README.includes(`\`${name}\``) && !README.includes(`\`${name}(`))).toEqual([]);
   });
 
@@ -262,11 +262,39 @@ describe('README: Hosting (./host)', () => {
     const s = section('Hosting');
     for (const name of [
       'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title', 'focus',
-      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback',
+      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid',
     ]) expect(s, name).toContain(`\`${name}\``);
     for (const reason of ['timeout', 'nonce', 'error', 'protocol', 'refusals', 'navigated', 'assets', 'too-large', 'invalid-input']) {
       expect(s, reason).toContain(`\`'${reason}'\``);
     }
+  });
+
+  it("states 'after-ready' and loadMermaid for ./host: the host hands the build over or the figures stay as source (ledger C107)", () => {
+    const s = section('Hosting');
+    const mermaidDraw = /\n\| `mermaidGate`, `mermaidDraw` \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const word of ["'auto'", "'on-request'", "'after-ready'"]) expect(mermaidDraw, word).toContain(word);
+    const row = /\n\| `loadMermaid` \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of [
+      "`mermaidDraw: 'after-ready'`", 'ignored, whatever it holds, and never called', 'the loader is used', 'must be a function when given', 'hand the build over', 'every figure as its source', '`TypeError`',
+      'at most once per `DocFrame`', 'a document with no fences never calls it', '8388608', 'sha256', 'one console warning', 'after that mount\'s own valid ready',
+    ]) expect(row, part).toContain(part);
+    expect(/\n\| `assets` \|[^\n]*/.exec(s)?.[0] ?? '').toContain("`'after-ready'`");
+  });
+
+  it("states what 'after-ready' changes in the srcdoc, the missing-asset code, the root's states and the policy fallback (ledger C107)", () => {
+    const frame = section('Framing');
+    const mermaid = /\n\*\*Mermaid\.\*\*[^\n]*/.exec(frame)?.[0] ?? '';
+    expect(mermaid).toContain("`'after-ready'`");
+    expect(mermaid).toContain('decides whether the host hands the build over, and nothing is inlined');
+    expect(frame).toContain("only when `mermaid` is not `null` and its draw mode is not `'after-ready'`");
+    expect(frame).toMatch(/\| `missing-asset` \|[^\n]*except in `'after-ready'`/);
+    const all = README;
+    const states = /`data-docreader-diagrams` with ([^.]*)\./.exec(all)?.[1] ?? '';
+    for (const state of ['on-request', 'waiting', 'drawing', 'drawn', 'partial', 'failed']) expect(states, state).toContain(`\`${state}\``);
+    const fallback = /\n2\. enhance's, the guard's or Mermaid's hash missing:[^\n]*/.exec(section('Hosting'))?.[0] ?? '';
+    expect(fallback).toContain("in `'after-ready'` mode");
+    expect(fallback).toContain('leaves every figure as its source');
+    expect(fallback).toContain('sends no error');
   });
 
   it('states the Mermaid duties handed to the README: no stock Mermaid with start-on-load on, and a stylesheet-hash policy only without Mermaid (ledger C94(3))', () => {
@@ -402,12 +430,57 @@ describe('README: the bridge', () => {
       'parent-to-frame changes.result ranges',
       'parent-to-frame changes.result removedAfter',
       'parent-to-frame changes.result unavailable',
+      'parent-to-frame mermaid unavailable',
     ]);
     expect(s).not.toContain('Every message is a flat object');
     expect(s).toContain('Every message the frame sends is a flat object whose values are strings, except `v`');
     expect(s).toContain('`ranges`, a list of `[from, to]` pairs of integers');
     expect(s).toContain('`removedAfter`, a list of integers');
     expect(s).toContain('`unavailable: true`');
+  });
+
+  it("states the mermaid op: exactly one of text (within its cap) or unavailable: true, only for an 'after-ready' frame, once, after ready", async () => {
+    const { BRIDGE_LIMITS } = await import('../src/frame/index.js');
+    const s = section('The bridge');
+    expect(s).toContain('`mermaid` carries exactly one of `text`');
+    expect(s).toContain(`at most ${String(BRIDGE_LIMITS.mermaidMaxChars)} UTF-16 code units`);
+    const row = /\n\| `mermaid` \| parent to frame \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const word of ["'after-ready'", 'once', 'after ready', 'ignored']) expect(row, word).toContain(word);
+  });
+});
+
+describe('README: one header bar over the bridge (batch 1.1, ledger C108)', () => {
+  it('Hosting: the onProgress row, DocFrame.command, and the title recipe that reads result.meta.title (Q9)', () => {
+    const s = section('Hosting');
+    const row = /\n\| `onProgress` \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ['`onProgress(share)`', 'a number from 0 to 1', 'The frame sends at most four reports a second', 'does not throttle', 'the latest of each 250 ms window', 'the final value always arrives', 'no `onProgress`']) {
+      expect(row, part).toContain(part);
+    }
+    const command = /\n\*\*`command\(name\)`\*\*[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ["`'jump'`", "`'settings'`", "`'contents'`", "`'outline'`", 'focuses the iframe', 'not queued', 'after `destroy()`', '`TypeError`']) {
+      expect(command, part).toContain(part);
+    }
+    expect(s).toContain('**One header bar.**');
+    expect(s).toContain('result.meta.title');
+    expect(s).toContain('frame.command(');
+    expect(s).toContain('onProgress:');
+  });
+
+  it('The bridge: the command and progress rows, the progress grammar and window, and the switch that is off by default', async () => {
+    const { BRIDGE_LIMITS } = await import('../src/frame/index.js');
+    const s = section('The bridge');
+    const command = /\n\| `command` \| parent to frame \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ['`name`', "`'jump'`", "`'outline'`", 'ignored']) expect(command, part).toContain(part);
+    // ./frame exports no list of the command names, so the row names the four and no constant.
+    expect(command).not.toContain('COMMAND_OPS');
+    const progress = /\n\| `progress` \| frame to parent \|[^\n]*/.exec(s)?.[0] ?? '';
+    for (const part of ['`p`', 'Thousandths', "`'0'` to `'1000'`", 'no sign', `${String(BRIDGE_LIMITS.progressWindowMs)} ms`, 'bridge.progress']) expect(progress, part).toContain(part);
+    expect(s).toContain('`progress` carries `p`');
+  });
+
+  it('Framing: the bridge switch `progress` defaults to false while the others default to true', () => {
+    const s = section('Framing');
+    expect(s).toMatch(/`bridge`[^\n]*`progress`[^\n]*(?:false|off)/);
   });
 });
 

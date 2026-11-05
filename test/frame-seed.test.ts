@@ -22,6 +22,7 @@ import { loadCorpus } from '../src/conformance/index.js';
 import { LIMITS as ENHANCE_LIMITS, normalizeOptions } from '../src/enhance/options.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, FRAME_PREF_VALUES, PREF_KEYS } from '../src/frame/protocol.js';
 import {
+  BRIDGE_KEYS,
   escapedHtmlLength,
   FEATURE_KEYS,
   IMAGE_BUDGET_CHARS,
@@ -34,6 +35,7 @@ import {
   SEED_LIMITS,
   serializeSeed,
   validateSeed,
+  type MermaidDraw,
   type Seed,
 } from '../src/frame/seed.js';
 import { FM_LIST_MAX_ITEM, FM_LIST_MAX_ITEMS, FM_MAX_KEYS, FM_MAX_VALUE } from '../src/render/frontMatter.js';
@@ -61,7 +63,7 @@ function base(): Seed {
     snapshot: [],
     features: {},
     mermaid: null,
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
   };
 }
 
@@ -90,7 +92,7 @@ function full(): Seed {
     ],
     features: { rules: true, folds: false, keyboard: true, chrome: { bar: false }, vocabulary: { ids: false, qualifiers: ['annex'] } },
     mermaid: { maxTextSize: 16384, maxEdges: 500, secure: ['themeCSS'], draw: 'on-request' },
-    bridge: { links: true, hash: false, copy: true, changes: false, versions: true },
+    bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true },
   };
 }
 
@@ -182,6 +184,12 @@ describe('L3.M4 validateSeed: the shape', () => {
   it("SEED_KEYS is schema 1's fourteen keys", () => {
     expect([...SEED_KEYS]).toEqual(['bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
     expect(Object.keys(base()).sort()).toEqual([...SEED_KEYS]);
+  });
+
+  it("B7.6 BRIDGE_KEYS is the five answered ops and the progress switch; the seed's bridge keeps exactly those keys, closed", () => {
+    expect([...BRIDGE_KEYS]).toEqual(['links', 'hash', 'copy', 'changes', 'versions', 'progress']);
+    for (const progress of [true, false]) expect(validateSeed({ ...base(), bridge: { ...base().bridge, progress } })).toMatchObject({ ok: true });
+    expect(validateSeed(loose({ bridge: { ...base().bridge, command: true } }))).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
   });
 
   it('an extra key: refused, with the nonce kept so the frame can report', () => {
@@ -351,6 +359,7 @@ const BAD: readonly Row[] = [
   ['mermaid', { secure: [], draw: 'auto', extra: 1 }, 'mermaid'],
   ['mermaid', { secure: [], draw: 'lazy' }, 'mermaid.draw'],
   ['mermaid', { secure: [], draw: true }, 'mermaid.draw'],
+  ['mermaid', { secure: [], draw: null }, 'mermaid.draw'],
   ['mermaid', { secure: 'x', draw: 'auto' }, 'mermaid.secure'],
   ['mermaid', { secure: ['1a'], draw: 'auto' }, 'mermaid.secure'],
   ['mermaid', { secure: ['k'.repeat(65)], draw: 'auto' }, 'mermaid.secure'],
@@ -362,8 +371,11 @@ const BAD: readonly Row[] = [
   ['mermaid', { secure: [], draw: 'auto', maxTextSize: '100' }, 'mermaid.maxTextSize'],
   ['bridge', {}, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true }, 'bridge'],
-  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, prefs: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true }, 'bridge'],
+  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true, progress: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: 0 }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, prefs: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, command: true }, 'bridge'],
   ['bridge', null, 'bridge'],
 ];
 
@@ -464,6 +476,8 @@ describe('L3.M4 validateSeed: each bad field refused by its own name, with the n
 
   it('mermaid: secure and draw alone pass; the caps at their maxima pass', () => {
     expect(why(loose({ mermaid: { secure: [], draw: 'auto' } }))).toBe('ok');
+    expect(why(loose({ mermaid: { secure: [], draw: 'after-ready' } }))).toBe('ok');
+    expect(why(loose({ mermaid: { secure: [], draw: 'lazy' } }))).toBe('mermaid.draw');
     expect(why(loose({ mermaid: { secure: ['securityLevel'], draw: 'on-request', maxTextSize: 1048576, maxEdges: 50000 } }))).toBe('ok');
   });
 
@@ -545,11 +559,11 @@ describe("the seed's copies of L2's and render()'s caps equal their originals", 
     expect(m?.[1]).toBe(SECURE_KEY_SOURCE);
   });
 
-  it('the prefs are FRAME_PREF_VALUES, and the draw values are auto and on-request', () => {
+  it('the prefs are FRAME_PREF_VALUES, and the draw values are auto, on-request and after-ready', () => {
     for (const [k, vals] of Object.entries(FRAME_PREF_VALUES)) {
       for (const v of vals) expect(why(loose({ prefs: { [k]: v } })), `${k}=${v}`).toBe('ok');
     }
-    expect([...MERMAID_DRAW]).toEqual(['auto', 'on-request']);
+    expect([...MERMAID_DRAW]).toEqual(['auto', 'on-request', 'after-ready']);
   });
 });
 
@@ -696,8 +710,8 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       snapshot: storeKeys.map((k) => [k, `"${lt(BRIDGE_LIMITS.valueMaxBytes - 2)}"`] as const) as Seed['snapshot'],
       // The validator keeps a repeated word (L2 drops it), so the longest list repeats the longest word.
       features: maximalFeatures(L.words, () => lt(L.wordMaxCodeUnits)) as Seed['features'],
-      mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as 'auto' | 'on-request' },
-      bridge: { links: false, hash: false, copy: false, changes: false, versions: false },
+      mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as MermaidDraw },
+      bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false },
     };
   }
 
@@ -718,5 +732,15 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
     for (let c = 0; c <= 0xffff; c += 1) worst = Math.max(worst, escapedHtmlLength(String.fromCharCode(c)));
     expect(worst).toBe(6);
     expect(escapedHtmlLength('\u{1F600}')).toBe(2);
+  });
+});
+
+describe('the seed carries chrome.topSpace (B6.5)', () => {
+  it('features.chrome.topSpace is accepted by the seed and by L2\'s normalizeOptions', () => {
+    expect(FEATURE_KEYS.chrome).toContain('topSpace');
+    const f = { chrome: { bar: false, topSpace: false } };
+    expect(why(loose({ features: f }))).toBe('ok');
+    expect(normalizeOptions(f).chrome.topSpace).toBe(false);
+    expect(why(loose({ features: { chrome: { topSpace: 1 } } }))).toBe('features.chrome');
   });
 });

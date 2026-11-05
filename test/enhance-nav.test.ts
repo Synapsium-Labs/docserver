@@ -470,6 +470,32 @@ describe('initialHash and the stored position (LD7, LD8)', () => {
     expect(s.scrolled.at(-1)).toEqual([3000 - HEAD_GAP, 'auto']);
   });
 
+  it('a row with no id counts the head at its computed top when that is a length and past the bar (FR2), and at the bar when it is auto', async () => {
+    const s = stage();
+    let top = '50px';
+    let bar = '0px';
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(((target: Element) => ({
+      getPropertyValue: (prop: string) => (prop === 'top' && target.tagName === 'TH' ? top : prop === '--bar-h' ? bar : ''),
+    })) as never);
+    const root = mount('Text.\n\n| ID | What |\n|---|---|\n| R1 | One |\n');
+    s.tops.set(row(root, 'R1'), 3000);
+    defineRow('R1');
+    await enhance(root, { initialHash: 'R1' });
+    expect(s.scrolled).toEqual([[3000 - 50 - HEAD_GAP, 'auto']]); // the head sticks at 50px on a root with no bar: below it
+    top = 'auto';
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([3000 - HEAD_GAP, 'auto']); // a head that does not stick: the bar's height (0)
+    top = '20px';
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([3000 - 20 - HEAD_GAP, 'auto']);
+    // A head whose computed top is BELOW the bar's height (a bar-on root with a table that does not fit, or with the bar slid
+    // away, computes `top: 0px`): the bar's height still counts, so the row is not left under the bar (review F1).
+    bar = '52px';
+    top = '0px';
+    goToHash(root, 'R1');
+    expect(s.scrolled.at(-1)).toEqual([3000 - 52 - HEAD_GAP, 'auto']);
+  });
+
   it('a revealer that destroys the instance while it lands stops it: no pin, and enhance() rejects', async () => {
     const s = stage();
     hooks.before.push({
@@ -733,6 +759,50 @@ describe('position.keep', () => {
     s.points.length = 0;
     position.keep(() => undefined);
     expect([s.scrolled.length, s.points]).toEqual([1, []]);
+  });
+
+  it('an engine that keeps whole pixels and drops the fraction of a scroll (as WebKit does): a run of keeps leaves the block within 1 px of where it was, never a fraction lost per keep (fix round FR1, F1)', async () => {
+    const s = stage();
+    let whole = true;
+    vi.spyOn(window, 'scrollTo').mockImplementation(((o: ScrollToOptions) => {
+      s.scrolled.push([o.top ?? 0, o.behavior ?? 'auto']);
+      s.y = Math.max(0, whole ? Math.trunc(o.top ?? 0) : (o.top ?? 0));
+    }) as never);
+    const root = mount();
+    await enhance(root);
+    const { position } = ctxOf(root);
+    const para = blockAfter(root, '3-plan');
+    let top = 1150.75;
+    s.tops.set(para, top);
+    s.y = 1000;
+    s.hit = para;
+    const offset = (): number => (s.tops.get(para) ?? 0) - s.y;
+    for (let i = 0; i < 6; i += 1) {
+      position.keep(() => {
+        top += 10.75; // a figure above drawn, its height a fraction of a pixel off the whole
+        s.tops.set(para, top);
+      });
+    }
+    expect(s.scrolled).toHaveLength(6);
+    expect(Math.abs(offset() - 150.75)).toBeLessThan(1);
+    expect(offset()).toBe(151.25);
+    // On an engine that keeps fractions, the reader scrolls a quarter of a pixel: the next keep keeps the block where the
+    // reader put it, not where the keeps before aimed.
+    whole = false;
+    s.y += 0.25;
+    position.keep(() => undefined);
+    expect(offset()).toBe(151);
+    // A block moved by a pixel or more with the page not scrolled (a change no keep made): the next keep keeps it there.
+    top += 30;
+    s.tops.set(para, top);
+    position.keep(() => undefined);
+    expect(offset()).toBe(181);
+    // Another block at the reading line, less than a pixel from where the last keep aimed: it keeps its own offset.
+    const other = el(root, 'h2', '3-plan');
+    s.tops.set(other, s.y + 181.5);
+    s.hit = other;
+    position.keep(() => undefined);
+    expect((s.tops.get(other) ?? 0) - s.y).toBe(181.5);
   });
 
   it('nothing hit: back to the scroll position; a throwing fn still restores, then throws', async () => {

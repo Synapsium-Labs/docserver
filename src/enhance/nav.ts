@@ -35,7 +35,8 @@
 // no id (a row or a rule, LD6) gets the margin it would have with one, computed here, and the window is scrolled
 // (env.scrollTo): the `[id]` margin (`--bar-h` + ID_GAP), as the browser resolves it on the document's first heading
 // (whatever unit the host gave `--bar-h`); for a table row, the bar's height that margin implies (never below 0) plus
-// the table head's height (`--thead-h`, HEAD_GAP when unset), as `tr[id]`'s margin is. With no heading, the bar's height
+// the table head's height (`--thead-h`, HEAD_GAP when unset), as `tr[id]`'s margin is; the bar's height there is the larger
+// of that and the head's own computed `top` when it is a length (a root with no bar sticks it below Aa). With no heading, the bar's height
 // is `--bar-h` read as a length in px (0 when it is not one).
 //
 // The position seam (`ctx.position`, for every feature):
@@ -44,7 +45,10 @@
 //                      the page (nothing above can move) nothing is anchored; while a pin holds, the pin is applied
 //                      after instead; and for SMOOTH_MS after a smooth jump began nothing is anchored or restored,
 //                      since a scroll made then would stop it halfway. A keep inside a keep only runs `fn`. Relayout
-//                      runs inside it.
+//                      runs inside it. A scroll position is whole pixels in an engine (WebKit drops the fraction it is
+//                      asked for), so a restore can leave the block up to a pixel off; the next keep, when it anchors
+//                      that block less than a pixel from that offset and the scroll position is unchanged since the last restore, aims at the
+//                      same offset again, so a run of keeps never adds those fractions up.
 //   position.holdBar() keep the phone bar shown for BAR_HOLD_MS (a jump just moved the page); position.barHeld()
 //                      says whether that hold is still on (scroll.ts reads it).
 // And, for the reading position (position.ts) and goToHash, through placeOf(ctx.nav):
@@ -295,7 +299,13 @@ export function createNavigation(args: NavArgs): Navigation {
       break;
     }
     const barH = idMargin === null ? (px(env.computed(root, '--bar-h')) ?? 0) : Math.max(0, idMargin - ID_GAP);
-    if (el.localName === 'tr') return barH + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP);
+    if (el.localName === 'tr') {
+      // The head sticks at its own computed `top`, which is below Aa on a root with no bar (the stylesheet's floor): count it
+      // there when it is a length and larger than the bar's height; `auto` (the head does not stick) leaves the bar's.
+      const head = el.closest('table')?.querySelector('th') ?? null;
+      const stuckAt = head === null ? null : px(env.computed(head, 'top'));
+      return Math.max(barH, stuckAt ?? 0) + (px(env.computed(el, '--thead-h')) ?? HEAD_GAP);
+    }
     return idMargin ?? barH + ID_GAP;
   };
 
@@ -431,9 +441,18 @@ export function createNavigation(args: NavArgs): Navigation {
 
   // ── keep
   let keeping = 0;
+  /** Where the last keep put its block: its line, the offset it aimed at, and the scroll position it left (aimed). */
+  let aimed: Anchor | null = null;
   const keep = <T>(fn: () => T): T => {
     if (keeping > 0) return fn();
-    const at = pinned !== null || env.now() < smoothUntil || env.viewport().scrollY < 1 ? null : anchor();
+    let at = pinned !== null || env.now() < smoothUntil || env.viewport().scrollY < 1 ? null : anchor();
+    // An engine keeps a scroll position in whole pixels (WebKit drops the fraction it is asked for), so a restore can
+    // leave its block up to a pixel off the offset it aimed at. The next keep of that block, with the scroll position unchanged
+    // since the last restore, aims at the same offset again rather than at where the block was left, so those fractions never add up
+    // across a run of keeps (fix round FR1, F1: seven kept changes moved the reading line 2.78 px on WebKit).
+    if (at !== null && aimed !== null && at.line === aimed.line && at.y === aimed.y && Math.abs(at.offset - aimed.offset) < 1) {
+      at = Object.freeze({ line: at.line, offset: aimed.offset, y: at.y });
+    }
     keeping += 1;
     try {
       return fn();
@@ -442,7 +461,10 @@ export function createNavigation(args: NavArgs): Navigation {
       // After a destroy `fn` asked for (its teardown waits for the operation), neither scrolls: reach and env.scrollTo
       // check live().
       if (pinned !== null) hold();
-      else if (at !== null) restore(at);
+      else if (at !== null) {
+        restore(at);
+        aimed = Object.freeze({ line: at.line, offset: at.offset, y: env.viewport().scrollY });
+      }
     }
   };
 

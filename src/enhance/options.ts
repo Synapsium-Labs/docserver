@@ -12,7 +12,7 @@
 // (state.ts), so a storage hook can never run before the instance is reserved. The signal is a host object read
 // through its own interface (`aborted`, its listeners).
 //
-// A function option (onLink, onHash, copy, changes, openVersion, itemLink, and mermaid.load) is an own data property
+// A function option (onLink, onHash, copy, changes, openVersion, itemLink, onProgress, and mermaid.load) is an own data property
 // holding a function. It is only checked with `typeof` here, never called, and no property of it is read, so no host
 // code runs; it is kept with the object it came from (its receiver) in `callbacks`, which only host.ts calls, inside
 // the instance's operations. Features never see the functions: they use `ctx.host`.
@@ -40,6 +40,8 @@ export interface ChromeFlags {
   readonly bar: boolean;
   readonly rail: boolean;
   readonly settings: boolean;
+  /** False trims the root's top padding to 8px (the root class `no-top-space`), for a root with no bar only; batch 1.1, C108. */
+  readonly topSpace: boolean;
 }
 
 /** options.mermaid without its load (which is a host callback): null limits are the library's pinned defaults. */
@@ -48,7 +50,7 @@ export interface MermaidSettings {
   readonly maxEdges: number | null;
   /** Configuration keys a diagram's directive may not set, added to the library's own list. */
   readonly secure: readonly string[];
-  /** When figures are drawn: all of them in the second phase ('auto'), or each on its Render tap ('on-request'). */
+  /** When figures are drawn: all of them in the second phase ('auto'), each on its Render tap ('on-request'), or all once load() answers ('after-ready'). */
   readonly draw: MermaidDraw;
 }
 
@@ -107,15 +109,15 @@ export function prefNames(): (keyof Prefs)[] {
 export const OPTION_KEYS: readonly string[] = [
   'prefs', 'storage', 'storageKey', 'info', 'folds', 'signal',
   'posKey', 'keyboard', 'chrome', 'rules', 'initialHash',
-  'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'mermaid',
+  'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'mermaid',
   'vocabulary', 'namespace',
 ];
 const INFO_KEYS: readonly string[] = ['title', 'frontList', 'sha', 'draft', 'commits', 'only'];
-const CHROME_KEYS: readonly string[] = ['bar', 'rail', 'settings'];
+const CHROME_KEYS: readonly string[] = ['bar', 'rail', 'settings', 'topSpace'];
 const MERMAID_KEYS: readonly string[] = ['load', 'maxTextSize', 'maxEdges', 'secure', 'draw'];
 
 /** The values of mermaid.draw, the first being its default (docserver L3, Task 16; FD13). */
-export const MERMAID_DRAW_VALUES = ['auto', 'on-request'] as const;
+export const MERMAID_DRAW_VALUES = ['auto', 'on-request', 'after-ready'] as const;
 
 /** The option lists of the vocabulary, by group (vocab.ts says what each means). */
 const VOCABULARY_KEYS: readonly string[] = [
@@ -340,10 +342,15 @@ function callback(where: string, v: unknown, self: object): BoundCallback | null
 }
 
 function normalizeChrome(v: unknown): ChromeFlags {
-  if (v === undefined) return Object.freeze({ bar: true, rail: true, settings: true });
+  if (v === undefined) return Object.freeze({ bar: true, rail: true, settings: true, topSpace: true });
   if (!isRecord(v)) throw invalid('chrome must be an object');
-  const { bar, rail, settings } = ownFields('chrome', v, CHROME_KEYS);
-  return Object.freeze({ bar: flag('chrome.bar', bar, true), rail: flag('chrome.rail', rail, true), settings: flag('chrome.settings', settings, true) });
+  const { bar, rail, settings, topSpace } = ownFields('chrome', v, CHROME_KEYS);
+  return Object.freeze({
+    bar: flag('chrome.bar', bar, true),
+    rail: flag('chrome.rail', rail, true),
+    settings: flag('chrome.settings', settings, true),
+    topSpace: flag('chrome.topSpace', topSpace, true),
+  });
 }
 
 /** A finite integer from 1 to `max`, or null when left out. */
@@ -484,6 +491,7 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
     onHash: callback('onHash', fields['onHash'], options),
     itemLink: callback('itemLink', fields['itemLink'], options),
     mermaid: mermaid?.load ?? null,
+    onProgress: callback('onProgress', fields['onProgress'], options),
   });
   return {
     prefs: prefs === undefined ? {} : normalizePrefs(prefs),

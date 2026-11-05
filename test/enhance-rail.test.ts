@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Read marks and the contents rail (docserver L2, Task 18).
 import { afterEach, describe, expect, it } from 'vitest';
-import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, type EnhanceOptions } from '../src/enhance/index.js';
 import { render } from '../src/render/index.js';
 
 const DOC = [
@@ -406,5 +406,43 @@ describe('read marks', () => {
     mark(root, '__proto__').click();
     mark(root, 'constructor').click();
     expect(Object.keys(JSON.parse(writes.at(-1)?.[1] ?? '{}')).sort()).toEqual(['__proto__', 'constructor']);
+  });
+});
+
+describe('commands without the bar: contents (B6.2, B6.3)', () => {
+  it('B6.2: with the bar off, the contents command toggles the drawer; Escape closes it', async () => {
+    const root = mount(DOC);
+    await enhance(root, { chrome: { bar: false } });
+    expect(root.querySelector('.topbar')).toBeNull();
+    expect(root.classList.contains('toc-open')).toBe(false);
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(root.classList.contains('toc-open')).toBe(true);
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(root.classList.contains('toc-open')).toBe(false);
+    expect(runEnhancementCommand(root, 'contents')).toBe(true);
+    expect(root.classList.contains('toc-open')).toBe(true);
+    (root.querySelector('nav.doc-toc') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(root.classList.contains('toc-open')).toBe(false);
+  });
+
+  it('T6-e: where the rail is shown (1240 px or more) there is no drawer: the command answers false and changes nothing', async () => {
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 });
+    try {
+      const root = mount(DOC);
+      await enhance(root, { chrome: { bar: false } });
+      expect(runEnhancementCommand(root, 'contents')).toBe(false);
+      expect(root.classList.contains('toc-open')).toBe(false);
+    } finally {
+      if (width === undefined) Reflect.deleteProperty(window, 'innerWidth');
+      else Object.defineProperty(window, 'innerWidth', width);
+    }
+  });
+
+  it('B6.3: with chrome.rail false the contents command answers false and the drawer stays shut', async () => {
+    const root = mount(DOC);
+    await enhance(root, { chrome: { bar: false, rail: false } });
+    expect(runEnhancementCommand(root, 'contents')).toBe(false);
+    expect(root.classList.contains('toc-open')).toBe(false);
   });
 });

@@ -406,7 +406,7 @@ describe('enhance walls: import inertness', () => {
     for (const s of spies) s.mockRestore();
     expect(calls).toEqual([0, 0, 0, 0]);
     expect(Reflect.ownKeys(globalThis).filter((k) => !names.has(k))).toEqual([]);
-    expect(Object.keys(mod).sort()).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'setEnhancementPrefs']);
+    expect(Object.keys(mod).sort()).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementPrefs']);
   });
 
   it('no source file runs code at its top level', () => {
@@ -662,7 +662,7 @@ describe('README: ./enhance', () => {
     const README = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
     const mod = (await import('../src/enhance/index.js')) as Record<string, unknown>;
     const names = Object.keys(mod);
-    expect(names.length).toBe(5);
+    expect(names.length).toBe(6);
     expect(names.filter((n) => !README.includes(`\`${n}\``) && !README.includes(`\`${n}(`))).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // The frame's DOM-free copies of L2's plain-data shapes, held equal to L2's own (docserver L3, Task 1; review findings C1
 // and C3). src/frame typechecks with no DOM lib (tsconfig.frame.json, Reference §12), and src/enhance/types.ts reaches DOM
 // types through its imports, so the frame cannot import the shapes Reference §1 names from it. src/frame/wire-types.ts
@@ -5,7 +6,7 @@
 // op (theme, width, font; the lens stays frame-local, Q1). This file sits in the enhance typecheck project
 // (tsconfig.enhance.json, with the DOM lib), the one place where both sides typecheck: a drift on either side is a red
 // `npm run typecheck`. The prefs' values are compared at run time as well.
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { PREF_VALUES } from '../src/enhance/options.js';
 import type { ChromeOptions, CommitEntry, Prefs, VocabularyOptions } from '../src/enhance/types.js';
 import { FRAME_PREF_VALUES, type FramePrefValues } from '../src/frame/protocol.js';
@@ -36,5 +37,25 @@ describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", ()
   it("the lens is L2's and stays out (its control: PREF_VALUES does carry one)", () => {
     expect(Object.keys(PREF_VALUES)).toContain('lens');
     expect(Object.keys(FRAME_PREF_VALUES)).not.toContain('lens');
+  });
+});
+
+describe("the frame's registered reader api (C-F4)", () => {
+  it('the enhance entry registers exactly the five members, runEnhancementCommand among them', async () => {
+    const script = document.createElement('script');
+    const seen: unknown[] = [];
+    script.addEventListener('docserver:register', (e) => void seen.push((e as CustomEvent).detail));
+    Object.defineProperty(document, 'currentScript', { configurable: true, get: () => script });
+    try {
+      vi.resetModules();
+      await import('../src/frame-runtime/enhance-entry.js');
+    } finally {
+      Reflect.deleteProperty(document, 'currentScript');
+    }
+    expect(seen).toHaveLength(1);
+    const detail = seen[0] as { name: string; api: Record<string, unknown> };
+    expect(detail.name).toBe('enhance');
+    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementPrefs']);
+    expect(typeof detail.api['runEnhancementCommand']).toBe('function');
   });
 });

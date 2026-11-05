@@ -1,0 +1,2430 @@
+# Batch Task 6: mutation rows (the tools without the bar, commands, progress, `--bar-h`, `topSpace`)
+
+Step 1 of the task wrote the tests before the code, but the first bounded run queued behind other work for many minutes, and the source edits were made while it waited, so there is no separate run of the new tests against the old code. The red of each guard is shown by its row below instead: the row removes that guard (or takes the guard's opposite) and the named tests go red through assertions.
+
+## Method
+
+Each row was measured in place on branch `ws/docserver-release-1-1`, one at a time, by a driver. The first round was three driver runs, not one: B6a to B6l and B6n in the first (B6m was green there), B6m again after a registry case was added (B6o green there), and B6m, B6o and B6p in the third after a second fix of that case; the logs of each run are kept in the session's scratch directory. For each row: the bytes of every edited file and of every generated output (`assets/assets.json`, `src/frame/manifest.generated.ts`, `assets/frame/*`) were saved and hashed; the edit was applied; the named tests ran in a bounded run (`timeout -k 10 600 ./node_modules/.bin/vitest run --maxWorkers=2 <files>`, with `ulimit -u` set to the measured thread count plus 1500); the edited files were restored from the saved bytes (byte copy) and their sha256 checked against the saved one; the generated outputs were hashed again (a row edits sources but never rebuilds, so they must be unchanged) and `node scripts/build-frame.mjs --check` ran after each restore. A row is red only through test assertions (no compile or import failure).
+
+Row B6h (the prelude rule `[data-docreader-root][data-docreader-root]:not(:has(> .topbar)){--bar-h:0px}` deleted from `scripts/build-frame.mjs`) is measured in Task 8: its red is a browser row there.
+
+Rows B6a to B6g are the brief's. B6i to B6p are this task's own: B6i (`topSpace` class), B6j (outline command), B6k (settings toggles), B6l (`onProgress` is read from the options), B6m and B6o (the registry's two live checks, red through the direct registry test), B6n (Aa in the tray when the bar exists), B6p (below).
+
+## Verdicts
+
+Every row is red through assertions except:
+
+- B6m and B6o were first measured green (their new case, the direct registry test, did not yet exist for B6m, and for B6o its first form built the "dead" registry with a live check that never turned true), and each got a case before being measured red, as the rule says. B6a, B6f, B6k and B6n were measured against the 32-case settings file; the later case is additive, so their verdicts stand.
+- B6p stays green: an equivalent mutant (ledger C108): Map.get does no prototype lookup and register throws for an unknown name; the check stays for type narrowing (`handlers.get(name: string)` on a `Map<CommandName, ...>` fails the typecheck without it). The registry's `known()` check in `run` only guards a lookup in a map whose keys are all known names (`register` throws for any other), so a name that is not known finds no handler and answers false either way. B6f is the guard that matters (an unknown name must not reach any handler), and it is red.
+
+## The rows
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6a | Aa without the bar | `src/enhance/settings.ts` | `  if (!ctx.options.chrome.settings) return;` → `  if (!ctx.options.chrome.settings \|\| ctx.slots === null) return;` | `test/enhance-settings.test.ts`: 2 failed \| 30 passed (32) |
+| B6b | toggle, not open (superseded by B6b2: this text exists only in the first round) | `src/enhance/rail.ts` | `  ctx.commands.register('contents', () => { ⏎     if (drawerOpen) close(); ⏎     else open(); ⏎ ` → `  ctx.commands.register('contents', () => { ⏎     open(); ⏎   });` | `test/enhance-rail.test.ts`: 1 failed \| 18 passed (19) |
+| B6c | jump reachable | `src/enhance/jump.ts` | `  ctx.commands.register('jump', () => {` → `  if (ctx.slots !== null) ctx.commands.register('jump', () => {` | `test/enhance-jump.test.ts`: 1 failed \| 55 passed (56) |
+| B6d | progress without the bar | `src/enhance/scroll.ts` | `    if (slots !== null \|\| reportsProgress) {` → `    if (slots !== null) {` | `test/enhance-scroll.test.ts`: 1 failed \| 38 passed (39) |
+| B6e | report on change only | `src/enhance/scroll.ts` | `      if (w !== width) { ⏎         width = w; ⏎         if (slots !== null)` → `      if (w !== width \|\| reportsProgress) { ⏎         width = w; ⏎         if (slots !== null)` | `test/enhance-scroll.test.ts`: 1 failed \| 38 passed (39) |
+| B6f | unknown name | `src/enhance/commands.ts` | `typeof name !== 'string' \|\| !known(name)) return false; ⏎       const run = handlers.get(nam` → `typeof name !== 'string') return false; ⏎       const run = handlers.get(known(name) ? name ` | `test/enhance-settings.test.ts` (+1): 1 failed \| 87 passed (88) |
+| B6g | seed key | `src/frame/seed.ts` | `chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),` → `chrome: Object.freeze(['bar', 'rail', 'settings'] as const),` | `test/frame-seed.test.ts`: 2 failed \| 156 passed (158) |
+| B6i | topSpace class | `src/enhance/lifecycle.ts` | `  if (!options.chrome.topSpace) journal.toggleClass(root, 'no-top-space', true);` → `(removed)` | `test/enhance-options.test.ts`: 1 failed \| 157 passed (158) |
+| B6j | outline command | `src/enhance/plans.ts` | `  ctx.commands.register('outline', () => { ⏎     setOutline(!outlined); ⏎   }); ⏎ ` → `(removed)` | `test/enhance-plans.test.ts`: 1 failed \| 40 passed (41) |
+| B6k | settings toggle, not open (superseded by B6k2: this text exists only in the first round) | `src/enhance/settings.ts` | `  ctx.commands.register('settings', () => { ⏎     if (menu.hidden) show(); ⏎     else close();` → `  ctx.commands.register('settings', () => { ⏎     show(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 31 passed (32) |
+| B6l | onProgress is a host callback of the options | `src/enhance/options.ts` | `    onProgress: callback('onProgress', fields['onProgress'], options),` → `    onProgress: null,` | `test/enhance-scroll.test.ts` (+1): 7 failed \| 190 passed (197) |
+| B6m | the registry runs a command only while live (the run's live check dropped) | `src/enhance/commands.ts` | `      if (!live() \|\| typeof name` → `      if (typeof name` | `test/enhance-settings.test.ts`: 1 failed \| 32 passed (33) |
+| B6n | no Aa in the tray when the bar exists (Aa always on the root) | `src/enhance/settings.ts` | `  if (ctx.slots !== null) ctx.slots.tool('settings', wrap); ⏎   else ctx.journal.insert` → `  ctx.journal.insert` | `test/enhance-settings.test.ts`: 1 failed \| 31 passed (32) |
+| B6o | the registry drops a registration made while not live (the register's live check dropped) | `src/enhance/commands.ts` | `      if (!live()) return () => undefined; ⏎       handlers.set` → `      handlers.set` | `test/enhance-settings.test.ts`: 1 failed \| 32 passed (33) |
+| B6p | an unknown name is refused by the registry (the known() check dropped from run, no fallback handler) | `src/enhance/commands.ts` | `typeof name !== 'string' \|\| !known(name)) return false;` → `typeof name !== 'string') return false;` | `test/enhance-settings.test.ts`: 33 passed (33) (stays green) |
+| B6h | `--bar-h` rule | `scripts/build-frame.mjs` | the prelude rule deleted (a rebuild row) | measured in Task 8 |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "9c456ba32130184053d6060e24a14b6b2e8bb1b71f8f791cd84311bb3e768107",
+    "src/frame/manifest.generated.ts": "32b20a2bfb1c0cd37330e64777921631f33d4fc6340b142e78db4ddc42c31076",
+    "assets/frame/bootstrap.js": "2792621f7d625f289f6caf5e7b8c6dce96a0b50c110d00d52c75dbda0b727db3",
+    "assets/frame/enhance.js": "7b23628446e3a96d99ec9e691c499ca3b24cc2c342c434e10935aa0ed9059027",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "2a897678d74de4a3723e85fcc321857b5ec102bb189b9f6e7bc89eb65d3e2524"
+  },
+  "rows": [
+    {
+      "id": "B6a",
+      "guard": "Aa without the bar",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  if (!ctx.options.chrome.settings) return;",
+          "new": "  if (!ctx.options.chrome.settings || ctx.slots === null) return;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 30 passed (32)",
+      "failing": [
+        "B6.1: with the bar off, Aa is built on the root, and the settings command opens then closes it; Escape closes ",
+        "B6.3: chrome.settings false answers false and builds nothing; an unknown name or root answers false"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7db5324cae88fc4ddec128e2edaeb19fcb251c7d814eb901c0b68d41be970ea5"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7db5324cae88fc4ddec128e2edaeb19fcb251c7d814eb901c0b68d41be970ea5"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6b",
+      "guard": "toggle, not open",
+      "edits": [
+        {
+          "file": "src/enhance/rail.ts",
+          "old": "  ctx.commands.register('contents', () => {\n    if (drawerOpen) close();\n    else open();\n  });",
+          "new": "  ctx.commands.register('contents', () => {\n    open();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-rail.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 18 passed (19)",
+      "failing": [
+        "B6.2: with the bar off, the contents command toggles the drawer; Escape closes it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/rail.ts": "5013739678747f8b6949a5970d1631a6d9e77382d2438a1f8cd3ca65975f114b"
+      },
+      "sha256After": {
+        "src/enhance/rail.ts": "5013739678747f8b6949a5970d1631a6d9e77382d2438a1f8cd3ca65975f114b"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6c",
+      "guard": "jump reachable",
+      "edits": [
+        {
+          "file": "src/enhance/jump.ts",
+          "old": "  ctx.commands.register('jump', () => {",
+          "new": "  if (ctx.slots !== null) ctx.commands.register('jump', () => {"
+        }
+      ],
+      "tests": [
+        "test/enhance-jump.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 55 passed (56)",
+      "failing": [
+        "B6.2: with the bar off, the jump command opens then closes the dialog, and Escape closes it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/jump.ts": "37b7ec55911e388574c3a8588a7036d53c09d88af03243d2ecedc0a07e00af7c"
+      },
+      "sha256After": {
+        "src/enhance/jump.ts": "37b7ec55911e388574c3a8588a7036d53c09d88af03243d2ecedc0a07e00af7c"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6d",
+      "guard": "progress without the bar",
+      "edits": [
+        {
+          "file": "src/enhance/scroll.ts",
+          "old": "    if (slots !== null || reportsProgress) {",
+          "new": "    if (slots !== null) {"
+        }
+      ],
+      "tests": [
+        "test/enhance-scroll.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "with the bar off and onProgress given, scrolling reports the share once per change"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "sha256After": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6e",
+      "guard": "report on change only",
+      "edits": [
+        {
+          "file": "src/enhance/scroll.ts",
+          "old": "      if (w !== width) {\n        width = w;\n        if (slots !== null)",
+          "new": "      if (w !== width || reportsProgress) {\n        width = w;\n        if (slots !== null)"
+        }
+      ],
+      "tests": [
+        "test/enhance-scroll.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "with the bar off and onProgress given, scrolling reports the share once per change"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "sha256After": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6f",
+      "guard": "unknown name",
+      "edits": [
+        {
+          "file": "src/enhance/commands.ts",
+          "old": "typeof name !== 'string' || !known(name)) return false;\n      const run = handlers.get(name);",
+          "new": "typeof name !== 'string') return false;\n      const run = handlers.get(known(name) ? name : 'jump');"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts",
+        "test/enhance-jump.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 87 passed (88)",
+      "failing": [
+        "B6.3: chrome.settings false answers false and builds nothing; an unknown name or root answers false"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "sha256After": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6g",
+      "guard": "seed key",
+      "edits": [
+        {
+          "file": "src/frame/seed.ts",
+          "old": "chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),",
+          "new": "chrome: Object.freeze(['bar', 'rail', 'settings'] as const),"
+        }
+      ],
+      "tests": [
+        "test/frame-seed.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 156 passed (158)",
+      "failing": [
+        "FEATURE_KEYS equals the key lists L2's normalizeOptions reads (options.ts)",
+        "features.chrome.topSpace is accepted by the seed and by L2's normalizeOptions"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/frame/seed.ts": "4f0d2b408e9b358dd7a14732c2c2598813cd138bb161329035c28440a2480bde"
+      },
+      "sha256After": {
+        "src/frame/seed.ts": "4f0d2b408e9b358dd7a14732c2c2598813cd138bb161329035c28440a2480bde"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6i",
+      "guard": "topSpace class",
+      "edits": [
+        {
+          "file": "src/enhance/lifecycle.ts",
+          "old": "  if (!options.chrome.topSpace) journal.toggleClass(root, 'no-top-space', true);",
+          "new": ""
+        }
+      ],
+      "tests": [
+        "test/enhance-options.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 157 passed (158)",
+      "failing": [
+        "chrome.topSpace false puts a root class; true leaves the root as it was"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/lifecycle.ts": "08ff87ea48075532cb5175caf835fbb6a000161ac23d2ccffb85d3cfd64aa7a6"
+      },
+      "sha256After": {
+        "src/enhance/lifecycle.ts": "08ff87ea48075532cb5175caf835fbb6a000161ac23d2ccffb85d3cfd64aa7a6"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6j",
+      "guard": "outline command",
+      "edits": [
+        {
+          "file": "src/enhance/plans.ts",
+          "old": "  ctx.commands.register('outline', () => {\n    setOutline(!outlined);\n  });\n",
+          "new": ""
+        }
+      ],
+      "tests": [
+        "test/enhance-plans.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 40 passed (41)",
+      "failing": [
+        "B6.2: the outline command toggles a plan's Outline with the bar off"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/plans.ts": "9a05fafe7d9c9544a91b85df9a751da502f3924f6a0fc1a38e86d943d8d482a4"
+      },
+      "sha256After": {
+        "src/enhance/plans.ts": "9a05fafe7d9c9544a91b85df9a751da502f3924f6a0fc1a38e86d943d8d482a4"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6k",
+      "guard": "settings toggle, not open",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.commands.register('settings', () => {\n    if (menu.hidden) show();\n    else close();\n  });",
+          "new": "  ctx.commands.register('settings', () => {\n    show();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 31 passed (32)",
+      "failing": [
+        "B6.1: with the bar off, Aa is built on the root, and the settings command opens then closes it; Escape closes "
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7db5324cae88fc4ddec128e2edaeb19fcb251c7d814eb901c0b68d41be970ea5"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7db5324cae88fc4ddec128e2edaeb19fcb251c7d814eb901c0b68d41be970ea5"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6l",
+      "guard": "onProgress is a host callback of the options",
+      "edits": [
+        {
+          "file": "src/enhance/options.ts",
+          "old": "    onProgress: callback('onProgress', fields['onProgress'], options),",
+          "new": "    onProgress: null,"
+        }
+      ],
+      "tests": [
+        "test/enhance-scroll.test.ts",
+        "test/enhance-options.test.ts"
+      ],
+      "rc": 1,
+      "red": "7 failed | 190 passed (197)",
+      "failing": [
+        "onProgress a string",
+        "onProgress null",
+        "through enhance(), every one rejects invalid-options and the root is untouched",
+        "neither normalizeOptions nor the whole startup touches a function option, mermaid.load included",
+        "chrome.topSpace defaults to true, takes false, and onProgress is kept as a host callback",
+        "with the bar off and onProgress given, scrolling reports the share once per change",
+        "with the bar on, the same share is reported and the bar line draws it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/options.ts": "feafff7f8fd0de945e550ac88faa804125a95086094d9361edc8c6210ef90eba"
+      },
+      "sha256After": {
+        "src/enhance/options.ts": "feafff7f8fd0de945e550ac88faa804125a95086094d9361edc8c6210ef90eba"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6m",
+      "guard": "the registry runs a command only while live (the run's live check dropped)",
+      "edits": [
+        {
+          "file": "src/enhance/commands.ts",
+          "old": "      if (!live() || typeof name",
+          "new": "      if (typeof name"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 32 passed (33)",
+      "failing": [
+        "names four commands, runs a registered one only while live, and answers false otherwise"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "sha256After": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6n",
+      "guard": "no Aa in the tray when the bar exists (Aa always on the root)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  if (ctx.slots !== null) ctx.slots.tool('settings', wrap);\n  else ctx.journal.insert",
+          "new": "  ctx.journal.insert"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 31 passed (32)",
+      "failing": [
+        "with the bar on, the same command works and Aa stays in the bar tray"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7db5324cae88fc4ddec128e2edaeb19fcb251c7d814eb901c0b68d41be970ea5"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7db5324cae88fc4ddec128e2edaeb19fcb251c7d814eb901c0b68d41be970ea5"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6o",
+      "guard": "the registry drops a registration made while not live (the register's live check dropped)",
+      "edits": [
+        {
+          "file": "src/enhance/commands.ts",
+          "old": "      if (!live()) return () => undefined;\n      handlers.set",
+          "new": "      handlers.set"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 32 passed (33)",
+      "failing": [
+        "names four commands, runs a registered one only while live, and answers false otherwise"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "sha256After": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6p",
+      "guard": "an unknown name is refused by the registry (the known() check dropped from run, no fallback handler)",
+      "edits": [
+        {
+          "file": "src/enhance/commands.ts",
+          "old": "typeof name !== 'string' || !known(name)) return false;",
+          "new": "typeof name !== 'string') return false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 0,
+      "red": "33 passed (33)",
+      "failing": [],
+      "verdict": "green (equivalent mutant)",
+      "sha256": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "sha256After": {
+        "src/enhance/commands.ts": "5fd26e0e3200b6f7603dcecc28e67221ee234d71bbdae26df628e0ad009ab727"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ],
+  "measuredElsewhere": {
+    "B6h": "measured in Task 8"
+  }
+}
+```
+
+## Fix round 1 (ledger C108): rows B6q to B6ai
+
+Measured the same way, on the tree of the fix-round commit, against the new cases (every row measured again after the last source edit of the round; a draft of row B6u, the keydown clear of the settings flag, was dropped with the listener, because the services case that counts one keydown listener per document went red on it). B6aa was first measured green: its first cases (a later spy event, a running-head write) saw nothing, because the events and the journal already refuse writes once the instance is not live. It got a case that counts heading rect reads after the destroy (red), and was measured again. B6ac and B6ad stay green and are recorded as equivalent mutants (reasons below); B6ae was recorded here as one too, and that was wrong (fix round 2 below: it is red with a case where a host listener requests a destroy during the command); B6ab, the phase guard that matters (a command called from inside a feature build), is red. B6p keeps the ruling of the first round (ledger C108).
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6q | topSpace trims only a root with no bar (CSS scope) | `assets/reader.css` | `.no-top-space:not(:has(> .topbar)) { padding-top: 8px; }` → `.no-top-space { padding-top: 8px; }` | `test/enhance-options.test.ts`: 1 failed \| 158 passed (159) |
+| B6r | the same gesture's command leaves a menu closed by an outside press closed | `src/enhance/settings.ts` | `    if (closedByOutside) {` → `    if (false as boolean) {` | `test/enhance-settings.test.ts`: 1 failed \| 38 passed (39) |
+| B6s | focus leaving the document does not close the menu | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎ ` → `(removed)` | `test/enhance-settings.test.ts`: 1 failed \| 38 passed (39) |
+| B6t | the flag is cleared after the gesture's click | `src/enhance/settings.ts` | `ctx.journal.listen(doc, 'click', () => { ⏎     closedByOutside = false;` → `ctx.journal.listen(doc, 'click', () => { ⏎     void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 38 passed (39) |
+| B6v | settings does not open over another overlay | `src/enhance/settings.ts` | `    if (ctx.overlays.any()) return false; ⏎     show();` → `    show();` | `test/enhance-settings.test.ts`: 1 failed \| 38 passed (39) |
+| B6w | jump does not open over another overlay | `src/enhance/jump.ts` | `    if (ctx.overlays.any()) return false; ⏎     openJump();` → `    openJump();` | `test/enhance-jump.test.ts`: 1 failed \| 56 passed (57) |
+| B6x | contents answers false where the rail is shown | `src/enhance/rail.ts` | `ctx.env.viewport().w >= RAIL_MIN_WIDTH \|\| ctx.overlays.any()` → `ctx.overlays.any()` | `test/enhance-rail.test.ts`: 1 failed \| 19 passed (20) |
+| B6x2 | contents does not open over another overlay | `src/enhance/rail.ts` | `ctx.env.viewport().w >= RAIL_MIN_WIDTH \|\| ctx.overlays.any()` → `ctx.env.viewport().w >= RAIL_MIN_WIDTH` | `test/enhance-settings.test.ts`: 1 failed \| 38 passed (39) |
+| B6y | a stored outline is applied with the bar and the keyboard off | `src/enhance/plans.ts` | `  // (The outline command is registered above` → `  if (ctx.slots === null && !ctx.options.keyboard) return; ⏎   // (The outline command is re` | `test/enhance-plans.test.ts`: 1 failed \| 41 passed (42) |
+| B6z | the frame's api carries runEnhancementCommand | `src/frame-runtime/enhance-entry.ts` | `goToHash, runEnhancementCommand })` → `goToHash })` | `test/enhance-frame-wire.test.ts`: 1 failed \| 4 passed (5) |
+| B6aa | no write or event after onProgress destroyed the instance | `src/enhance/scroll.ts` | `          ctx.host.onProgress(Math.round(share * 1000) / 100000); ⏎           if (!ctx.live(` → `          ctx.host.onProgress(Math.round(share * 1000) / 100000);` | `test/enhance-scroll.test.ts`: 1 failed \| 41 passed (42) |
+| B6ab | a command during startup answers false (the phase guard) | `src/enhance/lifecycle.ts` | `inst.phase !== 'active' \|\| ctx === null) return false; ⏎   return operate` → `ctx === null) return false; ⏎   return operate` | `test/enhance-plans.test.ts`: 1 failed \| 41 passed (42) |
+| B6ac | a root that is no element (isElement guard) | `src/enhance/lifecycle.ts` | `if (!isElement(root) \|\| typeof name !== 'string') return false;` → `if (typeof name !== 'string') return false;` | `test/enhance-settings.test.ts`: 39 passed (39) (stays green, possible equivalent mutant: equivalent: WeakMap.get of a non-object answers undefined, so findByRoot answers undefined and the call is false either way) |
+| B6ad | a name that is no string (lifecycle guard) | `src/enhance/lifecycle.ts` | `if (!isElement(root) \|\| typeof name !== 'string') return false;` → `if (!isElement(root)) return false;` | `test/enhance-settings.test.ts`: 39 passed (39) (stays green, possible equivalent mutant: equivalent: the registry's own `typeof name` check in run() answers false for a non-string either way) |
+| B6ae | a destroyed or destroying root (ctx and operate guards) | `src/enhance/lifecycle.ts` | `  return operate(inst, () => ctx.commands.run(name)) === true;` → `  return ctx.commands.run(name);` | `test/enhance-settings.test.ts`: 39 passed (39) (stays green in this round; NOT equivalent, see fix round 2) |
+| B6af | progress computed only with the bar or onProgress | `src/enhance/scroll.ts` | `    if (slots !== null \|\| reportsProgress) {` → `    if (true as boolean) {` | `test/enhance-scroll.test.ts`: 2 failed \| 40 passed (42) |
+| B6ag | no contents command with chrome.rail false | `src/enhance/rail.ts` | `if (!ctx.info.isDocument \|\| !ctx.options.chrome.rail) return;` → `if (!ctx.info.isDocument) return;` | `test/enhance-rail.test.ts`: 1 failed \| 19 passed (20) |
+| B6ah | no outline command on a document that is no plan | `src/enhance/plans.ts` | `  if (!outlineable) return; ⏎ ` → `  if (!outlineable) { ⏎     ctx.commands.register('outline', () => undefined); ⏎     return; ⏎  ` | `test/enhance-plans.test.ts`: 1 failed \| 41 passed (42) |
+| B6ai | no jump command on a document with too few entries | `src/enhance/jump.ts` | `  if (entries.length <= MIN_ENTRIES) return;` → `  if (entries.length <= MIN_ENTRIES) { ⏎     ctx.commands.register('jump', () => true); ⏎     ` | `test/enhance-jump.test.ts`: 1 failed \| 56 passed (57) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "34d64fa574978d3d0a0ad86287aedc2462fa69ad07cf74c403b70e34b5dbee95",
+    "src/frame/manifest.generated.ts": "06fd3c79d86079da8a16305625cbb0f05adada2985f626a4c47d283f68f36369",
+    "assets/frame/bootstrap.js": "2792621f7d625f289f6caf5e7b8c6dce96a0b50c110d00d52c75dbda0b727db3",
+    "assets/frame/enhance.js": "4b7aebf65dfd81d440a3f441353b23e393ce1e1ac3dde80af90cbfc7323452a7",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6q",
+      "guard": "topSpace trims only a root with no bar (CSS scope)",
+      "edits": [
+        {
+          "file": "assets/reader.css",
+          "old": ".no-top-space:not(:has(> .topbar)) { padding-top: 8px; }",
+          "new": ".no-top-space { padding-top: 8px; }"
+        }
+      ],
+      "tests": [
+        "test/enhance-options.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 158 passed (159)",
+      "failing": [
+        "with the bar on and topSpace false the root has its bar and the class; the stylesheet trims only a root with n"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "assets/reader.css": "505092a2299c6824834a3289d23d829a529bacfaefa5328d7e7daf3232dda5c0"
+      },
+      "sha256After": {
+        "assets/reader.css": "505092a2299c6824834a3289d23d829a529bacfaefa5328d7e7daf3232dda5c0"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6r",
+      "guard": "the same gesture's command leaves a menu closed by an outside press closed",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (closedByOutside) {",
+          "new": "    if (false as boolean) {"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "a button outside the root: the first press opens, the second closes, a third opens again"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6s",
+      "guard": "focus leaving the document does not close the menu",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n",
+          "new": ""
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu ope"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6t",
+      "guard": "the flag is cleared after the gesture's click",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "ctx.journal.listen(doc, 'click', () => {\n    closedByOutside = false;",
+          "new": "ctx.journal.listen(doc, 'click', () => {\n    void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "the swallowed half does not outlive its gesture: a later command opens it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6v",
+      "guard": "settings does not open over another overlay",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (ctx.overlays.any()) return false;\n    show();",
+          "new": "    show();"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "settings answers false and changes nothing while the drawer is open; closing its own still works"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "60934831686e0e4663b5820ce5c2dc9976ee8d5c0a7bca434f38de7ecc2e924e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6w",
+      "guard": "jump does not open over another overlay",
+      "edits": [
+        {
+          "file": "src/enhance/jump.ts",
+          "old": "    if (ctx.overlays.any()) return false;\n    openJump();",
+          "new": "    openJump();"
+        }
+      ],
+      "tests": [
+        "test/enhance-jump.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 56 passed (57)",
+      "failing": [
+        "T6-d: the jump command answers false and changes nothing while another dialog is open"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/jump.ts": "280b630bb83c2561ac2c74a5ad38adbf475c99574adea8832b1d64260fdcd908"
+      },
+      "sha256After": {
+        "src/enhance/jump.ts": "280b630bb83c2561ac2c74a5ad38adbf475c99574adea8832b1d64260fdcd908"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6x",
+      "guard": "contents answers false where the rail is shown",
+      "edits": [
+        {
+          "file": "src/enhance/rail.ts",
+          "old": "ctx.env.viewport().w >= RAIL_MIN_WIDTH || ctx.overlays.any()",
+          "new": "ctx.overlays.any()"
+        }
+      ],
+      "tests": [
+        "test/enhance-rail.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 19 passed (20)",
+      "failing": [
+        "T6-e: where the rail is shown (1240 px or more) there is no drawer: the command answers false and changes noth"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/rail.ts": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619"
+      },
+      "sha256After": {
+        "src/enhance/rail.ts": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6x2",
+      "guard": "contents does not open over another overlay",
+      "edits": [
+        {
+          "file": "src/enhance/rail.ts",
+          "old": "ctx.env.viewport().w >= RAIL_MIN_WIDTH || ctx.overlays.any()",
+          "new": "ctx.env.viewport().w >= RAIL_MIN_WIDTH"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 38 passed (39)",
+      "failing": [
+        "settings answers false and changes nothing while the drawer is open; closing its own still works"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/rail.ts": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619"
+      },
+      "sha256After": {
+        "src/enhance/rail.ts": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6y",
+      "guard": "a stored outline is applied with the bar and the keyboard off",
+      "edits": [
+        {
+          "file": "src/enhance/plans.ts",
+          "old": "  // (The outline command is registered above",
+          "new": "  if (ctx.slots === null && !ctx.options.keyboard) return;\n  // (The outline command is registered above"
+        }
+      ],
+      "tests": [
+        "test/enhance-plans.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 41 passed (42)",
+      "failing": [
+        "a stored outline is applied whatever the bar and the keyboard are: the outline command can always leave it (T6"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/plans.ts": "47de9edb6a99316635c1e96a16bdb95e42f01b5eab3a5eeca228c2698ef8f8d6"
+      },
+      "sha256After": {
+        "src/enhance/plans.ts": "47de9edb6a99316635c1e96a16bdb95e42f01b5eab3a5eeca228c2698ef8f8d6"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6z",
+      "guard": "the frame's api carries runEnhancementCommand",
+      "edits": [
+        {
+          "file": "src/frame-runtime/enhance-entry.ts",
+          "old": "goToHash, runEnhancementCommand })",
+          "new": "goToHash })"
+        }
+      ],
+      "tests": [
+        "test/enhance-frame-wire.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 4 passed (5)",
+      "failing": [
+        "the enhance entry registers exactly the five members, runEnhancementCommand among them"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/frame-runtime/enhance-entry.ts": "563fb837adb9efbfb8dce1e7165a23a9b58f39e572d1aea9aec936c890944c3e"
+      },
+      "sha256After": {
+        "src/frame-runtime/enhance-entry.ts": "563fb837adb9efbfb8dce1e7165a23a9b58f39e572d1aea9aec936c890944c3e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aa",
+      "guard": "no write or event after onProgress destroyed the instance",
+      "edits": [
+        {
+          "file": "src/enhance/scroll.ts",
+          "old": "          ctx.host.onProgress(Math.round(share * 1000) / 100000);\n          if (!ctx.live()) return;",
+          "new": "          ctx.host.onProgress(Math.round(share * 1000) / 100000);"
+        }
+      ],
+      "tests": [
+        "test/enhance-scroll.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 41 passed (42)",
+      "failing": [
+        "a destroy requested inside onProgress ends the frame there: no heading rect is read afterwards"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "sha256After": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ab",
+      "guard": "a command during startup answers false (the phase guard)",
+      "edits": [
+        {
+          "file": "src/enhance/lifecycle.ts",
+          "old": "inst.phase !== 'active' || ctx === null) return false;\n  return operate",
+          "new": "ctx === null) return false;\n  return operate"
+        }
+      ],
+      "tests": [
+        "test/enhance-plans.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 41 passed (42)",
+      "failing": [
+        "a command called from a feature build, before the instance is active, answers false and changes nothing"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "sha256After": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ac",
+      "guard": "a root that is no element (isElement guard)",
+      "edits": [
+        {
+          "file": "src/enhance/lifecycle.ts",
+          "old": "if (!isElement(root) || typeof name !== 'string') return false;",
+          "new": "if (typeof name !== 'string') return false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 0,
+      "red": "39 passed (39)",
+      "failing": [],
+      "verdict": "green (possible equivalent mutant)",
+      "sha256": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "sha256After": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ad",
+      "guard": "a name that is no string (lifecycle guard)",
+      "edits": [
+        {
+          "file": "src/enhance/lifecycle.ts",
+          "old": "if (!isElement(root) || typeof name !== 'string') return false;",
+          "new": "if (!isElement(root)) return false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 0,
+      "red": "39 passed (39)",
+      "failing": [],
+      "verdict": "green (possible equivalent mutant)",
+      "sha256": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "sha256After": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ae",
+      "guard": "a destroyed or destroying root (ctx and operate guards)",
+      "edits": [
+        {
+          "file": "src/enhance/lifecycle.ts",
+          "old": "  return operate(inst, () => ctx.commands.run(name)) === true;",
+          "new": "  return ctx.commands.run(name);"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 0,
+      "red": "39 passed (39)",
+      "failing": [],
+      "verdict": "green (possible equivalent mutant)",
+      "sha256": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "sha256After": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6af",
+      "guard": "progress computed only with the bar or onProgress",
+      "edits": [
+        {
+          "file": "src/enhance/scroll.ts",
+          "old": "    if (slots !== null || reportsProgress) {",
+          "new": "    if (true as boolean) {"
+        }
+      ],
+      "tests": [
+        "test/enhance-scroll.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 40 passed (42)",
+      "failing": [
+        "spy events come without the bar too (chrome.bar false), and no bar rect is read",
+        "with neither the bar nor onProgress, no progress is computed: the root's rect is never read"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "sha256After": {
+        "src/enhance/scroll.ts": "23faa39683d213601d561cc1abf2aefb11a0ac8f84664a945c59f75fd3d4e87b"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ag",
+      "guard": "no contents command with chrome.rail false",
+      "edits": [
+        {
+          "file": "src/enhance/rail.ts",
+          "old": "if (!ctx.info.isDocument || !ctx.options.chrome.rail) return;",
+          "new": "if (!ctx.info.isDocument) return;"
+        }
+      ],
+      "tests": [
+        "test/enhance-rail.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 19 passed (20)",
+      "failing": [
+        "B6.3: with chrome.rail false the contents command answers false and the drawer stays shut"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/rail.ts": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619"
+      },
+      "sha256After": {
+        "src/enhance/rail.ts": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ah",
+      "guard": "no outline command on a document that is no plan",
+      "edits": [
+        {
+          "file": "src/enhance/plans.ts",
+          "old": "  if (!outlineable) return;\n",
+          "new": "  if (!outlineable) {\n    ctx.commands.register('outline', () => undefined);\n    return;\n  }\n"
+        }
+      ],
+      "tests": [
+        "test/enhance-plans.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 41 passed (42)",
+      "failing": [
+        "B6.3: a document that is no plan has no outline command"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/plans.ts": "47de9edb6a99316635c1e96a16bdb95e42f01b5eab3a5eeca228c2698ef8f8d6"
+      },
+      "sha256After": {
+        "src/enhance/plans.ts": "47de9edb6a99316635c1e96a16bdb95e42f01b5eab3a5eeca228c2698ef8f8d6"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ai",
+      "guard": "no jump command on a document with too few entries",
+      "edits": [
+        {
+          "file": "src/enhance/jump.ts",
+          "old": "  if (entries.length <= MIN_ENTRIES) return;",
+          "new": "  if (entries.length <= MIN_ENTRIES) {\n    ctx.commands.register('jump', () => true);\n    return;\n  }"
+        }
+      ],
+      "tests": [
+        "test/enhance-jump.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 56 passed (57)",
+      "failing": [
+        "B6.3: the jump command answers false for a root with too few entries to jump over"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/jump.ts": "280b630bb83c2561ac2c74a5ad38adbf475c99574adea8832b1d64260fdcd908"
+      },
+      "sha256After": {
+        "src/enhance/jump.ts": "280b630bb83c2561ac2c74a5ad38adbf475c99574adea8832b1d64260fdcd908"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```
+
+## Fix round 2 (ledger C108): rows B6aj to B6an, and re-measured rows
+
+The fix round's flag was reworked (re-review N1, N2): the flag is set only by the outside pointerdown (seen in the capture phase), and cleared by the gesture's click, by a key's click (detail 0), by pointercancel and by the next press; a focusout closes without setting it. B6a, B6ae, B6r, B6s and B6t are measured again on this tree: B6a because its test now asserts the Aa button with `expect` (red through assertions; the helper's throw is no longer the reason); B6ae because it is NOT an equivalent mutant: `operate` defers a destroy that host code requests during the command (a document `focusin` listener, fired by the menu's focus), and the new case sees the teardown had not run mid-command (red). B6am was first measured green (its case ended with the menu closed whether or not the press was seen) and got a case that looks at the menu after the pointerdown alone (red). B6an is the mutant the re-review asked for (a focusout naming no element, with the document focused, no longer closes the menu).
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6a | Aa without the bar | `src/enhance/settings.ts` | `  if (!ctx.options.chrome.settings) return;` → `  if (!ctx.options.chrome.settings \|\| ctx.slots === null) return;` | `test/enhance-settings.test.ts`: 12 failed \| 32 passed (44) |
+| B6ae | a destroyed or destroying root (ctx and operate guards) | `src/enhance/lifecycle.ts` | `  return operate(inst, () => ctx.commands.run(name)) === true;` → `  return ctx.commands.run(name);` | `test/enhance-settings.test.ts`: 1 failed \| 43 passed (44) |
+| B6r | the same gesture's command leaves a menu closed by an outside press closed | `src/enhance/settings.ts` | `    if (closedByOutside) {` → `    if (false as boolean) {` | `test/enhance-settings.test.ts`: 2 failed \| 42 passed (44) |
+| B6s | focus leaving the document does not close the menu | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎ ` → `(removed)` | `test/enhance-settings.test.ts`: 1 failed \| 43 passed (44) |
+| B6t | the flag is cleared after the gesture's click | `src/enhance/settings.ts` | `ctx.journal.listen(doc, 'click', () => { ⏎     closedByOutside = false;` → `ctx.journal.listen(doc, 'click', () => { ⏎     void 0;` | `test/enhance-settings.test.ts`: 2 failed \| 42 passed (44) |
+| B6aj | Tabbing out of the menu sets no flag | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎     close();` → `    if (to === null && !doc.hasFocus()) return; ⏎     closedByOutside = true; ⏎     close();` | `test/enhance-settings.test.ts`: 2 failed \| 42 passed (44) |
+| B6ak | a cancelled press clears the flag | `src/enhance/settings.ts` | `ctx.journal.listen(doc, 'pointercancel', () => { ⏎     closedByOutside = false;` → `ctx.journal.listen(doc, 'pointercancel', () => { ⏎     void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 43 passed (44) |
+| B6al | a key's click (detail 0) clears the flag before the host's handler | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0) closedByOutside = false;` → `void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 43 passed (44) |
+| B6am | the outside pointerdown is seen in the capture phase | `src/enhance/settings.ts` | `  }, { capture: true }); ⏎   ctx.journal.listen(doc, 'pointercancel'` → `  }); ⏎   ctx.journal.listen(doc, 'pointercancel'` | `test/enhance-settings.test.ts`: 1 failed \| 43 passed (44) |
+| B6an | a focusout naming no element while the document has focus closes the menu (hasFocus check dropped) | `src/enhance/settings.ts` | `if (to === null && !doc.hasFocus()) return;` → `if (to === null) return;` | `test/enhance-settings.test.ts`: 1 failed \| 43 passed (44) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "4de886f995a9f3efa019419cd9ad905386db68dca5ed495149b88e91ab96c5a7",
+    "src/frame/manifest.generated.ts": "51f7112a1474a2cc04a710c6cf467a40a3209cac4670aca06961cf2494b89134",
+    "assets/frame/bootstrap.js": "2792621f7d625f289f6caf5e7b8c6dce96a0b50c110d00d52c75dbda0b727db3",
+    "assets/frame/enhance.js": "0d7d257f7803669f9812d1e0422f093a2cd087d564b7df5731e5781ff2edf320",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6a",
+      "guard": "Aa without the bar",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  if (!ctx.options.chrome.settings) return;",
+          "new": "  if (!ctx.options.chrome.settings || ctx.slots === null) return;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "12 failed | 32 passed (44)",
+      "failing": [
+        "B6.1: with the bar off, Aa is built on the root, and the settings command opens then closes it; Escape closes ",
+        "B6.3: chrome.settings false answers false and builds nothing; an unknown name or root answers false",
+        "a button outside the root: the first press opens, the second closes, a third opens again",
+        "the swallowed half does not outlive its gesture: a later command opens it",
+        "focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu ope",
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a",
+        "N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it",
+        "N1: a press that is cancelled (a touch that became a scroll) leaves no flag",
+        "N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first",
+        "the pointerdown is seen even when the host stops it on its button",
+        "settings answers false and changes nothing while the drawer is open; closing its own still works",
+        "a destroy requested by a host listener while the command runs waits for the command to return"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ae",
+      "guard": "a destroyed or destroying root (ctx and operate guards)",
+      "edits": [
+        {
+          "file": "src/enhance/lifecycle.ts",
+          "old": "  return operate(inst, () => ctx.commands.run(name)) === true;",
+          "new": "  return ctx.commands.run(name);"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 43 passed (44)",
+      "failing": [
+        "a destroy requested by a host listener while the command runs waits for the command to return"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "sha256After": {
+        "src/enhance/lifecycle.ts": "ea5a7413a7c8a22e1fdde5deac0d540a298c3398965a6916d8460ea19e0af0ef"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6r",
+      "guard": "the same gesture's command leaves a menu closed by an outside press closed",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (closedByOutside) {",
+          "new": "    if (false as boolean) {"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 42 passed (44)",
+      "failing": [
+        "a button outside the root: the first press opens, the second closes, a third opens again",
+        "the pointerdown is seen even when the host stops it on its button"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6s",
+      "guard": "focus leaving the document does not close the menu",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n",
+          "new": ""
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 43 passed (44)",
+      "failing": [
+        "focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu ope"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6t",
+      "guard": "the flag is cleared after the gesture's click",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "ctx.journal.listen(doc, 'click', () => {\n    closedByOutside = false;",
+          "new": "ctx.journal.listen(doc, 'click', () => {\n    void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 42 passed (44)",
+      "failing": [
+        "the swallowed half does not outlive its gesture: a later command opens it",
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aj",
+      "guard": "Tabbing out of the menu sets no flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n    close();",
+          "new": "    if (to === null && !doc.hasFocus()) return;\n    closedByOutside = true;\n    close();"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 42 passed (44)",
+      "failing": [
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a",
+        "N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ak",
+      "guard": "a cancelled press clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "ctx.journal.listen(doc, 'pointercancel', () => {\n    closedByOutside = false;",
+          "new": "ctx.journal.listen(doc, 'pointercancel', () => {\n    void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 43 passed (44)",
+      "failing": [
+        "N1: a press that is cancelled (a touch that became a scroll) leaves no flag"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6al",
+      "guard": "a key's click (detail 0) clears the flag before the host's handler",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if ((event as MouseEvent).detail === 0) closedByOutside = false;",
+          "new": "void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 43 passed (44)",
+      "failing": [
+        "N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6am",
+      "guard": "the outside pointerdown is seen in the capture phase",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  }, { capture: true });\n  ctx.journal.listen(doc, 'pointercancel'",
+          "new": "  });\n  ctx.journal.listen(doc, 'pointercancel'"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 43 passed (44)",
+      "failing": [
+        "the pointerdown is seen even when the host stops it on its button"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6an",
+      "guard": "a focusout naming no element while the document has focus closes the menu (hasFocus check dropped)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if (to === null && !doc.hasFocus()) return;",
+          "new": "if (to === null) return;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 43 passed (44)",
+      "failing": [
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "84610dfdf6ad2229d99f6d8fe6a92c3a15e4a50e5b4706f4fdf9dcd0147b9f27"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```
+
+## Fix round 3 (ledger C108): the settings' document listeners only while they have work
+
+The outside-press listener is now added when the menu opens and removed by every close path and at teardown, the way the pin's listeners are (nav.ts): an instance with a closed menu adds no document pointerdown listener, which the navigation and services cases count. The gesture's listeners (the click in capture and in bubble, pointercancel) are added only when an outside press sets the flag, and removed when it clears or at teardown. Rows B6r, B6s, B6t, B6aj, B6ak, B6al, B6am and B6an are measured again on this code (their edits follow the new text); B6ao to B6ar and B6aq2 are new, and every row of the round is red through assertions. The rows were first measured against a baseline in which the new listener-count case itself failed (a wrong expected count in its last line), so every row was measured again after that was fixed; the rows here are those second measurements. B6aq (the teardown defer no longer stops the outside-press listener) is not equivalent: the overlay's own teardown defer cannot close the menu, because the registry answers false once the instance is not live.
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6ao | a closed menu adds no document pointerdown listener | `src/enhance/settings.ts` | `  let stopOutside: (() => void) \| null = null;` → `  let stopOutside: (() => void) \| null = onDoc('pointerdown', () => undefined, true);` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6ap | every close removes the outside-press listener | `src/enhance/settings.ts` | `    menu.hidden = true; ⏎     stopListening();` → `    menu.hidden = true;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6aq | a destroy with the menu open removes the outside-press listener | `src/enhance/settings.ts` | `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎     clearFlag(); ⏎   });` → `  ctx.journal.defer(() => { ⏎     clearFlag(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6aq2 | a destroy while the gesture's listeners are on removes them | `src/enhance/settings.ts` | `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎     clearFlag(); ⏎   });` → `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6ar | the gesture's listeners go when the flag is cleared | `src/enhance/settings.ts` | `    closedByOutside = false; ⏎     stopGesture?.(); ⏎     stopGesture = null;` → `    closedByOutside = false;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6r | the same gesture's command leaves a menu closed by an outside press closed | `src/enhance/settings.ts` | `    if (closedByOutside) {` → `    if (false as boolean) {` | `test/enhance-settings.test.ts`: 2 failed \| 44 passed (46) |
+| B6s | focus leaving the document does not close the menu | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎ ` → `(removed)` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6t | the gesture's bubbling click clears the flag | `src/enhance/settings.ts` | `onDoc('click', clearFlag, false),` → `onDoc('click', () => undefined, false),` | `test/enhance-settings.test.ts`: 3 failed \| 43 passed (46) |
+| B6aj | Tabbing out of the menu sets no flag | `src/enhance/settings.ts` | `    if (to === null && !doc.hasFocus()) return; ⏎     close();` → `    if (to === null && !doc.hasFocus()) return; ⏎     setFlag(); ⏎     close();` | `test/enhance-settings.test.ts`: 2 failed \| 44 passed (46) |
+| B6ak | a cancelled press clears the flag | `src/enhance/settings.ts` | `onDoc('pointercancel', clearFlag, false),` → `onDoc('pointercancel', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6al | a key's click (detail 0) clears the flag before the host's handler | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0) clearFlag();` → `void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6am | the outside pointerdown is seen in the capture phase | `src/enhance/settings.ts` | `    }, true); ⏎     button.setAttribute('aria-expanded', 'true');` → `    }, false); ⏎     button.setAttribute('aria-expanded', 'true');` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+| B6an | a focusout naming no element while the document has focus closes the menu (hasFocus check dropped) | `src/enhance/settings.ts` | `if (to === null && !doc.hasFocus()) return;` → `if (to === null) return;` | `test/enhance-settings.test.ts`: 1 failed \| 45 passed (46) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "405bf5c18bc6443a4bcc12ef32f3f7900bb9ddf34be633182f211f89777c2fd8",
+    "src/frame/manifest.generated.ts": "af2bdc57469699fb80448e71f38d241cb6b7f855bbaf49061539734544077f52",
+    "assets/frame/bootstrap.js": "99d7acf5267291edaf3f210168580362dbb799434f4bcbb268462b41f30cfb5e",
+    "assets/frame/enhance.js": "fc34703da82c0222c2679935defadc76d0aab72ccbbe79ee9ade558998fb86a4",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6ao",
+      "guard": "a closed menu adds no document pointerdown listener",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  let stopOutside: (() => void) | null = null;",
+          "new": "  let stopOutside: (() => void) | null = onDoc('pointerdown', () => undefined, true);"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ap",
+      "guard": "every close removes the outside-press listener",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    menu.hidden = true;\n    stopListening();",
+          "new": "    menu.hidden = true;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aq",
+      "guard": "a destroy with the menu open removes the outside-press listener",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.journal.defer(() => {\n    stopListening();\n    clearFlag();\n  });",
+          "new": "  ctx.journal.defer(() => {\n    clearFlag();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aq2",
+      "guard": "a destroy while the gesture's listeners are on removes them",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.journal.defer(() => {\n    stopListening();\n    clearFlag();\n  });",
+          "new": "  ctx.journal.defer(() => {\n    stopListening();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "the gesture's click and pointercancel listeners are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ar",
+      "guard": "the gesture's listeners go when the flag is cleared",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    closedByOutside = false;\n    stopGesture?.();\n    stopGesture = null;",
+          "new": "    closedByOutside = false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "the gesture's click and pointercancel listeners are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6r",
+      "guard": "the same gesture's command leaves a menu closed by an outside press closed",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (closedByOutside) {",
+          "new": "    if (false as boolean) {"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 44 passed (46)",
+      "failing": [
+        "a button outside the root: the first press opens, the second closes, a third opens again",
+        "the pointerdown is seen even when the host stops it on its button"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6s",
+      "guard": "focus leaving the document does not close the menu",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n",
+          "new": ""
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "focus leaving the document (a focusout naming no element while the document has lost focus) keeps the menu ope"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6t",
+      "guard": "the gesture's bubbling click clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('click', clearFlag, false),",
+          "new": "onDoc('click', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "3 failed | 43 passed (46)",
+      "failing": [
+        "the swallowed half does not outlive its gesture: a later command opens it",
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a",
+        "the gesture's click and pointercancel listeners are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aj",
+      "guard": "Tabbing out of the menu sets no flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (to === null && !doc.hasFocus()) return;\n    close();",
+          "new": "    if (to === null && !doc.hasFocus()) return;\n    setFlag();\n    close();"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 44 passed (46)",
+      "failing": [
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a",
+        "N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ak",
+      "guard": "a cancelled press clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('pointercancel', clearFlag, false),",
+          "new": "onDoc('pointercancel', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "N1: a press that is cancelled (a touch that became a scroll) leaves no flag"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6al",
+      "guard": "a key's click (detail 0) clears the flag before the host's handler",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if ((event as MouseEvent).detail === 0) clearFlag();",
+          "new": "void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6am",
+      "guard": "the outside pointerdown is seen in the capture phase",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    }, true);\n    button.setAttribute('aria-expanded', 'true');",
+          "new": "    }, false);\n    button.setAttribute('aria-expanded', 'true');"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "the pointerdown is seen even when the host stops it on its button"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6an",
+      "guard": "a focusout naming no element while the document has focus closes the menu (hasFocus check dropped)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if (to === null && !doc.hasFocus()) return;",
+          "new": "if (to === null) return;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 45 passed (46)",
+      "failing": [
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press a"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "6a436184376f678eed56f23a2a316f4f8c799f7fffdaf335a767ebd78b9fc5ce"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```
+
+## Fix round 4 (ledger C108): a stale outside-press flag clears on the next press
+
+An outside press that sends neither a click nor a pointercancel (a right-click, a release outside the window) used to leave the flag set, and no pointerdown listener existed while the menu was closed to clear it. The gesture's listeners, which exist only while the flag is set, now include a capture-phase pointerdown, an auxclick and a contextmenu clear (six listeners in all), so a closed menu with no flag still adds no document listener. Rows B6as, B6at and B6au (one per new clear) and B6av (the gesture's listeners added with no flag) are new and red; B6t, B6ak, B6al, B6aq2 and B6ar are measured again on this code. The count cases moved from 3 to 6 gesture listeners. (This section was written after the fact, from the round's logs and results; the generated-output hashes are those of the round-4 commit.)
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6as | the next press clears a stale flag | `src/enhance/settings.ts` | `onDoc('pointerdown', clearFlag, true),` → `onDoc('pointerdown', () => undefined, true),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6at | an auxclick clears the flag | `src/enhance/settings.ts` | `onDoc('auxclick', clearFlag, false),` → `onDoc('auxclick', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6au | a contextmenu clears the flag | `src/enhance/settings.ts` | `onDoc('contextmenu', clearFlag, false),` → `onDoc('contextmenu', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6av | the gesture's listeners are added only with the flag | `src/enhance/settings.ts` | `  let closedByOutside = false; ⏎   let stopOutside` → `  let closedByOutside = false; ⏎   onDoc('pointerdown', () => undefined, true); ⏎   let stopOutside` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+| B6t | the gesture's bubbling click clears the flag | `src/enhance/settings.ts` | `onDoc('click', clearFlag, false),` → `onDoc('click', () => undefined, false),` | `test/enhance-settings.test.ts`: 4 failed \| 47 passed (51) |
+| B6ak | a cancelled press clears the flag | `src/enhance/settings.ts` | `onDoc('pointercancel', clearFlag, false),` → `onDoc('pointercancel', () => undefined, false),` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6al | a key's click (detail 0) clears the flag before the host's handler | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0) clearFlag();` → `void 0;` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6aq2 | a destroy while the gesture's listeners are on removes them | `src/enhance/settings.ts` | `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎     clearFlag(); ⏎   });` → `  ctx.journal.defer(() => { ⏎     stopListening(); ⏎   });` | `test/enhance-settings.test.ts`: 1 failed \| 50 passed (51) |
+| B6ar | the gesture's listeners go when the flag is cleared | `src/enhance/settings.ts` | `    closedByOutside = false; ⏎     stopGesture?.(); ⏎     stopGesture = null;` → `    closedByOutside = false;` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "da9123c2b4bcd5cc86f179adad13bfda9096fb4f65b9edd0a64fa14000f40bde",
+    "src/frame/manifest.generated.ts": "3068ff9749c29f90b3c59208b60ad80c67d0210f6bc1f07f4da7b42e89a4b7f5",
+    "assets/frame/bootstrap.js": "dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424",
+    "assets/frame/enhance.js": "3b2cadb728847f1c535dae80c899a4939606602e7ad0d95fcf04de2bf091e1d2",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6as",
+      "guard": "the next press clears a stale flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('pointerdown', clearFlag, true),",
+          "new": "onDoc('pointerdown', () => undefined, true),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "a press that sends nothing after it: the next press clears the flag before its click"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6at",
+      "guard": "an auxclick clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('auxclick', clearFlag, false),",
+          "new": "onDoc('auxclick', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "an auxclick ends the gesture too"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6au",
+      "guard": "a contextmenu clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('contextmenu', clearFlag, false),",
+          "new": "onDoc('contextmenu', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "a contextmenu ends the gesture too"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6av",
+      "guard": "the gesture's listeners are added only with the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  let closedByOutside = false;\n  let stopOutside",
+          "new": "  let closedByOutside = false;\n  onDoc('pointerdown', () => undefined, true);\n  let stopOutside"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does",
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6t",
+      "guard": "the gesture's bubbling click clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('click', clearFlag, false),",
+          "new": "onDoc('click', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "4 failed | 47 passed (51)",
+      "failing": [
+        "the swallowed half does not outlive its gesture: a later command opens it",
+        "focus moving to another element, a focusout naming no element while the document has focus, an outside press and Escape still close it",
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does",
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ak",
+      "guard": "a cancelled press clears the flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "onDoc('pointercancel', clearFlag, false),",
+          "new": "onDoc('pointercancel', () => undefined, false),"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "N1: a press that is cancelled (a touch that became a scroll) leaves no flag"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6al",
+      "guard": "a key's click (detail 0) clears the flag before the host's handler",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "if ((event as MouseEvent).detail === 0) clearFlag();",
+          "new": "void 0;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aq2",
+      "guard": "a destroy while the gesture's listeners are on removes them",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "  ctx.journal.defer(() => {\n    stopListening();\n    clearFlag();\n  });",
+          "new": "  ctx.journal.defer(() => {\n    stopListening();\n  });"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "1 failed | 50 passed (51)",
+      "failing": [
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6ar",
+      "guard": "the gesture's listeners go when the flag is cleared",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    closedByOutside = false;\n    stopGesture?.();\n    stopGesture = null;",
+          "new": "    closedByOutside = false;"
+        }
+      ],
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does",
+        "the gesture's listeners (click, pointercancel, pointerdown, auxclick, contextmenu) are added by an outside close and gone once the gesture ends"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "7fd6cc91c8332eb1722a29996a8a3342927beaaba877417d78e4206eaad0d976"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```
+
+
+## Fix round 5 (ledger C108, ruling T6-j): focusout closes only for focus moving within the document
+
+Ruling T6-j replaces the `document.hasFocus()` exception of T6-c: a `focusout` whose `relatedTarget` is null never closes the menu (the focus left the document, or went to no element), and a `focusout` closes it only when the focus moves to another element of the same document outside the menu. On Chromium the document still reports the focus while the menu's `focusout` runs as a parent's button takes it, which is why the T6-c rule let the menu close at the mousedown and the click's command open it again (Task 8's row B8.1b). The outside press (with its same-gesture flag), Escape and the command still close the menu. B6s, B6aj and B6an are measured again on the new code (their edits follow the new text; B6an now restores the T6-c exception, the defect itself, rather than dropping it); B6aw is new: B6s's edit, measured through a rebuild and B8.1b as well as in jsdom. B6an and B6aw mutate a build input: the frame was rebuilt with the mutant, the generated outputs were saved before and restored from the saved bytes after, and `--check` ran after each restore. Every row is red through assertions, B6an and B6aw both in jsdom and through B8.1b on Chromium. The round 4 fix (the gesture's six listeners) is unchanged by this round.
+
+| Row | Guard | File | Change | Red |
+|---|---|---|---|---|
+| B6s | a focusout naming no element does not close the menu | `src/enhance/settings.ts` | `    if (menu.hidden \|\| to === null \|\| contains(wrap, to)) return;` → `    if (menu.hidden \|\| contains(wrap, to)) return;` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+| B6aj | Tabbing out of the menu sets no flag | `src/enhance/settings.ts` | `contains(wrap, to)) return; ⏎     close();` → `contains(wrap, to)) return; ⏎     setFlag(); ⏎     close();` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51) |
+| B6an | a focusout naming no element while the document still has focus keeps the menu open (the hasFocus exception of T6-c restored) | `src/enhance/settings.ts` | `to === null \|\|` → `(to === null && !doc.hasFocus()) \|\|` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51); `test/browser/frame-one-bar.test.ts` (Chromium, after a rebuild): 1 failed \| 5 passed \| 6 skipped (12) |
+| B6aw | a null relatedTarget closes the menu again (T6-j undone) | `src/enhance/settings.ts` | `    if (menu.hidden \|\| to === null \|\| contains(wrap, to)) return;` → `    if (menu.hidden \|\| contains(wrap, to)) return;` | `test/enhance-settings.test.ts`: 2 failed \| 49 passed (51); `test/browser/frame-one-bar.test.ts` (Chromium, after a rebuild): 1 failed \| 5 passed \| 6 skipped (12) |
+
+```json
+{
+  "generatedOutputs": {
+    "assets/assets.json": "a7e8c2cb2badb961c01e3cf307cae0ca759954c44007182176207ebda55869d3",
+    "src/frame/manifest.generated.ts": "24b9188cec59053a5780e345ceff1b58fc3d9e68501a74d1090dccddc2325938",
+    "assets/frame/bootstrap.js": "dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424",
+    "assets/frame/enhance.js": "daa25c84fd193dc9c8a734e6ab5705bba5d6a29fc5be73d29ed478249a9ffa7f",
+    "assets/frame/guard.js": "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d",
+    "assets/frame/reader.css": "83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f"
+  },
+  "rows": [
+    {
+      "id": "B6s",
+      "guard": "a focusout naming no element does not close the menu",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (menu.hidden || to === null || contains(wrap, to)) return;\n",
+          "new": "    if (menu.hidden || contains(wrap, to)) return;\n"
+        }
+      ],
+      "rebuild": false,
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aj",
+      "guard": "Tabbing out of the menu sets no flag",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "contains(wrap, to)) return;\n    close();",
+          "new": "contains(wrap, to)) return;\n    setFlag();\n    close();"
+        }
+      ],
+      "rebuild": false,
+      "tests": [
+        "test/enhance-settings.test.ts"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51)",
+      "failing": [
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it",
+        "N1: Tabbing out of the menu leaves no flag: the next command, from the keyboard, opens it"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6an",
+      "guard": "a focusout naming no element while the document still has focus keeps the menu open (the hasFocus exception of T6-c restored)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "to === null ||",
+          "new": "(to === null && !doc.hasFocus()) ||"
+        }
+      ],
+      "rebuild": true,
+      "tests": [
+        "test/enhance-settings.test.ts",
+        "test/browser/frame-one-bar.test.ts (DOCREADER_BROWSERS=chromium)"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51); 1 failed | 5 passed | 6 skipped (12)",
+      "failing": [
+        "T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it",
+        "B8.1b: the host button's second press closes the menu although its mousedown took the focus out of the frame"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    },
+    {
+      "id": "B6aw",
+      "guard": "a null relatedTarget closes the menu again (T6-j undone)",
+      "edits": [
+        {
+          "file": "src/enhance/settings.ts",
+          "old": "    if (menu.hidden || to === null || contains(wrap, to)) return;\n",
+          "new": "    if (menu.hidden || contains(wrap, to)) return;\n"
+        }
+      ],
+      "rebuild": true,
+      "tests": [
+        "test/enhance-settings.test.ts",
+        "test/browser/frame-one-bar.test.ts (DOCREADER_BROWSERS=chromium)"
+      ],
+      "rc": 1,
+      "red": "2 failed | 49 passed (51); 1 failed | 5 passed | 6 skipped (12)",
+      "failing": [
+        "T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+        "T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it",
+        "B8.1b: the host button's second press closes the menu although its mousedown took the focus out of the frame"
+      ],
+      "verdict": "red",
+      "sha256": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "sha256After": {
+        "src/enhance/settings.ts": "3477bd2bc86826c828178cb2ed5b28f19fa9e70f4effdc7c620ed19739025d5e"
+      },
+      "restored": true,
+      "generatedOutputsUnchanged": true,
+      "checkAfterRestore": 0
+    }
+  ]
+}
+```
+
+## Fix round FR1: a tap that ends inside the reader leaves no flag (finding F2)
+
+Fix round FR1, item F2 (the review's finding F2, the coordinator's ruling): a host command acts on the menu's present state, never on a flag left by a gesture whose click never arrived. The failing path: Aa open on a touch device, a tap on a card trigger fires the outside pointerdown (flag set, menu closed), the cards stop that tap's click in the root's capture phase, so the bubbling clear never ran, and the host's next `command('settings')` consumed the flag and left the menu closed. The fix: the gesture's capture-phase click listener on the document (which runs before the root's capture listeners) also clears the flag for a click whose target is inside the reader's root, and keeps it for a click outside the root (the one-document host's own button, whose handler runs the command in the same gesture). Listener count and phases are unchanged, so the pins of `test/enhance-nav.test.ts` and `test/enhance-services.test.ts` did not move (both files pass unchanged). Measured on the fixed tree.
+
+Red before the fix: the two new cases of `test/enhance-settings.test.ts` ("a host command acts on the menu's present state ...") failed (`expected true to be false`: the menu stayed closed after the command); the third (a click outside the root keeps the flag) is the control and passed before and after. Green after: `test/enhance-settings.test.ts`, `test/enhance-nav.test.ts`, `test/enhance-services.test.ts` and `test/enhance-rail.test.ts`: 222 passed.
+
+Method as in the first section of this file: bytes saved with the sha256 of the fixed file, one edit, a bounded run behind a `ulimit -u` of the measured thread count plus 1500 (2313 to 2439 threads, limits 3813 to 3939), the file restored by `cp` and its sha256 compared. The rows edit a source that feeds the frame build, but the unit tests read sources, so no build ran for them.
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B6az | a click inside the root ends the gesture (FR1, F2) | `src/enhance/settings.ts` | `if ((event as MouseEvent).detail === 0 \|\| contains(ctx.root, event.target)) clearFlag();` -> `if ((event as MouseEvent).detail === 0) clearFlag();` in the gesture's capture-phase click listener | test/enhance-settings.test.ts: 2 failed \| 52 passed (54). test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6ba | the clear is made in the capture phase, before the root's own capture listeners | `src/enhance/settings.ts` | the gesture's first click listener registered for the bubble phase (`}, true),` -> `}, false),`) | test/enhance-settings.test.ts: 3 failed \| 51 passed (54). test/enhance-settings.test.ts: N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first; test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6bb | a click outside the root keeps the flag for the host's command | `src/enhance/settings.ts` | `\|\| contains(ctx.root, event.target)) clearFlag();` -> `\|\| !contains(ctx.root, event.target)) clearFlag();` (the clear made for an outside click instead of an inside one) | test/enhance-settings.test.ts: 6 failed \| 48 passed (54). test/enhance-settings.test.ts: a button outside the root: the first press opens, the second closes, a third opens again; test/enhance-settings.test.ts: the pointerdown is seen even when the host stops it on its button; test/enhance-settings.test.ts: the same-gesture toggle still closes; test/enhance-settings.test.ts: a click outside the root, the host button's, keeps the flag for its command: the same gesture still closes; test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu; test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+
+```json
+[
+  {
+    "id": "B6az",
+    "guard": "a click inside the root ends the gesture (FR1, F2)",
+    "file": "src/enhance/settings.ts",
+    "change": "`if ((event as MouseEvent).detail === 0 || contains(ctx.root, event.target)) clearFlag();` -> `if ((event as MouseEvent).detail === 0) clearFlag();` in the gesture's capture-phase click listener",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "2 failed | 52 passed (54)",
+    "failing": [
+      "test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu",
+      "test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  },
+  {
+    "id": "B6ba",
+    "guard": "the clear is made in the capture phase, before the root's own capture listeners",
+    "file": "src/enhance/settings.ts",
+    "change": "the gesture's first click listener registered for the bubble phase (`}, true),` -> `}, false),`)",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "3 failed | 51 passed (54)",
+    "failing": [
+      "test/enhance-settings.test.ts: N1: a key's click (detail 0) on the host's button after a press that sent no click clears the flag first",
+      "test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu",
+      "test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  },
+  {
+    "id": "B6bb",
+    "guard": "a click outside the root keeps the flag for the host's command",
+    "file": "src/enhance/settings.ts",
+    "change": "`|| contains(ctx.root, event.target)) clearFlag();` -> `|| !contains(ctx.root, event.target)) clearFlag();` (the clear made for an outside click instead of an inside one)",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "6 failed | 48 passed (54)",
+    "failing": [
+      "test/enhance-settings.test.ts: a button outside the root: the first press opens, the second closes, a third opens again",
+      "test/enhance-settings.test.ts: the pointerdown is seen even when the host stops it on its button",
+      "test/enhance-settings.test.ts: the same-gesture toggle still closes",
+      "test/enhance-settings.test.ts: a click outside the root, the host button's, keeps the flag for its command: the same gesture still closes",
+      "test/enhance-settings.test.ts: Aa open, a touch tap on a card trigger (the cards stop its click in the root), then the command opens the menu",
+      "test/enhance-settings.test.ts: the same after a tap on any other element of the root whose click is stopped there"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  }
+]
+```
+
+## Fix round FR1: a focusout naming no element no longer closes Aa, bar on (advisory A7)
+
+Fix round FR1, item A7 (the review's advisory A7): ruling T6-j changes bar-on hosts as well as bar-off ones. A `focusout` whose related target is null (the focus leaving the document, as when the window loses it or Tab leaves the last control) used to close Aa, and no longer does. T6-j is kept as ruled; the new case pins the changed behaviour on a root with the bar ON, where Aa sits in the bar's tray, with `document.hasFocus()` reading false and true. Aa's own button, and a focus moving to another element of the document, still close it. No source changed for this item, so no generated output moved; both rows run on the fixed tree of the first F2 commit.
+
+Both rows were measured, and the case is the only new test; it passes on the shipped tree (55 passed) and goes red under either edit. Method as above (2347 and 2479 threads, limits 3847 and 3979).
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B6ax | ruling T6-j: a focusout naming no element never closes Aa, with the bar on | `src/enhance/settings.ts` | `if (menu.hidden \|\| to === null \|\| contains(wrap, to)) return;` -> `if (menu.hidden \|\| contains(wrap, to)) return;` | test/enhance-settings.test.ts: 3 failed \| 52 passed (55). test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus; test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7); test/enhance-settings.test.ts: T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6ay | ruling T6-j: the old rule (close unless the document still has the focus) is not back | `src/enhance/settings.ts` | `to === null \|\|` -> `(to === null && doc.hasFocus()) \|\|` in the same condition | test/enhance-settings.test.ts: 2 failed \| 53 passed (55). test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus; test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7) | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+
+```json
+[
+  {
+    "id": "B6ax",
+    "guard": "ruling T6-j: a focusout naming no element never closes Aa, with the bar on",
+    "file": "src/enhance/settings.ts",
+    "change": "`if (menu.hidden || to === null || contains(wrap, to)) return;` -> `if (menu.hidden || contains(wrap, to)) return;`",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "3 failed | 52 passed (55)",
+    "failing": [
+      "test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+      "test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7)",
+      "test/enhance-settings.test.ts: T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  },
+  {
+    "id": "B6ay",
+    "guard": "ruling T6-j: the old rule (close unless the document still has the focus) is not back",
+    "file": "src/enhance/settings.ts",
+    "change": "`to === null ||` -> `(to === null && doc.hasFocus()) ||` in the same condition",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "2 failed | 53 passed (55)",
+    "failing": [
+      "test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+      "test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  }
+]
+```
+
+## Fix round FR1 (evidence half): the toggle rows re-recorded against the final text (review 1480, F4)
+
+B6b and B6k above mutate `if (drawerOpen) close(); else open();` and `if (menu.hidden) show(); else close();`, text that only the first round had: fix round 1 rewrote both handlers, and no later round measured them again, so those two rows name edits that cannot be applied to the tree. Their guard is the close branch of each command; B6b2 and B6k2 measure it on the final text, and B6c2 adds the row that the jump command's close branch had none of. Each was measured at the tip of the behaviour half of fix round FR1, in place, one at a time, with the same method as above (the bytes and sha256 of the file saved, `ulimit -u` at the measured thread count plus 1500, `timeout -k 10 600`, restore by byte copy, sha256 equal; no row edits a build input, so no generated output was touched).
+
+| Row | Guard | File | Change | Red | Restore sha256 |
+|---|---|---|---|---|---|
+| B6b2 | the `contents` command closes an open drawer (toggle) | `src/enhance/rail.ts` | the `close();` line of `if (drawerOpen) { close(); return true; }` in the command is removed | `test/enhance-rail.test.ts`: 1 failed \| 19 passed (20); B6.2 | b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619 |
+| B6k2 | the `settings` command closes an open menu (toggle) | `src/enhance/settings.ts` | the `close();` line of `if (!menu.hidden) { close(); return true; }` in the command is removed | `test/enhance-settings.test.ts`: 3 failed \| 52 passed (55); B6.1, T6-j and the listener-lifecycle case | ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930 |
+| B6c2 | the `jump` command closes an open dialog (toggle) | `src/enhance/jump.ts` | the `close();` line of `if (isOpen()) { close(); return true; }` in the command is removed | `test/enhance-jump.test.ts`: 1 failed \| 56 passed (57); B6.2 | 280b630bb83c2561ac2c74a5ad38adbf475c99574adea8832b1d64260fdcd908 |
+
+```json
+[
+  {"id": "B6b2", "guard": "the contents command closes an open drawer", "file": "src/enhance/rail.ts", "old": "    if (drawerOpen) {\n      close();\n      return true;\n    }\n    // Where the rail", "new": "    if (drawerOpen) {\n      return true;\n    }\n    // Where the rail", "tests": "test/enhance-rail.test.ts", "rc": 1, "red": "1 failed | 19 passed (20)", "failing": ["commands without the bar: contents (B6.2, B6.3) > B6.2: with the bar off, the contents command toggles the drawer; Escape closes it"], "assertionErrorsOnly": true, "sha256": "b174209d1564bafe5201ca194b55330b5e36d031bfb895548644561e39bac619", "restored": true},
+  {"id": "B6k2", "guard": "the settings command closes an open menu", "file": "src/enhance/settings.ts", "old": "    if (!menu.hidden) {\n      close();\n      return true;\n    }\n    if (ctx.overlays.any()) return false;\n    show();", "new": "    if (!menu.hidden) {\n      return true;\n    }\n    if (ctx.overlays.any()) return false;\n    show();", "tests": "test/enhance-settings.test.ts", "rc": 1, "red": "3 failed | 52 passed (55)", "failing": ["commands without the bar: settings (B6.1, B6.3) > B6.1: with the bar off, Aa is built on the root, and the settings command opens then closes it; Escape closes it", "a host's own button toggles the settings (T6-c) > T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus", "the settings' document listeners exist only while they have work (fix round 3) > a closed menu leaves no document pointerdown listener; an open one has one; every way of closing removes it, and a destroy does"], "assertionErrorsOnly": true, "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930", "restored": true},
+  {"id": "B6c2", "guard": "the jump command closes an open dialog", "file": "src/enhance/jump.ts", "old": "    if (isOpen()) {\n      close();\n      return true;\n    }\n    if (ctx.overlays.any()) return false;\n    openJump();", "new": "    if (isOpen()) {\n      return true;\n    }\n    if (ctx.overlays.any()) return false;\n    openJump();", "tests": "test/enhance-jump.test.ts", "rc": 1, "red": "1 failed | 56 passed (57)", "failing": ["the jump: keys and options > B6.2: with the bar off, the jump command opens then closes the dialog, and Escape closes it"], "assertionErrorsOnly": true, "sha256": "280b630bb83c2561ac2c74a5ad38adbf475c99574adea8832b1d64260fdcd908", "restored": true}
+]
+```

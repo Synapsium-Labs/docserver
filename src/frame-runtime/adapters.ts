@@ -12,8 +12,11 @@
 //             shows a failed copy
 //   changes   only a full sha (40 or 64 lower-case hex): anything shorter resolves null locally; else the outbox's slot
 //   openVersion  version: null keys omitted, full shas only (a short one sends nothing); {} back to the latest
+//   onProgress   progress: the share (0 to 1) as a string of thousandths, rounded and clamped to 0..1000; a value that is
+//                not a finite number sends nothing (batch 1.1, C108)
 //
-// Each callback but storage exists only when the seed's `bridge` allows its op (links, hash, copy, changes, versions),
+// Each callback but storage exists only when the seed's `bridge` allows its op (links, hash, copy, changes, versions,
+// progress),
 // so L2 builds no control whose op the parent does not answer.
 //
 // The storage key mapping (L2's scheme, src/enhance/state.ts; namespace `docreader`, storageKey and posKey `doc`):
@@ -23,11 +26,13 @@
 //   docreader:doc:doc:<name>    doc:<name>, <name> a DOC_FIELDS member other than pos
 //   anything else               dropped, never sent
 //
-// Mermaid (docserver L3, Task 16): enhanceMermaid() is enhance's `mermaid` option from the seed's (its caps when given,
-// its secure keys and its `draw`, passed through unchanged) with a load() that answers the registered API; and
-// waitsForDrawing() is the ready rule: ready waits for the first full pass only in 'auto' mode (FD13, FD18); and
-// probesInlineStyle() says when the bootstrap asks for inline style before ready instead: in 'on-request' mode, whose
-// first drawing comes after ready (styles.ts; fix round, review S1; Reference §11.5, ruling R7).
+// Mermaid (docserver L3, Task 16; C107): enhanceMermaid() is enhance's `mermaid` option from the seed's (its caps when
+// given, its secure keys and its `draw`, passed through unchanged) with the load() it is given; mermaidOption() says
+// which load: the registered API in the inline modes, the build that arrives over the port in 'after-ready' (always
+// passed there, even with nothing registered at boot); and waitsForDrawing() is the ready rule: ready waits for the first
+// full pass only in 'auto' mode (FD13, FD18); and probesInlineStyle() says when the bootstrap asks for inline style
+// before ready instead: in every other mode, whose first drawing comes after ready (styles.ts; fix round, review S1;
+// Reference §11.5, ruling R7).
 import { isFragmentId } from '../frame/fragment.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey } from '../frame/protocol.js';
 import type { Seed, SeedMermaid } from '../frame/seed.js';
@@ -91,6 +96,8 @@ export interface FrameAdapters {
   readonly copy?: (text: string) => Promise<void>;
   readonly changes?: (sha: string) => Promise<ChangesAnswer | null>;
   readonly openVersion?: (v: { readonly sha: string | null; readonly only: string | null }) => void;
+  /** Only when the seed's bridge asks for progress (its default is false): the share read so far, 0 to 1. */
+  readonly onProgress?: (share: number) => void;
   /** The guard's `docserver:link`: the same sink as onLink, dropped when links are off. */
   link(href: string): void;
 }
@@ -145,33 +152,94 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
           },
         }
       : {}),
+    ...(b.progress === true
+      ? {
+          onProgress: (share: number): void => {
+            if (typeof share !== 'number' || !Number.isFinite(share)) return;
+            outbox.send({ t: 'progress', p: String(Math.min(1000, Math.max(0, Math.round(share * 1000)))) });
+          },
+        }
+      : {}),
     link: navigate,
   };
 }
 
-/** enhance's `mermaid` option for a frame whose seed asks for Mermaid: the seed's settings, `draw` included, and the API. */
+/**
+ * enhance's `mermaid` option for a frame whose seed asks for Mermaid: the seed's settings, `draw` included, and the
+ * `load` it is given (the inline modes answer the registered API; 'after-ready' answers what arrives over the port).
+ */
 export function enhanceMermaid(
   m: SeedMermaid,
-  api: object,
+  load: () => Promise<unknown>,
 ): { maxTextSize?: number; maxEdges?: number; secure: readonly string[]; draw: SeedMermaid['draw']; load: () => Promise<unknown> } {
   return {
     ...(m.maxTextSize === undefined ? {} : { maxTextSize: m.maxTextSize }),
     ...(m.maxEdges === undefined ? {} : { maxEdges: m.maxEdges }),
     secure: m.secure,
     draw: m.draw,
-    load: () => Promise.resolve(api),
+    load,
   };
 }
 
-/** Whether ready waits for Mermaid's first full pass: only with Mermaid on in 'auto' mode; never on request (FD13). */
+/** Whether Mermaid's build comes after ready, over the port, instead of inline: only in 'after-ready' mode (C107). */
+export function arrivesLate(m: SeedMermaid | null): boolean {
+  return m !== null && m.draw === 'after-ready';
+}
+
+/**
+ * What the bootstrap adds to enhance's options for Mermaid. Mermaid off: nothing. An inline mode: the option, its load
+ * answering the registered API, and nothing at all when none registered. 'after-ready': always the option, whose load
+ * is `late` (pending until the build arrives), however little registered at boot: an option left out would make L2
+ * draw nothing and wait for nothing (C107).
+ */
+export function mermaidOption(
+  m: SeedMermaid | null,
+  registered: object | null,
+  late: () => Promise<unknown>,
+): { mermaid?: ReturnType<typeof enhanceMermaid> } {
+  if (m === null) return {};
+  if (arrivesLate(m)) return { mermaid: enhanceMermaid(m, late) };
+  return registered === null ? {} : { mermaid: enhanceMermaid(m, () => Promise.resolve(registered)) };
+}
+
+/** One `docserver:register` the late insertion's listener saw: the event's target, read through a captured accessor, and its detail when it was a plain object (else null). */
+export interface LateRegistration {
+  readonly target: unknown;
+  readonly detail: unknown;
+}
+
+/**
+ * The Mermaid API of a late insertion, or null (the figures then show L2's load note: a denial, never a substitution).
+ * Accepted only when EXACTLY ONE `docserver:register` arrived while the script was inserted, its target is the inserted
+ * element itself, it is Mermaid's (`name: 'mermaid'`), and its API carries `initialize` and `render` functions. Two
+ * registrations (one forged on the same element, say), none, a target that is anything else, another name (a replayed
+ * enhance script registers as `enhance`) or an API without both functions all answer null (BD4, BX-3; C107). Pure: the
+ * bootstrap's listener only records what it saw.
+ */
+export function lateApi(seen: readonly LateRegistration[], inserted: unknown): Record<string, unknown> | null {
+  const [only] = seen;
+  if (seen.length !== 1 || only === undefined) return null;
+  if (only.target !== inserted) return null;
+  const d = only.detail;
+  if (typeof d !== 'object' || d === null) return null;
+  const detail = d as Record<string, unknown>;
+  if (detail['name'] !== 'mermaid') return null;
+  const api = detail['api'];
+  if (typeof api !== 'object' || api === null) return null;
+  const m = api as Record<string, unknown>;
+  return typeof m['initialize'] === 'function' && typeof m['render'] === 'function' ? m : null;
+}
+
+/** Whether ready waits for Mermaid's first full pass: only with Mermaid on in 'auto' mode; never on request or after ready (FD13). */
 export function waitsForDrawing(m: SeedMermaid | null): boolean {
   return m !== null && m.draw === 'auto';
 }
 
 /**
- * Whether the bootstrap asks for inline style before ready (styles.ts): only with Mermaid on and drawn on request, where
- * Mermaid's own first request for it comes on a tap, after ready (fix round, review S1; ruling R7).
+ * Whether the bootstrap asks for inline style before ready (styles.ts): with Mermaid on in any mode but 'auto', where
+ * Mermaid's own first request for it comes after ready (on a tap, or when the build arrives), so no violation could end
+ * the boot then (fix round, review S1; ruling R7; C94(1), C107).
  */
 export function probesInlineStyle(m: SeedMermaid | null): boolean {
-  return m !== null && m.draw === 'on-request';
+  return m !== null && m.draw !== 'auto';
 }

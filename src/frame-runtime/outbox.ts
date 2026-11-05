@@ -20,7 +20,11 @@
 // refused when 4 copies went in the last 1000 ms, so a burst of other ops never delays one. Ops that are not copies go in order;
 // a store.set still waiting takes a newer value for its key in place. navigate and version are coalesced on the leading
 // edge: the first goes at once and opens a 250 ms window, and the latest of those asked for within it goes when it ends
-// (which opens the next). hash is coalesced over 100 ms: the latest id when the window that the first opened ends.
+// (which opens the next). progress is coalesced the same way over its own window (BRIDGE_LIMITS.progressWindowMs, 250
+// ms, batch 1.1): the first value at once, the window's latest at its end, so the final value always arrives, at most
+// four a second. A progress still waiting in the pacer's line takes the newer value in place (as store.set does for its
+// key), so at most one progress ever waits there and a navigate asked for later is never queued behind stale values
+// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends.
 //
 // The changes slot: one request in flight, one queued. A request is in flight from the instant it is posted; its
 // answer (answer(), matched by sha) or 35 s without one (frameChangesTimeoutMs, longer than the parent's own 30 s)
@@ -39,7 +43,7 @@ export interface OutboxClock {
 /** The limits the outbox paces by (BRIDGE_LIMITS). */
 export type OutboxLimits = Pick<
   typeof BRIDGE_LIMITS,
-  'frameWindowMs' | 'frameMaxPerWindow' | 'frameStoreSetMaxPerWindow' | 'frameCopyMaxPerWindow' | 'frameChangesTimeoutMs' | 'coalesceMs'
+  'frameWindowMs' | 'frameMaxPerWindow' | 'frameStoreSetMaxPerWindow' | 'frameCopyMaxPerWindow' | 'frameChangesTimeoutMs' | 'coalesceMs' | 'progressWindowMs'
 >;
 
 export interface OutboxOptions {
@@ -50,7 +54,7 @@ export interface OutboxOptions {
 }
 
 /** The ops send() takes; copy and changes have their own calls. */
-export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' }>;
+export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' }>;
 
 /** A changes answer as L2's `changes` callback resolves it (L2's readChangeSet reads it), or null. */
 export interface ChangesAnswer {
@@ -61,7 +65,7 @@ export interface ChangesAnswer {
 export type ChangesResult = Extract<ParentToFrame, { t: 'changes.result' }>;
 
 export interface Outbox {
-  /** store.set, navigate, version or hash: queued before open(), paced and coalesced after. */
+  /** store.set, navigate, version, hash or progress: queued before open(), paced and coalesced after. */
   send(op: QueuedOp): void;
   /** A copy: true when it was posted (or queued before open()), false when it is refused (its share is spent). */
   copy(text: string): boolean;
@@ -117,10 +121,13 @@ export function createOutbox(o: OutboxOptions): Outbox {
   let pacerTimer: unknown;
   let current: Request | null = null;
   let next: Request | null = null;
-  const lanes: Record<'navigate' | 'version', Lane> = {
+  const lanes: Record<'navigate' | 'version' | 'progress', Lane> = {
     navigate: { active: false, held: null, timer: undefined },
     version: { active: false, held: null, timer: undefined },
+    progress: { active: false, held: null, timer: undefined },
   };
+  /** Each leading-edge lane's window, in ms. */
+  const windowOf = { navigate: L.coalesceMs, version: L.coalesceMs, progress: L.progressWindowMs } as const;
   const hashLane: Lane = { active: false, held: null, timer: undefined };
 
   /** The send times in `xs` no more than `ms` old at `now` (older ones are dropped for good). */
@@ -192,13 +199,13 @@ export function createOutbox(o: OutboxOptions): Outbox {
     }
   };
 
-  /** Into the pacer's line; a store.set still waiting for its key takes the newer value in place. */
+  /** Into the pacer's line; a store.set still waiting for its key, or a progress still waiting, takes the newer value in place. */
   function enqueue(e: Entry): void {
-    if (e.kind === 'op' && e.op.t === 'store.set') {
-      const key = e.op.key;
-      const waiting = line.find((x) => x.kind === 'op' && x.op.t === 'store.set' && x.op.key === key);
+    if (e.kind === 'op' && (e.op.t === 'store.set' || e.op.t === 'progress')) {
+      const mine = e.op;
+      const waiting = line.find((x) => x.kind === 'op' && x.op.t === mine.t && (mine.t !== 'store.set' || (x.op.t === 'store.set' && x.op.key === mine.key)));
       if (waiting !== undefined && waiting.kind === 'op') {
-        waiting.op = e.op;
+        waiting.op = mine;
         return;
       }
     }
@@ -207,7 +214,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
   }
 
   /** A leading-edge lane: the first at once, the latest of the window's when it ends. */
-  const lead = (lane: Lane, op: QueuedOp): void => {
+  const lead = (lane: Lane, op: QueuedOp, windowMs: number): void => {
     if (lane.active) {
       lane.held = op;
       return;
@@ -224,7 +231,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
         }
         openWindow();
         enqueue({ kind: 'op', op: held });
-      }, L.coalesceMs);
+      }, windowMs);
     };
     openWindow();
     enqueue({ kind: 'op', op });
@@ -264,7 +271,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
   };
 
   const route = (op: QueuedOp): void => {
-    if (op.t === 'navigate' || op.t === 'version') lead(lanes[op.t], op);
+    if (op.t === 'navigate' || op.t === 'version' || op.t === 'progress') lead(lanes[op.t], op, windowOf[op.t]);
     else if (op.t === 'hash') trail(op);
     else enqueue({ kind: 'op', op });
   };
@@ -331,13 +338,13 @@ export function createOutbox(o: OutboxOptions): Outbox {
       for (const e of queued) {
         if (e.kind === 'copy') postEntry(e, now);
         else if (e.kind === 'changes' || e.op.t === 'hash' || e.op.t === 'store.set') enqueue(e);
-        else lead(lanes[e.op.t], e.op);
+        else lead(lanes[e.op.t], e.op, windowOf[e.op.t]);
       }
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const t of [pacerTimer, lanes.navigate.timer, lanes.version.timer, hashLane.timer]) if (t !== undefined) clock.clearTimeout(t);
+      for (const t of [pacerTimer, lanes.navigate.timer, lanes.version.timer, lanes.progress.timer, hashLane.timer]) if (t !== undefined) clock.clearTimeout(t);
       for (const req of [current, next]) if (req !== null) end(req, null);
       for (const e of early) if (e.kind === 'changes' && e.req !== current) end(e.req, null);
       current = null;

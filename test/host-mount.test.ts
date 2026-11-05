@@ -15,6 +15,8 @@
 // writes them; the seed is read back from it to learn the nonce and what the mount seeded. One row (L3.H11's `nonce` and
 // `csp` codes, which ./host's own values never produce) stubs frameDocument to throw them.
 import { createRequire } from 'node:module';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildFrame } from '../scripts/build-frame.mjs';
 import { frameCsp } from '../src/frame/csp.js';
@@ -728,6 +730,206 @@ describe('after ready: the limiter, then one effect per op (Reference §11.3)', 
 
 // ───────── setPrefs, update, destroy ─────────
 
+describe('B7.7 progress: the frame\'s share in thousandths reaches onProgress as p / 1000 (batch 1.1, C108)', () => {
+  const withProgress = (): Partial<Record<keyof HostAdapters, unknown>> => ({
+    onProgress: (share: unknown) => progressLog.push(share),
+  });
+  let progressLog: unknown[] = [];
+  beforeEach(() => {
+    progressLog = [];
+  });
+
+  it("'0', '1', '500' and '1000' arrive as 0, 0.001, 0.5 and 1, as numbers", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const m = mount(PLAIN, withProgress());
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    for (const p of ['0', '1', '500', '1000']) {
+      m.say({ t: 'progress', p });
+      vi.advanceTimersByTime(250);
+    }
+    expect(progressLog).toEqual([0, 0.001, 0.5, 1]);
+    expect(progressLog.every((v) => typeof v === 'number')).toBe(true);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('onProgress is called as a method of the adapters object, and a throw is caught and logged, never counted against the frame', async () => {
+    const seen: Seen = { events: [] };
+    const adapters = adaptersFor(seen, {
+      onProgress(this: unknown) {
+        seen.events.push(['this', this === adapters]);
+        throw new Error('boom');
+      },
+    });
+    const frame = mountDocFrame(container, { document: input(PLAIN), adapters });
+    const ch = channels[channels.length - 1] as FakeChannel;
+    const nonce = NONCE_RE.exec(container.querySelector('iframe')?.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    ch.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    ch.port1.onmessage?.({ data: { t: 'progress', p: '500' }, ports: [] });
+    expect(seen.events.filter(([n]) => n === 'this')).toEqual([['this', true]]);
+    expect(seen.events.filter(([n]) => n === 'fallback')).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+    frame.destroy();
+  });
+
+  it("a value outside the grammar is refused and never reaches onProgress: '1001', '05', '-1', '5.5', a number", async () => {
+    const m = await ready(PLAIN, withProgress());
+    for (const p of ['1001', '05', '-1', '5.5', 500]) m.say({ t: 'progress', p });
+    expect(progressLog).toEqual([]);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('a progress op before ready is dropped like every other op', () => {
+    const m = mount(PLAIN, withProgress());
+    m.say({ t: 'progress', p: '500' });
+    expect(progressLog).toEqual([]);
+  });
+
+  it('a frame that sends progress to a host with no onProgress is harmless: no call, no fallback', async () => {
+    const m = await ready();
+    m.say({ t: 'progress', p: '500' });
+    expect(m.seen.events.map(([n]) => n)).toEqual(['ready']);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('onProgress must be a function when given, and is a known adapter key', () => {
+    expect(() => mount(PLAIN, { onProgress: 'x' })).toThrow(TypeError);
+    expect(() => mount(PLAIN, { onProgress: {} })).toThrow(/adapters\.onProgress must be a function/);
+    expect(iframes()).toBe(0);
+    expect(() => mount(PLAIN, { onProgres: () => undefined } as never)).toThrow(/unknown key/);
+  });
+});
+
+describe('B7.4 DocFrame.command(name): drops before ready and after destroy, throws on an unknown name, else focuses the iframe and posts (batch 1.1, C108)', () => {
+  const NAMES = ['jump', 'settings', 'contents', 'outline'] as const;
+
+  it('before ready it posts nothing and moves no focus (B7j)', async () => {
+    const m = mount();
+    await m.loaded();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(document.activeElement === other, 'the focus stays where it was').toBe(true);
+    // And the command is not queued: it does not arrive at ready.
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m)).toEqual([]);
+  });
+
+  it('after ready it posts the exact op, once, after focusing the iframe (B7k)', async () => {
+    const m = await ready();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    expect(document.activeElement === m.iframe, 'the iframe has lost the focus').toBe(false);
+    const order: string[] = [];
+    m.iframe.addEventListener('focus', () => order.push(`focus (posted ${String(frameBound(m).length)})`));
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([{ t: 'command', name: 'jump' }]);
+    expect(document.activeElement === m.iframe, 'the iframe is the active element').toBe(true);
+    expect(order).toEqual(['focus (posted 0)']);
+    for (const name of NAMES.slice(1)) m.frame.command(name);
+    expect(frameBound(m)).toEqual(NAMES.map((name) => ({ t: 'command', name })));
+  });
+
+  it('it focuses the iframe even when the mount was made with focus: false (the host asked for the command)', async () => {
+    const m = await ready(PLAIN, { focus: false });
+    expect(document.activeElement === m.iframe, 'not focused at mount').toBe(false);
+    m.frame.command('settings');
+    expect(document.activeElement === m.iframe).toBe(true);
+    expect(frameBound(m)).toEqual([{ t: 'command', name: 'settings' }]);
+  });
+
+  it('an unknown name throws a TypeError and posts and focuses nothing: another name, another case, an inherited name, a non-string', async () => {
+    const m = await ready();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    for (const bad of ['print', 'Jump', ' jump', '', 'toString', 'constructor', '__proto__', 1, null, undefined, {}, ['jump']]) {
+      expect(() => m.frame.command(bad as never), String(bad)).toThrow(TypeError);
+    }
+    expect(frameBound(m)).toEqual([]);
+    expect(document.activeElement === other, 'the focus stays where it was').toBe(true);
+  });
+
+  it('the name is checked before the state: an unknown name throws before ready and after destroy too', async () => {
+    const m = mount();
+    expect(() => m.frame.command('print' as never)).toThrow(TypeError);
+    m.frame.destroy();
+    expect(() => m.frame.command('print' as never)).toThrow(TypeError);
+  });
+
+  it('after destroy() it posts and focuses nothing, and calls no adapter', async () => {
+    const m = await ready();
+    const focusSpy = vi.spyOn(m.iframe, 'focus');
+    m.frame.destroy();
+    const other = document.createElement('button');
+    document.body.append(other);
+    other.focus();
+    const before = m.seen.events.length;
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(document.activeElement === other).toBe(true);
+    // The iframe is gone: it is not focused either (the spy sees a call on a detached element, which moves nothing).
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(m.seen.events).toHaveLength(before);
+  });
+
+  it('after an update whose document is refused there is no mount: a command posts nothing on the old port and focuses no iframe', async () => {
+    const m = await ready();
+    const focusSpy = vi.spyOn(m.iframe, 'focus');
+    const d = input(PLAIN);
+    m.frame.update({ ...d, result: { ...d.result, outcome: 'failed' } });
+    expect(m.fallbacks()).toEqual(['invalid-input']);
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(iframes()).toBe(0);
+  });
+
+  it('after update() the new mount is not ready: it posts nothing, on the old port or the new one, until its own ready', async () => {
+    const m = await ready();
+    m.frame.update(input(PLAIN));
+    const fresh = channels[channels.length - 1] as FakeChannel;
+    m.frame.command('jump');
+    expect(m.channel.port1.sent).toEqual([]);
+    expect(fresh.port1.sent).toEqual([]);
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const nonce = NONCE_RE.exec(iframe.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    m.frame.command('contents');
+    expect(fresh.port1.sent).toEqual([{ t: 'command', name: 'contents' }]);
+    expect(m.channel.port1.sent).toEqual([]);
+  });
+
+  it('after a fallback it posts nothing', async () => {
+    const m = await ready();
+    m.say({ t: 'error', why: 'render' });
+    expect(m.fallbacks()).toEqual(['error']);
+    const focusSpy = vi.spyOn(m.iframe, 'focus');
+    m.frame.command('jump');
+    expect(frameBound(m)).toEqual([]);
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it("host code that runs at the focus (a focusout that destroys the frame) leaves the command unposted, and nothing throws", async () => {
+    const m = await ready();
+    const search = document.createElement('input');
+    document.body.append(search);
+    search.focus();
+    search.addEventListener('focusout', () => m.frame.destroy());
+    expect(() => m.frame.command('jump')).not.toThrow();
+    expect(frameBound(m)).toEqual([]);
+  });
+
+  it('the op is the whole message: exactly {t, name}', async () => {
+    const m = await ready();
+    m.frame.command('outline');
+    const [op] = frameBound(m);
+    expect(Object.keys(op as object)).toEqual(['t', 'name']);
+  });
+});
+
 describe('setPrefs, update and destroy (Reference §11.4)', () => {
   it('setPrefs before ready queues the latest and posts it once at ready; after ready it posts at once', async () => {
     const m = mount();
@@ -992,11 +1194,19 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference �
   });
 
   it('the bridge switches follow which adapters exist', () => {
-    const all = mount(PLAIN, { changes: () => Promise.resolve(null) });
-    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true });
+    const all = mount(PLAIN, { changes: () => Promise.resolve(null), onProgress: () => undefined });
+    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true });
     all.frame.destroy();
     const none = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined });
-    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false });
+    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false });
+  });
+
+  it('B7.2: progress is switched on by onProgress alone, and by nothing else (B7i)', () => {
+    const without = mount(PLAIN, { changes: () => Promise.resolve(null) });
+    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
+    without.frame.destroy();
+    const only = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined, onProgress: () => undefined });
+    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true });
   });
 
   it('features and prefs pass through to the seed', () => {
@@ -1004,5 +1214,515 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference �
     const seed = seedOf(m.iframe.getAttribute('srcdoc') ?? '');
     expect(seed['features']).toEqual({ rules: false });
     expect(seed['prefs']).toEqual({ theme: 'dark', width: 'wide' });
+  });
+});
+
+// ───────── B4: mermaidDraw 'after-ready' and loadMermaid (docserver batch T4; ledger C107) ─────────
+
+describe("B4 mermaidDraw 'after-ready': the build is fetched in parallel with the boot and posted after ready (ledger C107)", () => {
+  const AFTER = { mermaidDraw: 'after-ready' } as const;
+  const OP_CAP = 8_388_608;
+  /** The one warning's first argument; its second is a fixed reason, never a value the loader supplied. */
+  const UNAVAILABLE = 'docserver host: the Mermaid build is unavailable';
+
+  /** A loader the test settles by hand, and the number of times it was called. */
+  function deferred(): { readonly load: () => Promise<string>; readonly calls: () => number; resolve(v: unknown): void; reject(e: unknown): void } {
+    let n = 0;
+    let res: (v: string) => void = () => undefined;
+    let rej: (e: unknown) => void = () => undefined;
+    return {
+      load: () => {
+        n += 1;
+        return new Promise<string>((a, b) => {
+          res = a;
+          rej = b;
+        });
+      },
+      calls: () => n,
+      resolve: (v) => res(v as string),
+      reject: (e) => rej(e),
+    };
+  }
+
+  /** Records every postMessage on a channel's parent end, also after the port closed (the fake port drops those). */
+  function watch(channel: FakeChannel): unknown[] {
+    const posts: unknown[] = [];
+    const original = channel.port1.postMessage.bind(channel.port1);
+    channel.port1.postMessage = (m: unknown): void => {
+      posts.push(m);
+      original(m);
+    };
+    return posts;
+  }
+
+  /**
+   * The mermaid ops among the posts, the text summarised: a failing assertion formats its values, and a diff of a
+   * 3.7 MB build (or a Mermaid-sized string) would exhaust the worker.
+   */
+  const mermaidOps = (posts: readonly unknown[]): unknown[] =>
+    posts
+      .filter((p) => (p as { t?: unknown }).t === 'mermaid')
+      .map((p) => {
+        const op = p as { t: string; text?: unknown; unavailable?: unknown };
+        if (!('text' in op)) return op;
+        const { text } = op;
+        return { t: op.t, text: typeof text !== 'string' ? `a ${typeof text}` : text === mermaidText ? 'the build' : `another text of ${String(text.length)} code units` };
+      });
+  const settle = (): Promise<void> => new Promise((r) => globalThis.setTimeout(r, 0));
+
+  /** The newest mount: its channel, its posts and a way to speak as its frame. */
+  function newest(): { readonly channel: FakeChannel; readonly posts: unknown[]; ready(): void } {
+    const all = container.querySelectorAll('iframe');
+    const iframe = all[all.length - 1] as HTMLIFrameElement;
+    const channel = channels[channels.length - 1] as FakeChannel;
+    const nonce = NONCE_RE.exec(iframe.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    const posts = watch(channel);
+    return { channel, posts, ready: () => channel.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] }) };
+  }
+
+  it("B4.0: 'after-ready' is an accepted mode: a mount with a loader does not throw, and the srcdoc seeds it", () => {
+    let m: Mounted | undefined;
+    expect(() => {
+      m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: () => new Promise<string>(() => undefined) });
+    }).not.toThrow();
+    expect(iframes()).toBe(1);
+    expect((seedOf((m as Mounted).iframe.getAttribute('srcdoc') ?? '')['mermaid'] as { draw: string }).draw).toBe('after-ready');
+  });
+
+  it('B4.1: for a document the gate admits, the loader is called at mount, before ready; nothing is posted before ready; the op follows a valid ready', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    expect(d.calls()).toBe(1);
+    const srcdoc = m.iframe.getAttribute('srcdoc') ?? '';
+    expect(seedOf(srcdoc)['mermaid']).toEqual({ maxTextSize: MERMAID_GATE_DEFAULTS.maxFenceChars, secure: [], draw: 'after-ready' });
+    expect(srcdoc.includes(mermaidText), 'no inline Mermaid script').toBe(false);
+    await m.loaded();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(posts), 'nothing before ready').toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(mermaidOps(posts), 'the build, byte for byte').toEqual([{ t: 'mermaid', text: 'the build' }]);
+    expect(Object.keys(posts.find((p) => (p as { t?: unknown }).t === 'mermaid') as object)).toEqual(['t', 'text']);
+    await settle();
+    expect(mermaidOps(posts), 'exactly once').toHaveLength(1);
+    expect(d.calls()).toBe(1);
+  });
+
+  it('B4.2: an answer that arrives after ready is posted at once', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(mermaidOps(posts)).toEqual([]);
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+  });
+
+  it('B4.3: a wrong text posts unavailable and warns; so does a rejection', async () => {
+    const wrong = deferred();
+    const a = mount(MERMAID_DOC, { ...AFTER, loadMermaid: wrong.load });
+    const aPosts = watch(a.channel);
+    await a.loaded();
+    a.say({ t: 'ready', v: 1, nonce: a.nonce });
+    wrong.resolve(`${mermaidText} `);
+    await settle();
+    expect(mermaidOps(aPosts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+    expect(warn.mock.calls).toEqual([[UNAVAILABLE, 'the build is not the shipped one']]);
+    a.frame.destroy();
+    warn.mockClear();
+    const rejected = deferred();
+    const b = mount(MERMAID_DOC, { ...AFTER, loadMermaid: rejected.load });
+    const bPosts = watch(b.channel);
+    await b.loaded();
+    b.say({ t: 'ready', v: 1, nonce: b.nonce });
+    rejected.reject(new Error('offline'));
+    await settle();
+    expect(mermaidOps(bPosts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+    expect(warn.mock.calls, 'a fixed reason, never the rejection').toEqual([[UNAVAILABLE, 'the loader rejected']]);
+  });
+
+  it('B4.4: an answer that arrives after destroy() posts nothing', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    m.frame.destroy();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(posts)).toEqual([]);
+  });
+
+  it('B4.4b: an onReady adapter that destroys or updates, with the answer already known, leaves the replaced mount silent', async () => {
+    for (const how of ['destroy', 'update'] as const) {
+      const d = deferred();
+      let frame: DocFrame | undefined;
+      const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load, onReady: () => (how === 'destroy' ? frame?.destroy() : frame?.update(input(PLAIN))) });
+      frame = m.frame;
+      const posts = watch(m.channel);
+      await m.loaded();
+      d.resolve(mermaidText);
+      await settle();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(mermaidOps(posts), how).toEqual([]);
+    }
+  });
+
+  it("B4.5: 'after-ready' with neither source is a TypeError; with assets.mermaid only, that text is posted after ready", async () => {
+    expect(() => mountDocFrame(container, { document: input(MERMAID_DOC), adapters: adaptersFor({ events: [] }, AFTER) })).toThrow(TypeError);
+    expect(iframes()).toBe(0);
+    // A non-function loader is refused on its own, even when assets.mermaid could serve (B4l).
+    expect(() => mountDocFrame(container, { document: input(MERMAID_DOC), adapters: adaptersFor({ events: [] }, { ...AFTER, loadMermaid: 'x', assets: { ...assets, mermaid: mermaidText } }) })).toThrow(TypeError);
+    expect(iframes()).toBe(0);
+    expect(() => mountDocFrame(container, { document: input(MERMAID_DOC), adapters: adaptersFor({ events: [] }, { ...AFTER, assets: { ...assets, mermaid: 5 } }) })).toThrow(TypeError);
+    const m = mount(MERMAID_DOC, { ...AFTER, assets: { ...assets, mermaid: mermaidText } });
+    const posts = watch(m.channel);
+    expect((m.iframe.getAttribute('srcdoc') ?? '').includes(mermaidText), 'not inlined').toBe(false);
+    await m.loaded();
+    await settle();
+    expect(mermaidOps(posts)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(mermaidOps(posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+  });
+
+  it('B4.5b: with both sources, the loader is used: it is called once and its wrong answer gives unavailable, though assets.mermaid holds the true build', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load, assets: { ...assets, mermaid: mermaidText } });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    d.resolve(`${mermaidText} `);
+    await settle();
+    expect(d.calls()).toBe(1);
+    expect(mermaidOps(posts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+  });
+
+  it("B4.6: 'auto' and 'on-request' never call loadMermaid and post no mermaid op", async () => {
+    for (const mode of ['auto', 'on-request'] as const) {
+      const d = deferred();
+      const m = mount(MERMAID_DOC, { mermaidDraw: mode, assets: { ...assets, mermaid: mermaidText }, loadMermaid: d.load });
+      const posts = watch(m.channel);
+      await m.loaded();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      d.resolve(mermaidText);
+      await settle();
+      expect(d.calls(), mode).toBe(0);
+      expect(mermaidOps(posts), mode).toEqual([]);
+      m.frame.destroy();
+    }
+    const d = deferred();
+    const dflt = mount(MERMAID_DOC, { assets: { ...assets, mermaid: mermaidText }, loadMermaid: d.load });
+    await settle();
+    expect(d.calls(), 'default mode').toBe(0);
+    dflt.frame.destroy();
+  });
+
+  it("B4.6b: in any other mode a loadMermaid that is not a function is ignored: the mount succeeds and nothing is called", async () => {
+    for (const mode of ['auto', 'on-request'] as const) {
+      let m: Mounted | undefined;
+      expect(() => {
+        m = mount(MERMAID_DOC, { mermaidDraw: mode, assets: { ...assets, mermaid: mermaidText }, loadMermaid: 'x' });
+      }, mode).not.toThrow();
+      expect(iframes(), mode).toBe(1);
+      (m as Mounted).frame.destroy();
+    }
+    let n: Mounted | undefined;
+    expect(() => {
+      n = mount(PLAIN, { loadMermaid: 42 });
+    }, 'the default mode').not.toThrow();
+    (n as Mounted).frame.destroy();
+  });
+
+  it('B4.7: an update before the loader resolves: the new mount gets exactly one op, the replaced mount none, the loader one call; a later update re-posts without a call', async () => {
+    const d = deferred();
+    const first = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const firstPosts = watch(first.channel);
+    await first.loaded();
+    first.say({ t: 'ready', v: 1, nonce: first.nonce });
+    first.frame.update(input(MERMAID_DOC));
+    const second = newest();
+    expect(d.calls(), 'the remount reuses the held verdict').toBe(1);
+    second.ready();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(firstPosts), 'the replaced mount posts nothing').toEqual([]);
+    expect(mermaidOps(second.posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+    first.frame.update(input(MERMAID_DOC));
+    const third = newest();
+    third.ready();
+    await settle();
+    expect(mermaidOps(third.posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+    expect(mermaidOps(second.posts), 'still one for the second').toHaveLength(1);
+    expect(d.calls(), 'one call for the whole DocFrame').toBe(1);
+  });
+
+  it('B4.7a: a failed answer warns once per DocFrame: a remount after it is told unavailable, with no second warning', async () => {
+    const d = deferred();
+    const first = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    await first.loaded();
+    first.say({ t: 'ready', v: 1, nonce: first.nonce });
+    d.reject(new Error('offline'));
+    await settle();
+    expect(warn.mock.calls).toEqual([[UNAVAILABLE, 'the loader rejected']]);
+    first.frame.update(input(MERMAID_DOC));
+    const second = newest();
+    second.ready();
+    await settle();
+    expect(mermaidOps(second.posts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+    first.frame.update(input(MERMAID_DOC));
+    const third = newest();
+    third.ready();
+    await settle();
+    expect(mermaidOps(third.posts)).toEqual([{ t: 'mermaid', unavailable: true }]);
+    expect(warn.mock.calls, 'one warning for the DocFrame').toHaveLength(1);
+    expect(d.calls()).toBe(1);
+  });
+
+  it('B4.7b: a replaced mount that is not replaced by a Mermaid mount still posts nothing when the answer arrives', async () => {
+    const d = deferred();
+    const first = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const firstPosts = watch(first.channel);
+    await first.loaded();
+    first.say({ t: 'ready', v: 1, nonce: first.nonce });
+    first.frame.update(input(PLAIN));
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(firstPosts)).toEqual([]);
+    expect(mermaidOps(newest().posts)).toEqual([]);
+  });
+
+  it('B4.8: a document with no fences never calls loadMermaid and posts no op; an update that brings figures calls it once', async () => {
+    const d = deferred();
+    const m = mount(PLAIN, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    await settle();
+    expect(d.calls()).toBe(0);
+    expect(mermaidOps(posts)).toEqual([]);
+    m.frame.update(input(MERMAID_DOC));
+    expect(d.calls()).toBe(1);
+    const next = newest();
+    next.ready();
+    d.resolve(mermaidText);
+    await settle();
+    expect(mermaidOps(next.posts)).toEqual([{ t: 'mermaid', text: 'the build' }]);
+  });
+
+  it('B4.8b: a destroy at the step-8 focus (a focusout handler) means the loader is never called', () => {
+    const d = deferred();
+    const m = mount(PLAIN, { ...AFTER, loadMermaid: d.load });
+    const search = document.createElement('input');
+    document.body.append(search);
+    search.focus();
+    search.addEventListener('focusout', () => m.frame.destroy());
+    m.frame.update(input(MERMAID_DOC));
+    expect(iframes()).toBe(0);
+    expect(d.calls(), 'no adapter call after destroy').toBe(0);
+  });
+
+  it('B4.9: a loader that throws, resolves to a non-string, or resolves over the cap posts unavailable and warns once with its reason; nothing throws out of mountDocFrame', async () => {
+    const loaders: [string, string, () => Promise<string>][] = [
+      ['a synchronous throw', 'the loader threw', () => { throw new Error('sync'); }],
+      ['a non-string', 'the loader did not answer a string', () => Promise.resolve(42 as unknown as string)],
+      // A String object has the right length and characters, so only the typeof check (not the hash) refuses it.
+      ['a String object', 'the loader did not answer a string', () => Promise.resolve(new String(mermaidText) as unknown as string)],
+      // Over the cap the hash would refuse it too, so only the reason tells the cap check from the hash check.
+      ['over the cap', 'the build is over the bridge cap', () => Promise.resolve('a'.repeat(OP_CAP + 1))],
+      ['a thenable whose then throws', 'the loader rejected', () => ({ then: () => { throw new Error('then'); } }) as unknown as Promise<string>],
+      ['a throwing then getter', 'the loader rejected', () => Object.defineProperty({}, 'then', { get: () => { throw new Error('getter'); } }) as unknown as Promise<string>],
+      ['a rejection', 'the loader rejected', () => Promise.reject(new Error('offline'))],
+    ];
+    for (const [name, reason, loadMermaid] of loaders) {
+      warn.mockClear();
+      let m: Mounted | undefined;
+      expect(() => { m = mount(MERMAID_DOC, { ...AFTER, loadMermaid }); }, name).not.toThrow();
+      const mounted = m as Mounted;
+      const posts = watch(mounted.channel);
+      await mounted.loaded();
+      mounted.say({ t: 'ready', v: 1, nonce: mounted.nonce });
+      await settle();
+      expect(mermaidOps(posts), name).toEqual([{ t: 'mermaid', unavailable: true }]);
+      expect(warn.mock.calls, name).toEqual([[UNAVAILABLE, reason]]);
+      mounted.frame.destroy();
+    }
+  });
+
+  it('B4.9c: a console that throws, and a value whose formatting throws, change nothing: the verdict still arrives and nothing throws out of mountDocFrame, update() or the port', async () => {
+    const hostile = { [Symbol.for('nodejs.util.inspect.custom')]: () => { throw new Error('inspect'); } };
+    warn.mockImplementation(() => { throw new Error('console down'); });
+    const loaders: [string, () => Promise<string>][] = [
+      ['a synchronous throw', () => { throw hostile; }],
+      ['a rejection', () => Promise.reject(hostile)],
+      ['a wrong text', () => Promise.resolve(`${mermaidText} `)],
+    ];
+    for (const [name, loadMermaid] of loaders) {
+      let m: Mounted | undefined;
+      expect(() => { m = mount(MERMAID_DOC, { ...AFTER, loadMermaid }); }, name).not.toThrow();
+      const mounted = m as Mounted;
+      const posts = watch(mounted.channel);
+      await mounted.loaded();
+      expect(() => mounted.say({ t: 'ready', v: 1, nonce: mounted.nonce }), name).not.toThrow();
+      await settle();
+      expect(mermaidOps(posts), name).toEqual([{ t: 'mermaid', unavailable: true }]);
+      expect(() => mounted.frame.update(input(MERMAID_DOC)), name).not.toThrow();
+      mounted.frame.destroy();
+    }
+    warn.mockClear();
+    // The reason is a fixed string: no argument of the one warning is a value the loader supplied.
+    warn.mockImplementation(() => undefined);
+    const bad = mount(MERMAID_DOC, { ...AFTER, loadMermaid: () => Promise.reject(hostile) });
+    await bad.loaded();
+    await settle();
+    expect(warn.mock.calls).toEqual([[UNAVAILABLE, 'the loader rejected']]);
+  });
+
+  it('B4.9d: a port that throws on the mermaid post, with a console that throws too, never throws out of the port', async () => {
+    const m = mount(MERMAID_DOC, { ...AFTER, assets: { ...assets, mermaid: mermaidText } });
+    await m.loaded();
+    await settle();
+    m.channel.port1.postMessage = (): void => {
+      throw new Error('port gone');
+    };
+    warn.mockImplementation(() => { throw new Error('console down'); });
+    expect(() => m.say({ t: 'ready', v: 1, nonce: m.nonce })).not.toThrow();
+    expect(m.seen.events.map(([n]) => n)).toEqual(['ready']);
+  });
+
+  it('B4.9b: a loader that calls update() or destroy() from inside itself never loops, never throws and is called once; the current mount, not the outer one, receives the verdict', async () => {
+    for (const how of ['update', 'destroy'] as const) {
+      const d = deferred();
+      let calls = 0;
+      let frame: DocFrame | undefined;
+      const load = (): Promise<string> => {
+        calls += 1;
+        if (how === 'update') frame?.update(input(MERMAID_DOC));
+        else frame?.destroy();
+        return d.load();
+      };
+      const m = mount(PLAIN, { ...AFTER, loadMermaid: load });
+      frame = m.frame;
+      expect(() => m.frame.update(input(MERMAID_DOC)), how).not.toThrow();
+      expect(calls, how).toBe(1);
+      const all = channels.slice();
+      const outer = all[all.length - 2] as FakeChannel;
+      const outerPosts = watch(outer);
+      if (how === 'update') {
+        const inner = newest();
+        inner.ready();
+        d.resolve(mermaidText);
+        await settle();
+        expect(mermaidOps(inner.posts), how).toEqual([{ t: 'mermaid', text: 'the build' }]);
+        expect(mermaidOps(outerPosts), how).toEqual([]);
+        expect(calls, how).toBe(1);
+      } else {
+        const last = channels[channels.length - 1] as FakeChannel;
+        const lastPosts = watch(last);
+        d.resolve(mermaidText);
+        await settle();
+        expect(mermaidOps(lastPosts), how).toEqual([]);
+        expect(iframes(), how).toBe(0);
+      }
+      m.frame.destroy();
+      container.replaceChildren();
+    }
+  });
+
+  it('B4.9e: a ready with a wrong nonce is not a ready: the frame falls back, and an answer that arrives after it posts nothing', async () => {
+    const d = deferred();
+    const m = mount(MERMAID_DOC, { ...AFTER, loadMermaid: d.load });
+    const posts = watch(m.channel);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: 'f'.repeat(32) });
+    d.resolve(mermaidText);
+    await settle();
+    expect(m.fallbacks()).toEqual(['nonce']);
+    expect(mermaidOps(posts)).toEqual([]);
+  });
+
+  /**
+   * Collects garbage now: the flag is set at run time, so the suite needs no launch option. A value an assertion holds is
+   * a WeakRef's target only, never a strong reference.
+   */
+  const collect = async (): Promise<void> => {
+    v8.setFlagsFromString('--expose-gc');
+    const gc = vm.runInNewContext('gc') as () => void;
+    for (let i = 0; i < 6; i += 1) {
+      await new Promise((r) => globalThis.setTimeout(r, 25));
+      gc();
+    }
+  };
+
+  /**
+   * A mount into a stand-in element whose document makes a div where the mount asks for an iframe. jsdom keeps every
+   * iframe it ever made reachable, so only a div can be collected; what a mount holds on to is the same either way.
+   * `made` holds a weak handle on each element the mount created, oldest first.
+   */
+  function weakMount(doc: RenderInput, over: Partial<Record<keyof HostAdapters, unknown>>): { readonly frame: DocFrame; readonly made: WeakRef<object>[] } {
+    const made: WeakRef<object>[] = [];
+    const stubWin = {
+      document: {
+        createElement: (): HTMLElement => {
+          const el = document.createElement('div');
+          made.push(new WeakRef(el));
+          return el;
+        },
+      },
+      crypto: win.crypto,
+      performance: win.performance,
+      MessageChannel: FakeChannel,
+      setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
+      clearTimeout: (h: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(h),
+    };
+    const el = { ownerDocument: { defaultView: stubWin }, append: (node: Node): void => void container.append(node) } as unknown as HTMLElement;
+    const frame = mountDocFrame(el, { document: doc, adapters: adaptersFor({ events: [] }, { focus: false, watchdogMs: 120_000, ...over }) });
+    return { frame, made };
+  }
+
+  it("B7.4: DocFrame.command's handle does not retain a mount: after a destroy, or an update whose document is refused, the old iframe is collectable", async () => {
+    const collected = async (r: WeakRef<object> | undefined): Promise<boolean> => {
+      await collect();
+      return r?.deref() === undefined;
+    };
+    const destroyed = weakMount(input(PLAIN), {});
+    destroyed.frame.destroy();
+    expect(await collected(destroyed.made[0]), 'destroyed').toBe(true);
+
+    const refused = weakMount(input(PLAIN), {});
+    const d = input(PLAIN);
+    refused.frame.update({ ...d, result: { ...d.result, outcome: 'failed' } });
+    expect(await collected(refused.made[0]), 'replaced by a refused document (no new mount takes the handle over)').toBe(true);
+    refused.frame.destroy();
+  });
+
+  it('B4.10: while the loader stays pending, a replaced or destroyed mount is not retained: only the current mount can be reached from the verdict hook', async () => {
+    const collected = async (r: WeakRef<object> | undefined): Promise<boolean> => {
+      await collect();
+      return r?.deref() === undefined;
+    };
+    // A control: with no loader pending, a destroyed mount is collectable at all in this environment.
+    const control = weakMount(input(MERMAID_DOC), { mermaidDraw: 'after-ready', assets: { ...assets, mermaid: mermaidText } });
+    control.frame.destroy();
+    expect(await collected(control.made[0]), 'the control').toBe(true);
+
+    const never = (): Promise<string> => new Promise<string>(() => undefined);
+    const destroyed = weakMount(input(MERMAID_DOC), { ...AFTER, loadMermaid: never });
+    destroyed.frame.destroy();
+    expect(await collected(destroyed.made[0]), 'destroyed while the loader is pending').toBe(true);
+
+    const bare = weakMount(input(MERMAID_DOC), { ...AFTER, loadMermaid: never });
+    bare.frame.update(input(PLAIN));
+    expect(await collected(bare.made[0]), 'replaced by a document without figures while the loader is pending').toBe(true);
+    bare.frame.destroy();
+
+    const many = weakMount(input(MERMAID_DOC), { ...AFTER, loadMermaid: never });
+    for (let i = 0; i < 3; i += 1) many.frame.update(input(MERMAID_DOC));
+    await collect();
+    expect(many.made.map((r) => r.deref() === undefined), 'the replaced mounts go, the current one stays').toEqual([true, true, true, false]);
+    many.frame.destroy();
+    expect(await collected(many.made[3]), 'the current mount goes at destroy').toBe(true);
   });
 });

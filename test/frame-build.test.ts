@@ -43,7 +43,7 @@ import {
 import { commentTokenHazards } from '../scripts/comment-tokens.mjs';
 import { freeGlobalList, MAX_FREE_GLOBALS, scanFreeGlobals, scanScript } from '../scripts/free-globals.mjs';
 import { frameCsp, frameDocument, FRAME_MANIFEST, type RenderInput } from '../src/frame/index.js';
-import { pinFreeGlobals } from '../src/frame-runtime/pin.js';
+import { pinFreeGlobals, RESERVED_GLOBALS } from '../src/frame-runtime/pin.js';
 import { render } from '../src/render/index.js';
 
 type Element = DefaultTreeAdapterMap['element'];
@@ -469,6 +469,12 @@ describe('L3.M17: the free-global list', () => {
     expect(b.freeGlobals.names).not.toContain('fastdom');
     expect(Object.keys(FREE_GLOBALS_ALLOWLIST).sort()).toEqual(['fastdom', 'injected']);
     for (const why of Object.values(FREE_GLOBALS_ALLOWLIST)) expect(why).toMatch(/\S{8}/);
+    // BD5 (C107): each reason cites the Phase-S reservation, not the order of evaluation, which no longer holds after ready.
+    for (const why of Object.values(FREE_GLOBALS_ALLOWLIST)) {
+      expect(why).toMatch(/reserved in Phase S/);
+      expect(why).not.toMatch(/before (?:the bootstrap adds )?any content/);
+    }
+    expect(Object.keys(FREE_GLOBALS_ALLOWLIST).sort()).toEqual([...RESERVED_GLOBALS].sort());
     // The scan sees Mermaid's static write of `injected`; fastdom's write through its IIFE parameter it cannot see, so
     // the allowlist holds `fastdom` too, and any read the scan does see of it is never pinned.
     expect(b.freeGlobals.first.mermaid.writes).toEqual(['injected']);
