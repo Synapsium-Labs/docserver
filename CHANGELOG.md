@@ -28,7 +28,7 @@ Item A, the line and paragraph separators:
 
 Item B, Mermaid drawn after `ready`:
 
-- `mermaidDraw` takes a third value, `'after-ready'`. The default stays `'auto'`. In this mode the frame mounts and sends `ready` with no Mermaid script in its document, every figure a readable source, and draws the figures nearest first once the host hands the build over.
+- `mermaidDraw` takes a third value, `'after-ready'`. The default stays `'auto'`. In this mode the frame mounts and sends `ready` with no Mermaid script in its document, every figure a readable source, and draws the figures once the host hands the build over, in `'auto'`'s order: the figures within one and a half screens of the reader first, in document order, then the rest by distance. (A figure in view can wait behind earlier figures up to one and a half screens away.) The write that turns drawing on is kept like each figure's own, so the reader's place in the text does not move at the handover.
 - `mountDocFrame` takes `loadMermaid()`, a promise of the text of `mermaid/mermaid.frame.js`, used only with `'after-ready'` (when both it and `assets.mermaid` are given, it wins). It is called at mount, in parallel with the frame's boot, at most once per `DocFrame` and only for a document the Mermaid gate admits. Its text is checked against the bridge's size cap and the shipped build's sha256, and is posted after each mount's valid `ready`. `mountDocFrame` throws a `TypeError` for `'after-ready'` with neither `loadMermaid` nor `assets.mermaid`, or with a `loadMermaid` that is not a function.
 - The new operation `mermaid` (parent to frame) carries the build, or says it is unavailable. The frame inserts it as one inline script and accepts exactly one registration, from that element. A host policy that blocks Mermaid's hash leaves the sources with the load note and the frame mounted. A host that never hands the build over leaves the root `waiting` with readable sources.
 - `./enhance` has the matching draw mode, and the root's `data-docreader-diagrams` gains `waiting`.
@@ -39,15 +39,19 @@ Item C, one header bar:
 - `runEnhancementCommand(root, name)` and `DocFrame.command(name)` run `'jump'`, `'settings'`, `'contents'` or `'outline'` as a toggle, so a host's own buttons reach the bar's tools. `DocFrame.command(name)` throws on an unknown name. The new operations are `command` (parent to frame) and `progress` (frame to parent, at most four a second, off unless the seed's `bridge.progress` is true).
 - **Hosts with the bar off now get an Aa button at the root's top right**; `chrome.settings: false` opts out of it. (Before this release the button vanished with the bar.)
 - The frame's prelude sets `--bar-h: 0` for a root without a bar; `./enhance` hosts keep the documented 48 px.
+- On a root with no bar, the settings menu's height is bounded to its viewport (`max-height: calc(100vh - 80px)`, which keeps its bottom inside the frame from the top of the document and once Aa is stuck), where it ran up to 47 px past the bottom of a short frame. This applies to every root with no bar, framed or not.
+- On a root with no bar, the sticky figure tools and a table's sticky head stick at 50 px, below Aa's box, instead of at the bar's height, so Aa no longer covers the right end of their hit areas. `--bar-h` stays 0 in the frame, and a root with a bar is unchanged.
+- In the settings menu, a `focusout` that names no element (the window loses focus, or Tab leaves the document) no longer closes Aa, on every host, bar on or off; focus moving to another element outside the menu, and Aa's own button, still close it.
+- A host command (`DocFrame.command('settings')` and the rest) acts on the menu's present state: a tap on a card's trigger while Aa is open no longer leaves a flag that makes the host's next `settings` command answer true and open nothing. A click inside the reader's root ends the gesture; a host button placed inside the root loses the same-gesture toggle, so a host keeps its own buttons outside the root, as the documented layout does.
 
 The conformance corpus: `conformance/bridge-cases.json` gained the new operations' cases. Every `conformance/frame-mutants/*.html` file (17 files) moved, each changed only by the seed's new `"progress":false` key; no verdict moved, and no hostile case lost its expected verdict.
 
 The assets that moved, each with the sha256 that `assets/assets.json` records (`assets/assets.json` also records the new `version`); `assets/frame/guard.js`, the fonts and both Mermaid builds did not move:
 
 - `assets/frame/bootstrap.js`: `dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424`, csp `'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ='`
-- `assets/frame/enhance.js`: `daa25c84fd193dc9c8a734e6ab5705bba5d6a29fc5be73d29ed478249a9ffa7f`, csp `'sha256-2qJchP0ZPcnIpzTmq1cFu6XWop/FvnPSntR4JJqf+n8='`
-- `assets/frame/reader.css`: `83176e0055183256fdd131a602f847a16a17a8944812071672550e64c8dc9e9f`
-- `assets/reader.css`: `505092a2299c6824834a3289d23d829a529bacfaefa5328d7e7daf3232dda5c0`
+- `assets/frame/enhance.js`: `655422aafe40ceb83c0e6df3a110abd61c8dd9c93a4bdabaff27d1662f4d4c2f`, csp `'sha256-ZVQiqv5Azrg8Dm3zoRCr1hyN2ck6S9q6/yfRZi9NTC8='`
+- `assets/frame/reader.css`: `262ac2013f0a2cb27634ea27b0e8fb7eb286269590842dca354e630e0c56147d`
+- `assets/reader.css`: `a6348b2134ebb1c7cde0b7f17318178cef4d670e3586c46f34a50aac268ef3cb`
 
 ## 1.0.0
 
