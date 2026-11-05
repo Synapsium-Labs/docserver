@@ -46,7 +46,7 @@
 //                      since a scroll made then would stop it halfway. A keep inside a keep only runs `fn`. Relayout
 //                      runs inside it. A scroll position is whole pixels in an engine (WebKit drops the fraction it is
 //                      asked for), so a restore can leave the block up to a pixel off; the next keep, when it anchors
-//                      that block less than a pixel from that offset and the page has not scrolled since, aims at the
+//                      that block less than a pixel from that offset and the scroll position is unchanged since the last restore, aims at the
 //                      same offset again, so a run of keeps never adds those fractions up.
 //   position.holdBar() keep the phone bar shown for BAR_HOLD_MS (a jump just moved the page); position.barHeld()
 //                      says whether that hold is still on (scroll.ts reads it).
@@ -440,8 +440,8 @@ export function createNavigation(args: NavArgs): Navigation {
     if (keeping > 0) return fn();
     let at = pinned !== null || env.now() < smoothUntil || env.viewport().scrollY < 1 ? null : anchor();
     // An engine keeps a scroll position in whole pixels (WebKit drops the fraction it is asked for), so a restore can
-    // leave its block up to a pixel off the offset it aimed at. The next keep of that block, with the page not scrolled
-    // since, aims at the same offset again rather than at where the block was left, so those fractions never add up
+    // leave its block up to a pixel off the offset it aimed at. The next keep of that block, with the scroll position unchanged
+    // since the last restore, aims at the same offset again rather than at where the block was left, so those fractions never add up
     // across a run of keeps (fix round FR1, F1: seven kept changes moved the reading line 2.78 px on WebKit).
     if (at !== null && aimed !== null && at.line === aimed.line && at.y === aimed.y && Math.abs(at.offset - aimed.offset) < 1) {
       at = Object.freeze({ line: at.line, offset: aimed.offset, y: at.y });
