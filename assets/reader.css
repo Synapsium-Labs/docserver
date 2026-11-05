@@ -770,6 +770,12 @@
    height, which a frame sets to 0, is no part of that. Measured at 390px wide in a 520px frame (FR1, A6): the rule above ran
    27px past the frame's bottom edge when stuck and 47px before. 80px keeps its bottom inside the viewport in every state. */
 [data-docreader-root][data-docreader-root][data-docreader-root]:not(:has(> .topbar)) > .aa-wrap .aa-menu { max-height: calc(100vh - 80px); }
+/* What sticks at the top of a root with no bar sticks below Aa (FR1, A6): Aa is sticky at 8px and 34px high, so the figure tools
+   (6px under the bar's height, which a frame sets to 0) and a table's head (at the bar's height) would sit under its box and
+   lose the right end of their hit areas to it. 50px is Aa's bottom (42px) and a gap of 8px. --bar-h stays what the host or
+   the frame says. */
+[data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)) .table-wrapper.fits th { top: 50px; }
+[data-docreader-root][data-docreader-root]:not(i):not(:has(> .topbar)) figure.mermaid-figure .tools { top: 50px; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu[hidden] { display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu fieldset + fieldset { margin-top: 12px; }

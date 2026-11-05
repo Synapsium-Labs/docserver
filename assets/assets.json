@@ -63,8 +63,8 @@
     },
     {
       "path": "frame/reader.css",
-      "sha256": "7e43fb4438bfe9758834c73dda535f4e25e617beb378d0d6b337596a368d795c",
-      "bytes": 549887,
+      "sha256": "262ac2013f0a2cb27634ea27b0e8fb7eb286269590842dca354e630e0c56147d",
+      "bytes": 550513,
       "kind": "style"
     },
     {
@@ -82,8 +82,8 @@
     },
     {
       "path": "reader.css",
-      "sha256": "191c50eaa2a2a297a50d8eb4975163843d8a6aecb8b0ed432078438e4223148b",
-      "bytes": 136385,
+      "sha256": "a6348b2134ebb1c7cde0b7f17318178cef4d670e3586c46f34a50aac268ef3cb",
+      "bytes": 137011,
       "kind": "style"
     }
   ]

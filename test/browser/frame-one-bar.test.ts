@@ -28,6 +28,10 @@
 //          `--bar-h: 0` zeroes, so the sticky Aa's own top and height must be counted too), at two frame heights; (b) the
 //          sticky Aa covers no control's hit area: at the centre of the stuck figure tools' last button, and of the stuck
 //          table head's last cell, the element found is not Aa. The numbers are printed as `host-measure:` lines.
+//   B8.7   fix round FR1 (the coordinator's ruling on A6(b)): with the bar off at 390 px, a point sampled every 3 px across
+//          the whole width of the stuck figure tools' last button, and of the sticky table head's last cell, finds that
+//          control and never Aa; both sit below Aa. A root with the bar on keeps its own tops (the bar's height plus 6 px
+//          for the tools, the bar's height for the head; 6 px and 0 while the bar is slid away).
 //
 // Waits are polls on a condition with a load-tolerant cap, and a row that must see that something did NOT happen ends
 // with a command that travels the same port after it (an ordered barrier), never a fixed sleep.
@@ -66,6 +70,20 @@ function targetId(): string {
 const ID = targetId();
 /** The document: its title, a link to the fourth section in the first paragraph, then the sections. */
 const DOC = [...HEAD, `Jump to [section four](#${ID}).`, '', ...SECTIONS].join('\n');
+
+/** The A6 document: a tall drawn figure (its tools row sticks) and a two-column table (a table of three or more columns stacks on a phone and has no head to stick), each between paragraphs. */
+const A6_MD = [
+  '# A6',
+  '',
+  PARA,
+  '',
+  ...['```mermaid', 'flowchart TD', ...Array.from({ length: 14 }, (_, i) => `  N${String(i)} --> N${String(i + 1)}`), '```', '', '*Figure 1. A tall chain.*', ''],
+  PARA,
+  '',
+  ...['| Name | Status |', '|---|---|', ...Array.from({ length: 40 }, (_, i) => `| R${String(i + 1)} | Open |`), ''],
+  PARA,
+  '',
+].join('\n');
 
 const NO_BAR = { chrome: { bar: false } };
 const NO_BAR_NO_SPACE = { chrome: { bar: false, topSpace: false } };
@@ -321,10 +339,7 @@ describeBrowsers((browser: BrowserName) => {
     for (const r of Object.values(rows)) expect(Number.isFinite(r.title)).toBe(true);
   }, 240_000);
   it('B8.6 (A6): bar off at 390 px, the open menu ends inside the frame and the sticky Aa covers neither the stuck figure tools nor the stuck table head', async () => {
-    const figure = ['```mermaid', 'flowchart TD', ...Array.from({ length: 14 }, (_, i) => `  N${String(i)} --> N${String(i + 1)}`), '```', '', '*Figure 1. A tall chain.*', ''];
-    // Two columns: a table of three or more stacks into cards on a phone, and then has no head to stick.
-    const table = ['| Name | Status |', '|---|---|', ...Array.from({ length: 40 }, (_, i) => `| R${String(i + 1)} | Open |`), ''];
-    const md = ['# A6', '', PARA, '', ...figure, PARA, '', ...table, PARA, ''].join('\n');
+    const md = A6_MD;
     const numbers: Record<string, unknown> = {};
     const overflows: string[] = [];
     for (const [name, height, features] of [['top space', 844, NO_BAR], ['top space', 560, NO_BAR], ['no top space', 560, NO_BAR_NO_SPACE]] as const) {
@@ -399,5 +414,72 @@ describeBrowsers((browser: BrowserName) => {
       }
     }
     expect(overflows, 'a menu runs past the frame\'s bottom edge').toEqual([]);
+  }, 300_000);
+
+  it('B8.7 (A6b): bar off at 390 px, points across the stuck figure tools\' last button and the sticky head\'s last cell find the control, never Aa; a bar-on root keeps its tops', async () => {
+    const seen: Record<string, unknown> = {};
+    for (const [name, features] of [['bar off', NO_BAR], ['bar on', {}]] as const) {
+      const host = await openLibHost(await browserFor(browser), { touch: false }, { hostBar: true });
+      try {
+        await host.page.setViewportSize({ width: 390, height: 844 });
+        await host.mount({
+          document: { ...input(A6_MD), initialHash: null, scan: { mermaid: scanRefs(A6_MD).mermaid } },
+          assets,
+          watchdogMs: 60_000,
+          features,
+          mermaidDraw: 'after-ready',
+          loader: 'immediate',
+          mermaidText,
+        });
+        await until(async () => (await host.lib()).events.some((e) => e.kind === 'ready'), 'the frame is ready');
+        const frame = host.frame();
+        await until(() => frame.evaluate(() => document.querySelector('[data-docreader-root]')?.getAttribute('data-docreader-diagrams') === 'drawn'), 'the figure is drawn');
+        /** Scroll `what` into its stuck state, then sample the last control `last` of it across its width, at its vertical centre. */
+        const probe = (what: 'tools' | 'head'): Promise<{ top: number; aaBottom: number | null; samples: number; misses: string[]; barH: string; hidden: boolean }> =>
+          frame.evaluate(async (w) => {
+            const root = document.querySelector('[data-docreader-root]') as HTMLElement;
+            const host = (w === 'tools' ? document.querySelector('figure.mermaid-figure') : document.querySelector('.table-wrapper')) as HTMLElement;
+            window.scrollTo({ top: window.scrollY + host.getBoundingClientRect().top + (w === 'tools' ? 120 : 200), behavior: 'instant' });
+            await new Promise((r) => setTimeout(r, 400));
+            const row = (w === 'tools' ? host.querySelector('.tools') : host.querySelector('th')) as HTMLElement;
+            const control = (w === 'tools' ? Array.from(host.querySelectorAll('.tools button')).at(-1) : Array.from(host.querySelectorAll('th')).at(-1)) as HTMLElement;
+            const r = control.getBoundingClientRect();
+            const misses: string[] = [];
+            let samples = 0;
+            for (let x = Math.ceil(r.left) + 1; x < r.right - 1; x += 3) {
+              samples += 1;
+              const at = document.elementFromPoint(x, r.top + r.height / 2);
+              if (at === null || at.closest(w === 'tools' ? 'button' : 'th') !== control) misses.push(`${String(x)}: ${at === null ? 'none' : `${at.tagName.toLowerCase()}.${String(at.className)}`}`);
+            }
+            const aa = root.querySelector(':scope > .aa-wrap');
+            return {
+              top: row.getBoundingClientRect().top,
+              aaBottom: aa === null ? null : aa.getBoundingClientRect().bottom,
+              samples,
+              misses,
+              barH: getComputedStyle(root).getPropertyValue('--bar-h'),
+              hidden: root.classList.contains('bar-hidden'),
+            };
+          }, what);
+        const tools = await probe('tools');
+        const head = await probe('head');
+        seen[name] = { tools, head };
+        if (name === 'bar off') {
+          expect(tools.samples, 'the tools probe sampled').toBeGreaterThan(10);
+          expect(head.samples, 'the head probe sampled').toBeGreaterThan(10);
+          expect(tools.misses, `Aa takes points of the stuck tools' last button: ${JSON.stringify(tools)}`).toEqual([]);
+          expect(head.misses, `Aa takes points of the sticky head's last cell: ${JSON.stringify(head)}`).toEqual([]);
+          expect(tools.top, 'the tools row sticks below Aa').toBeGreaterThanOrEqual(tools.aaBottom ?? Number.POSITIVE_INFINITY);
+          expect(head.top, 'the head sticks below Aa').toBeGreaterThanOrEqual(head.aaBottom ?? Number.POSITIVE_INFINITY);
+        } else {
+          // The bar's own tops, unchanged: the bar's height plus 6 px for the tools and its height for the head (6 px and 0 while the bar is slid away).
+          expect(tools.top).toBeCloseTo(tools.hidden ? 6 : Number.parseFloat(tools.barH) + 6, 0);
+          expect(head.top).toBeCloseTo(head.hidden ? 0 : Number.parseFloat(head.barH), 0);
+        }
+      } finally {
+        console.warn(`host-measure: ${JSON.stringify({ row: 'B8.7', browser, viewportWidth: 390, seen })}`);
+        await host.close();
+      }
+    }
   }, 300_000);
 });
