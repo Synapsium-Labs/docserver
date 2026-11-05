@@ -825,6 +825,29 @@ describe('a host\'s own button toggles the settings (T6-c)', () => {
     }
   });
 
+  it('T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7)', async () => {
+    const root = mount();
+    await enhance(root, {});
+    expect(tool(root).closest('.bar-tools')).not.toBeNull();
+    for (const hasFocus of [false, true]) {
+      click(tool(root));
+      expect(menu(root).hidden).toBe(false);
+      const spy = vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+      radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+      expect(menu(root).hidden).toBe(false);
+      spy.mockRestore();
+      // Aa's own button, Escape and the focus moving to another element still close it.
+      click(tool(root));
+      expect(menu(root).hidden).toBe(true);
+    }
+    click(tool(root));
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    radio(root, 'theme', 'auto').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: outside }));
+    expect(menu(root).hidden).toBe(true);
+    outside.remove();
+  });
+
   it('T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it', async () => {
     const root = mount();
     await enhance(root, { chrome: { bar: false } });

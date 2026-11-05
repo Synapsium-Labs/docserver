@@ -2361,3 +2361,52 @@ Method as in the first section of this file: bytes saved with the sha256 of the 
   }
 ]
 ```
+
+## Fix round FR1: a focusout naming no element no longer closes Aa, bar on (advisory A7)
+
+Fix round FR1, item A7 (the review's advisory A7): ruling T6-j changes bar-on hosts as well as bar-off ones. A `focusout` whose related target is null (the focus leaving the document, as when the window loses it or Tab leaves the last control) used to close Aa, and no longer does. T6-j is kept as ruled; the new case pins the changed behaviour on a root with the bar ON, where Aa sits in the bar's tray, with `document.hasFocus()` reading false and true. Aa's own button, and a focus moving to another element of the document, still close it. No source changed for this item, so no generated output moved; both rows run on the fixed tree of the first F2 commit.
+
+Both rows were measured, and the case is the only new test; it passes on the shipped tree (55 passed) and goes red under either edit. Method as above (2347 and 2479 threads, limits 3847 and 3979).
+
+| Row | Guard | File | Change | Red | Restore |
+|---|---|---|---|---|---|
+| B6ax | ruling T6-j: a focusout naming no element never closes Aa, with the bar on | `src/enhance/settings.ts` | `if (menu.hidden \|\| to === null \|\| contains(wrap, to)) return;` -> `if (menu.hidden \|\| contains(wrap, to)) return;` | test/enhance-settings.test.ts: 3 failed \| 52 passed (55). test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus; test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7); test/enhance-settings.test.ts: T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+| B6ay | ruling T6-j: the old rule (close unless the document still has the focus) is not back | `src/enhance/settings.ts` | `to === null \|\|` -> `(to === null && doc.hasFocus()) \|\|` in the same condition | test/enhance-settings.test.ts: 2 failed \| 53 passed (55). test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus; test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7) | sha256 `ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930` restored, equal |
+
+```json
+[
+  {
+    "id": "B6ax",
+    "guard": "ruling T6-j: a focusout naming no element never closes Aa, with the bar on",
+    "file": "src/enhance/settings.ts",
+    "change": "`if (menu.hidden || to === null || contains(wrap, to)) return;` -> `if (menu.hidden || contains(wrap, to)) return;`",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "3 failed | 52 passed (55)",
+    "failing": [
+      "test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+      "test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7)",
+      "test/enhance-settings.test.ts: T6-j: focus moving to another element of the document outside the menu, an outside press and Escape still close it"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  },
+  {
+    "id": "B6ay",
+    "guard": "ruling T6-j: the old rule (close unless the document still has the focus) is not back",
+    "file": "src/enhance/settings.ts",
+    "change": "`to === null ||` -> `(to === null && doc.hasFocus()) ||` in the same condition",
+    "tests": "test/enhance-settings.test.ts",
+    "rc": 1,
+    "red": "2 failed | 53 passed (55)",
+    "failing": [
+      "test/enhance-settings.test.ts: T6-j: a focusout naming no element never closes the menu, whether or not the document still has the focus",
+      "test/enhance-settings.test.ts: T6-j on a root with the bar on (every host): a focusout naming no element, the focus leaving the document, no longer closes Aa (FR1, A7)"
+    ],
+    "assertionErrorsOnly": true,
+    "sha256": "ab07fba60fe9a06f1e88baa4a5b39eb7021b451ba0295687755c366010c29930",
+    "restored": true
+  }
+]
+```
