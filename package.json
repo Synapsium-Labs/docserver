@@ -67,7 +67,8 @@
     "build:mermaid": "node scripts/build-mermaid.mjs",
     "build:frame": "node scripts/build-frame.mjs",
     "prepack": "node scripts/verify-assets.mjs",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build",
+    "decisions": "node scripts/decisions/build.mjs"
   },
   "dependencies": {
     "@types/js-yaml": "4.0.9",

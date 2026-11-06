@@ -5,8 +5,8 @@
 // (the 100.64/10 block) addresses, e-mail addresses outside the reserved example domains and noreply, and
 // credential shapes. It scans the tree: every file of the checkout, minus the root .git (a directory, or in a
 // linked worktree a file holding an absolute path), the build outputs that .gitignore keeps out (node_modules,
-// dist, coverage, logs, packed tarballs, the demo page's demo-out/ and the visual comparison's visual-out/ at the
-// root), docs/, which holds the programme's working papers and is scrubbed separately before the repository goes
+// dist, coverage, logs, packed tarballs, the demo page's demo-out/, the decision log's decisions-out/ and the visual
+// comparison's visual-out/ at the root), docs/, which holds the programme's working papers and is scrubbed separately before the repository goes
 // public, two named root-level scratch directories that tools create and git never tracks, and the woff2 fonts
 // directly in assets/fonts, which
 // are binary and pinned by hash instead. It walks the directory rather than asking git, so it works in a copy that has no .git;
@@ -42,10 +42,11 @@ const ROOT_SKIP: Readonly<Record<string, string>> = {
   '.superpowers': 'scratch that a planning workflow creates and git never tracks',
   'graphify-out': 'scratch that a code-graph tool creates and git never tracks',
   'demo-out': 'the demo page scripts/demo/build.mjs writes (copies of the assets among it); git-ignored',
+  'decisions-out': 'the decision log pages scripts/decisions/build.mjs writes (copies of the assets among it); git-ignored',
   'visual-out': 'the screenshots and reports scripts/visual/compare.mjs writes (a measured page may name anything); git-ignored',
 };
 /** The ROOT_SKIP entries that a script of this repository writes, so .gitignore must keep them out of git. */
-const WRITTEN = ['demo-out', 'visual-out'];
+const WRITTEN = ['demo-out', 'decisions-out', 'visual-out'];
 /** Files never read as text, by name: ignored logs, editor litter and packed tarballs. */
 const SKIP_FILE = /(?:\.log|\.tgz|^\.DS_Store)$/;
 /**

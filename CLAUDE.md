@@ -16,6 +16,7 @@ A shared, pure Markdown renderer and rich reading layout. The design is §3 of c
 - **The conformance corpus is the contract.** A change that moves any golden file says so in its commit and in the release notes. A hostile case never loses its expected verdict.
 - **Mutation discipline:** every guard ships with a case that goes red when the guard is removed. Measure it; do not assume it.
 - **Releases:** exact versions only. Consumers pin one version and never a branch.
+- **Decisions:** every ruling is one file, `docs/decisions/C<n>.md`, with a row in `docs/decisions/README.md` (its "Adding a decision" is the format); `test/decisions.test.ts` checks both. `npm run decisions` builds the log as local pages in `decisions-out/`.
 
 ## Build and test
 
