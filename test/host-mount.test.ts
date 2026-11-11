@@ -1150,7 +1150,7 @@ describe('L3.H11 each FrameErrorCode maps to its FallbackReason; no iframe is cr
     it(`${code} (reached through a stubbed frameDocument): assets, after the internal warning`, () => {
       stub.code = code;
       expect(fellBack(input(PLAIN))).toEqual(['assets']);
-      expect(warn.mock.calls).toContainEqual(['docserver host: internal', code]);
+      expect(warn.mock.calls).toContainEqual(['pinax host: internal', code]);
     });
   }
 
@@ -1223,7 +1223,7 @@ describe("B4 mermaidDraw 'after-ready': the build is fetched in parallel with th
   const AFTER = { mermaidDraw: 'after-ready' } as const;
   const OP_CAP = 8_388_608;
   /** The one warning's first argument; its second is a fixed reason, never a value the loader supplied. */
-  const UNAVAILABLE = 'docserver host: the Mermaid build is unavailable';
+  const UNAVAILABLE = 'pinax host: the Mermaid build is unavailable';
 
   /** A loader the test settles by hand, and the number of times it was called. */
   function deferred(): { readonly load: () => Promise<string>; readonly calls: () => number; resolve(v: unknown): void; reject(e: unknown): void } {

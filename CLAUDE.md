@@ -1,4 +1,4 @@
-# docserver
+# pinax
 
 A shared, pure Markdown renderer and rich reading layout. The design is §3 of ccrc's spec,
 `docs/superpowers/specs/2026-10-12-rich-docs-reader-and-shared-renderer-design.md` in

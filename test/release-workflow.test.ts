@@ -299,7 +299,7 @@ describe('release.yml: verify-tag (L3.W7, L3.W11)', () => {
   function packageDir(pkg: Record<string, unknown>, assetsVersion: string): string {
     const dir = scratch('pkg');
     mkdirSync(path.join(dir, 'assets'));
-    writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: '@synapsium-labs/docserver', ...pkg }));
+    writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: '@synapsium-labs/pinax', ...pkg }));
     writeFileSync(path.join(dir, 'assets', 'assets.json'), JSON.stringify({ manifest: 1, version: assetsVersion }));
     return dir;
   }
@@ -605,7 +605,7 @@ describe('release.yml: one tarball, attested and published (L3.W4, L3.W5, L3.W6,
   function recheck(bytes: string, sums: (sha: string) => string, sha256?: string): SpawnSyncReturns<string> {
     const step = stepNamed('publish', RECHECK);
     const dir = scratch('release');
-    const name = 'synapsium-labs-docserver-1.0.0.tgz';
+    const name = 'synapsium-labs-pinax-1.0.0.tgz';
     writeFileSync(path.join(dir, name), bytes);
     const sha = spawnSync('sha256sum', [name], { cwd: dir, encoding: 'utf8' }).stdout.split(' ')[0] ?? '';
     writeFileSync(path.join(dir, 'SHA256SUMS'), sums(sha));
@@ -613,7 +613,7 @@ describe('release.yml: one tarball, attested and published (L3.W4, L3.W5, L3.W6,
   }
 
   it('L3.W6: the re-check passes on the tarball build packed, and fails on a changed byte, a changed SHA256SUMS or a sha256 build did not hand on', () => {
-    const name = 'synapsium-labs-docserver-1.0.0.tgz';
+    const name = 'synapsium-labs-pinax-1.0.0.tgz';
     expect(recheck('bytes', (sha) => `${sha}  ${name}\n`).status).toBe(0);
     // The file changed after SHA256SUMS was written (the sums name the original bytes).
     const original = spawnSync('sha256sum', [], { input: 'bytes', encoding: 'utf8' }).stdout.split(' ')[0] ?? '';

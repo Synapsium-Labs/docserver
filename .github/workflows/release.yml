@@ -372,7 +372,7 @@ jobs:
         run: |
           mkdir -p -- "${RUNNER_TEMP:?}/post-verify"
           for attempt in $(seq 1 20); do
-            if npm view "@synapsium-labs/docserver@${VERSION:?}" version > /dev/null 2>&1; then exit 0; fi
+            if npm view "@synapsium-labs/pinax@${VERSION:?}" version > /dev/null 2>&1; then exit 0; fi
             echo "the registry does not serve ${VERSION} yet (attempt ${attempt} of 20)"
             sleep 30
           done
@@ -384,8 +384,8 @@ jobs:
           VERSION: ${{ needs.verify-tag.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          npm install @synapsium-labs/docserver@$VERSION --ignore-scripts
+          npm install @synapsium-labs/pinax@$VERSION --ignore-scripts
           npm audit signatures
-          npm pack @synapsium-labs/docserver@$VERSION
-          test "$(npm view @synapsium-labs/docserver@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-docserver-$VERSION.tgz | openssl base64 -A)"
-          gh attestation verify synapsium-labs-docserver-$VERSION.tgz --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml
+          npm pack @synapsium-labs/pinax@$VERSION
+          test "$(npm view @synapsium-labs/pinax@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-pinax-$VERSION.tgz | openssl base64 -A)"
+          gh attestation verify synapsium-labs-pinax-$VERSION.tgz --repo Synapsium-Labs/pinax --signer-workflow Synapsium-Labs/pinax/.github/workflows/release.yml

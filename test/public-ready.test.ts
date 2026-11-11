@@ -123,8 +123,8 @@ describe('public-ready: the scanner', () => {
       j('someone', '@', 'example.com'),
       j('x', '@', 'y.test'),
       j('12345+someone', '@', 'users.noreply.github.com'),
-      'markdown-it@14.3.2 and @synapsium-labs/docserver and actions/checkout@v4',
-      'https://github.com/Synapsium-Labs/docserver and ./node_modules/.bin/vitest',
+      'markdown-it@14.3.2 and @synapsium-labs/pinax and actions/checkout@v4',
+      'https://github.com/Synapsium-Labs/pinax and ./node_modules/.bin/vitest',
       j('a/ho', 'me/b is not a home path, nor is docs/da', 'ta/x'),
     ];
     expect(negatives.filter((n) => scanText(n).length !== 0)).toEqual([]);
@@ -317,7 +317,7 @@ describe('public-ready: the release files (L3 Task 14)', () => {
 
   it('publishes for the public, with provenance, from exactly this repository (npm compares the provenance to repository.url)', () => {
     expect(manifest.publishConfig).toEqual({ access: 'public', provenance: true });
-    expect(manifest.repository).toEqual({ type: 'git', url: 'git+https://github.com/Synapsium-Labs/docserver.git' });
+    expect(manifest.repository).toEqual({ type: 'git', url: 'git+https://github.com/Synapsium-Labs/pinax.git' });
   });
 
   it('is MIT: the package says so and LICENSE is the MIT licence', () => {
@@ -329,7 +329,7 @@ describe('public-ready: the release files (L3 Task 14)', () => {
 
   it('SECURITY.md sends a vulnerability to a private advisory, never a public issue', () => {
     const security = readRoot('SECURITY.md');
-    expect(security).toContain('https://github.com/Synapsium-Labs/docserver/security/advisories/new');
+    expect(security).toContain('https://github.com/Synapsium-Labs/pinax/security/advisories/new');
     expect(security).toMatch(/do not open a public issue/i);
   });
 

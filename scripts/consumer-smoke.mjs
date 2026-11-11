@@ -6,7 +6,7 @@
 //
 // It makes a throwaway consumer project, installs the packed tarball there, and runs a check from inside that
 // project, so every import resolves by package name through the tarball's own exports map, never through this
-// checkout. The check imports `@synapsium-labs/docserver/render` and `/conformance`, confirms the entry
+// checkout. The check imports `@synapsium-labs/pinax/render` and `/conformance`, confirms the entry
 // resolved into the consumer's node_modules and that a deep import past the exports map is refused, imports
 // `/enhance` in Node (it is import-inert) and checks its five exports, resolves the stylesheet, the font licence and
 // the Mermaid file through `./assets/*` and imports the Mermaid file there (its one export, the default, is Mermaid's
@@ -45,7 +45,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGE = '@synapsium-labs/docserver';
+const PACKAGE = '@synapsium-labs/pinax';
 
 /** The installed exports map's keys, sorted: the whole public surface. */
 const EXPORT_KEYS = ['./assets/*', './conformance', './enhance', './frame', './highlight', './host', './package.json', './render'];

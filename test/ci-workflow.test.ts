@@ -571,7 +571,7 @@ describe('ci.yml: the frame build is checked and the packed tarball is the one n
     const at = steps.findIndex((s) => s.run === 'npm run build');
     expect(at).toBeGreaterThan(steps.findIndex((s) => s.run === './node_modules/.bin/vitest run'));
     expect(steps.slice(at + 1, at + 3)).toEqual([{ run: FRAME_CHECK }, { run: MANIFEST_DIFF }]);
-    expect(pkg.name).toBe('@synapsium-labs/docserver');
+    expect(pkg.name).toBe('@synapsium-labs/pinax');
     const scripts = (JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts;
     expect(scripts['build']).toContain('npm run build:frame');
     expect(scripts['prepack']).toBe('node scripts/verify-assets.mjs');
@@ -609,7 +609,7 @@ describe('ci.yml: the frame build is checked and the packed tarball is the one n
   }
 
   it('hands over the filename `npm pack --json` gives, whatever the version', () => {
-    for (const filename of ['synapsium-labs-docserver-1.0.0.tgz', 'synapsium-labs-docserver-1.1.0-rc.2.tgz']) {
+    for (const filename of ['synapsium-labs-pinax-1.0.0.tgz', 'synapsium-labs-pinax-1.1.0-rc.2.tgz']) {
       const { r, out, npm } = pack(JSON.stringify([{ name: pkg.name, filename, files: [] }]));
       expect(r.status, r.stderr).toBe(0);
       expect(out.split('\n').filter((l) => l !== '')).toEqual([`tarball=${filename}`]);
@@ -618,12 +618,12 @@ describe('ci.yml: the frame build is checked and the packed tarball is the one n
   });
 
   it.each([
-    ['npm pack fails (prepack refused the bytes)', JSON.stringify([{ filename: 'synapsium-labs-docserver-1.0.0.tgz' }]), { FAKE_PACK_RC: '1' }],
+    ['npm pack fails (prepack refused the bytes)', JSON.stringify([{ filename: 'synapsium-labs-pinax-1.0.0.tgz' }]), { FAKE_PACK_RC: '1' }],
     ['stdout is not JSON', 'verify-assets: ok', {}],
     ['no filename', JSON.stringify([{ name: 'x' }]), {}],
     ['a name with a path', JSON.stringify([{ filename: '../x.tgz' }]), {}],
     ['a name that is not a tarball', JSON.stringify([{ filename: 'x.zip' }]), {}],
-    ['no tarball where npm says it wrote one', JSON.stringify([{ filename: 'synapsium-labs-docserver-1.0.0.tgz' }]), { FAKE_PACK_FILE: 'none' }],
+    ['no tarball where npm says it wrote one', JSON.stringify([{ filename: 'synapsium-labs-pinax-1.0.0.tgz' }]), { FAKE_PACK_FILE: 'none' }],
   ])('fails, handing over nothing, when %s', (_what, json, extra) => {
     const { r, out } = pack(json, extra);
     expect(r.status).not.toBe(0);

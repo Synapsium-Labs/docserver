@@ -71,13 +71,13 @@ interface Scan {
  * prefix or docKey outside its grammar, before the storage is touched.
  */
 export function createHostStore(storage: HostStorage, prefix: string = DEFAULT_STORE_PREFIX, docKey?: string): HostStore {
-  if (typeof prefix !== 'string') throw new TypeError('docserver host: storePrefix must be a string');
+  if (typeof prefix !== 'string') throw new TypeError('pinax host: storePrefix must be a string');
   if (prefix.length < 1 || prefix.length > PREFIX_MAX || hasControl(prefix)) {
-    throw new RangeError(`docserver host: storePrefix must be 1 to ${PREFIX_MAX} code units with no control character`);
+    throw new RangeError(`pinax host: storePrefix must be 1 to ${PREFIX_MAX} code units with no control character`);
   }
-  if (docKey !== undefined && typeof docKey !== 'string') throw new TypeError('docserver host: docKey must be a string');
+  if (docKey !== undefined && typeof docKey !== 'string') throw new TypeError('pinax host: docKey must be a string');
   if (docKey !== undefined && !isDocKey(docKey)) {
-    throw new RangeError(`docserver host: docKey must be 1 to ${DOC_KEY_MAX} code units with no control character`);
+    throw new RangeError(`pinax host: docKey must be 1 to ${DOC_KEY_MAX} code units with no control character`);
   }
 
   const docPrefix = `${prefix}doc:`;
@@ -101,7 +101,7 @@ export function createHostStore(storage: HostStorage, prefix: string = DEFAULT_S
 
   const scan = (): Scan => {
     const n = storage.length;
-    if (!Number.isSafeInteger(n) || n < 0) throw new TypeError('docserver host: storage length');
+    if (!Number.isSafeInteger(n) || n < 0) throw new TypeError('pinax host: storage length');
     const keys: string[] = [];
     for (let i = 0; i < n; i += 1) {
       const k = storage.key(i);

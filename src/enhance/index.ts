@@ -1,4 +1,4 @@
-// The public entry of `@synapsium-labs/docserver/enhance`: the reading layout over a rendered document.
+// The public entry of `@synapsium-labs/pinax/enhance`: the reading layout over a rendered document.
 // Import-inert: importing it touches no DOM, window, document, storage, timers or network; nothing runs until
 // enhance() is called. The lifecycle is lifecycle.ts; the stylesheet is assets/reader.css.
 export { destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementPrefs } from './lifecycle.js';
