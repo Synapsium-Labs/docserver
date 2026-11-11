@@ -141,15 +141,15 @@ describe('package.json: exports keys', () => {
 describe('package.json: identity', () => {
   // Whether the package is private is pinned once, in test/public-ready.test.ts (L3 Task 14), so the v1 release PR
   // flips exactly one pin.
-  it('is the MIT, ESM package @synapsium-labs/docserver', () => {
-    expect(pkg.name).toBe('@synapsium-labs/docserver');
+  it('is the MIT, ESM package @synapsium-labs/pinax', () => {
+    expect(pkg.name).toBe('@synapsium-labs/pinax');
     expect(pkg.type).toBe('module');
     expect(pkg.license).toBe('MIT');
   });
 
   it('declares its modules free of side effects, but not its stylesheets', () => {
     // A bundler drops a bare import of a file the package calls side-effect free, so with `false` webpack would
-    // drop `import '@synapsium-labs/docserver/assets/reader.css'` and ship no stylesheet. No module of the
+    // drop `import '@synapsium-labs/pinax/assets/reader.css'` and ship no stylesheet. No module of the
     // package has a side effect on import (test/enhance-walls.test.ts and the render purity tests hold that).
     expect(pkg.sideEffects).toEqual(['*.css']);
   });

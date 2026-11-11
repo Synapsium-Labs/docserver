@@ -65,7 +65,7 @@ const FRAME_API = [
 const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'MAX_LINE_CHARS', 'MAX_WHOLE_BLOCK_CHARS', 'createHighlighter', 'resolveLanguage'];
 
 const INERT_LINE =
-  'consumer-smoke: @synapsium-labs/docserver/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
+  'consumer-smoke: @synapsium-labs/pinax/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
 const ASSETS_LINE =
   'consumer-smoke: every one of the 13 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
 const SCANS_LINE =
@@ -76,18 +76,18 @@ const SMOKE_LINES = [
   'consumer-smoke: installed the tarball offline',
   STRICT_LINE,
   'consumer-smoke: the frame and highlight declarations typecheck with no DOM library and no ambient types',
-  'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
+  'consumer-smoke: @synapsium-labs/pinax/render resolves into node_modules',
   'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-  'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementPrefs',
+  'consumer-smoke: @synapsium-labs/pinax/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementPrefs',
   'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
   "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
   'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
   // the frame layer (L3 Task 12)
   'consumer-smoke: the exports map is exactly ./assets/*, ./conformance, ./enhance, ./frame, ./highlight, ./host, ./package.json, ./render',
   INERT_LINE,
-  `consumer-smoke: @synapsium-labs/docserver/frame exports exactly ${FRAME_API.join(', ')}`,
-  'consumer-smoke: @synapsium-labs/docserver/host exports exactly mountDocFrame',
-  `consumer-smoke: @synapsium-labs/docserver/highlight exports exactly ${HIGHLIGHT_API.join(', ')}`,
+  `consumer-smoke: @synapsium-labs/pinax/frame exports exactly ${FRAME_API.join(', ')}`,
+  'consumer-smoke: @synapsium-labs/pinax/host exports exactly mountDocFrame',
+  `consumer-smoke: @synapsium-labs/pinax/highlight exports exactly ${HIGHLIGHT_API.join(', ')}`,
   'consumer-smoke: deep imports of the frame, host and highlight builds and of ./frame-runtime are refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
   ASSETS_LINE,
   'consumer-smoke: frameDocument over mermaid-figures (with Mermaid) and headings (without), from the installed files and frameCsp(), inlines those files byte for byte, in order',
@@ -244,7 +244,7 @@ afterAll(() => {
 describe('npm pack', () => {
   it('names the tarball as CI expects it', () => {
     expect(packed.filename).toBe(TARBALL);
-    expect(TARBALL).toBe('synapsium-labs-docserver-1.1.0.tgz');
+    expect(TARBALL).toBe('synapsium-labs-pinax-1.1.0.tgz');
   });
 
   it('holds the six entries with their types, the corpus files, the licence, the readme, the assets and their notices', () => {
@@ -375,8 +375,8 @@ describe('the packed package with a defect for each frame-layer check (reviews E
     const want: string[] = [...SMOKE_LINES];
     // In the order the check prints them: the import probe, then assets.json, then the scans.
     want.splice(at(INERT_LINE), 1,
-      'consumer-smoke: @synapsium-labs/docserver/highlight, imported alone in a fresh process, read setTimeout and added the globals none',
-      'consumer-smoke: @synapsium-labs/docserver/host, imported alone in a fresh process, read document and added the globals none');
+      'consumer-smoke: @synapsium-labs/pinax/highlight, imported alone in a fresh process, read setTimeout and added the globals none',
+      'consumer-smoke: @synapsium-labs/pinax/host, imported alone in a fresh process, read document and added the globals none');
     want.splice(want.indexOf(ASSETS_LINE), 1, 'consumer-smoke: assets: fonts/README.md is installed but not listed in assets.json');
     want.splice(want.indexOf(SCANS_LINE), 1, 'consumer-smoke: scans: meta-appended.html passes the M8.3 scan it must fail');
     expect(defectiveSmoke?.stdout).toBe([...want, 'consumer-smoke: 84 of 84 cases passed', ''].join('\n'));

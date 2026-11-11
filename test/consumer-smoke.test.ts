@@ -22,7 +22,7 @@ const SMOKE = fileURLToPath(new URL('../scripts/consumer-smoke.mjs', import.meta
 const DAY = 24 * 60 * 60 * 1000;
 
 const SOURCE = readFileSync(SMOKE, 'utf8');
-const PACKAGE = '@synapsium-labs/docserver';
+const PACKAGE = '@synapsium-labs/pinax';
 
 /**
  * A stand-in `npm`: records its arguments, then, when FAKE_KIND is set, installs a fake package into the consumer

@@ -1,9 +1,9 @@
-// The public entry of `@synapsium-labs/docserver/conformance` (docserver L1; architecture sections A, D, F).
+// The public entry of `@synapsium-labs/pinax/conformance` (docserver L1; architecture sections A, D, F).
 // Node-only by design: it reads the corpus that ships with the package. A consumer runs it in its own CI
 // against any render function with the same contract as `render()` from `./render`:
 //
-//   import { render } from '@synapsium-labs/docserver/render';
-//   import { runCorpus } from '@synapsium-labs/docserver/conformance';
+//   import { render } from '@synapsium-labs/pinax/render';
+//   import { runCorpus } from '@synapsium-labs/pinax/conformance';
 //   const run = runCorpus(render);
 //   if (!run.ok) throw new Error(run.results.filter((r) => !r.ok).map((r) => r.id).join(', '));
 //

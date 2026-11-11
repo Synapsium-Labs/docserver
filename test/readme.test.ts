@@ -334,7 +334,7 @@ describe('README: Hosting on your own origin (ledger C50, plan Q13)', () => {
   it('L3.H10: every recipe typechecks against EnhanceOptions under the strict settings', () => {
     expect(recipes).toHaveLength(5);
     const dir = fileURLToPath(new URL('./', import.meta.url));
-    const files = new Map(recipes.map((r, i) => [path.join(dir, `readme-recipe-${String(i)}.ts`), r.replaceAll("'@synapsium-labs/docserver/enhance'", "'../src/enhance/index.js'")]));
+    const files = new Map(recipes.map((r, i) => [path.join(dir, `readme-recipe-${String(i)}.ts`), r.replaceAll("'@synapsium-labs/pinax/enhance'", "'../src/enhance/index.js'")]));
     const options: ts.CompilerOptions = {
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.NodeNext,
@@ -488,11 +488,11 @@ describe('README: Release verification', () => {
   it("states the release lane's post-verify commands, verbatim, one per line (plan Reference §13 step 7)", () => {
     const [commands] = blocks(section('Release verification'), 'sh');
     expect(commands?.split('\n').filter((l) => l !== '')).toEqual([
-      'npm install @synapsium-labs/docserver@$VERSION --ignore-scripts',
+      'npm install @synapsium-labs/pinax@$VERSION --ignore-scripts',
       'npm audit signatures',
-      'npm pack @synapsium-labs/docserver@$VERSION',
-      'test "$(npm view @synapsium-labs/docserver@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-docserver-$VERSION.tgz | openssl base64 -A)"',
-      'gh attestation verify synapsium-labs-docserver-$VERSION.tgz --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml',
+      'npm pack @synapsium-labs/pinax@$VERSION',
+      'test "$(npm view @synapsium-labs/pinax@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-pinax-$VERSION.tgz | openssl base64 -A)"',
+      'gh attestation verify synapsium-labs-pinax-$VERSION.tgz --repo Synapsium-Labs/pinax --signer-workflow Synapsium-Labs/pinax/.github/workflows/release.yml',
     ]);
   });
 
@@ -500,8 +500,8 @@ describe('README: Release verification', () => {
     const [commands] = blocks(section('Release verification'), 'sh');
     const lines = commands?.split('\n').filter((l) => l !== '') ?? [];
     // npm names a scoped package's tarball as test/pack.test.ts's TARBALL does: the @ dropped, the slash a dash.
-    const tarball = `${'@synapsium-labs/docserver'.replace(/^@/, '').replace('/', '-')}-$VERSION.tgz`;
-    const made = lines.findIndex((l) => l.startsWith('npm pack @synapsium-labs/docserver@$VERSION'));
+    const tarball = `${'@synapsium-labs/pinax'.replace(/^@/, '').replace('/', '-')}-$VERSION.tgz`;
+    const made = lines.findIndex((l) => l.startsWith('npm pack @synapsium-labs/pinax@$VERSION'));
     const read = lines.map((l, i) => [l, i] as const).filter(([l]) => l.includes(tarball)).map(([, i]) => i);
     expect(made).toBeGreaterThanOrEqual(0);
     expect(read).toHaveLength(2);

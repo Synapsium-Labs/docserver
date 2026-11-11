@@ -1,4 +1,4 @@
-// The public entry of `@synapsium-labs/docserver/render`: pure, deterministic, for Node, browsers and workers.
+// The public entry of `@synapsium-labs/pinax/render`: pure, deterministic, for Node, browsers and workers.
 // `render` is the engine of render.ts; `scanRefs` (scan.ts) parses with the same engine and builds no html.
 // `ALLOWLIST` is the raw HTML render() recognises (allowlist.ts); everything else is text.
 export { ALLOWLIST } from './allowlist.js';

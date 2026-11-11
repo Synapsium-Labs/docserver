@@ -1,6 +1,6 @@
 # Changelog
 
-Every published version of `@synapsium-labs/docserver`, newest first. Consumers pin one exact version, so each entry says what moved between versions: the public API, the conformance corpus (every moved golden file is named), the frame's assets, the bridge protocol and the seed schema.
+Every published version of `@synapsium-labs/pinax`, newest first. Versions up to 1.1.0 were published as `@synapsium-labs/docserver`, the library's name before the rename. Consumers pin one exact version, so each entry says what moved between versions: the public API, the conformance corpus (every moved golden file is named), the frame's assets, the bridge protocol and the seed schema.
 
 How versions move:
 
