@@ -5,8 +5,9 @@
 // `./host` needs the same judgement to refuse a token before it reaches an adapter, and the pure `./frame` entry cannot
 // import the reader, so this file holds the grammar word for word. test/frame-anchor.test.ts owns the equality of the two:
 // `isAnchorToken(s)` is true exactly when nav's `parseToken(s)` is not null, for every token nav writes and every shape
-// nav's check rejects. The frame's bootstrap does not bundle this grammar (the port parser reads only the length of a
-// `from`, `ANCHOR_LIMITS.from`); the reader judges the token itself.
+// nav's check rejects. The frame's bootstrap bundles `isAnchorToken` (docserver parity T3): its `hash` adapter sends a
+// `from` only when the token passes, as `./host` refuses one that does not; the port parser reads only the length of a
+// `from`, `ANCHOR_LIMITS.from`, and the reader judges a token it is handed back itself.
 //
 // Pure: constants and two predicates, no import.
 

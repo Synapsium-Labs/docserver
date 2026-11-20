@@ -18,8 +18,8 @@ The appearance contract (a minor when released): a host can hand the frame one a
 
 The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
 
-- `assets/frame/bootstrap.js`: `500baba7c4664051f98628171d58c2ead1c730c4cf85745c065157735d1bac7c`, csp `'sha256-UAurp8RmQFH5higXHVjC6tHHMMTPhXRcBlFXc10brHw='`
-- `assets/frame/enhance.js`: `ba16d04952e3960597436fefb94df1638c4c1f15f30e17647978651681852cd1`, csp `'sha256-uhbQSVLjlgWXQ2/vuU3xY4xMHxXzDhdkeXhlFoGFLNE='`
+- `assets/frame/bootstrap.js`: `9dda7f13850957aa1e3736b5c6172fd98bfbcd3d25eaec8e405cad1eeec5d9f6`, csp `'sha256-ndp/E4UJV6oeNza1xhcv2Yv7zT0l6uyOQFytHu7F2fY='`
+- `assets/frame/enhance.js`: `cee332b34426f354e13d0b960ae8d0c8afe1e45bbfa6c6e344b827e351a87903`, csp `'sha256-zuMys0Qm81ThPQuWCujQyK/h5Fu/psbjRLgn41GoeQM='`
 - `assets/frame/reader.css`: `811bd9b312c7009ba6368599c6a2a8b2284265ec68041f22f184175f84d9cd2f`
 - `assets/reader.css`: `19011025e3f40c49f9585d7d09c6948d7c9861c2d092a2717ff5a7f5f8f2455d`
 

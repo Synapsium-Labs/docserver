@@ -4,7 +4,7 @@
 // bootstrap; DOM-free, and its time and timers come from the caller's clock, so a test runs it on a fake one.
 //
 // Before open() (the frame's `ready`): a bounded queue of 64 entries, in arrival order: store.set coalesced per key
-// (the latest value wins and moves to the end), the latest navigate, version and hash, at most 4 copies (a fifth is
+// (the latest value wins and moves to the end), the latest navigate, version and hash (a place is never coalesced: each stays, in order), at most 4 copies (a fifth is
 // refused), one changes (a newer request supersedes the queued one, which resolves null at once and is never sent).
 // Past 64 entries the oldest entry that is not a store.set is dropped; with the coalescing above the queue holds at most
 // 16, so the cap is a defensive bound. open() flushes it: the copies at once, every other entry through the pacer.
@@ -54,7 +54,7 @@ export interface OutboxOptions {
 }
 
 /** The ops send() takes; copy and changes have their own calls. */
-export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' }>;
+export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' | 'place' }>;
 
 /** A changes answer as L2's `changes` callback resolves it (L2's readChangeSet reads it), or null. */
 export interface ChangesAnswer {
@@ -65,7 +65,7 @@ export interface ChangesAnswer {
 export type ChangesResult = Extract<ParentToFrame, { t: 'changes.result' }>;
 
 export interface Outbox {
-  /** store.set, navigate, version, hash or progress: queued before open(), paced and coalesced after. */
+  /** store.set, navigate, version, hash, progress or place: queued before open(), paced and coalesced after. */
   send(op: QueuedOp): void;
   /** A copy: true when it was posted (or queued before open()), false when it is refused (its share is spent). */
   copy(text: string): boolean;
@@ -255,7 +255,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
   const queueEarly = (e: Entry): void => {
     if (e.kind === 'op') {
       const op = e.op;
-      early = early.filter((x) => !(x.kind === 'op' && x.op.t === op.t && (op.t !== 'store.set' || (x.op.t === 'store.set' && x.op.key === op.key))));
+      early = early.filter((x) => !(x.kind === 'op' && op.t !== 'place' && x.op.t === op.t && (op.t !== 'store.set' || (x.op.t === 'store.set' && x.op.key === op.key))));
     }
     early.push(e);
     if (early.length > QUEUE_MAX) {
@@ -337,7 +337,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
       const now = clock.now();
       for (const e of queued) {
         if (e.kind === 'copy') postEntry(e, now);
-        else if (e.kind === 'changes' || e.op.t === 'hash' || e.op.t === 'store.set') enqueue(e);
+        else if (e.kind === 'changes' || e.op.t === 'hash' || e.op.t === 'store.set' || e.op.t === 'place') enqueue(e);
         else lead(lanes[e.op.t], e.op, windowOf[e.op.t]);
       }
     },

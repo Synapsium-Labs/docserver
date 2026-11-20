@@ -12,7 +12,7 @@
 // (state.ts), so a storage hook can never run before the instance is reserved. The signal is a host object read
 // through its own interface (`aborted`, its listeners).
 //
-// A function option (onLink, onHash, copy, changes, openVersion, itemLink, onProgress, and mermaid.load) is an own data property
+// A function option (onLink, onHash, copy, changes, openVersion, itemLink, onProgress, onPlace, and mermaid.load) is an own data property
 // holding a function. It is only checked with `typeof` here, never called, and no property of it is read, so no host
 // code runs; it is kept with the object it came from (its receiver) in `callbacks`, which only host.ts calls, inside
 // the instance's operations. Features never see the functions: they use `ctx.host`.
@@ -112,7 +112,7 @@ export function prefNames(): (keyof Prefs)[] {
 export const OPTION_KEYS: readonly string[] = [
   'prefs', 'storage', 'storageKey', 'info', 'folds', 'signal',
   'posKey', 'keyboard', 'chrome', 'rules', 'initialHash',
-  'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'mermaid',
+  'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'onPlace', 'mermaid',
   'vocabulary', 'namespace', 'appearance',
 ];
 const INFO_KEYS: readonly string[] = ['title', 'frontList', 'sha', 'draft', 'commits', 'only'];
@@ -495,6 +495,7 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
     itemLink: callback('itemLink', fields['itemLink'], options),
     mermaid: mermaid?.load ?? null,
     onProgress: callback('onProgress', fields['onProgress'], options),
+    onPlace: callback('onPlace', fields['onPlace'], options),
   });
   return {
     prefs: prefs === undefined ? {} : normalizePrefs(prefs),

@@ -186,6 +186,7 @@ describe('options: a wrong type is refused, and nothing is reserved', () => {
     ['chrome.topSpace a string', { chrome: { topSpace: 'no' } }],
     ['onProgress a string', { onProgress: 'x' }],
     ['onProgress null', { onProgress: null }],
+    ['onPlace a string', { onPlace: 'x' }],
     ['initialHash a number', { initialHash: 7 }],
     ['initialHash an object', { initialHash: {} }],
     ...(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink'] as const).flatMap((k): [string, unknown][] => [
@@ -252,7 +253,7 @@ describe('options: a wrong type is refused, and nothing is reserved', () => {
 describe('options: getters are refused unread, unknown keys refused, inherited properties ignored', () => {
   const withGetter = (target: object, key: string, spy: () => unknown): object => Object.defineProperty(target, key, { get: spy, enumerable: true });
 
-  it.each(['posKey', 'keyboard', 'chrome', 'rules', 'initialHash', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'mermaid'])('a getter for %s', (key) => {
+  it.each(['posKey', 'keyboard', 'chrome', 'rules', 'initialHash', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'onPlace', 'mermaid'])('a getter for %s', (key) => {
     const spy = vi.fn(() => undefined);
     expect(verdict(withGetter({}, key, spy))).toMatch(/^invalid-options: .*not a getter/);
     expect(spy).not.toHaveBeenCalled();
@@ -337,7 +338,7 @@ describe('options: no host function runs while the options are read', () => {
 
   it('neither normalizeOptions nor the whole startup touches a function option, mermaid.load included', async () => {
     const log: string[] = [];
-    const names = ['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress'];
+    const names = ['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'onPlace'];
     const options = { ...Object.fromEntries(names.map((n) => [n, watched(log, n)])), mermaid: { load: watched(log, 'load') } };
     normalizeOptions(options);
     expect(log).toEqual([]);
@@ -545,10 +546,11 @@ function callAll(h: ReturnType<typeof harness>['host']): unknown[] {
     h.itemLink('KEY-1'),
     h.loadMermaid(),
     h.onProgress(0.5),
+    h.onPlace('overlay'),
   ];
 }
 
-const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink', 'onProgress'];
+const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink', 'onProgress', 'onPlace'];
 
 describe('host: one wrapper per host callback', () => {
   it('absent: present is empty, each wrapper calls nothing, enters no operation and answers null', async () => {
@@ -632,8 +634,9 @@ describe('host: one wrapper per host callback', () => {
       itemLink: () => 'https://tracker.example/KEY-1',
       mermaid: () => Promise.resolve({ default: 'module' }),
       onProgress: () => 'ignored',
+      onPlace: () => 'ignored',
     });
-    expect(await Promise.all(callAll(host))).toEqual([undefined, { changed: [[1, 2]] }, undefined, undefined, undefined, 'https://tracker.example/KEY-1', { default: 'module' }, undefined]);
+    expect(await Promise.all(callAll(host))).toEqual([undefined, { changed: [[1, 2]] }, undefined, undefined, undefined, 'https://tracker.example/KEY-1', { default: 'module' }, undefined, undefined]);
     const plain = harness({ copy: noop, changes: () => 7, mermaid: () => 'sync' });
     expect(await Promise.all([plain.host.copy('t'), plain.host.changes(SHA40), plain.host.loadMermaid()])).toEqual([undefined, 7, 'sync']);
   });

@@ -414,9 +414,9 @@ describe("L3.D4: draw absent is 'auto'; only 'auto', 'on-request' and 'after-rea
     // L2 may import only its own siblings, so the frame's wire keeps a twin of the names, held equal here (C94(2), C108).
     // The parity wire (docserver parity T1) names three more, which the wire carries before the reader has their handlers
     // (a reader that does not know a name answers false, as for any name it lacks): the tasks that write each handler (T3:
-    // `close-overlay` and `goto`; T6: `print-figures`) move that name from WIRE_ONLY into COMMAND_NAMES, which is how this row
+    // `close-overlay` and `goto`, moved; T6: `print-figures`) move that name from WIRE_ONLY into COMMAND_NAMES, which is how this row
     // stays the twin check: the wire's list is L2's names, in order, then the names still waiting for their handler.
-    const WIRE_ONLY = ['close-overlay', 'goto', 'print-figures'];
+    const WIRE_ONLY = ['print-figures'];
     expect([...COMMAND_OPS]).toEqual([...COMMAND_NAMES, ...WIRE_ONLY]);
     expectTypeOf<(typeof COMMAND_NAMES)[number]>().toExtend<(typeof COMMAND_OPS)[number]>();
   });

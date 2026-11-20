@@ -91,6 +91,37 @@ function maxInWindow(times: readonly number[], ms: number): number {
   return best;
 }
 
+describe('place ops (docserver parity T3): each one is sent, in order, never coalesced', () => {
+  it('before ready two places both survive the queue, in order, with the hash between them', () => {
+    const { clock, box, posted } = setup();
+    box.send({ t: 'place', kind: 'overlay' });
+    box.send({ t: 'hash', id: 'x', push: 'true' });
+    box.send({ t: 'place', kind: 'overlay-closed' });
+    box.send({ t: 'place', kind: 'overlay' });
+    box.open();
+    clock.advance(5000);
+    expect(posted.map((p) => p.msg)).toEqual([
+      { t: 'place', kind: 'overlay' },
+      { t: 'hash', id: 'x', push: 'true' },
+      { t: 'place', kind: 'overlay-closed' },
+      { t: 'place', kind: 'overlay' },
+    ]);
+  });
+
+  it('after ready each place is posted at once, in order, and takes a pacer slot', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'place', kind: 'overlay' });
+    box.send({ t: 'place', kind: 'overlay-closed' });
+    expect(posted.map((p) => p.msg)).toEqual([
+      { t: 'place', kind: 'overlay' },
+      { t: 'place', kind: 'overlay-closed' },
+    ]);
+    clock.advance(5000);
+    expect(posted).toHaveLength(2);
+  });
+});
+
 describe('the outbox before ready: a bounded, coalescing queue', () => {
   it('holds every op until open(); store.set coalesces per key (latest wins); the latest navigate, version and hash', () => {
     const { clock, box, posted } = setup();

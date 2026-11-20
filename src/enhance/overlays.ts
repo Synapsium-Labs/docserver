@@ -15,16 +15,27 @@
 // key's target, so it never closes another root's overlay (RF2). Every call is the instance's own: nothing is closed
 // once it is not live.
 //
+// Places (docserver parity T3): a host that keeps browser history for the reader hears when the full-screen figure opens
+// and closes (`onPlace`). A feature tells the registry, `report(kind, opened)`, when its overlay opens or closes, by
+// whatever path; the registry tells the host only for PLACE_OVERLAYS (the figure: the keys sheet, quick jump, settings,
+// changes menu, drawer and card are not places), once per change (a close that was not reported open, or an open already
+// reported, says nothing), and never once the instance is not live. `closeQuiet(kind)` is the host's own Back: it closes
+// the overlay and the close it causes is not reported, so the host's history is not answered twice.
+//
 // (There is no `open` here: the walls refuse the member name `open`, a page method. A feature opens its overlay
 // itself; the registry only knows what is open.)
 //
 // Import-inert: declarations only.
 import type { Cancel } from './env.js';
+import type { Host } from './host.js';
 
 /** The overlay kinds, in the order Escape closes them. */
 export const OVERLAY_ORDER = ['figure', 'keys', 'jump', 'settings', 'changes', 'drawer', 'card'] as const;
 
 export type OverlayKind = (typeof OVERLAY_ORDER)[number];
+
+/** The overlays that are places in a host's history: the full-screen figure only. */
+const PLACE_OVERLAYS: readonly OverlayKind[] = ['figure'];
 
 /** What a feature registers for its overlay. */
 export interface OverlayHandle {
@@ -44,11 +55,18 @@ export interface Overlays {
   any(): boolean;
   /** Close `kind` (or the top overlay): true when it was open, and so closed. */
   close(kind?: OverlayKind): boolean;
+  /** The overlay of `kind` opened (`true`) or closed (`false`): the host hears it for a place kind, once per change. */
+  report(kind: OverlayKind, opened: boolean): void;
+  /** As `close`, for `kind`, and the close it causes is not reported to the host (the host asked for it). */
+  closeQuiet(kind: OverlayKind): boolean;
 }
 
-/** The overlays of one instance: `live` is its own. */
-export function createOverlays(live: () => boolean): Overlays {
+/** The overlays of one instance: `live` and `host` are its own. */
+export function createOverlays(live: () => boolean, host: Pick<Host, 'onPlace'>): Overlays {
   const handles = new Map<OverlayKind, OverlayHandle>();
+  /** The place kinds last reported open, and whether a close in progress is the host's own. */
+  const reported = new Set<OverlayKind>();
+  let quiet = false;
   const isOpen = (kind: OverlayKind): boolean => {
     const h = handles.get(kind);
     return h !== undefined && h.isOpen();
@@ -56,6 +74,13 @@ export function createOverlays(live: () => boolean): Overlays {
   const top = (): OverlayKind | null => {
     for (const kind of OVERLAY_ORDER) if (isOpen(kind)) return kind;
     return null;
+  };
+  const close = (kind?: OverlayKind): boolean => {
+    if (!live()) return false;
+    const k = kind ?? top();
+    if (k === null || !isOpen(k)) return false;
+    handles.get(k)?.close();
+    return true;
   };
   return Object.freeze({
     register(kind: OverlayKind, handle: OverlayHandle): Cancel {
@@ -73,12 +98,20 @@ export function createOverlays(live: () => boolean): Overlays {
     isOpen,
     top,
     any: (): boolean => OVERLAY_ORDER.some((kind) => kind !== 'card' && isOpen(kind)),
-    close(kind?: OverlayKind): boolean {
-      if (!live()) return false;
-      const k = kind ?? top();
-      if (k === null || !isOpen(k)) return false;
-      handles.get(k)?.close();
-      return true;
+    close,
+    report(kind: OverlayKind, opened: boolean): void {
+      if (!live() || !PLACE_OVERLAYS.includes(kind) || reported.has(kind) === opened) return;
+      if (opened) reported.add(kind);
+      else reported.delete(kind);
+      if (!(quiet && !opened)) host.onPlace(opened ? 'overlay' : 'overlay-closed');
+    },
+    closeQuiet(kind: OverlayKind): boolean {
+      quiet = true;
+      try {
+        return close(kind);
+      } finally {
+        quiet = false;
+      }
     },
   });
 }

@@ -11,6 +11,7 @@ export type {
   EnhanceOptions,
   FrontListEntry,
   MermaidOptions,
+  PlaceKind,
   Prefs,
   ReaderStorage,
   VocabularyOptions,

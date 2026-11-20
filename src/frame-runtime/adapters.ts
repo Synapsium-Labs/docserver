@@ -7,7 +7,10 @@
 //             JSON text (valid JSON, at most 65,536 UTF-8 bytes, else dropped), a delete as the JSON literal 'null'
 //   onLink    navigate: 1 to 4096 code units, no C0, DEL or C1 control; newTab dropped. The guard's links (link()) go to the
 //             same sink
-//   onHash    hash: only an id inside FRAGMENT_ID_GRAMMAR; onHash(null), push and from are not sent in protocol 1
+//   onHash    hash: only an id inside FRAGMENT_ID_GRAMMAR; onHash(null) is not sent. With the seed's `bridge.places` a push adds
+//             `push: 'true'` and a `from` that isAnchorToken accepts (a move that is not a push sends neither, as scroll-spy and
+//             the section keys); without it the op is batch 1.1's, the id alone
+//   onPlace   place: only with `bridge.places`; the kind `overlay` or `overlay-closed` (the reader reports the figure only)
 //   copy      at most 65,536 UTF-8 bytes, and only while copy's share of the window lasts; otherwise it rejects, and L2
 //             shows a failed copy
 //   changes   only a full sha (40 or 64 lower-case hex): anything shorter resolves null locally; else the outbox's slot
@@ -33,10 +36,11 @@
 // full pass only in 'auto' mode (FD13, FD18); and probesInlineStyle() says when the bootstrap asks for inline style
 // before ready instead: in every other mode, whose first drawing comes after ready (styles.ts; fix round, review S1;
 // Reference §11.5, ruling R7).
+import { isAnchorToken } from '../frame/anchor.js';
 import { isFragmentId } from '../frame/fragment.js';
-import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey, type PlaceKind } from '../frame/protocol.js';
 import type { Seed, SeedMermaid } from '../frame/seed.js';
-import type { ChangesAnswer, Outbox } from './outbox.js';
+import type { ChangesAnswer, Outbox, QueuedOp } from './outbox.js';
 
 /** L2's namespace, storage key and position key inside the frame (FD7: no document identity in the frame). */
 export const FRAME_NAMESPACE = 'docreader';
@@ -98,6 +102,8 @@ export interface FrameAdapters {
   readonly openVersion?: (v: { readonly sha: string | null; readonly only: string | null }) => void;
   /** Only when the seed's bridge asks for progress (its default is false): the share read so far, 0 to 1. */
   readonly onProgress?: (share: number) => void;
+  /** Only when the seed's bridge asks for places (its default is false): the figure overlay opened or closed. */
+  readonly onPlace?: (kind: PlaceKind) => void;
   /** The guard's `docserver:link`: the same sink as onLink, dropped when links are off. */
   link(href: string): void;
 }
@@ -129,8 +135,14 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
     ...(b.links ? { onLink: (href: string): void => navigate(href) } : {}),
     ...(b.hash
       ? {
-          onHash: (id: string | null): void => {
-            if (isFragmentId(id)) outbox.send({ t: 'hash', id });
+          onHash: (id: string | null, entry?: { readonly push: boolean; readonly from: string | null }): void => {
+            if (!isFragmentId(id)) return;
+            const op: Extract<QueuedOp, { t: 'hash' }> = { t: 'hash', id };
+            if (b.places === true && entry?.push === true) {
+              op.push = 'true';
+              if (isAnchorToken(entry.from)) op.from = entry.from as string;
+            }
+            outbox.send(op);
           },
         }
       : {}),
@@ -149,6 +161,13 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
             const { sha, only } = v;
             if ((sha !== null && !isFullSha(sha)) || (only !== null && !isFullSha(only))) return;
             outbox.send({ t: 'version', ...(sha === null ? {} : { sha }), ...(only === null ? {} : { only }) });
+          },
+        }
+      : {}),
+    ...(b.places === true
+      ? {
+          onPlace: (kind: PlaceKind): void => {
+            if (kind === 'overlay' || kind === 'overlay-closed') outbox.send({ t: 'place', kind });
           },
         }
       : {}),

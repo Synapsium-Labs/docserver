@@ -28,6 +28,9 @@ export interface Prefs {
   lens: 'all' | 'product';
 }
 
+/** What `onPlace` reports: the full-screen figure opened or closed (the frame wire's PlaceKind, held equal by test). */
+export type PlaceKind = 'overlay' | 'overlay-closed';
+
 /** The host's storage, seen through two calls. The library never touches a storage API itself. */
 export interface ReaderStorage {
   /**
@@ -233,6 +236,12 @@ export interface EnhanceOptions {
    * the bar. Called once when the reader starts, then on every change (batch 1.1, C108).
    */
   onProgress?(share: number): void;
+  /**
+   * The full-screen figure opened (`'overlay'`) or closed (`'overlay-closed'`), so a host that keeps a history entry for it
+   * can drop the entry when it closes. Closed by a host's own `close-overlay` command: no report. Only the figure is a place;
+   * the keys sheet, the quick jump, settings and the rest are not. Absent: nothing is reported.
+   */
+  onPlace?(kind: PlaceKind): void;
   /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
   copy?(text: string): void | Promise<void>;
   /** The document's changes since commit `sha`, for "what changed". Absent: no comparison. */
