@@ -31,7 +31,7 @@ Each row edits `test/size-rules.ts` in place (the original saved and its sha256 
 | A8y | genesis: x1 judged against the shares the landing adds | `if (grew.total > own.total \|\| grew.frame > own.frame) v.push(  ->  if (false) v.push(` | test/size-rules.test.ts | red |
 | A8z | a correction names a design or rebaseline only | `if (d !== 'rebaseline' && RESERVED_WORDS.includes(d)) v.push(  ->  if (false) v.push(` | test/size-rules.test.ts | red |
 | A8aa | a layout is compared with the enhance entry's chars | `const defaults = bundle?.layout === 'default' ? bundle.chars : undefined;  ->  const defaults = bundle?.layout === 'default' ? layouts['default'] : undefined;` | test/size-rules.test.ts | red |
-| A8ab | genesis total share held on its own total only (frame side) | `grew.total > own.total \|\| grew.frame > own.frame  ->  grew.total > own.total` | test/size-rules.test.ts | equivalent mutant: in the genesis landing the baseline row has frame equal to total and the head's frame never exceeds its total, so the frame growth never exceeds the total growth and the frame side of the check cannot fire alone |
+| A8ab | genesis total share held on its own total only (frame side) | `grew.total > own.total \|\| grew.frame > own.frame  ->  grew.total > own.total` | test/size-rules.test.ts | red (review 2906 F6: first recorded as an equivalent mutant, which it is not; the argument held only for the real 1.1.0 base, and the pure rule accepts any first parent. A synthetic genesis, a base of two layouts of 40000 characters and a head whose enhance is 80000 with the other layout gone, grows the frame 40000 with the total unchanged, and the new row of `test/size-rules.test.ts` reds: 1 failed \| 61 passed (62)) |
 
 ```json
 [
@@ -229,7 +229,7 @@ Each row edits `test/size-rules.ts` in place (the original saved and its sha256 
   "guard": "genesis total share held on its own total only (frame side)",
   "edit": "grew.total > own.total || grew.frame > own.frame  ->  grew.total > own.total",
   "tests": "test/size-rules.test.ts",
-  "result": "equivalent mutant: in the genesis landing the baseline row has frame equal to total and the head's frame never exceeds its total, so the frame growth never exceeds the total growth and the frame side of the check cannot fire alone"
+  "result": "red (review 2906 F6; first recorded as an equivalent mutant, which it is not: a synthetic genesis whose frame grows with the total unchanged reds it; 1 failed | 61 passed (62))"
  }
 ]
 ```

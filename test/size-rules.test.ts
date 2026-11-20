@@ -285,6 +285,16 @@ describe('the genesis landing: a first parent with neither table', () => {
     expect(run(32758)).toEqual([]);
     has(run(32759), 'genesis: x1 grew 32769');
   });
+  // Review 2906 F6: the frame half of the share check has its own row. The pure rule accepts any first parent, and one with
+  // two layouts (the frame counts the larger only) grows its frame without its total when a layout merges into the other.
+  it("this landing's own growth: a frame that grows past x1's share with the total unchanged reds on the frame alone", () => {
+    const two = { enhance: A('b', 40000, 'default'), wide: A('w', 40000, 'wide') }; // total 80000, frame 40000
+    const merged = { enhance: A('e', 80000, 'default') }; // total 80000, frame 80000
+    const p = state(null, null, two);
+    const z = sizesOf(merged);
+    const v = judge(p, state(GENESIS_SHARES, [row('baseline', 80000, 40000), row('x1', z.total, z.frame)], merged), said('x1'));
+    expect(v).toEqual(['genesis: x1 grew 0 total and 40000 frame, over its own share of 32768 and 32768']);
+  });
   it('a head without the tables, or a parent with only one, reds', () => {
     has(judge(parent, state(null, growth, headManifest), said('x1')), 'lacks the shares table');
     has(judge(state(SHARES, null, parentManifest), good(), said('x1')), 'one of the two tables');
