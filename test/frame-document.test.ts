@@ -47,6 +47,7 @@ import { HOST_VALUES_MAX } from '../src/frame/document.js';
 import { escapedHtmlLength, FEATURE_KEYS, IMAGE_BUDGET_CHARS, OPTIONAL_SEED_KEYS, SEED_FIELDS_MAX_CHARS, SEED_KEYS, SEED_LIMITS, validateSeed } from '../src/frame/seed.js';
 import { base64, cspHash, hex, hexToBase64, sha256Text } from '../src/frame/sha256.js';
 import { render } from '../src/render/index.js';
+import { ASSET_CHARS_1_1_0, ASSET_CHARS_NOW, oldCapDocument, oldDefaultCap } from './frame-old-cap.js';
 import {
   attr,
   expand,
@@ -556,19 +557,38 @@ describe('L3.M7 each code at its boundary', () => {
     expect(seedText(out).length).toBeGreaterThan(SEED_HTML_MAX_CHARS);
     expect(escapedHtmlLength(`${atCap}a`)).toBe(SEED_HTML_MAX_CHARS + 1);
     expect(refusal(() => frame(doc(`${atCap}a`)))).toBe('too-large');
-    // Test 7's old-cap row: the same html with both faces at 131 072 decoded bytes and the largest appearance the validator
-    // accepts is framed too (the derived cap rose by exactly those), and the srcdoc grows by the seed text of the two fields.
-    const faceAtCap = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
-    expect(faceAtCap).toHaveLength(174764);
-    const maximal = JSON.parse(MAXIMAL_APPEARANCE_TEXT().replace(/\\u003c/g, '<')) as unknown;
-    const both = frame(doc(atCap), { appearance: maximal, assets: { ...assets, fonts: { sans: faceAtCap, mono: faceAtCap } } as FrameAssets });
-    expect(both.length).toBeLessThanOrEqual(MAX_SRCDOC_CHARS_DEFAULT);
-    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: nothing else of the srcdoc moves.
-    const fields = `,"appearance":`.length + MAXIMAL_APPEARANCE_TEXT().length + `,"fonts":{"sans":"","mono":""}`.length + 2 * faceAtCap.length;
-    expect(both.length - out.length).toBe(fields);
     // Longer than the cap before escaping: refused without being measured.
     expect(refusal(() => frame(doc('a'.repeat(SEED_HTML_MAX_CHARS + 1))))).toBe('too-large');
   }, 300_000);
+
+  it("test 7's old-cap row: a document at 1.1.0's default srcdoc cap, with both faces at 131 072 decoded bytes and the largest accepted appearance, is framed, within the derived cap, and grows by the two fields' seed text", () => {
+    // ccrc D-8824: the document is at the old cap the way 1.1.0 counted it (test/frame-old-cap.ts): the html at
+    // SEED_HTML_MAX_CHARS, 512 images at the 5 MiB budget, and every other seed field at its cap, with Mermaid's asset
+    // inlined. Only lengths are kept (the srcdoc is about 115 million characters), so this row is run with -t.
+    const { input: doc, options } = oldCapDocument();
+    const on = { ...options, assets: withMermaid() };
+    // Each srcdoc is about 115 million characters: only its length is kept, and the next is framed after it is released.
+    const lengthOf = (o: Partial<FrameOptions>): number => frame(doc, { ...on, ...o }).length;
+    const withoutLength = lengthOf({});
+    // The document is at 1.1.0's cap: with the assets counted at 1.1.0's lengths it is within the old cap, and it leaves less
+    // than a thousandth of it unused (the skeleton's slack, the base64 padding slack the seed fields' cap counts, and the
+    // small fields a mount writes at their own values: lang, prefs, the initial hash, the bridge flags, Mermaid's limits).
+    const oldCap = oldDefaultCap();
+    const atOld = withoutLength - (ASSET_CHARS_NOW - ASSET_CHARS_1_1_0);
+    expect(atOld).toBeLessThanOrEqual(oldCap);
+    expect(oldCap - atOld).toBeLessThan(oldCap / 1000);
+    const faceAtCap = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
+    expect(faceAtCap).toHaveLength(174764);
+    const maximal = JSON.parse(MAXIMAL_APPEARANCE_TEXT().replace(/\\u003c/g, '<')) as unknown;
+    const both: Partial<FrameOptions> = { appearance: maximal, assets: { ...withMermaid(), fonts: { sans: faceAtCap, mono: faceAtCap } } as FrameAssets };
+    const bothLength = lengthOf(both);
+    expect(bothLength).toBeLessThanOrEqual(MAX_SRCDOC_CHARS_DEFAULT);
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: nothing else of the srcdoc moves.
+    const fields = `,"appearance":`.length + MAXIMAL_APPEARANCE_TEXT().length + `,"fonts":{"sans":"","mono":""}`.length + 2 * faceAtCap.length;
+    expect(bothLength - withoutLength).toBe(fields);
+    // Its control: one character under that length the refusal is too-large, so the cap the row sits under is the one in force.
+    expect(refusal(() => lengthOf({ ...both, maxSrcdocChars: bothLength - 1 }))).toBe('too-large');
+  }, 600_000);
 
   it('SEED_HTML_MAX_CHARS: an html longer than the cap before escaping is refused too-large without being measured', () => {
     // Escaping only lengthens, so such a string is over the cap whatever it holds; measuring it would cost up to six

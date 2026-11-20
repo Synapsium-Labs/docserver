@@ -9,20 +9,21 @@
 // rows: the policy does not depend on an appearance, and the frame-to-parent traffic of a mount with a seed and 20 ops
 // equals that of the same mount with none; and the string `ccrc` is in no built frame asset.
 //
-// The cap row. The plan asks for a document at 1.1.0's default srcdoc cap (about 70 million characters, most of it the
-// html's 57 million-character share). That is not mounted here: the reader's startup over it takes minutes and the
-// srcdoc text alone is held several times over in the test process, the browser and the frame, which the 6 GB shared
-// slice does not carry. The row mounts a 1.5 MiB document with both faces near the cap (the library's own serif face, 122 360
-// decoded bytes of the 131 072 allowed, for both roles) and the largest appearance. The old-cap row proper is a Node row, test 7's
-// in test/frame-document.test.ts (the html at its cap, with both faces at 131 072 decoded bytes and the largest appearance, is
-// framed within the derived cap and grows by exactly those two fields' seed text).
+// The cap rows. The row in the ordinary run mounts a 1.5 MiB document with both faces near the cap (the library's own serif
+// face, 122 360 decoded bytes of the 131 072 allowed, for both roles) and the largest appearance. A document at 1.1.0's
+// default srcdoc cap (about 115 million characters: the html's 57 million, the five assets, the images' 7 million and every
+// other seed field at its cap, test/frame-old-cap.ts) is mounted by the measured row alone, which runs only with
+// DOCREADER_MEASURE=1 (ccrc D-8824): the srcdoc text is held several times over in the test process, the browser and the
+// frame, which the 6 GB shared slice does not carry beside other runs, and the reader's startup over it is long. The Node
+// row of the same document, test 7's old-cap row in test/frame-document.test.ts, runs in CI.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { frameCsp, frameDocument, type FrameAssets } from '../../src/frame/index.js';
 import { APPEARANCE_SLOTS, parseAppearance, SLOT_PROPERTY, type Appearance, type AppearanceColourSlot } from '../../src/enhance/appearance.js';
-import { openFrameHost, type FrameHost } from './frame-host-page.js';
-import { data, freshNonce, input, loadFrame, PLAIN, ROOT, sleep, type BuiltFrame } from './frame-shared.js';
+import { openFrameHost, openLibHost, type FrameHost } from './frame-host-page.js';
+import { data, figure, freshNonce, input, loadFrame, MEASURE, PLAIN, ROOT, sleep, waitProgress, type BuiltFrame } from './frame-shared.js';
+import { oldCapDocument } from '../frame-old-cap.js';
 import { browserFor, closeBrowsers, describeBrowsers } from './harness.js';
 
 let built: BuiltFrame;
@@ -85,7 +86,7 @@ describeBrowsers((browser) => {
   }
 
   /** The root's computed values of the given custom properties, its attributes, and the html element's mark and properties. */
-  const read = (h: FrameHost, props: readonly string[]) =>
+  const read = (h: Pick<FrameHost, 'frame'>, props: readonly string[]) =>
     h.frame().evaluate((names) => {
       const root = document.body.querySelector(':scope > article') as HTMLElement;
       const cs = getComputedStyle(root);
@@ -240,6 +241,48 @@ describeBrowsers((browser) => {
       await done();
     }
   }, 240_000);
+
+  it.skipIf(!MEASURE)(
+    "measures (DOCREADER_MEASURE=1): a document at 1.1.0's default srcdoc cap, with both faces and the largest accepted appearance, mounts through ./host to ready with no fallback",
+    async () => {
+      // ccrc D-8824. The document is test/frame-old-cap.ts's (html at SEED_HTML_MAX_CHARS, 512 images at the 5 MiB budget, the
+      // title, front list, commits and the features' word lists at their caps); what the library page's mount cannot carry is the
+      // snapshot (a store of 8 values of 64 KiB, about 3 million characters) and the 64 Mermaid secure keys, which this row leaves out.
+      // Mermaid's asset is inlined (the scan admits it), as the old cap counts it.
+      const { input: doc, options } = oldCapDocument();
+      const face = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
+      const host = await openLibHost(await browserFor(browser));
+      try {
+        const scan = { mermaid: { fences: 1, largestBytes: 1, totalBytes: 1, largestChars: 1, totalChars: 1 } };
+        const t0 = performance.now();
+        await host.mount({
+          document: { ...doc, scan },
+          assets: { ...assets, mermaid: built.mermaid, fonts: { sans: face, mono: face } } as FrameAssets,
+          watchdogMs: 120_000,
+          features: options.features,
+          appearance: LARGEST,
+        });
+        const sent = performance.now() - t0;
+        const srcdocChars = await host.page.evaluate(() => document.querySelector('iframe')?.srcdoc.length ?? -1);
+        const w = await waitProgress(host, 1, `old cap ${browser}`, 240_000, 900_000);
+        const rec = await host.lib();
+        figure('oldCap', browser, 'srcdocChars', srcdocChars);
+        figure('oldCap', browser, 'mountCallMs', sent);
+        figure('oldCap', browser, 'waitedMs', w.ms);
+        figure('oldCap', browser, 'readyAtMs', rec.events.find((e) => e.kind === 'ready')?.at ?? -1);
+        expect(w.gaveUp).toBe(false);
+        expect(rec.events.map((e) => e.kind)).toEqual(['ready']); // no fallback
+        expect(host.errors).toEqual([]);
+        expect(host.cspConsole).toEqual([]);
+        const got = await read(host, ALL);
+        expect(got.props).toEqual(expectedOf(LARGEST));
+        expect(got.aa).toBe('<'.repeat(64));
+      } finally {
+        await host.close().catch(() => undefined);
+      }
+    },
+    1_200_000,
+  );
 
   it('test 9 (behaviour): the policy does not depend on an appearance, and 20 ops add no frame-to-parent message', async () => {
     const run = async (appearance: Appearance | undefined, ops: number): Promise<{ csp: string | null; kinds: string[]; attr: string }> => {

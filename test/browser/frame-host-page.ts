@@ -535,6 +535,8 @@ export interface LibMountSpec {
   readonly docKey?: string;
   /** The layout's switches as plain data (FrameFeatures), for a mount that turns the bar off or the top space off. */
   readonly features?: unknown;
+  /** The host's appearance, given as the adapters' `appearance` (a plain object; the library takes it through parseAppearance). */
+  readonly appearance?: unknown;
   /** The callbacks to give, beside onReady and onFallback (always given); default the five but onProgress. */
   readonly callbacks?: readonly LibCallback[];
   /** What the changes adapter answers; default null. */
@@ -632,6 +634,7 @@ function libMain(): void {
       callbacks?: string[];
       changesReply?: unknown;
       features?: unknown;
+      appearance?: unknown;
     }): void {
       const log =
         (kind: string) =>
@@ -678,6 +681,7 @@ function libMain(): void {
       if (spec.store === true) adapters['store'] = store;
       if (spec.docKey !== undefined) adapters['docKey'] = spec.docKey;
       if (spec.features !== undefined) adapters['features'] = spec.features;
+      if (spec.appearance !== undefined) adapters['appearance'] = spec.appearance;
       if (callbacks.includes('onLink')) adapters['onLink'] = log('onLink');
       if (callbacks.includes('onHash')) adapters['onHash'] = log('onHash');
       if (callbacks.includes('onProgress')) adapters['onProgress'] = log('onProgress');
