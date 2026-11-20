@@ -14,7 +14,7 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 // These are L2's stable classes created by reader chrome. Keep this list next to its fixture:
 // removing a name makes the source identity census fail before browser interaction can mask it.
 const REQUIRED_CHROME_CLASSES = [
-  'aa-btn', 'aa-btns', 'aa-key', 'aa-kh', 'aa-menu', 'aa-note', 'aa-wrap',
+  'aa-btn', 'aa-btns', 'aa-hosted', 'aa-key', 'aa-kh', 'aa-menu', 'aa-note', 'aa-wrap',
   'bar-tools', 'box', 'byline', 'c', 'cap-text', 'cd', 'cell-br', 'cell-bullet',
   'chg-menu', 'chg-nav', 'chg-pick', 'chg-trig', 'ckey', 'cm-d', 'cm-days',
   'cm-days-wrap', 'cm-group', 'cm-hint', 'cm-item', 'cm-lab', 'cm-main', 'cm-more',

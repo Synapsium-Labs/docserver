@@ -2,6 +2,7 @@
 // and 6): the pure contract module `src/enhance/appearance.ts`, re-exported by `./frame`. It reads no DOM; it is judged
 // here on values only: the slot lists, `parseAppearance` (grammars, ranges, the size walk, the label), the pairs and
 // `SLOT_PROPERTY`.
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -714,7 +715,9 @@ describe('SLOT_PROPERTY', () => {
       popShadow: '--dr-pop-shadow', sectionFamily: '--dr-section-family', sectionSize: '--dr-section-size',
       sectionWeight: '--dr-section-weight', sectionTracking: '--dr-section-tracking', sectionCase: '--dr-section-case',
     });
-    for (const v of Object.values(SLOT_PROPERTY.skin)) expect(css).not.toMatch(new RegExp(`(?:^|[\\s;{])${v}\\s*:`));
+    // New names: 1.1.0's stylesheet declares none of them (the current one declares each, empty, for its hosted rules).
+    const v110 = execFileSync('git', ['show', 'v1.1.0:assets/reader.css'], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+    for (const v of Object.values(SLOT_PROPERTY.skin)) expect(v110).not.toMatch(new RegExp(`(?:^|[\\s;{])${v}\\s*:`));
   });
 
   it('every property name is distinct', () => {
