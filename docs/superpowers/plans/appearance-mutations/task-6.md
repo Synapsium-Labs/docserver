@@ -740,3 +740,15 @@ Measured on Chromium (`DOCREADER_BROWSERS=chromium`). Each row mutated a scratch
  }
 ]
 ```
+
+## Review 2906 fix round, CI: test 4's length tolerance
+
+CI's WebKit print run read a definition ring's `rect` (sized by the reader from measured text) 0.0625 px apart between the two pages (51.234 against 51.297 px). Row (a) now treats two `px` values within 0.1 px as the same, `scripts/visual/compare.mjs`'s `TOLERANCE`, and reads every element whose hash differs (at most 2 000) so a real move is still reported.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| T4-tol | a size leak beyond the tolerance still reds | the `.ckey .sw.k-info` 3 px height rule ungated, served through `DOCREADER_STYLE_UNDER_TEST` | `test/browser/appearance-style.test.ts -t "no appearance.*jump/dialogs"` (Chromium) | red: `span.sw.k-info: height: 3px -> 10px` in the Aa menu and the keys sheet |
+
+```json
+[{"row":"T4-tol","guard":"a size leak beyond the 0.1 px tolerance still reds","edit":"the .ckey .sw.k-info 3px height rule ungated, served through DOCREADER_STYLE_UNDER_TEST","tests":"test/browser/appearance-style.test.ts -t \"no appearance.*jump/dialogs\" (Chromium)","result":"red"}]
+```

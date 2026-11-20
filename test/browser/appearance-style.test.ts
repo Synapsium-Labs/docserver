@@ -283,7 +283,6 @@ async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page
   const bad: number[] = [];
   for (let i = 0; i < ra.hashes.length; i += 1) if (ra.hashes[i] !== rb.hashes[i]) bad.push(i);
   if (bad.length === 0) return [];
-  const out = [`${label}: ${String(bad.length)} element(s) differ`];
   /** One element's string, split: the element's own values, then each pseudo-element's, by name. */
   const split = (s: string): Map<string, string[]> => {
     const m = new Map<string, string[]>();
@@ -296,7 +295,13 @@ async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page
     });
     return m;
   };
-  for (const i of bad.slice(0, limit)) {
+  // A length is the same within 0.1 px, scripts/visual/compare.mjs's TOLERANCE: a box the reader sizes from measured text
+  // (a definition ring's rect) can land a sub-pixel apart between two pages that differ in nothing a rule sets.
+  const px = /^-?\d+(?:\.\d+)?px$/;
+  const same = (x: string, y: string): boolean => x === y || (px.test(x) && px.test(y) && Math.abs(parseFloat(x) - parseFloat(y)) <= 0.1 + 1e-9);
+  const lines: string[] = [];
+  // Every element whose hash differs is read (a real move is reported, a sub-pixel one is not), at most 2 000 of them.
+  for (const i of bad.slice(0, 2000)) {
     const [ta, tb] = await Promise.all([pa, pb].map((pg) => pg.evaluate((n) => (window as unknown as { __st: St }).__st.rows[n] as string, i)));
     const a = split(ta as string);
     const b = split(tb as string);
@@ -305,11 +310,12 @@ async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page
     for (const [name, xs] of a) {
       const ys = b.get(name) ?? [];
       if (xs.length !== ys.length) parts.push(`${name} content differs`);
-      else PROPS.forEach((prop, j) => (xs[j] !== ys[j] ? parts.push(`${name}${name === '' ? '' : ' '}${prop}: ${xs[j] as string} -> ${ys[j] as string}`) : undefined));
+      else PROPS.forEach((prop, j) => (!same(xs[j] as string, ys[j] as string) ? parts.push(`${name}${name === '' ? '' : ' '}${prop}: ${xs[j] as string} -> ${ys[j] as string}`) : undefined));
     }
-    out.push(`    ${where}: ${parts.slice(0, 4).join('; ')}`);
+    if (parts.length > 0) lines.push(`    ${where}: ${parts.slice(0, 4).join('; ')}`);
   }
-  return out;
+  if (lines.length === 0 && bad.length <= 2000) return [];
+  return [`${label}: ${String(bad.length > 2000 ? bad.length : lines.length)} element(s) differ`, ...lines.slice(0, limit)];
 }
 
 // ───────── the states ─────────
