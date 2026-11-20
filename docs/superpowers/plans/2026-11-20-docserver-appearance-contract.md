@@ -296,7 +296,7 @@ X1's share is 32 768 on both totals, so 5 137 are left. The bootstrap stays unde
 ### Commands
 
 ```text
-~/.local/bin/ccrc test -- ./node_modules/.bin/vitest run --maxWorkers=2 <files>          per task, Verify lists
+./node_modules/.bin/vitest run --maxWorkers=2 <files>   (through the test wrapper)   per task, Verify lists
 PLAYWRIGHT_BROWSERS_PATH=<scratch> DOCREADER_BROWSERS=chromium ... test/browser/<file>  browser rows
 DOCSERVER_BOUNDARY_BASE=origin/main ... test/frame-boundaries.test.ts                    test 9, local
 DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x1' ... test/size-contract.test.ts
