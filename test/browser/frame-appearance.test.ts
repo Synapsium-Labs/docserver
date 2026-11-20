@@ -9,7 +9,7 @@
 // rows: the policy does not depend on an appearance, and the frame-to-parent traffic of a mount with a seed and 20 ops
 // equals that of the same mount with none; and the string `ccrc` is in no built frame asset.
 //
-// The cap rows. The row in the ordinary run mounts a 1.5 MiB document with both faces near the cap (the library's own serif
+// The cap rows. The row in the ordinary run mounts a document of about 1.4 MiB with both faces near the cap (the library's own serif
 // face, 122 360 decoded bytes of the 131 072 allowed, for both roles) and the largest appearance. A document at 1.1.0's
 // default srcdoc cap (about 115 million characters: the html's 57 million, the five assets, the images' 7 million and every
 // other seed field at its cap, test/frame-old-cap.ts) is mounted by the measured row alone, which runs only with
