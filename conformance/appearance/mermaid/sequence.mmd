@@ -1,0 +1,73 @@
+sequenceDiagram
+  autonumber
+  participant P as Plain
+  actor U as Actor
+  participant B@{ "type": "boundary" }
+  participant C@{ "type": "control" }
+  participant E@{ "type": "entity" }
+  participant D@{ "type": "database" }
+  participant L@{ "type": "collections" }
+  participant Q@{ "type": "queue" }
+  P->>U: ping
+  U-->>P: dotted reply
+  P->U: open line
+  P-->U: dotted open line
+  P-xU: cross
+  P--xU: dotted cross
+  P-)U: async
+  P--)U: dotted async
+  P<<->>U: both ways
+  P<<-->>U: both ways dotted
+  P-|\U: solid top half
+  P--|\U: dotted solid top half
+  P-|/U: solid bottom half
+  P--|/U: dotted solid bottom half
+  P/|-U: solid top half reversed
+  P/|--U: dotted solid top half reversed
+  P\|-U: solid bottom half reversed
+  P\|--U: dotted solid bottom half reversed
+  P-\\U: stick top half
+  P--\\U: dotted stick top half
+  P-//U: stick bottom half
+  P--//U: dotted stick bottom half
+  P//-U: stick top half reversed
+  P//--U: dotted stick top half reversed
+  P\\-U: stick bottom half reversed
+  P\\--U: dotted stick bottom half reversed
+  Note right of U: A note
+  Note over P,U: A wide note
+  activate P
+  P->>B: Activated
+  deactivate P
+  P->>+C: Plus activates
+  C-->>-P: Minus deactivates
+  create participant X as Created
+  P->>X: Hello
+  destroy X
+  X-->>P: Bye
+  create actor Y as Another
+  P->>Y: Hi
+  loop Every minute
+    P->>E: Check
+  end
+  alt Fine
+    E->>D: Store
+  else Not fine
+    E->>L: Queue
+  end
+  opt o
+    D->>Q: Maybe
+  end
+  par One
+    P->>U: Left
+  and Two
+    P->>E: Right
+  end
+  critical Establish
+    P->>D: Connect
+  option Timeout
+    P->>U: Retry
+  end
+  break Stop
+    P->>U: Abort
+  end

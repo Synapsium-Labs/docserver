@@ -178,7 +178,7 @@ describe('rebaseline', () => {
 describe('correcting a row', () => {
   // x2 spent 40 that was x1's: the pair lowers x2's row by 40 and puts x1's at the newest again.
   const base = state(SHARES, [row('baseline', 1160), row('x1', 1200), row('x2', 1240)], man({ css: A('c', 130) }));
-  const pair = (wrong: Row, right: Row): State => state(SHARES, [...(base.growth as { rows: Row[] }).rows, wrong, right], man({ css: A('c', 130) }));
+  const pair = (wrong: Row, right: Row): State => state(SHARES, [...(base.growth as unknown as { rows: Row[] }).rows, wrong, right], man({ css: A('c', 130) }));
   const good = (): State => pair(row('x2', 1200), row('x1', 1240));
   it('a pair that moves growth from the wrong design to the right one is clean', () => expect(judge(base, good(), said('correction'))).toEqual([]));
   it('the second row must equal the first parent\'s newest row on both totals', () => {
@@ -186,14 +186,14 @@ describe('correcting a row', () => {
     has(judge(base, pair(row('x2', 1200, 1240), row('x1', 1240, 1239)), said('correction')), "the second row's totals are not the first parent's newest");
   });
   it('the second row must equal the recomputation at the judged commit (a landing that changes the assets reds)', () => {
-    const moved = state(SHARES, [...(base.growth as { rows: Row[] }).rows, row('x2', 1200), row('x1', 1240)], man({ css: A('q', 130) }));
+    const moved = state(SHARES, [...(base.growth as unknown as { rows: Row[] }).rows, row('x2', 1200), row('x1', 1240)], man({ css: A('q', 130) }));
     has(judge(base, moved, said('correction')), 'correction: the landing changes a frame asset');
-    const off = state(SHARES, [...(base.growth as { rows: Row[] }).rows, row('x2', 1200), row('x1', 1240)], man({ css: A('c', 131) }));
+    const off = state(SHARES, [...(base.growth as unknown as { rows: Row[] }).rows, row('x2', 1200), row('x1', 1240)], man({ css: A('c', 131) }));
     has(judge(base, off, said('correction')), 'the second row is not the recomputation');
   });
   it('the first row is lowered, never raised', () => has(judge(base, pair(row('x2', 1250), row('x1', 1240)), said('correction')), 'the first row is not lowered'));
   it('one row, three rows, or the same design twice, red', () => {
-    has(judge(base, state(SHARES, [...(base.growth as { rows: Row[] }).rows, row('x1', 1240)], man({ css: A('c', 130) })), said('correction')), 'correction: 1 growth rows');
+    has(judge(base, state(SHARES, [...(base.growth as unknown as { rows: Row[] }).rows, row('x1', 1240)], man({ css: A('c', 130) })), said('correction')), 'correction: 1 growth rows');
     has(judge(base, pair(row('x2', 1200), row('x2', 1240)), said('correction')), 'both rows name the same design');
   });
   it('a row named by another reserved word reds: none, shares, correction, baseline', () => {
@@ -207,7 +207,7 @@ describe('correcting a row', () => {
     has(judge(base, pair(row('x9', 1200), row('x1', 1240)), said('correction')), '"x9", which has no share row');
   });
   it("the right design's growth stays within its shares", () => {
-    const tight = state([row('x1', 70, 70), row('x2', 300, 300)], (base.growth as { rows: Row[] }).rows.map((r) => r), man({ css: A('c', 130) }));
+    const tight = state([row('x1', 70, 70), row('x2', 300, 300)], (base.growth as unknown as { rows: Row[] }).rows.map((r) => r), man({ css: A('c', 130) }));
     has(judge(tight, pair(row('x2', 1200), row('x1', 1240)), said('correction')), 'within the share: x1 grew');
   });
   it('a share row on a correction reds', () => has(judge(base, state([...SHARES, row('x3', 5)], good().growth?.rows ?? [], man({ css: A('c', 130) })), said('correction')), 'correction: the landing appends a share row'));

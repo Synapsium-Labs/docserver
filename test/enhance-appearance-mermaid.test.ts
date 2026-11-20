@@ -164,7 +164,7 @@ describe('test 5 (unit half): with colours each figure is classified before it i
     const f = fake();
     await enhance(root, using(f.api, DARK));
     await settled(root);
-    const [r1, r2, r3, r4, r5] = ['n1', 'n2', 'n3', 'n4', 'n5'].map((w) => only(f, w)[0]!);
+    const [r1, r2, r3, r4, r5] = ['n1', 'n2', 'n3', 'n4', 'n5'].map((w) => only(f, w)[0]!) as [Rendered, Rendered, Rendered, Rendered, Rendered];
     expect(theme(r1)).toEqual(hosted(DARK, r1));
     expect(theme(r5)).toEqual(hosted(DARK, r5));
     for (const r of [r2, r3, r4]) expect(theme(r)).toEqual(plain(r));

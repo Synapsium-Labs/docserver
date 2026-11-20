@@ -1,0 +1,21 @@
+---
+config:
+  htmlLabels: false
+---
+flowchart LR
+  subgraph CL[Cluster]
+    direction TB
+    A[Rectangle] --> B(Round)
+    B --> C([Stadium])
+    C --> D[[Subroutine]]
+  end
+  D -->|edge label| E[(Cylinder)]
+  E --> F((Circle))
+  F --> G(((Double circle)))
+  G --> H{Diamond}
+  H --> I{{Hexagon}}
+  I --> J[/Parallelogram/]
+  J --> K>Asymmetric]
+  K --> W[Widget]
+  W --> T[Tip node]
+  click T "#x" "tip"
