@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task by task. Each task is an implementer subagent (tests first), then one held-out review over the task's diff, then one fix round. The plan is lean (C40): it holds no implementation code, only the contract each task must meet, its tests and its mutation rows.
 
-**Status:** written 2026-11-20 against `main` at `bee0fd1` (the appearance contract, then the rename to `@synapsium-labs/pinax-lib`). Proposed as two sequential landings, A and B (Design §3); the split waits on the coordinator's ruling, and no task starts before it. The design is the first consumer's, approved by its operator on 2026-11-19; this plan decides only how the library builds it. A sentence of the design that cannot be built as written is a stop-and-ask, never a silent departure. The package version does not change here; the release and its signed tag are the operator's. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
+**Status:** written 2026-11-20 against `main` at `bee0fd1` (the appearance contract, then the rename to `@synapsium-labs/pinax-lib`). Two sequential landings, A and B (Design §3), as the coordinator ruled on 2026-11-20: landing A (Tasks 1 to 8, print mode included) is this run; landing B (Tasks 9 to 14, all four layouts in one landing) is a run of its own once A lands. The design is the first consumer's, approved by its operator on 2026-11-19; this plan decides only how the library builds it. A sentence of the design that cannot be built as written is a stop-and-ask, never a silent departure. The package version does not change here; the release and its signed tag are the operator's. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
 
 **Goal:** Everything the first consumer's parity design asks of the library: four more layouts beside `default`, each on the appearance slots and its own frame policy; Back-to-close and Back-from-a-jump through places on the existing port; item links seeded by the host; drawn figures handed to the host for print; the In short "Headlines / Full" option and a seeded comparison base; and a print mode of `render` with its own stylesheet. A host that asks for none of it gets exactly today's behaviour.
 
@@ -62,7 +62,7 @@
 
 *Table 2. Technical choices. A product choice found while executing goes to the coordinator as a structured ask.*
 
-### 3. Two landings (proposed; the coordinator rules)
+### 3. Two landings (ruled 2026-11-20)
 
 ```mermaid
 flowchart LR
@@ -155,7 +155,7 @@ flowchart LR
 - `BRIDGE_LIMITS` gains `printFiguresMax: 64`, `printFigurePngMaxBytes: 1048576`, `printFiguresTotalMaxBytes: 16777216`, `printFigureSideMaxPx: 2048`.
 - `src/frame/anchor.ts`: `ANCHOR_LIMITS` (`line` 1024, `from` 4096, `coord` 10 000 000) and `isAnchorToken(s): boolean`, the grammar of nav's `TOKEN` and its `from` check, word for word; `pngBytesOfBase64(b64): number | null` (canonical base64 only, size from length and padding, null otherwise).
 **Behaviour.** The port parser accepts `command` with `name` in `COMMAND_OPS`; `id` and `from` only with `goto`, `id` by the fragment grammar, `from` a string of at most `ANCHOR_LIMITS.from` code units. `close-overlay` and `print-figures` carry no other key. Dispatch hands each to the reader's API (Task 3, Task 6), with a root and an API only, a throw contained.
-**Test 9.** One entry appended to the record: `FRAME_OPS` with the two new ops, `FRAME_ACCEPTS` unchanged, the masked CSP unchanged. The row "`FRAME_OPS` equals the parent's" becomes "equals the parent's plus exactly `place` and `print-figure`" for this landing only, as test 9 says a later design extends its lists in its own landing, and the record carries the new list from then on.
+**Test 9.** One entry appended to the record: `FRAME_OPS` with the two new ops, `FRAME_ACCEPTS` unchanged, the masked CSP unchanged. Today's two delta rows compare only the newest entry with the one before (`FRAME_OPS` equal, `FRAME_ACCEPTS` plus `appearance`), which would no longer describe the appearance contract's entry once a third is appended. They become one table of deltas keyed by entry index, append-only like the record: entry 1 (the appearance contract) adds no frame op and `appearance` to the accepted list; entry 2 (this landing) adds exactly `place` and `print-figure` to the frame ops and nothing to the accepted list. Every entry's lists are the previous entry's in the same order with only additions at the end, and an entry with no delta row reds, so a later landing that changes a list writes its own row.
 **Steps.** 1. Tests in `test/frame-protocol.test.ts`, `test/frame-seed.test.ts`, `test/frame-runtime.test.ts`, `test/frame-boundaries.test.ts`, `test/frame-anchor.test.ts` (new: the grammar against nav's own `tokenOf` output and against every rejected shape of nav's check); red. 2. Implement; `npm run build:frame`. 3. Green, with `test/frame-build.test.ts` (budgets: the bootstrap's growth measured and recorded) and `test/frame-runtime-walls.test.ts`. 4. Rows; commit with the manifests.
 **Mutation rows.** P1a the port parser accepts `goto` without `id`; P1b accepts `id` on `close-overlay`; P1c accepts a `from` of 4097; P1d `FRAME_ACCEPTS` gains a word; P1e `BRIDGE_KEYS.places` defaults true; P1f `pngBytesOfBase64` ignores padding; P1g `isAnchorToken` accepts a `y` below zero; P1h dispatch drops `goto`.
 **Verify.** `test/frame-protocol.test.ts test/frame-seed.test.ts test/frame-runtime.test.ts test/frame-runtime-walls.test.ts test/frame-boundaries.test.ts test/frame-anchor.test.ts test/frame-build.test.ts test/readme.test.ts`; `npm run typecheck`; `node scripts/build-frame.mjs --check`.
@@ -266,7 +266,7 @@ As Task 8, for landing B: one appended `x2` row; `frame` unchanged from A's row;
 - The design, §6 in full, as approved by the first consumer's operator on 2026-11-19; X2's shares, 1 166 336 total and 72 704 frame, as the coordinator set them and the shares table records them.
 
 ### Waiting on you
-- **The split (§3).** Two landings, A then B, each with its own `Size-Design: x2` line; or B as four, one per layout. No task starts before the ruling.
+- Nothing. The split is ruled (2026-11-20): A then B, B's four layouts in one landing. The bootstrap's 32 768 bytes and the frame share are stops, measured at each task that changes the default layout's assets; neither budget moves here.
 
 ### Later
 - The release and its signed tag; the first consumer's re-pin (its wave P5).
