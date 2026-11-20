@@ -59,8 +59,8 @@ const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under str
 /** The runtime exports of each L3 entry, as the smoke lists them (sorted). */
 const FRAME_API = [
   'APPEARANCE_CONTRACT', 'APPEARANCE_LABEL_DEFAULT', 'APPEARANCE_PAIRS', 'APPEARANCE_SLOTS', 'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_MANIFEST', 'FrameError',
-  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
-  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isFragmentId', 'mermaidGate', 'parseAppearance',
+  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_HOSTED_KINDS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
+  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isFragmentId', 'mermaidGate', 'mermaidThemeOf', 'parseAppearance',
 ];
 const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'MAX_LINE_CHARS', 'MAX_WHOLE_BLOCK_CHARS', 'createHighlighter', 'resolveLanguage'];
 

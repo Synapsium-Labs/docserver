@@ -3,12 +3,14 @@
 // lists are only typed readonly there. This file freezes them in place, deeply, and re-exports the public names:
 // whatever a host reads from `./frame` cannot be written to. `SLOT_PROPERTY` stays internal.
 import { APPEARANCE_PAIRS, APPEARANCE_SLOTS } from '../enhance/appearance.js';
+import { MERMAID_HOSTED_KINDS } from '../enhance/appearance-mermaid.js';
 
 Object.freeze(APPEARANCE_SLOTS.colour);
 Object.freeze(APPEARANCE_SLOTS.skin);
 Object.freeze(APPEARANCE_SLOTS);
 for (const pair of APPEARANCE_PAIRS) Object.freeze(pair);
 Object.freeze(APPEARANCE_PAIRS);
+Object.freeze(MERMAID_HOSTED_KINDS);
 
 export {
   APPEARANCE_CONTRACT,
@@ -17,6 +19,7 @@ export {
   APPEARANCE_SLOTS,
   parseAppearance,
 } from '../enhance/appearance.js';
+export { MERMAID_HOSTED_KINDS, mermaidThemeOf } from '../enhance/appearance-mermaid.js';
 export type {
   Appearance,
   AppearanceColourSlot,

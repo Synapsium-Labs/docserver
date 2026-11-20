@@ -10,6 +10,8 @@ export {
   APPEARANCE_LABEL_DEFAULT,
   APPEARANCE_PAIRS,
   APPEARANCE_SLOTS,
+  MERMAID_HOSTED_KINDS,
+  mermaidThemeOf,
   parseAppearance,
 } from './appearance.js';
 export type {

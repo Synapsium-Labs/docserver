@@ -160,6 +160,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'FrameError',
         'MAX_SRCDOC_CHARS_DEFAULT',
         'MERMAID_GATE_DEFAULTS',
+        'MERMAID_HOSTED_KINDS',
         'MERMAID_LIMIT_CEILINGS',
         'OP_KEYS',
         'PREF_KEYS',
@@ -170,6 +171,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'frameDocument',
         'isFragmentId',
         'mermaidGate',
+        'mermaidThemeOf',
         'parseAppearance',
       ].sort(),
     );
