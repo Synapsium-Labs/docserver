@@ -768,3 +768,21 @@ The 0.1 px tolerance of test 4 (a) is cited as ccrc D-8827 (a departure from "eq
  {"row":"F5-tag","guard":"an element whose tag differs from its pair's is reported","edit":"the a.tag !== b.tag test in rowDiff() made false","tests":"test/browser/appearance-style.test.ts -t \"comparison predicate|0.5 px leak|comparison goes red\" (Chromium)","result":"red"}
 ]
 ```
+
+## Second review F13: the widened sweeps' mutants
+
+The two mutants that justified widening test 4's sweeps (recorded before only in the plan's Results), measured again. Each is a scratch copy of the stylesheet served through `DOCREADER_STYLE_UNDER_TEST`; assets/reader.css was not edited. Unmutated, the same rows pass (13 passed for the first filter).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F13-draw-failed | row (a) reads the layout cases that draw Mermaid | the `.draw-failed` figure's chrome `pre.mermaid` rule `display: none !important` made `display: block !important` | `test/browser/appearance-style.test.ts -t "no appearance.*layout/diagrams\|no appearance.*layout/figures\|no appearance.*layout/diagram-tools"` (Chromium) | red: 2 rows, `layout/diagrams/edges` and `layout/diagrams/elk` (the cases whose figure fails to draw); 11 passed |
+| F13-keys-ground | row (c) reads every document in every state | the keys sheet's `.keys .box` ground `var(--bg)` made the literal `#ffffff` | `-t "every document, every state"` (Chromium) | red on `Phosphor & Ink` (9 distinct offending elements over 99 documents); the `Phosphor Daylight` row stayed green, because that fixture's `bg` is white, so the literal is equal there (an equivalent mutant for that fixture only) |
+| F13-keys-ground-2 | the same, with a literal no fixture has | the same ground made `#123456` | `-t "closed grounds.*every document, every state"` (Chromium) | red on both `Phosphor & Ink` and `Phosphor Daylight` (9 distinct offending elements, 99 documents, 45 726 text elements read) |
+
+```json
+[
+ {"row":"F13-draw-failed","guard":"row (a) reads the layout cases that draw Mermaid","edit":"the .draw-failed figure's chrome pre.mermaid rule display: none made display: block (scratch stylesheet)","tests":"test/browser/appearance-style.test.ts -t \"no appearance.*layout/diagrams|no appearance.*layout/figures|no appearance.*layout/diagram-tools\" (Chromium)","result":"red (2 rows: layout/diagrams/edges, layout/diagrams/elk)"},
+ {"row":"F13-keys-ground","guard":"row (c) reads every document in every state","edit":"the keys sheet's ground var(--bg) made the literal #ffffff (scratch stylesheet)","tests":"test/browser/appearance-style.test.ts -t \"every document, every state\" (Chromium)","result":"red on Phosphor & Ink (9 elements); green on Phosphor Daylight, whose bg is white (equivalent there)"},
+ {"row":"F13-keys-ground-2","guard":"row (c) reads every document in every state","edit":"the keys sheet's ground made the literal #123456 (scratch stylesheet)","tests":"test/browser/appearance-style.test.ts -t \"closed grounds.*every document, every state\" (Chromium)","result":"red on both rows (9 elements, 99 documents)"}
+]
+```

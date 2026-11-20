@@ -233,3 +233,21 @@ Each row edits `test/size-rules.ts` in place (the original saved and its sha256 
  }
 ]
 ```
+
+## Second review F13: the package guard of F17
+
+`package.json`'s `sideEffects` names `./dist/frame/appearance.js`, the one module that freezes the appearance contract's lists in place at its top level, so a bundler keeps its body; `test/package.test.ts` pins the entry and pins that `src/frame/appearance.ts` still holds a top-level freeze. Unmutated, `test/package.test.ts` is 23 passed (23).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F17-side | the `sideEffects` list names the freezing module | the `./dist/frame/appearance.js` entry removed from package.json (restored from a saved copy, sha256 checked) | `test/package.test.ts` | red: 1 failed, 22 passed (the sideEffects row) |
+| F17-freeze-3 | the freezing module still freezes | the first three `Object.freeze` lines of src/frame/appearance.ts commented out | `test/package.test.ts` | green (23 passed): the pin is a pattern for any top-level freeze, and three more remain. Not a gap: the guard is "no freeze at all" |
+| F17-freeze | the freezing module still freezes | every top-level `Object.freeze` line of src/frame/appearance.ts (lines 8 to 13) commented out (restored from a saved copy, sha256 checked) | `test/package.test.ts` | red: 1 failed, 22 passed (the same row) |
+
+```json
+[
+ {"row":"F17-side","guard":"the sideEffects list names the freezing module","edit":"the ./dist/frame/appearance.js entry removed from package.json","tests":"test/package.test.ts","result":"red (1 failed | 22 passed)"},
+ {"row":"F17-freeze-3","guard":"the freezing module still freezes","edit":"the first three Object.freeze lines of src/frame/appearance.ts commented out","tests":"test/package.test.ts","result":"green (23 passed): equivalent for this guard, three top-level freezes remain, and the pin asks for any"},
+ {"row":"F17-freeze","guard":"the freezing module still freezes","edit":"every top-level Object.freeze line of src/frame/appearance.ts commented out","tests":"test/package.test.ts","result":"red (1 failed | 22 passed)"}
+]
+```
