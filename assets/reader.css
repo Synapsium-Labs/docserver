@@ -94,7 +94,7 @@
      --chg     what changed, and nothing else                          --code-*  code and file paths (cool grey)  */
 [data-docreader-root] {
   --serif: "Docreader Serif", "Docreader Serif Fallback Times", "Docreader Serif Fallback DejaVu", "Source Serif 4", Georgia, serif;
-  --sans: "Docreader Sans", "Docreader Sans Fallback Arial", "Docreader Sans Fallback DejaVu", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --sans-lib: "Docreader Sans", "Docreader Sans Fallback Arial", "Docreader Sans Fallback DejaVu", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; --sans: var(--sans-lib);
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --prose: var(--serif);
   --rem: 16px;               /* the layout's rem: sizes given in rem are calc(N * var(--rem)), see the header */
@@ -1233,9 +1233,9 @@
 @media (hover: none) and (pointer: coarse) {
   [data-docreader-root] .toc-foot .keys-btn { display: none; }
 }
-/* ─── hosted: an appearance from the host. Every rule below is gated by the root's presence attributes (data-docreader-hosted, -colours, -skin), so with none no rule matches and 1.1.0's computed styles stand. ─── */
-[data-docreader-root] { --focus: var(--accent); --accent-ink: initial; --code-ink: initial; --syn-comment: initial; --syn-keyword: initial; --syn-string: initial; --syn-number: initial; --syn-function: initial; --syn-type: initial; --syn-tag: initial; --syn-attr: initial; --syn-punct: initial; --syn-deleted: initial; --syn-inserted: initial; --chg-gap: var(--bg); --dr-radius: initial; --dr-radius-small: initial; --dr-radius-large: initial; --dr-control-row: initial; --dr-pop-shadow: initial; --dr-section-size: initial; --dr-section-weight: initial; --dr-section-tracking: initial; --dr-section-case: initial; }
-[data-docreader-root][data-docreader-hosted] { --sans: "Docreader Host Sans", "Docreader Sans", "Docreader Sans Fallback Arial", "Docreader Sans Fallback DejaVu", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; --mono: "Docreader Host Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+/* ─── hosted: an appearance from the host; each rule is gated by the root's presence attributes, so with none 1.1.0 stands ─── */
+[data-docreader-root] { --focus: var(--accent); --accent-ink: ; --code-ink: ; --syn-comment: ; --syn-keyword: ; --syn-string: ; --syn-number: ; --syn-function: ; --syn-type: ; --syn-tag: ; --syn-attr: ; --syn-punct: ; --syn-deleted: ; --syn-inserted: ; --chg-gap: var(--bg); --dr-radius: ; --dr-radius-small: ; --dr-radius-large: ; --dr-control-row: ; --dr-pop-shadow: ; --dr-section-size: ; --dr-section-weight: ; --dr-section-tracking: ; --dr-section-case: ; }
+[data-docreader-root][data-docreader-hosted] { --chg-row: inset 2px 0 0 var(--chg), inset 4px 0 0 var(--chg-tint), inset 6px 0 0 var(--chg); --sans: "Docreader Host Sans", var(--sans-lib); --mono: "Docreader Host Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 [data-docreader-root][data-docreader-colours] { --accent-hover: color-mix(in srgb, var(--accent) 80%, var(--text)); --accent-soft: color-mix(in srgb, var(--accent) 4%, var(--bg)); --th-bg: var(--accent-soft); --wait-soft: color-mix(in srgb, var(--wait) 4%, var(--bg)); --wait-tint: var(--wait-soft); --no-tint: color-mix(in srgb, var(--no) 4%, var(--bg)); --chg-tint: color-mix(in srgb, var(--chg) 4%, var(--bg)); --chg-soft: color-mix(in srgb, var(--chg) 4%, var(--surface)); --short-bg: var(--surface); --paper: var(--bg); --topbar-bg: var(--bg); --code-inline-bg: var(--surface2); --code-comment: var(--syn-comment); }
 [data-docreader-root][data-docreader-colours]:not(i) :is(.short, .callout.waiting) .chg:not(tr) { --chg-bg: color-mix(in srgb, var(--chg) 4%, var(--short-bg)); }
 [data-docreader-root][data-docreader-colours] pre.mermaid:is(:not(:has(> svg)), :has(> svg[data-docreader-hosted-figure])) { --plate: var(--surface); }
@@ -1261,37 +1261,37 @@
 [data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-name, .hljs-tag .hljs-name) { color: var(--syn-tag); }
 [data-docreader-root][data-docreader-colours] .codehilite .hljs-deletion { color: var(--syn-deleted); background: none; }
 [data-docreader-root][data-docreader-colours] .codehilite .hljs-addition { color: var(--syn-inserted); background: none; }
-[data-docreader-root][data-docreader-skin~="radius"] :is(.bar-tools button, .aa-menu .seg, .aa-menu .aa-btns button, figure.mermaid-figure .tools button, .fig-render button, .peek-btn, .code-copy, .short-view, .codehilite, pre.fig-src) { border-radius: var(--dr-radius) !important; }
-[data-docreader-root][data-docreader-skin~="radiusSmall"] :is(:not(pre) > code, kbd, .who) { border-radius: var(--dr-radius-small) !important; }
-[data-docreader-root][data-docreader-skin~="radiusLarge"] :is(.aa-menu, .chg-menu, .xcard, .jump .box, .keys .box, .callout.waiting, .short, .rs-wait, figure.mermaid-figure pre.mermaid) { border-radius: var(--dr-radius-large) !important; }
+[data-docreader-root][data-docreader-skin~="radius"] :is(.aa-menu .seg, .aa-menu .aa-btns button, .chg-menu .cm-only, .jump input, figure.mermaid-figure .tools button, .fig-render button, .fig-overlay .fo-bar button, .peek-btn, .code-copy, .short-view, .codehilite, pre:not(.mermaid)) { border-radius: var(--dr-radius) !important; }
+[data-docreader-root][data-docreader-skin~="radiusSmall"] :is(:not(pre) > code, .keys kbd, .who) { border-radius: var(--dr-radius-small) !important; }
+[data-docreader-root][data-docreader-skin~="radiusLarge"] :is(.aa-menu, .chg-menu, .xcard, .jump .box, .keys .box, .short, figure.mermaid-figure pre.mermaid) { border-radius: var(--dr-radius-large) !important; }
+[data-docreader-root][data-docreader-skin~="radiusLarge"] :is(.callout.waiting, .rs-wait) { border-radius: 0 var(--dr-radius-large) var(--dr-radius-large) 0; }
 @media (pointer: fine) {
-  [data-docreader-root][data-docreader-skin~="controlRow"] :is(.aa-menu .opt, .chg-menu .cm-item, .jump li, .keys :is(dt, dd), .toc-contents a, .toc-index a.ix) { min-height: var(--dr-control-row); }
+  [data-docreader-root][data-docreader-skin~="controlRow"] :is(.aa-menu .opt, .chg-menu .cm-item, .jump li, .keys :is(dt, dd), .toc-open :is(.toc-contents a, .toc-index a.ix)) { min-height: var(--dr-control-row); }
 }
 [data-docreader-root][data-docreader-skin~="popShadow"] { --pop-shadow: var(--dr-pop-shadow); }
 [data-docreader-root][data-docreader-skin~="popShadow"] :is(.jump .box, .keys .box) { box-shadow: var(--dr-pop-shadow) !important; }
 @media screen and (max-width: 1239px) {
   [data-docreader-root][data-docreader-skin~="popShadow"]:not(i).has-toc.toc-open > .doc-toc { box-shadow: var(--dr-pop-shadow); }
 }
-[data-docreader-root][data-docreader-skin~="sectionSize"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { font-size: var(--dr-section-size); }
-[data-docreader-root][data-docreader-skin~="sectionWeight"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { font-weight: var(--dr-section-weight); }
-[data-docreader-root][data-docreader-skin~="sectionTracking"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { letter-spacing: var(--dr-section-tracking); }
-[data-docreader-root][data-docreader-skin~="sectionCase"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { text-transform: var(--dr-section-case); }
-[data-docreader-root][data-docreader-section-family="mono"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { font-family: var(--mono); }
+[data-docreader-root][data-docreader-skin~="sectionSize"] :is(.aa-menu legend, .aa-kh, .cm-lab, .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-open :is(.toc-tabs button, .ix-group)) { font-size: var(--dr-section-size); }
+[data-docreader-root][data-docreader-skin~="sectionWeight"] :is(.aa-menu legend, .aa-kh, .cm-lab, .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-open :is(.toc-tabs button, .ix-group)) { font-weight: var(--dr-section-weight); }
+[data-docreader-root][data-docreader-skin~="sectionTracking"] :is(.aa-menu legend, .aa-kh, .cm-lab, .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-open :is(.toc-tabs button, .ix-group)) { letter-spacing: var(--dr-section-tracking); }
+[data-docreader-root][data-docreader-skin~="sectionCase"] :is(.aa-menu legend, .aa-kh, .cm-lab, .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-open :is(.toc-tabs button, .ix-group)) { text-transform: var(--dr-section-case); }
+[data-docreader-root][data-docreader-section-family="mono"] :is(.aa-menu legend, .aa-kh, .cm-lab, .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-open :is(.toc-tabs button, .ix-group)) { font-family: var(--mono); }
 [data-docreader-root][data-docreader-hosted]:not(i) .chg:not(tr) { box-shadow: calc(var(--chg-x) * -1 + 3px) 0 0 var(--chg-bg), calc(var(--chg-x) * -1 + 1px) 0 0 var(--chg), calc(var(--chg-x) * -1 - 1px) 0 0 var(--chg-gap), calc(var(--chg-x) * -1 - 3px) 0 0 var(--chg); }
-[data-docreader-root][data-docreader-hosted]:not(i) .short .chg:not(tr) { --chg-gap: var(--short-bg); }
-[data-docreader-root][data-docreader-hosted]:not(i) .callout.waiting .chg:not(tr) { --chg-gap: var(--wait-soft); }
-[data-docreader-root][data-docreader-hosted]:not(i) tr.chg > td:first-child { box-shadow: inset 2px 0 0 var(--chg), inset 4px 0 0 var(--chg-tint), inset 6px 0 0 var(--chg); }
+[data-docreader-root][data-docreader-hosted] .short { --chg-gap: var(--short-bg); }
+[data-docreader-root][data-docreader-hosted] :is(.callout.waiting, .rs-wait) { --chg-gap: var(--wait-soft); }
+[data-docreader-root][data-docreader-hosted] .gh-warning { --chg-gap: var(--wait-tint); }
+[data-docreader-root][data-docreader-hosted] .gh-caution { --chg-gap: var(--no-tint); }
+[data-docreader-root][data-docreader-hosted]:not(i) tr.chg > td:first-child { box-shadow: var(--chg-row); }
 @media (max-width: 700px) {
-  [data-docreader-root][data-docreader-hosted]:not(i) .stack tr.chg { box-shadow: inset 2px 0 0 var(--chg), inset 4px 0 0 var(--chg-tint), inset 6px 0 0 var(--chg); }
+  [data-docreader-root][data-docreader-hosted]:not(i) .stack tr.chg { box-shadow: var(--chg-row); }
 }
-[data-docreader-root][data-docreader-root][data-docreader-root][data-docreader-hosted] .toc-index .dot.wait { background: none; }
-[data-docreader-root][data-docreader-hosted] .toc-index .dot.wait { border: 2px solid var(--wait); }
-[data-docreader-root][data-docreader-hosted] .toc-index .dot:is(.no, .info) { border-radius: 0; }
-[data-docreader-root][data-docreader-hosted] .toc-index .dot.info { height: 3px; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-docreader-hosted] :is(.toc-index .dot.wait, .ckey .sw.k-wait) { background: none; }
+[data-docreader-root][data-docreader-hosted] :is(.toc-index .dot.wait, .ckey .sw.k-wait) { border: 2px solid var(--wait); box-shadow: none; }
 [data-docreader-root][data-docreader-hosted] .ckey .sw:is(.k-ok, .k-wait, .k-no, .k-info) { width: 7px; height: 7px; margin: 0 3.5px; border-radius: 50%; }
-[data-docreader-root][data-docreader-hosted] .ckey .sw.k-wait { background: none; border: 2px solid var(--wait); box-shadow: none; }
-[data-docreader-root][data-docreader-hosted] .ckey .sw:is(.k-no, .k-info) { border-radius: 0; }
-[data-docreader-root][data-docreader-hosted] .ckey .sw.k-info { height: 3px; }
+[data-docreader-root][data-docreader-hosted] :is(.toc-index .dot, .ckey .sw):is(.no, .info, .k-no, .k-info) { border-radius: 0; }
+[data-docreader-root][data-docreader-hosted] :is(.toc-index .dot.info, .ckey .sw.k-info) { height: 3px; }
 [data-docreader-root][data-docreader-hosted] a.xref { text-decoration-style: dashed; }
 [data-docreader-root][data-docreader-hosted] a.term { text-decoration-style: dotted; }
 [data-docreader-root][data-docreader-hosted] .jump li.sel { box-shadow: inset 2px 0 0 var(--accent); }
@@ -1300,6 +1300,21 @@
 [data-docreader-root][data-docreader-hosted] .short-view button { font-weight: 400; }
 [data-docreader-root][data-docreader-hosted] .short-view button[aria-pressed="true"] { font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 [data-docreader-root][data-docreader-hosted] .tbl-tools input:focus-visible { outline: 2px solid var(--focus); }
+/* ─── hosted Mermaid: a covered, plain drawing carries data-docreader-hosted-figure on its svg (diagrams.ts), which the full-screen copy keeps; every rule here is !important, Mermaid's own sheet being scoped to the drawing's id ─── */
+[data-docreader-root] svg[data-docreader-hosted-figure] { --fig-filter: none !important; }
+[data-docreader-root] svg[data-docreader-hosted-figure] [filter*="drop-shadow"] { filter: none !important; }
+[data-docreader-root] svg[data-docreader-hosted-figure] marker path[stroke="black"] { stroke: var(--text-muted) !important; }
+/* a cherry-pick commit is a disc with no series class and no fill (Mermaid 12.1.0: text-muted), with two dots and two stems on it (bg) */
+[data-docreader-root] svg[data-docreader-hosted-figure] circle.commit-cherry-pick:not([fill]) { fill: var(--text-muted) !important; stroke: var(--text-muted) !important; }
+[data-docreader-root] svg[data-docreader-hosted-figure] circle.commit-cherry-pick[fill] { fill: var(--bg) !important; }
+[data-docreader-root] svg[data-docreader-hosted-figure] line.commit-cherry-pick { stroke: var(--bg) !important; }
+[data-docreader-root] svg[data-docreader-hosted-figure] .commit-label-bkg { opacity: 1 !important; }
+[data-docreader-root] svg[data-docreader-hosted-figure] :is(.messageText, .loopText, .loopText > tspan) { paint-order: stroke !important; stroke: var(--surface) !important; stroke-width: 3px !important; stroke-linejoin: round !important; }
+[data-docreader-root] figure.mermaid-figure > pre.mermaid[data-docreader-redraw] { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
+[data-docreader-root] .fig-overlay .fo-stage:has(> svg[data-docreader-hosted-figure]) { background: var(--surface) !important; }
+/* Mermaid's tooltip is one div in the frame's body, outside the root: the frame marks its html element and sets these three there (frame-runtime/enhance-entry.ts); the root's declarations only keep the sheet's read-what-it-declares check whole */
+[data-docreader-root] { --dr-tip-bg: initial; --dr-tip-fg: initial; --dr-tip-edge: initial; }
+html[data-docreader-hosted] > body > .mermaidTooltip { background: var(--dr-tip-bg) !important; color: var(--dr-tip-fg) !important; border-color: var(--dr-tip-edge) !important; }
 /* ─── print: light, whole tables, figures kept on one page, no chrome ────── */
 @media print {
   [data-docreader-root] svg .dn-dot,

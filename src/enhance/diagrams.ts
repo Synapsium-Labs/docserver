@@ -40,6 +40,13 @@
 //   7. once every figure is done, the state reads `drawn`, `partial` (some failed) or `failed` (all did).
 // Each change of a figure runs through position.keep and asks for a relayout ('content').
 //
+// While the host's colours apply (the appearance contract; the first consumer's design, "Mermaid while hosted"), each
+// figure is classified at its turn in the queue, before it is drawn: unless its text is author-styled
+// (appearance-mermaid.ts's scan), the bundled Mermaid's `parse` names its kind, and a covered kind draws with
+// `mermaidThemeOf` and its svg takes the mark `data-docreader-hosted-figure`, which the hosted rules of reader.css are
+// scoped to and the full-screen copy keeps. Every other figure draws exactly as above, and with no colours no `parse`
+// is called. On each 'appearance' event the figures drawn so far are drawn again in the new colours (follow, below).
+//
 // That is `mermaid.draw: 'auto'`, the default. With `'on-request'` (docserver L3, Task 16; FD13) the second phase
 // neither calls load() nor sets the gate or `drawing`: the root reads `data-docreader-diagrams="on-request"` for good, a
 // figure longer than maxTextSize takes its fallback with the long note at once, and every other figure gets one Render
@@ -94,6 +101,8 @@
 // Standard files, slug `diagrams`: test/enhance-diagrams.test.ts, test/browser/diagrams.test.ts,
 // conformance/layout/diagrams/ and scripts/demo/samples/diagrams.md. The figure rules are assets/reader.css's.
 // Registered in features.ts, whose header says where in the build order and why.
+import type { Appearance } from './appearance.js';
+import { isAuthorStyled, MERMAID_HOSTED_KINDS, mermaidThemeOf } from './appearance-mermaid.js';
 import { chrome } from './journal.js';
 import type { MermaidSettings } from './options.js';
 import type { FigureEntry } from './registry.js';
@@ -219,9 +228,17 @@ export function secureKeys(): readonly string[] {
   return Object.freeze(Object.values(secureGroups()).flat());
 }
 
+/** The host's colour slots, as a verdict holds them. */
+type Colours = NonNullable<Appearance['colour']>;
+
+/** The configuration of one call: 1.1.0's, or with colours the theme derived from them. */
+type Config = (paint?: Colours) => Record<string, unknown>;
+
 /** Mermaid's API, as the reader uses it. */
 interface MermaidApi {
   initialize(config: Record<string, unknown>): unknown;
+  /** Name `text`'s kind: resolves `{ diagramType }` (Mermaid 12); asked only while the host's colours apply. */
+  parse?(text: string): unknown;
   /** Draw `text` under the name `id`, in `container`: answers (a promise of) the SVG text and its bindFunctions. */
   render(id: string, text: string, container: Element): unknown;
 }
@@ -278,6 +295,14 @@ interface Fig {
   readonly source: HTMLElement;
   /** Its text, read when drawing starts. */
   readonly text: string;
+  /** The chrome pre its drawing is in, once drawn. */
+  drawing: HTMLElement | null;
+  /** A drawing was asked for. */
+  started: boolean;
+  /** The drawing asked for (the one in place unless a redraw failed) is in the host's colours. */
+  hosted: boolean;
+  /** Of a covered kind and not author-styled (`undefined` until the host's colours first apply to it). */
+  cover: boolean | undefined;
 }
 
 /** One queue per Mermaid module, across roots: the last call asked for, settled either way. */
@@ -391,16 +416,16 @@ function drawable(ctx: FeatureContext): Fig[] {
         break;
       }
     }
-    if (source !== null) out.push({ entry, source, text: source.textContent ?? '' });
+    if (source !== null) out.push({ entry, source, text: source.textContent ?? '', drawing: null, started: false, hosted: false, cover: undefined });
   }
   return out;
 }
 
 /** The configuration for one call: a new object each time, since Mermaid keeps what it is given. */
-function configOf(settings: MermaidSettings, fontFamily: string): () => Record<string, unknown> {
+function configOf(settings: MermaidSettings, fontFamily: string): Config {
   const secure = [...secureKeys()];
   for (const k of settings.secure) if (!secure.includes(k)) secure.push(k);
-  return () => ({
+  return (paint) => ({
     startOnLoad: false,
     securityLevel: 'strict',
     suppressErrorRendering: true,
@@ -410,7 +435,7 @@ function configOf(settings: MermaidSettings, fontFamily: string): () => Record<s
     secure: [...secure],
     theme: 'base',
     fontFamily,
-    themeVariables: { ...THEME_VARIABLES, fontFamily },
+    themeVariables: { ...(paint === undefined ? THEME_VARIABLES : mermaidThemeOf(paint)), fontFamily },
     dompurifyConfig: { FORBID_TAGS: [...LABEL_TAGS_REFUSED], FORBID_ATTR: [...LABEL_ATTRS_REFUSED] },
   });
 }
@@ -514,64 +539,142 @@ function finish(ctx: FeatureContext, f: Fig, svg: SVGSVGElement | null, why: Why
 /**
  * Put what render() answered into `drawing`, as run() does after its render: the SVG text in place of whatever the pre
  * holds (run() writes innerHTML; here an inert parse, env.parseHtml), then bindFunctions(drawing) when there is one.
- * An answer without SVG text, or a window without a parser, leaves the pre as Mermaid left it. A throw (of
+ * An answer without SVG text, or a window without a parser, leaves the pre as Mermaid left it (false). A throw (of
  * bindFunctions, or of a getter of the answer's) is the caller's to keep from the page.
  */
-function place(ctx: FeatureContext, drawing: HTMLElement, out: unknown): void {
-  if ((typeof out !== 'object' && typeof out !== 'function') || out === null) return;
+function place(ctx: FeatureContext, drawing: HTMLElement, out: unknown): boolean {
+  if ((typeof out !== 'object' && typeof out !== 'function') || out === null) return false;
   const { svg, bindFunctions } = out as { svg?: unknown; bindFunctions?: unknown };
-  if (typeof svg !== 'string') return;
+  if (typeof svg !== 'string') return false;
   const nodes = ctx.env.parseHtml(svg);
-  if (nodes === null) return;
+  if (nodes === null) return false;
   drawing.replaceChildren(...nodes);
   if (typeof bindFunctions === 'function') (bindFunctions as (el: Element) => unknown)(drawing);
+  return true;
+}
+
+/** Put the mark of a drawing in the host's colours on the svg `pre` holds. */
+function markFigure(ctx: FeatureContext, pre: HTMLElement): void {
+  const svg = drawnSvg(pre);
+  if (svg !== null) ctx.operate(() => ctx.journal.setAttribute(svg, 'data-docreader-hosted-figure', ''));
+}
+
+/** Whether the bundled Mermaid's `parse` names `text`'s kind as one drawn in the host's colours (a failure, or no id, is no). */
+async function covered(ctx: FeatureContext, api: MermaidApi, text: string): Promise<boolean> {
+  try {
+    const out = (await ctx.operate(() => api.parse?.(text))) as { diagramType?: unknown } | null | undefined;
+    return (MERMAID_HOSTED_KINDS as readonly string[]).includes(out?.diagramType as string);
+  } catch {
+    return false;
+  }
 }
 
 /**
- * One call, inside the module's queue: the chrome pre beside the source, initialize, then the drawing as run() makes it
- * (header, step 5), under a name of the reader's (drawingId). Answers the chrome pre (whatever Mermaid left in it), or
- * null when the instance is no longer live and nothing was asked.
+ * One call, inside the module's queue: the chrome pre beside the source (a redraw uses the figure's own, and replaces its
+ * drawing), initialize, then the drawing as run() makes it (header, step 5), under a name of the reader's (drawingId).
+ * While the host's colours apply, the figure's kind is asked of Mermaid first (`parse`) and a covered, not author-styled
+ * figure draws with `mermaidThemeOf` and the svg mark; every other draws as 1.1.0 does, and with no colours nothing more
+ * is called than 1.1.0 called. The colours are read here, at the figure's turn. Answers the chrome pre (whatever Mermaid
+ * left in it), or null when the instance is no longer live and nothing was asked.
  */
-async function call(ctx: FeatureContext, api: MermaidApi, config: () => Record<string, unknown>, f: Fig): Promise<HTMLElement | null> {
-  if (!ctx.live()) return null;
+async function call(ctx: FeatureContext, api: MermaidApi, config: Config, f: Fig, again: boolean): Promise<HTMLElement | null> {
+  if (!ctx.live() || (again && (f.drawing === null || f.drawing.parentNode !== f.entry.figure))) return null;
   const doc = ctx.root.ownerDocument;
+  const text = mermaidText(f.text);
+  f.started = true;
+  if (ctx.state.hosted?.colour !== undefined) {
+    f.cover ??= !isAuthorStyled(text) && (await covered(ctx, api, text));
+    if (!ctx.live()) return null;
+  }
+  const paint = f.cover === false ? undefined : ctx.state.hosted?.colour;
+  const was = f.hosted;
+  f.hosted = paint !== undefined;
+  // A redraw is made in a pre of its own, laid out but unseen as a first drawing is, and its svg then replaces the figure's
+  // own drawing in that pre (Mermaid empties the container it is given, so the drawing in view would go at once).
+  const home = again ? f.drawing : null;
   // Marked as run() marks a node it draws, before it reads the node's text.
-  const drawing = chrome(doc, 'pre', { className: 'mermaid', text: f.text, attrs: { 'data-processed': 'true' } });
+  const drawing = chrome(doc, 'pre', { className: 'mermaid', text: f.text, attrs: again ? { 'data-processed': 'true', 'data-docreader-redraw': '' } : { 'data-processed': 'true' } });
   let had: Element | null = null;
   let rendering: unknown;
   try {
     rendering = ctx.operate(() => {
-      ctx.journal.insert(drawing, f.entry.figure, besideSource(f, true));
+      ctx.journal.insert(drawing, f.entry.figure, home === null ? besideSource(f, true) : home.nextSibling);
       had = tooltipIn(doc);
-      api.initialize(config());
+      api.initialize(config(paint));
       if (!ctx.live()) return undefined; // initialize destroyed the instance: its drawing is never asked for
-      return { out: api.render(drawingId(), mermaidText(f.text), drawing) };
+      return { out: api.render(drawingId(), text, drawing) };
     });
   } catch {
-    return drawing; // a throw of the module's: the drawing is what it left, checked by the caller
+    // A throw of the module's: a first drawing's pre stays (the drawing is what the module left, checked by the caller).
+    if (home === null) return drawing;
+    drawing.remove();
+    return home;
   }
   if (rendering === undefined) return null;
+  let placed = false;
   try {
-    place(ctx, drawing, await (rendering as { out: unknown }).out);
+    placed = place(ctx, drawing, await (rendering as { out: unknown }).out);
   } catch {
     // A rejection, or a throw of bindFunctions: kept from the page, as run() keeps it with suppressErrors. The drawing
     // is checked by the caller.
   }
-  noteTip(ctx, doc, had, drawing);
-  return drawing;
+  if (home === null) {
+    if (placed && paint !== undefined) markFigure(ctx, drawing);
+    noteTip(ctx, doc, had, drawing);
+    return drawing;
+  }
+  if (placed) {
+    home.replaceChildren(...Array.from(drawing.childNodes));
+    if (paint !== undefined) markFigure(ctx, home);
+  } else f.hosted = was; // the drawing in place is the old one
+  drawing.remove();
+  return home;
 }
 
 /** Draw one figure through the module's queue; answers how it ended, or null once the instance is not live. */
-async function draw(ctx: FeatureContext, api: MermaidApi, config: () => Record<string, unknown>, settings: MermaidSettings, f: Fig): Promise<boolean | null> {
+async function draw(ctx: FeatureContext, api: MermaidApi, config: Config, settings: MermaidSettings, f: Fig): Promise<boolean | null> {
   if (f.text.length > (settings.maxTextSize ?? MAX_TEXT_SIZE)) {
     finish(ctx, f, null, 'long');
     return false;
   }
-  const drawing = await enqueue(api, () => call(ctx, api, config, f));
+  const drawing = await enqueue(api, () => call(ctx, api, config, f, false));
   if (!ctx.live() || drawing === null) return null;
   const svg = drawing.parentNode === f.entry.figure ? drawnSvg(drawing) : null;
+  if (svg !== null) f.drawing = drawing;
   finish(ctx, f, svg, 'error');
   return svg !== null;
+}
+
+/**
+ * On each appearance the host applies, redraw the figures asked for so far (the design's "Mermaid on a change"): with
+ * colours, every one not known to be outside the covered kinds; without, the ones drawn in the host's colours, back as
+ * 1.1.0 draws them. Nearest first, one per task, each in place through the module's queue; a newer appearance cancels
+ * what an older one still has queued (`gen`). A figure not drawn yet reads the colours at its own turn (call()).
+ */
+function follow(ctx: FeatureContext, api: () => MermaidApi | null, config: Config, figs: readonly Fig[]): void {
+  let gen = 0;
+  ctx.journal.defer(
+    ctx.events.on('appearance', (a) => {
+      const mine = (gen += 1);
+      const h = ctx.env.viewport().h;
+      const todo = figs
+        .filter((f) => f.started && (a.colour === undefined ? f.hosted : f.cover !== false))
+        .map((f, i) => ({ f, d: distance(f.source, h), i }))
+        .sort((x, y) => x.d - y.d || x.i - y.i);
+      void (async () => {
+        for (const { f } of todo) {
+          await new Promise<void>((resolve) => {
+            ctx.env.timeout(resolve, 0);
+          });
+          const mermaid = api();
+          if (!ctx.live() || gen !== mine || mermaid === null) return;
+          const drawing = await enqueue(mermaid, () => (gen === mine ? call(ctx, mermaid, config, f, true) : Promise.resolve(null)));
+          const svg = ctx.live() && drawing !== null ? drawnSvg(drawing) : null;
+          if (svg !== null) finish(ctx, f, svg, 'error');
+        }
+      })();
+    }),
+  );
 }
 
 /** Build this feature during startup: nothing; diagrams are drawn in the second phase (LD5). */
@@ -583,7 +686,7 @@ export function build(ctx: FeatureContext): void {
  * Call the host's load(), and, as soon as the module is here, before the font wait ends, give it its configuration
  * once: its start-on-load off, before a window load event can find it on (header, step 2).
  */
-function load(ctx: FeatureContext, config: () => Record<string, unknown>): Promise<unknown> {
+function load(ctx: FeatureContext, config: Config): Promise<unknown> {
   const loading = ctx.host.loadMermaid();
   void loading.then((mod) => {
     const early = mermaidOf(mod);
@@ -611,12 +714,15 @@ function onRequest(ctx: FeatureContext, settings: MermaidSettings, figs: readonl
   ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'on-request');
   const config = configOf(settings, fontOf(ctx));
   let module: Promise<MermaidApi | null> | null = null;
+  let loaded: MermaidApi | null = null;
   const api = (): Promise<MermaidApi | null> =>
     (module ??= (async () => {
       const loading = load(ctx, config);
       await ctx.env.fonts(FONT_WAIT_MS);
-      return mermaidOf(await loading);
+      loaded = mermaidOf(await loading);
+      return loaded;
     })());
+  follow(ctx, () => loaded, config, figs);
   const doc = ctx.root.ownerDocument;
   const tap = async (f: Fig, bar: HTMLElement, button: HTMLButtonElement): Promise<void> => {
     const a = await api();
@@ -711,6 +817,7 @@ export async function after(ctx: FeatureContext): Promise<void> {
     settle();
     return;
   }
+  follow(ctx, () => api, config, figs);
   await new Promise<void>((resolve) => {
     ctx.env.frame(resolve);
   });

@@ -186,6 +186,14 @@ function startsWithScope(selector: string): boolean {
   return rest === '' || selector[i] === ' ' ? !/^[~+]/.test(rest) : rest.startsWith('>');
 }
 
+/**
+ * The one selector the sheet may hold outside its root's scope: Mermaid appends its tooltip, one shared div, to the
+ * frame's body, outside the root, where no rule scoped under the root reaches it (the appearance contract, "Mermaid's
+ * tooltip"). It matches only while the frame has marked its html element as hosted, and sets nothing but the tooltip's
+ * three colours from the three properties the frame writes on that element.
+ */
+const SCOPE_EXCEPTION = 'html[data-docreader-hosted] > body > .mermaidTooltip';
+
 /** Every reason a sheet escapes its scope or its asset rules, as readable lines; empty when it does not. */
 function scopeProblems(css: string, fontsDir: string): string[] {
   const problems: string[] = [];
@@ -208,7 +216,7 @@ function scopeProblems(css: string, fontsDir: string): string[] {
     // A style rule. Keyframe steps (from, to, 50%) live inside an @keyframes block, which is not walked.
     if (node.selectors.length === 0) problems.push('a style rule with no selector');
     for (const s of node.selectors) {
-      if (!startsWithScope(s)) problems.push(`unscoped selector: ${s}${node.within.length > 0 ? `  (inside ${node.within.join(' > ')})` : ''}`);
+      if (!startsWithScope(s) && s !== SCOPE_EXCEPTION) problems.push(`unscoped selector: ${s}${node.within.length > 0 ? `  (inside ${node.within.join(' > ')})` : ''}`);
       if (/#[A-Za-z_-]/.test(s.replace(/\[[^\]]*\]/g, '').replace(/"[^"]*"/g, ''))) problems.push(`id selector: ${s}`);
     }
   }
@@ -276,6 +284,14 @@ describe('reader stylesheet: scope', () => {
     expect(scopeProblems(`${base}@media print { p { x: y } }`, fontsDir)).toEqual(['unscoped selector: p  (inside @media print)']);
     expect(scopeProblems(`${base}:where(${SCOPE}) p { x: y }`, fontsDir)).toHaveLength(1);
     expect(scopeProblems(`${base}[data-docreader-rootless] p { x: y }`, fontsDir)).toHaveLength(1);
+  });
+
+  it('allows exactly one selector outside the root: the Mermaid tooltip while the frame is hosted, and nothing near it', () => {
+    const base = `${SCOPE} p { x: y }\n`;
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { x: y }`, fontsDir)).toEqual([]);
+    expect(scopeProblems(`${base}html > body > .mermaidTooltip { x: y }`, fontsDir)).toHaveLength(1);
+    expect(scopeProblems(`${base}html[data-docreader-hosted] > body > .mermaidTooltip, body { x: y }`, fontsDir)).toEqual(['unscoped selector: body']);
+    expect(scopeProblems(`${base}html[data-docreader-hosted] > body > div { x: y }`, fontsDir)).toHaveLength(1);
   });
 
   it('flags an id selector, an @import, an @charset, an undeclared at-rule and a url() in a style rule', () => {

@@ -141,6 +141,8 @@ export function build(ctx: FeatureContext): void {
     if (source !== undefined && source.parentElement !== null) held.set(entry.figure, { entry, source, sourceParent: source.parentElement, text: source.textContent ?? '' });
   }
   const playbacks = new Map<SVGSVGElement, Playback>();
+  /** The drawing each figure's tools were built for: a redraw (an appearance change) replaces the svg, so they are built again. */
+  const toolsFor = new WeakMap<HTMLElement, SVGSVGElement>();
   const cuePending = new Set<SVGSVGElement>();
   const cueUnresolved = new Set<SVGSVGElement>();
   const cueObserved = new Set<SVGSVGElement>();
@@ -607,11 +609,13 @@ export function build(ctx: FeatureContext): void {
       dot.setAttribute('r', '3.5');
       ctx.journal.insert(ring, group, null);
       ctx.journal.insert(dot, group, null);
+      // 1.1.0's literals, but on a figure drawn in the host's colours: its focus, accent and bg (resolved, never a var()).
+      const paint = svg.hasAttribute('data-docreader-hosted-figure') ? ctx.state.hosted?.colour : undefined;
       ctx.journal.setStyle(ring, 'fill', 'none', true);
-      ctx.journal.setStyle(ring, 'stroke', '#0b6b66', true);
+      ctx.journal.setStyle(ring, 'stroke', paint?.focus ?? '#0b6b66', true);
       ctx.journal.setStyle(ring, 'stroke-width', '1.5px', true);
-      ctx.journal.setStyle(dot, 'fill', '#0b6b66', true);
-      ctx.journal.setStyle(dot, 'stroke', '#ffffff', true);
+      ctx.journal.setStyle(dot, 'fill', paint?.accent ?? '#0b6b66', true);
+      ctx.journal.setStyle(dot, 'stroke', paint?.bg ?? '#ffffff', true);
       ctx.journal.setStyle(dot, 'stroke-width', '1.5px', true);
     }
     if (!ctx.live()) return;
@@ -659,7 +663,16 @@ export function build(ctx: FeatureContext): void {
         });
         tools.append(copy);
       }
+      const bound = toolsFor.get(tools);
+      if (drawing !== undefined && bound !== undefined && bound !== drawing) {
+        const old = playbacks.get(bound);
+        if (old !== undefined) { cancelPlayback(old); playbacks.delete(bound); }
+        forgetCue(bound);
+        for (const button of Array.from(tools.children)) if (!/^Cop/.test(button.textContent ?? '')) button.remove();
+        ctx.journal.setAttribute(tools, 'data-diagram-tools', null);
+      }
       if (drawing === undefined || tools.getAttribute('data-diagram-tools') === 'true') continue;
+      toolsFor.set(tools, drawing);
       ctx.journal.setAttribute(tools, 'data-diagram-tools', 'true');
       const graph = graphOf(drawing);
       cueOwners.set(drawing, { figure: entry.figure, source, sourceParent, parent: drawing.parentElement as Element });
