@@ -434,4 +434,32 @@ describeBrowsers((browser: BrowserName) => {
       await doc.close();
     }
   }, 240_000);
+
+  it("a root that is the document element, after a colourless op, leaves Mermaid's tooltip 1.1.0's (third review F2)", async () => {
+    // The root's own data-docreader-hosted stays for life, and with no colours it writes no --dr-tip-* properties: the tooltip rule
+    // must not match then, or its three declarations compute as unset over Mermaid's own inline colours.
+    const doc = await openDoc(DOC, {}, { browser, csp: 'reader', enhance: false, mermaid: true });
+    try {
+      await doc.page.evaluate(script);
+      const got = await doc.page.evaluate(
+        `(async () => {
+          const html = document.documentElement;
+          await window.__dg.enhance(html, { appearance: ${JSON.stringify({ mode: DARK.mode, colour: DARK.colour })} });
+          window.__dg.setEnhancementAppearance(html, { mode: ${JSON.stringify(DARK.mode)} });
+          const tip = document.createElement('div');
+          tip.className = 'mermaidTooltip';
+          tip.style.background = '#ffffde';
+          tip.style.border = '1px solid #333';
+          document.body.append(tip);
+          const s = getComputedStyle(tip);
+          const out = { hosted: html.hasAttribute('data-docreader-hosted'), colours: html.hasAttribute('data-docreader-colours'), bg: s.backgroundColor, edge: s.borderTopColor };
+          tip.remove();
+          return out;
+        })()`,
+      );
+      expect(got).toEqual({ hosted: true, colours: false, bg: 'rgb(255, 255, 222)', edge: 'rgb(51, 51, 51)' });
+    } finally {
+      await doc.close();
+    }
+  }, 120_000);
 });

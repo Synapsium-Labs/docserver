@@ -1322,7 +1322,7 @@
 [data-docreader-root] figure.mermaid-figure > pre.mermaid[data-docreader-redraw] { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
 [data-docreader-root] .fig-overlay .fo-stage:has(> svg[data-docreader-hosted-figure]) { background: var(--surface) !important; }
 /* Mermaid's tooltip is in the frame's body, outside the root: the frame marks html and sets these three there */
-html[data-docreader-hosted] > body > .mermaidTooltip { background: var(--dr-tip-bg) !important; color: var(--dr-tip-fg) !important; border-color: var(--dr-tip-edge) !important; }
+html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip, html[data-docreader-root][data-docreader-colours] > body > .mermaidTooltip { background: var(--dr-tip-bg) !important; color: var(--dr-tip-fg) !important; border-color: var(--dr-tip-edge) !important; }
 /* ─── print: light, whole tables, figures kept on one page, no chrome ────── */
 @media print {
   [data-docreader-root] svg .dn-dot,

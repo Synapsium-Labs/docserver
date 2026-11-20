@@ -309,3 +309,15 @@ Chosen: refresh, not close. `attach` runs on every relayout, and on a figure who
  }
 ]
 ```
+
+## Third review F2
+
+The tooltip rule matches a hosted html marked by another root, or a root that is the document element only while it has colours. Measured on `assets/reader.css`, restored from a saved copy and compared byte for byte. Red first: the new row failed before the selector changed (background `rgba(0, 0, 0, 0)` for `rgb(255, 255, 222)`).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F2a | a colourless document-element root leaves Mermaid's tooltip 1.1.0's | the previous selector restored: `html[data-docreader-hosted] > body > .mermaidTooltip` | `test/browser/appearance-mermaid-draw.test.ts -t "third review F2"` (Chromium) | red: 1 failed |
+
+```json
+[{"row":"F2a","guard":"a colourless document-element root leaves Mermaid's tooltip 1.1.0's","edit":"the previous selector restored","tests":"test/browser/appearance-mermaid-draw.test.ts -t \"third review F2\" (Chromium)","result":"red"}]
+```

@@ -187,12 +187,17 @@ function startsWithScope(selector: string): boolean {
 }
 
 /**
- * The one selector the sheet may hold outside its root's scope: Mermaid appends its tooltip, one shared div, to the
- * frame's body, outside the root, where no rule scoped under the root reaches it (the appearance contract, "Mermaid's
- * tooltip"). It matches only while the frame has marked its html element as hosted, and sets nothing but the tooltip's
- * three colours from the three properties the frame writes on that element.
+ * The one rule the sheet may hold outside its root's scope: Mermaid appends its tooltip, one shared div, to the frame's
+ * body, outside the root, where no rule scoped under the root reaches it (the appearance contract, "Mermaid's tooltip").
+ * Its two selectors, exactly and in this order, match while the html element is marked hosted by another root, or is
+ * itself a hosted root with colours (the third review's F2: a document-element root keeps its own mark with no colours),
+ * and it sets nothing but the tooltip's three colours from the three properties written on that element.
  */
-const SCOPE_EXCEPTION = 'html[data-docreader-hosted] > body > .mermaidTooltip';
+const SCOPE_EXCEPTIONS: readonly string[] = [
+  'html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip',
+  'html[data-docreader-root][data-docreader-colours] > body > .mermaidTooltip',
+];
+const SCOPE_EXCEPTION = SCOPE_EXCEPTIONS.join(', ');
 
 /** The exception's declarations, exactly: the tooltip's three colours from the three properties the frame writes on its html. */
 const EXCEPTION_DECLARATIONS = ['background: var(--dr-tip-bg) !important', 'color: var(--dr-tip-fg) !important', 'border-color: var(--dr-tip-edge) !important'];
@@ -220,10 +225,10 @@ function scopeProblems(css: string, fontsDir: string): string[] {
     // A style rule. Keyframe steps (from, to, 50%) live inside an @keyframes block, which is not walked.
     if (node.selectors.length === 0) problems.push('a style rule with no selector');
     for (const s of node.selectors) {
-      if (s === SCOPE_EXCEPTION && (node.selectors.length !== 1 || declarationsOf(node.body).join('|') !== EXCEPTION_DECLARATIONS.join('|'))) {
+      if (SCOPE_EXCEPTIONS.includes(s) && s === node.selectors[0] && (node.selectors.join(', ') !== SCOPE_EXCEPTION || declarationsOf(node.body).join('|') !== EXCEPTION_DECLARATIONS.join('|'))) {
         problems.push(`the exception rule holds more or less than the tooltip's three colours: ${node.selectors.join(', ')} { ${node.body.trim()} }`);
       }
-      if (!startsWithScope(s) && s !== SCOPE_EXCEPTION) problems.push(`unscoped selector: ${s}${node.within.length > 0 ? `  (inside ${node.within.join(' > ')})` : ''}`);
+      if (!startsWithScope(s) && !(SCOPE_EXCEPTIONS.includes(s) && node.selectors.join(', ') === SCOPE_EXCEPTION)) problems.push(`unscoped selector: ${s}${node.within.length > 0 ? `  (inside ${node.within.join(' > ')})` : ''}`);
       if (/#[A-Za-z_-]/.test(s.replace(/\[[^\]]*\]/g, '').replace(/"[^"]*"/g, ''))) problems.push(`id selector: ${s}`);
     }
   }
@@ -300,11 +305,16 @@ describe('reader stylesheet: scope', () => {
     expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { x: y }`, fontsDir)).toHaveLength(1);
     expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { ${EXCEPTION_DECLARATIONS.join('; ')}; display: none }`, fontsDir)).toHaveLength(1);
     expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { background: var(--dr-tip-bg) !important; color: var(--dr-tip-bg) !important; border-color: var(--dr-tip-edge) !important }`, fontsDir)).toHaveLength(1);
-    expect(scopeProblems(`${base}${SCOPE_EXCEPTION}, ${SCOPE} i { ${EXCEPTION_DECLARATIONS.join('; ')} }`, fontsDir)).toHaveLength(1);
+    // The exception's selectors with a third: the rule is not the exception, so both its selectors are unscoped too.
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION}, ${SCOPE} i { ${EXCEPTION_DECLARATIONS.join('; ')} }`, fontsDir)).toHaveLength(3);
     expect(scopeProblems(`${base}html > body > .mermaidTooltip { x: y }`, fontsDir)).toHaveLength(1);
     expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { x: y }`, fontsDir)).toHaveLength(1);
     expect(scopeProblems(`${base}html[data-docreader-hosted] > body > .mermaidTooltip, body { x: y }`, fontsDir)).toHaveLength(2);
     expect(scopeProblems(`${base}html[data-docreader-hosted] > body > div { x: y }`, fontsDir)).toHaveLength(1);
+    // Either selector alone, or the two in the other order, is not the exception.
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTIONS[0] as string} { ${EXCEPTION_DECLARATIONS.join('; ')}; }`, fontsDir)).toHaveLength(2);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTIONS[1] as string} { ${EXCEPTION_DECLARATIONS.join('; ')}; }`, fontsDir)).toHaveLength(2);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTIONS[1] as string}, ${SCOPE_EXCEPTIONS[0] as string} { ${EXCEPTION_DECLARATIONS.join('; ')}; }`, fontsDir)).toHaveLength(3);
   });
 
   it('flags an id selector, an @import, an @charset, an undeclared at-rule and a url() in a style rule', () => {
@@ -358,7 +368,7 @@ describe('reader stylesheet: what the host page may not change', () => {
   it('reads no custom property it does not declare, so none inherits in from the host page', () => {
     // The one rule outside the root reads the three properties the frame writes on its html element, which no rule here
     // declares: the scope check above holds its declarations to exactly those.
-    const read = new Set(rules.filter((r) => !r.selectors.includes(SCOPE_EXCEPTION)).flatMap((r) => [...r.body.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1] ?? '')));
+    const read = new Set(rules.filter((r) => r.selectors.join(', ') !== SCOPE_EXCEPTION).flatMap((r) => [...r.body.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1] ?? '')));
     const declared = new Set(rules.flatMap((r) => [...r.body.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1] ?? '')));
     expect([...read].filter((v) => !declared.has(v)).sort()).toEqual([]);
   });
