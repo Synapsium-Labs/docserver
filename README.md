@@ -1,31 +1,31 @@
-# docserver
+# pinax-lib
 
 One shared renderer for spec and plan documents written in Markdown. It turns Markdown into the rich reading layout: a contents sidebar, "In short" and "Where things stand" boxes, status labels, figure cards for Mermaid diagrams, quick jump, a glossary on hover, an Index of defined IDs, "Changes since", read marks, and light and dark themes.
 
 It is pure. It does no network, storage, auth, git or hosting. Each product that uses it brings its own transport, login, content source and hosting, and pins one exact version.
 
-**Status:** 1.1.0, a minor release after 1.0.0, the first release. `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. Every version is published from a signed tag through the release lane (`.github/workflows/release.yml`); the Release verification section below checks one.
+**Status:** 1.1.0, a minor release after 1.0.0, the first release. `./render`, `./conformance` and `./enhance` are delivered, and so is the frame layer: `./frame`, `./host`, `./highlight` and the asset manifest `assets/assets.json`. Versions 1.0.0 and 1.1.0 were published as `@synapsium-labs/docserver`, the library's name before the rename; that name gets no further version, and once the first pinax-lib version is out it is deprecated with a pointer to `@synapsium-labs/pinax-lib`. The names the built frame and the bridge carry keep their names (the frame's `docserver:register` and `docserver:link` events, its own `docserver frame:` messages and its style-probe text, and every `data-docreader-*` attribute and `--dr-*` property), so the rename moves no golden file, no asset hash, no bridge protocol and no seed schema. Every version is published from a signed tag through the release lane (`.github/workflows/release.yml`); the Release verification section below checks one.
 
 ## What it holds
 
 | Part | Entry point | Stage |
 |---|---|---|
-| Markdown rules (markdown-it, TypeScript): GitHub-style Markdown, alerts, figure captions, front matter, heading ids, a short raw-HTML allowlist | `@synapsium-labs/docserver/render`: `render()`, `scanRefs()` | Delivered |
-| The conformance corpus: Markdown in, expected HTML out, plus hostile cases | `@synapsium-labs/docserver/conformance`: `runCorpus()`, `loadCorpus()` | Delivered |
-| The rich layout over a rendered document: lifecycle, host adapters, reader prefs, navigation, reading position, state, editorial and index views, menus, comparison UI and read marks | `@synapsium-labs/docserver/enhance`: `enhance()`, `destroyEnhancement()`, `goToHash()`, `setEnhancementPrefs()`, `setEnhancementAppearance()`, `runEnhancementCommand()`, `EnhanceError` | L2 implementation; final acceptance pending |
-| The layout stylesheet and package fonts | `@synapsium-labs/docserver/assets/*`: `assets/reader.css`, `assets/fonts/` | L2 implementation; final acceptance pending |
-| Self-hosted Mermaid and diagram controls | `@synapsium-labs/docserver/assets/mermaid/*` through `mermaid.load()` | Still completing; final behavioral verification pending |
-| The sealed reader frame's document builder, its policy and the bridge's protocol (pure) | `@synapsium-labs/docserver/frame`: `frameDocument()`, `frameCsp()`, `checkFrameCsp()`, `mermaidGate()` | L3 |
-| A reference parent that mounts the frame for other viewers | `@synapsium-labs/docserver/host`: `mountDocFrame()` | L3 |
-| The code highlighter `render()` uses, for a host that colours code itself | `@synapsium-labs/docserver/highlight`: `createHighlighter()` | L3 |
-| The frame's hashed scripts and stylesheet, and the manifest of every asset | `@synapsium-labs/docserver/assets/*`: `assets/frame/`, `assets/mermaid/mermaid.frame.js`, `assets/assets.json` | L3 |
+| Markdown rules (markdown-it, TypeScript): GitHub-style Markdown, alerts, figure captions, front matter, heading ids, a short raw-HTML allowlist | `@synapsium-labs/pinax-lib/render`: `render()`, `scanRefs()` | Delivered |
+| The conformance corpus: Markdown in, expected HTML out, plus hostile cases | `@synapsium-labs/pinax-lib/conformance`: `runCorpus()`, `loadCorpus()` | Delivered |
+| The rich layout over a rendered document: lifecycle, host adapters, reader prefs, navigation, reading position, state, editorial and index views, menus, comparison UI and read marks | `@synapsium-labs/pinax-lib/enhance`: `enhance()`, `destroyEnhancement()`, `goToHash()`, `setEnhancementPrefs()`, `setEnhancementAppearance()`, `runEnhancementCommand()`, `EnhanceError` | L2 implementation; final acceptance pending |
+| The layout stylesheet and package fonts | `@synapsium-labs/pinax-lib/assets/*`: `assets/reader.css`, `assets/fonts/` | L2 implementation; final acceptance pending |
+| Self-hosted Mermaid and diagram controls | `@synapsium-labs/pinax-lib/assets/mermaid/*` through `mermaid.load()` | Still completing; final behavioral verification pending |
+| The sealed reader frame's document builder, its policy and the bridge's protocol (pure) | `@synapsium-labs/pinax-lib/frame`: `frameDocument()`, `frameCsp()`, `checkFrameCsp()`, `mermaidGate()` | L3 |
+| A reference parent that mounts the frame for other viewers | `@synapsium-labs/pinax-lib/host`: `mountDocFrame()` | L3 |
+| The code highlighter `render()` uses, for a host that colours code itself | `@synapsium-labs/pinax-lib/highlight`: `createHighlighter()` | L3 |
+| The frame's hashed scripts and stylesheet, and the manifest of every asset | `@synapsium-labs/pinax-lib/assets/*`: `assets/frame/`, `assets/mermaid/mermaid.frame.js`, `assets/assets.json` | L3 |
 
 The package exports exactly `./render`, `./conformance`, `./enhance`, `./frame`, `./host`, `./highlight`, `./assets/*` and `./package.json`; nothing else is importable.
 
 ## Rendering: `./render`
 
 ```ts
-import { render, scanRefs } from '@synapsium-labs/docserver/render';
+import { render, scanRefs } from '@synapsium-labs/pinax-lib/render';
 
 const r = render(markdown, { maxBytes: 1_048_576, lineAttrs: true });
 if (r.outcome === 'rendered') {
@@ -93,9 +93,9 @@ The same list in every environment, exported as `ALLOWLIST`. Each form is matche
 ## Embedding: `./enhance`
 
 ```ts
-import { render } from '@synapsium-labs/docserver/render';
-import { destroyEnhancement, enhance, setEnhancementPrefs } from '@synapsium-labs/docserver/enhance';
-// Link @synapsium-labs/docserver/assets/reader.css as a stylesheet, or import it where a bundler handles CSS
+import { render } from '@synapsium-labs/pinax-lib/render';
+import { destroyEnhancement, enhance, setEnhancementPrefs } from '@synapsium-labs/pinax-lib/enhance';
+// Link @synapsium-labs/pinax-lib/assets/reader.css as a stylesheet, or import it where a bundler handles CSS
 // (the package marks its .css files as having side effects, so the import is kept); its fonts load from ./fonts/.
 
 const r = render(markdown);
@@ -224,10 +224,10 @@ A host that runs `./enhance` in its own page, rather than in the sealed frame, h
 
 ```ts
 // mermaidUrl → mermaid.load
-import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+import type { EnhanceOptions } from '@synapsium-labs/pinax-lib/enhance';
 
 // The host serves the package's own assets/mermaid/mermaid.mjs from its origin; its start-on-load is off.
-const mermaidUrl = 'https://example.test/static/docserver/mermaid/mermaid.mjs';
+const mermaidUrl = 'https://example.test/static/pinax-lib/mermaid/mermaid.mjs';
 
 export const options: EnhanceOptions = {
   mermaid: { load: () => import(mermaidUrl) },
@@ -236,7 +236,7 @@ export const options: EnhanceOptions = {
 
 ```ts
 // resolveLink → onLink
-import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+import type { EnhanceOptions } from '@synapsium-labs/pinax-lib/enhance';
 
 declare function resolveLink(href: string): string | null; // the host's old resolver: a link as written, to its page
 declare function goTo(url: string, newTab: boolean): void; // the host's own router
@@ -251,7 +251,7 @@ export const options: EnhanceOptions = {
 
 ```ts
 // changesUrl → changes
-import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+import type { EnhanceOptions } from '@synapsium-labs/pinax-lib/enhance';
 
 const changesUrl = 'https://example.test/api/changes';
 const docPath = 'specs/example.md';
@@ -267,7 +267,7 @@ export const options: EnhanceOptions = {
 
 ```ts
 // bar → chrome.bar
-import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+import type { EnhanceOptions } from '@synapsium-labs/pinax-lib/enhance';
 
 // The host keeps its own bar above the document, so the reader builds none; its rail and settings menu stay.
 export const options: EnhanceOptions = {
@@ -277,7 +277,7 @@ export const options: EnhanceOptions = {
 
 ```ts
 // issue-tracker base → itemLink
-import type { EnhanceOptions } from '@synapsium-labs/docserver/enhance';
+import type { EnhanceOptions } from '@synapsium-labs/pinax-lib/enhance';
 
 const trackerBase = 'https://example.test/issues/';
 
@@ -305,8 +305,8 @@ The same options, for a viewer that mounts the frame with `./host` instead, map 
 `./frame` builds the sealed reader frame's document as one string, for an `<iframe sandbox="allow-scripts" srcdoc>`. It is pure: no DOM, no clock, no randomness, no I/O, and it fetches nothing. The host reads the asset files and passes their texts; `frameDocument` checks each against the manifest it was built with.
 
 ```ts
-import { frameCsp, frameDocument, FrameError, mermaidGate } from '@synapsium-labs/docserver/frame';
-import { render, scanRefs } from '@synapsium-labs/docserver/render';
+import { frameCsp, frameDocument, FrameError, mermaidGate } from '@synapsium-labs/pinax-lib/frame';
+import { render, scanRefs } from '@synapsium-labs/pinax-lib/render';
 
 const result = render(markdown);
 const scan = scanRefs(markdown);
@@ -373,7 +373,7 @@ try {
 `mountDocFrame(el, { document, adapters })` is the reference parent of the frame, for viewers that do not speak the bridge themselves. It mounts the frame into `el`, speaks the bridge with it, and hands every effect to the host's adapters. Importing `./host` touches no DOM, starts no timer and keeps no state; only a mount does.
 
 ```ts
-import { mountDocFrame } from '@synapsium-labs/docserver/host';
+import { mountDocFrame } from '@synapsium-labs/pinax-lib/host';
 
 const frame = mountDocFrame(container, {
   document: { result, scan }, // render() and scanRefs() of the document
@@ -511,8 +511,8 @@ Every case is also checked by an output-safety oracle: only known tags, attribut
 To run it in your own CI against the renderer you ship:
 
 ```js
-import { render, scanRefs } from '@synapsium-labs/docserver/render';
-import { runCorpus } from '@synapsium-labs/docserver/conformance';
+import { render, scanRefs } from '@synapsium-labs/pinax-lib/render';
+import { runCorpus } from '@synapsium-labs/pinax-lib/conformance';
 
 const run = runCorpus(render, { scanRefs });
 for (const r of run.results) if (!r.ok) console.error(r.id, r.failures.join('\n  '));
@@ -567,17 +567,17 @@ A landing's message (or, on a pull request, its description) carries exactly one
 
 ## Release verification
 
-Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first release is 1.0.0; the deprecated `0.0.0-reserve` and `0.0.0-stage` before it are empty placeholders: the first reserved the name on npm, and npm made the second itself during that first publish. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):
+Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first release is 1.0.0, published as `@synapsium-labs/docserver`; the deprecated `0.0.0-reserve` and `0.0.0-stage` before it are empty placeholders of that name: the first reserved the name on npm, and npm made the second itself during that first publish. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version. For 1.0.0 and 1.1.0, published before the rename, read `@synapsium-labs/docserver`, `synapsium-labs-docserver-$VERSION.tgz` and `Synapsium-Labs/docserver` wherever the commands say `@synapsium-labs/pinax-lib`, `synapsium-labs-pinax-lib-$VERSION.tgz` and `Synapsium-Labs/pinax-lib`:
 
 ```sh
-npm install @synapsium-labs/docserver@$VERSION --ignore-scripts
+npm install @synapsium-labs/pinax-lib@$VERSION --ignore-scripts
 npm audit signatures
-npm pack @synapsium-labs/docserver@$VERSION
-test "$(npm view @synapsium-labs/docserver@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-docserver-$VERSION.tgz | openssl base64 -A)"
-gh attestation verify synapsium-labs-docserver-$VERSION.tgz --repo Synapsium-Labs/docserver --signer-workflow Synapsium-Labs/docserver/.github/workflows/release.yml
+npm pack @synapsium-labs/pinax-lib@$VERSION
+test "$(npm view @synapsium-labs/pinax-lib@$VERSION dist.integrity)" = "sha512-$(openssl dgst -sha512 -binary synapsium-labs-pinax-lib-$VERSION.tgz | openssl base64 -A)"
+gh attestation verify synapsium-labs-pinax-lib-$VERSION.tgz --repo Synapsium-Labs/pinax-lib --signer-workflow Synapsium-Labs/pinax-lib/.github/workflows/release.yml
 ```
 
-`npm audit signatures` checks the registry signatures and provenance of what was installed. `npm pack` fetches the registry's own tarball of that version into the directory, as `synapsium-labs-docserver-$VERSION.tgz`. The `test` line exits non-zero unless the registry's `dist.integrity`, which the install was checked against, is the `sha512-` integrity of those bytes. `gh attestation verify` then checks that the same bytes were built by this repository's release workflow and attested there; they are also the tarball attached to the GitHub release of that version. Each command must exit 0.
+`npm audit signatures` checks the registry signatures and provenance of what was installed. `npm pack` fetches the registry's own tarball of that version into the directory, as `synapsium-labs-pinax-lib-$VERSION.tgz`. The `test` line exits non-zero unless the registry's `dist.integrity`, which the install was checked against, is the `sha512-` integrity of those bytes. `gh attestation verify` then checks that the same bytes were built by this repository's release workflow and attested there; they are also the tarball attached to the GitHub release of that version. Each command must exit 0.
 
 ## Design
 
