@@ -752,3 +752,19 @@ CI's WebKit print run read a definition ring's `rect` (sized by the reader from 
 ```json
 [{"row":"T4-tol","guard":"a size leak beyond the 0.1 px tolerance still reds","edit":"the .ckey .sw.k-info 3px height rule ungated, served through DOCREADER_STYLE_UNDER_TEST","tests":"test/browser/appearance-style.test.ts -t \"no appearance.*jump/dialogs\" (Chromium)","result":"red"}]
 ```
+
+## Second review F5: the tolerance's width and the tag
+
+The 0.1 px tolerance of test 4 (a) is cited as ccrc D-8827 (a departure from "equal to 1.1.0's"). Its width is now pinned: `same()` and the per-element `rowDiff()` are module-level in `test/browser/appearance-style.test.ts`, with unit rows, and a browser row serves 1.1.0's stylesheet plus a rule that adds 0.5 px to the left margin of a paragraph and asserts the comparison names it. `rowDiff()` also reports a different tag at the same index.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F5-tol | the tolerance is 0.1 px, not wider | `<= 0.1 + 1e-9` in `same()` made `<= 0.5 + 1e-9` | `test/browser/appearance-style.test.ts -t "comparison predicate\|0.5 px leak\|comparison goes red"` (Chromium) | red: 3 rows (the `same()` row, the `rowDiff()` row and the 0.5 px leak row) |
+| F5-tag | an element whose tag differs from its pair's is reported | the `a.tag !== b.tag` test in `rowDiff()` made `false` | the same | red: the `rowDiff()` row (`tag: p -> div` not reported) |
+
+```json
+[
+ {"row":"F5-tol","guard":"the tolerance is 0.1 px, not wider","edit":"<= 0.1 + 1e-9 in same() made <= 0.5 + 1e-9","tests":"test/browser/appearance-style.test.ts -t \"comparison predicate|0.5 px leak|comparison goes red\" (Chromium)","result":"red"},
+ {"row":"F5-tag","guard":"an element whose tag differs from its pair's is reported","edit":"the a.tag !== b.tag test in rowDiff() made false","tests":"test/browser/appearance-style.test.ts -t \"comparison predicate|0.5 px leak|comparison goes red\" (Chromium)","result":"red"}
+]
+```

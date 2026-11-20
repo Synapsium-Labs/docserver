@@ -36,9 +36,12 @@
 //    they load the Mermaid bundle per page, and the text inside a drawing is test 5's. The drawn figure's chrome is covered
 //    by the one document with a static drawing.
 //  - (b) and (c) read every document, but those that draw Mermaid, in every state under two appearances (a dark and a light
-//    one), and the representative documents (REPRESENTATIVE) in every state under all twelve (ccrc D-8827: the ruling widened
-//    both from a sweep at rest and with text selected, once the full sweep's added time was measured: 83 s for the two
-//    rows on Chromium, 249 s a CI leg at the 2x WebKit factor, under the 5 minutes the ruling allowed).
+//    one), and the representative documents (REPRESENTATIVE) in every state under all twelve (the widening of both from a sweep
+//    at rest and with text selected, once the full sweep's added time was measured: 83 s for the two rows on Chromium, 249 s
+//    a CI leg at the 2x WebKit factor, under the 5 minutes allowed).
+//  - Test 4 (a) reads lengths within 0.1 px, not exactly (ccrc D-8827: the tolerance is a departure from "equal to 1.1.0's");
+//    the unit rows of `same` pin its width. An element whose tag differs from its pair's at the same index is a difference.
+//    When more than 2 000 elements differ, they are reported as differing without being read (READ_LIMIT).
 //  - The changes menu needs a `changes` callback: the harness page turns a `changes` option given as data into one
 //    (page/bootstrap.ts), and one synthetic document uses it.
 //  - Opacity above an element is read as shown or not shown (a product of zero is skipped); a partial opacity is not
@@ -277,45 +280,76 @@ async function readStyles(page: Page, variants: readonly Variant[]): Promise<Sty
   );
 }
 
-/** What differs between two reads: a line for the first elements that do, with the properties that differ. */
+/** One element's row string, split: its tag, then its own values, then each pseudo-element's by name. */
+function splitRow(s: string): { readonly tag: string; readonly values: Map<string, string[]> } {
+  const values = new Map<string, string[]>();
+  let tag = '';
+  s.split('~').forEach((chunk, k) => {
+    if (k === 0) {
+      const fields = chunk.split('|');
+      tag = fields[0] as string;
+      values.set('', fields.slice(1));
+    } else {
+      const at = chunk.indexOf('=');
+      values.set(chunk.slice(0, at), chunk.slice(at + 1) === '-' ? [] : chunk.slice(at + 1).split('|'));
+    }
+  });
+  return { tag, values };
+}
+
+/**
+ * The tolerance (ccrc D-8827): a length, a value that is a number of px, is the same as another within 0.1 px, which is
+ * scripts/visual/compare.mjs's TOLERANCE. A box the reader sizes from measured text (a definition ring's rect) can land a
+ * sub-pixel apart between two pages that differ in nothing a rule sets (0.0625 px on WebKit). Every other value, and a px
+ * value against a value that is not one, is the same only when it is equal. The unit rows below pin the width: 0.25 px and
+ * 0.5 px apart differ, so a tolerance widened to 0.5 px is red.
+ */
+const PX = /^-?\d+(?:\.\d+)?px$/;
+function same(x: string, y: string): boolean {
+  return x === y || (PX.test(x) && PX.test(y) && Math.abs(parseFloat(x) - parseFloat(y)) <= 0.1 + 1e-9);
+}
+
+/**
+ * What differs between two elements' row strings: a part for a different tag (a different element at the same index is a
+ * difference even when every computed value is equal) and one for each property, per pseudo-element, that is not `same`.
+ */
+function rowDiff(ta: string, tb: string): string[] {
+  const a = splitRow(ta);
+  const b = splitRow(tb);
+  const parts: string[] = [];
+  if (a.tag !== b.tag) parts.push(`tag: ${a.tag} -> ${b.tag}`);
+  for (const [name, xs] of a.values) {
+    const ys = b.values.get(name) ?? [];
+    if (xs.length !== ys.length) parts.push(`${name} content differs`);
+    else PROPS.forEach((prop, j) => (!same(xs[j] as string, ys[j] as string) ? parts.push(`${name}${name === '' ? '' : ' '}${prop}: ${xs[j] as string} -> ${ys[j] as string}`) : undefined));
+  }
+  return parts;
+}
+
+/** The most elements of a differing pair whose values are read: past it the elements are reported as differing, unread. */
+const READ_LIMIT = 2000;
+
+/**
+ * What differs between two reads: a line for the first elements that do, with the properties that differ. The rule: an
+ * element whose hash differs is read, and reported when a property is not `same` (a sub-pixel move is not reported); at
+ * most READ_LIMIT (2 000) such elements are read, and when more than that differ the count is reported as differing,
+ * whatever their values.
+ */
 async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page, pb: Page, limit = 6): Promise<string[]> {
   if (ra.hashes.length !== rb.hashes.length) return [`${label}: the pages have ${String(ra.hashes.length)} and ${String(rb.hashes.length)} elements`];
   const bad: number[] = [];
   for (let i = 0; i < ra.hashes.length; i += 1) if (ra.hashes[i] !== rb.hashes[i]) bad.push(i);
   if (bad.length === 0) return [];
-  /** One element's string, split: the element's own values, then each pseudo-element's, by name. */
-  const split = (s: string): Map<string, string[]> => {
-    const m = new Map<string, string[]>();
-    s.split('~').forEach((chunk, k) => {
-      if (k === 0) m.set('', chunk.split('|').slice(1));
-      else {
-        const at = chunk.indexOf('=');
-        m.set(chunk.slice(0, at), chunk.slice(at + 1) === '-' ? [] : chunk.slice(at + 1).split('|'));
-      }
-    });
-    return m;
-  };
-  // A length is the same within 0.1 px, scripts/visual/compare.mjs's TOLERANCE: a box the reader sizes from measured text
-  // (a definition ring's rect) can land a sub-pixel apart between two pages that differ in nothing a rule sets.
-  const px = /^-?\d+(?:\.\d+)?px$/;
-  const same = (x: string, y: string): boolean => x === y || (px.test(x) && px.test(y) && Math.abs(parseFloat(x) - parseFloat(y)) <= 0.1 + 1e-9);
   const lines: string[] = [];
-  // Every element whose hash differs is read (a real move is reported, a sub-pixel one is not), at most 2 000 of them.
-  for (const i of bad.slice(0, 2000)) {
+  for (const i of bad.slice(0, READ_LIMIT)) {
     const [ta, tb] = await Promise.all([pa, pb].map((pg) => pg.evaluate((n) => (window as unknown as { __st: St }).__st.rows[n] as string, i)));
-    const a = split(ta as string);
-    const b = split(tb as string);
+    const parts = rowDiff(ta as string, tb as string);
+    if (parts.length === 0) continue;
     const where = await pa.evaluate((n) => (window as unknown as { __st: St }).__st.pathOf((window as unknown as { __st: St }).__st.els[n] as Element, 6), i);
-    const parts: string[] = [];
-    for (const [name, xs] of a) {
-      const ys = b.get(name) ?? [];
-      if (xs.length !== ys.length) parts.push(`${name} content differs`);
-      else PROPS.forEach((prop, j) => (!same(xs[j] as string, ys[j] as string) ? parts.push(`${name}${name === '' ? '' : ' '}${prop}: ${xs[j] as string} -> ${ys[j] as string}`) : undefined));
-    }
-    if (parts.length > 0) lines.push(`    ${where}: ${parts.slice(0, 4).join('; ')}`);
+    lines.push(`    ${where}: ${parts.slice(0, 4).join('; ')}`);
   }
-  if (lines.length === 0 && bad.length <= 2000) return [];
-  return [`${label}: ${String(bad.length > 2000 ? bad.length : lines.length)} element(s) differ`, ...lines.slice(0, limit)];
+  if (lines.length === 0 && bad.length <= READ_LIMIT) return [];
+  return [`${label}: ${String(bad.length > READ_LIMIT ? bad.length : lines.length)} element(s) differ`, ...lines.slice(0, limit)];
 }
 
 // ───────── the states ─────────
@@ -734,7 +768,7 @@ describe('the pairs (b): the library gate, on every fixture', () => {
 
 // ───────── (a) rows ─────────
 
-/** Every document, the layout cases that draw Mermaid included: row (a)'s (ccrc D-8827's widening of it). */
+/** Every document, the layout cases that draw Mermaid included: row (a)'s. */
 const DOCS_A = allDocs();
 /** The documents the (b) and (c) sweeps read: those that draw no Mermaid, for cost (they load the Mermaid bundle per page). */
 const DOCS = DOCS_A.filter((d) => d.mermaid !== true);
@@ -746,6 +780,42 @@ const DARKENED: readonly string[] = [
 ];
 const PRINTED: readonly string[] = ['corpus/spec-template', 'layout/blocks/code', 'layout/changes/rules', 'synthetic/figure'];
 const reps = DOCS.filter((d) => REPRESENTATIVE.includes(d.id));
+
+describe('test 4 (a): the comparison predicate and the per-element line', () => {
+  it('same(): px values within 0.1 px are equal; 0.25 px and 0.5 px apart differ (a tolerance widened to 0.5 px is red)', () => {
+    expect(same('3px', '3px')).toBe(true);
+    expect(same('3px', '3.05px')).toBe(true);
+    expect(same('3px', '3.1px')).toBe(true);
+    expect(same('3.1px', '3px')).toBe(true);
+    expect(same('3px', '3.25px')).toBe(false);
+    expect(same('3px', '3.5px')).toBe(false);
+    expect(same('3.5px', '3px')).toBe(false);
+    expect(same('-0.5px', '0px')).toBe(false);
+    expect(same('0px', '-0.0625px')).toBe(true);
+  });
+
+  it('same(): a value that is not a px length is compared exactly, and a px value never equals one that is not', () => {
+    expect(same('rgb(1, 2, 3)', 'rgb(1, 2, 3)')).toBe(true);
+    expect(same('rgb(1, 2, 3)', 'rgb(1, 2, 4)')).toBe(false);
+    expect(same('1.05em', '1em')).toBe(false);
+    expect(same('0.05', '0')).toBe(false);
+    expect(same('3.05%', '3%')).toBe(false);
+    expect(same('normal', '0px')).toBe(false);
+    expect(same('0.05px solid', '0px solid')).toBe(false);
+  });
+
+  it('rowDiff(): a sub-pixel length is not reported, a half-pixel one is, and a different tag at the same index is', () => {
+    const row = (tag: string, w: string): string => `${tag}|${PROPS.map((p) => (p === 'width' ? w : 'x')).join('|')}`;
+    expect(rowDiff(row('p', '100px'), row('p', '100.05px'))).toEqual([]);
+    expect(rowDiff(row('p', '100px'), row('p', '100.5px'))).toEqual(['width: 100px -> 100.5px']);
+    // Every computed value equal, the tag not: the old split dropped the tag and returned no line.
+    expect(rowDiff(row('p', '100px'), row('div', '100px'))).toEqual(['tag: p -> div']);
+    // A pseudo-element's values are read the same way.
+    const withBefore = (w: string): string => `${row('p', '1px')}~::before=${PROPS.map((p) => (p === 'width' ? w : 'x')).join('|')}`;
+    expect(rowDiff(withBefore('10px'), withBefore('10.5px'))).toEqual(['::before width: 10px -> 10.5px']);
+    expect(rowDiff(withBefore('10px'), withBefore('10.05px'))).toEqual([]);
+  });
+});
 
 describeBrowsers((browser) => {
   it('the v1.1.0 tag is in the checkout and its stylesheet is the 1.1.0 one', () => {
@@ -773,6 +843,15 @@ describeBrowsers((browser) => {
     const out = await compareDoc(doc, browser, changed, false);
     expect(out.length).toBeGreaterThan(0);
     expect(out.join('\n')).toContain('color:');
+  }, 120_000);
+
+  it('the comparison reports a 0.5 px leak (the tolerance is 0.1 px: a tolerance widened to 0.5 px is red)', async () => {
+    // 1.1.0's stylesheet plus one rule that adds half a pixel to a margin of a known element: not within the tolerance, so
+    // the comparison must name it. (A margin is not snapped to device pixels, as a border width is.)
+    const doc = DOCS.find((d) => d.id === 'corpus/headings') as Doc;
+    const changed = `${v110()}\n[data-docreader-root] p { margin-left: 0.5px !important; }\n`;
+    const out = await compareDoc(doc, browser, changed, false);
+    expect(out.join('\n')).toContain('margin-left: 0px -> 0.5px');
   }, 120_000);
 
   describe('(a) no appearance: the computed styles equal 1.1.0\'s', () => {
