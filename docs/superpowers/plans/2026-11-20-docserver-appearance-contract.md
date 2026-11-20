@@ -303,6 +303,21 @@ X1's share is 32 768 on both totals, so 2 786 are left (measured at the third re
 - **WebKit and the definition ring.** WebKit does not report `:focus-visible` on a Tab-focused SVG node, so 1.1.0's own rule never shows the ring there, with or without an appearance. Test 5 reads the ring's stroke, its contrast and the dot in both engines, as §10 asks, and whether the ring is shown in Chromium only. Carried for the library programme: on WebKit a keyboard-focused node has no visible indicator, as in 1.1.0.
 - **Not fixed, recorded:** the port parser can throw on a Proxy whose traps throw, which a structured clone cannot deliver; a Mermaid `parse` that never settles stalls the drawing queue while colours apply; focus on a figure tool button is not carried across a redraw (focus on a node is).
 
+### The third review's fixes (accepted at the cap on condition)
+
+- F1: applied as written (e7daad3): the report's line in `isAuthorStyled`; its five probes are rows of the `styled` list, red before and green after; row A2R11 red.
+- F2: applied as written (c3d8101): the report's selector at the tooltip rule, and a browser row reading the tooltip after a colourless op on a document-element root, red before (row F2a). The stylesheet's scope wall, which pinned the previous single selector, now admits exactly the two selectors in that order and still refuses either alone. The frame assets and the x1 row were rebuilt: 4 558 002 characters on both totals, within 32 768.
+- F3: applied as written (3ef47f4): the plan, the row's title and its comment; the comment's replacement across its line break, as the coordinator ruled.
+- F4: applied as written (8d1d33c).
+- F5: applied as written (5044746).
+- F6: applied as written (2b17717): the report's row, verbatim; row F8l red.
+- F7: applied as written (2630774): four bullets in the ledger notes, and the release-gate item in Later.
+- F8: applied as written (635dbd1 and the pull request's description): the plan no longer held "1.5 MiB", so, as the coordinator ruled, the test header's "a 1.5 MiB document" reads "a document of about 1.4 MiB"; the description says "after each review's fix round".
+- F10: applied as written (fb7748b).
+- F11: applied as written (d938e27): row T4-limit red.
+- F9: not applied, because F1 is applied; the coordinator's D-8826 text replaces it.
+- F12: no change, as ruled.
+
 ### Unmeasured here
 
 - WebKit: every browser row ran on Chromium locally (the pinned 1243 build is served from the box's cached 1248); WebKit runs in CI only (C69).
