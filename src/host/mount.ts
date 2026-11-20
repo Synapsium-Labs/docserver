@@ -200,30 +200,35 @@ const isPlain = (v: unknown): v is object => {
 };
 
 /**
- * The checked copy of the host's `assets`, which every mount hands frameDocument (never the live object): a fresh object of
- * the own properties (descriptors copied, so a getter is never called here), with `fonts` replaced by the checked faces
- * (or left out). `fonts` is read as an own data property of any object `assets` (a getter on it, or a malformed shape, is a
- * TypeError at mount time, never a fallback; an inherited one is absent). A value that is not an object is passed through.
+ * What every mount hands frameDocument as `assets`. Only `fonts` is read at mount (the review 2906 F3 ruling): the facade
+ * inherits from the host's own object, so guard, bootstrap, enhance, css and mermaid are still read live by frameDocument,
+ * as in 1.1.0 (inherited ones, a later `assets.mermaid` and a throwing Proxy trap included), and its one own property is
+ * `fonts`, the checked faces (or undefined). `fonts` is read once as an own data property of any object `assets` (a getter
+ * on it, or a malformed shape, is a TypeError at mount time, never a fallback; an inherited one is absent), so a later
+ * change to it does not reach update(). A value that is not an object is passed through for frameDocument to refuse.
  */
 function assetsOf(assets: unknown): unknown {
   if (typeof assets !== 'object' || assets === null) return assets;
-  const copy: Record<string | symbol, unknown> = {};
-  let faces: ReturnType<typeof fontsOf>;
+  let d: PropertyDescriptor | undefined;
   try {
-    for (const k of Reflect.ownKeys(assets)) {
-      const d = Object.getOwnPropertyDescriptor(assets, k);
-      if (d === undefined) continue;
-      if (k === 'fonts') {
-        if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
-        faces = fontsOf(d.value);
-      } else Object.defineProperty(copy, k, d);
-    }
-  } catch (e) {
-    if (e instanceof TypeError) throw e;
-    throw new TypeError('docserver host: assets could not be read');
+    d = Object.getOwnPropertyDescriptor(assets, 'fonts');
+  } catch {
+    // A Proxy whose trap throws: nothing is read here; frameDocument reads it and the throw becomes a fallback, as in 1.1.0.
+    d = undefined;
   }
-  if (faces !== undefined) copy['fonts'] = faces;
-  return copy;
+  let faces: ReturnType<typeof fontsOf>;
+  if (d !== undefined) {
+    if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
+    try {
+      faces = fontsOf(d.value);
+    } catch (e) {
+      if (e instanceof TypeError) throw e;
+      throw new TypeError('docserver host: assets.fonts could not be read');
+    }
+  }
+  const facade: object = Object.create(assets);
+  Object.defineProperty(facade, 'fonts', { value: faces, enumerable: true });
+  return facade;
 }
 
 /** The own data properties of `v` as a record: an unknown key or a getter (unread) is a TypeError; undefined is absent. */

@@ -1908,6 +1908,41 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     expect(seedOf(lastSrcdoc())['fonts']).toEqual({ sans: GOOD });
   });
 
+  // Review 2906 F3: only `fonts` is read at mount; every other asset stays live, as in 1.1.0 (a host that passes no new key
+  // gets today's behaviour).
+  it('F3: an assets object whose guard, bootstrap, enhance and css are inherited (a class instance, Object.create) mounts', () => {
+    class Bundle {}
+    Object.assign(Bundle.prototype, { guard: assets.guard, bootstrap: assets.bootstrap, enhance: assets.enhance, css: assets.css });
+    const m = mount(PLAIN, { assets: new Bundle() });
+    expect(m.fallbacks()).toEqual([]);
+    expect(iframes()).toBe(1);
+    const based = mount(PLAIN, { assets: Object.create({ ...assets }) as object });
+    expect(based.fallbacks()).toEqual([]);
+    expect(iframes()).toBe(2);
+  });
+
+  it('F3: assets.mermaid filled after mount is seen by the next update()', () => {
+    const live: Record<string, unknown> = { ...assets };
+    const m = mount(PLAIN, { assets: live });
+    live['mermaid'] = mermaidText;
+    m.frame.update(input(MERMAID_DOC));
+    expect(m.fallbacks()).toEqual([]);
+    expect(lastSrcdoc()).toContain(mermaidText);
+  });
+
+  it("F3: a Proxy assets whose get trap throws reaches onFallback, as in 1.1.0, and mountDocFrame does not throw", () => {
+    // Every trap throws: 1.1.0 never touched the object before frameDocument's own reads, whose throw is a fallback
+    // ('invalid-input': not a FrameError); a snapshot at mount would throw out of mountDocFrame instead.
+    const trap = (): never => {
+      throw new Error('boom');
+    };
+    const boom = new Proxy({ ...assets }, { get: trap, ownKeys: trap, getOwnPropertyDescriptor: trap, has: trap });
+    const seen: Seen = { events: [] };
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor(seen, { assets: boom }) })).not.toThrow();
+    expect(seen.events).toEqual([['fallback', 'invalid-input']]);
+    expect(iframes()).toBe(0);
+  });
+
   it('setAppearance and setPrefs made inside onReady are posted after the values queued before ready, and win; the next update() seeds the new one', async () => {
     let frame: DocFrame | undefined;
     const m = mount(PLAIN, { onReady: () => {
