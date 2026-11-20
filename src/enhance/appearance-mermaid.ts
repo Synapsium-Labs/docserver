@@ -82,6 +82,19 @@ export function mermaidThemeOf(c: Colours): Readonly<Record<string, string>> {
   return o;
 }
 
+/** The text without its `%%{ … }%%` init directives (a document's directive cannot colour a hosted figure, so what it holds is no style). */
+function withoutDirectives(body: string): string {
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = body.indexOf('%%{', at);
+    const close = open < 0 ? -1 : body.indexOf('}%%', open + 3);
+    if (close < 0) return out + body.slice(at); // no directive, or one never closed: what follows stays in the scan
+    out += body.slice(at, open) + ' ';
+    at = close + 3;
+  }
+}
+
 /** Whether a figure's text styles itself, so it keeps 1.1.0's drawing (section 10, "Author-styled"). */
 export function isAuthorStyled(text: string): boolean {
   const lines = text.split(/\r\n|[\r\n]/);
@@ -90,12 +103,16 @@ export function isAuthorStyled(text: string): boolean {
     const end = lines.findIndex((l, i) => i > 0 && /^[ \t]*---\s*$/.test(l));
     if (end > 0) from = end + 1;
   }
-  const body = lines.slice(from).join('\n');
+  const body = withoutDirectives(lines.slice(from).join('\n'));
   return (
-    // A statement starts the text or follows a line break or a `;`, after any white space but a line break (so the scan
-    // stays linear on a run of blank lines), and its head ends at white
-    // space, a `;` or the text's end (a test, not a split: only csp-rules.ts splits on a semicolon, test/frame-csp.test.ts).
-    /(?:^|[\n;])[^\S\n]*(?:classDef|style|linkStyle|rect|box|todayMarker)(?:\s|;|$)/i.test(body) ||
-    /(?:^|[^<])<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(body)
+    // A head wherever a statement can start, erring toward author-styled: the text's start, white space (a line break, an
+    // indent, or the gap after a closing `end`, an ER relation or an entity block), a `;` or a closing `}`, then the head,
+    // then white space, a `;`, a `:` (`rect:wrap:red`) or the text's end. Neither a longer word (`styleX`, `restyle`, `boxes`)
+    // nor a quoted word matches. A test, not a split (only csp-rules.ts splits on a semicolon, test/frame-csp.test.ts), and
+    // linear: no group repeats.
+    /(?:^|[\s;}])(?:classDef|style|linkStyle|rect|box|todayMarker)(?:[\s;:]|$)/i.test(body) ||
+    // An element: `<` or `</` and a letter other than a `<br>`, but for the `<<name>>` annotation, the only `<` form spared
+    // (a second `<` before a letter starts a tag in the HTML tokenizer, so `<<font color=red>` and `<<mark>` are styled).
+    /<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(body.replace(/<<[a-z][\w-]*>>/gi, ' '))
   );
 }

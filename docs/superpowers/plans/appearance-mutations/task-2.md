@@ -20,6 +20,26 @@ Each row mutated `src/enhance/appearance-mermaid.ts` in place (original bytes sa
 
 A2j to A2m were measured in the fix round (A2k edits one line of `src/frame/appearance.ts` and restores it, sha256 checked).
 
+## Review 2906 F5
+
+Review 2906 found three families the scan missed (ccrc D-8826 ruled that the scan widens, erring toward author-styled). The scan now reads a head after the text's start, white space, `;` or a closing `}`, and before white space, `;`, `:` or the end; spares only a `<<name>>` annotation under the `<` rule; and scans the text without its `%%{ ... }%%` init directives (so a directive's `themeCSS` naming `rect` does not make the covered directive fixtures author-styled; an unclosed directive is not stripped). The rows were measured on `src/enhance/appearance-mermaid.ts` (original bytes saved, sha256 `7f696591...1f69` checked after each restore). The red-first run of the new test rows against the previous scan: 14 failed | 111 passed (125). Rows A2e to A2h, A2l and A2m above describe the previous scan; A2v to A2x re-measure the guards that remain, and A2y and A2z replace A2e and A2l. The totals differ only by rows added after the first measurements (134, then 136 in all).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| A2n | heads after a closing token or white space | scan prefix back to `(?:^|[\n;])[^\S\n]*` | `test/appearance-mermaid.test.ts` | red (8 failed | 126 passed (134)) |
+| A2o | `rect:` and every head end at a colon | drop `:` from the head's follow set | `test/appearance-mermaid.test.ts` | red (3 failed | 131 passed (134)) |
+| A2p | a closing `}` starts a statement | drop `}` from the prefix set | `test/appearance-mermaid.test.ts` | red (1 failed | 133 passed (134)) |
+| A2q | only `<<name>>` is spared by the `<` rule | `<` rule back to `(?:^|[^<])<` with no annotation strip | `test/appearance-mermaid.test.ts` | red (3 failed | 131 passed (134)) |
+| A2r | the annotation strip | drop the `.replace` of `<<name>>` | `test/appearance-mermaid.test.ts` | red (7 failed | 127 passed (134)) |
+| A2s | the annotation name's alphabet | name class `[\w-]*` to `[\w ]*` | `test/appearance-mermaid.test.ts` | red (1 failed | 133 passed (134)) |
+| A2t | a directive's text is no style | scan the body without stripping the init directives | `test/appearance-mermaid.test.ts` | red (2 failed | 132 passed (134)) |
+| A2u | an unclosed directive keeps what follows | `withoutDirectives` drops the tail when no directive is open | `test/appearance-mermaid.test.ts` | red (52 failed | 82 passed (134)) |
+| A2v | case-insensitive heads (re-measured) | drop the `i` flag of the head pattern | `test/appearance-mermaid.test.ts` | red (3 failed | 131 passed (134)) |
+| A2w | todayMarker head (re-measured) | remove `todayMarker` from the heads | `test/appearance-mermaid.test.ts` | red (2 failed | 132 passed (134)) |
+| A2x | br exclusion (re-measured) | br guard to `(?![a-z])` | `test/appearance-mermaid.test.ts` | red (19 failed | 115 passed (134)) |
+| A2y | `;` starts a statement with no space after it | drop `;` from the prefix set | `test/appearance-mermaid.test.ts` | red (1 failed | 135 passed (136)) |
+| A2z | lone CR ends a front-matter line | split lines at `\n` and `\r\n` only | `test/appearance-mermaid.test.ts` | red (1 failed | 135 passed (136)) |
+
 ## Choices
 
 - The derivation table's rows list 124 keys (96 plus 28 series keys); the spec's prose says 110 measured keys. The test asserts the rows as written.
@@ -118,6 +138,97 @@ A2j to A2m were measured in the fix round (A2k edits one line of `src/frame/appe
   "edit": "br guard back to `(?![a-z])`",
   "tests": "test/appearance-mermaid.test.ts",
   "result": "red (3 failed | 88 passed (91))"
+ },
+ {
+  "row": "A2n",
+  "guard": "heads after a closing token or white space",
+  "edit": "scan prefix back to `(?:^|[\\n;])[^\\S\\n]*`",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (8 failed | 126 passed (134))"
+ },
+ {
+  "row": "A2o",
+  "guard": "`rect:` and every head end at a colon",
+  "edit": "drop `:` from the head's follow set",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (3 failed | 131 passed (134))"
+ },
+ {
+  "row": "A2p",
+  "guard": "a closing `}` starts a statement",
+  "edit": "drop `}` from the prefix set",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 133 passed (134))"
+ },
+ {
+  "row": "A2q",
+  "guard": "only `<<name>>` is spared by the `<` rule",
+  "edit": "`<` rule back to `(?:^|[^<])<` with no annotation strip",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (3 failed | 131 passed (134))"
+ },
+ {
+  "row": "A2r",
+  "guard": "the annotation strip",
+  "edit": "drop the `.replace` of `<<name>>`",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (7 failed | 127 passed (134))"
+ },
+ {
+  "row": "A2s",
+  "guard": "the annotation name's alphabet",
+  "edit": "name class `[\\w-]*` to `[\\w ]*`",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 133 passed (134))"
+ },
+ {
+  "row": "A2t",
+  "guard": "a directive's text is no style",
+  "edit": "scan the body without stripping the init directives",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (2 failed | 132 passed (134))"
+ },
+ {
+  "row": "A2u",
+  "guard": "an unclosed directive keeps what follows",
+  "edit": "`withoutDirectives` drops the tail when no directive is open",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (52 failed | 82 passed (134))"
+ },
+ {
+  "row": "A2v",
+  "guard": "case-insensitive heads (re-measured)",
+  "edit": "drop the `i` flag of the head pattern",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (3 failed | 131 passed (134))"
+ },
+ {
+  "row": "A2w",
+  "guard": "todayMarker head (re-measured)",
+  "edit": "remove `todayMarker` from the heads",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (2 failed | 132 passed (134))"
+ },
+ {
+  "row": "A2x",
+  "guard": "br exclusion (re-measured)",
+  "edit": "br guard to `(?![a-z])`",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (19 failed | 115 passed (134))"
+ },
+ {
+  "row": "A2y",
+  "guard": "`;` starts a statement with no space after it",
+  "edit": "drop `;` from the prefix set",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 135 passed (136))"
+ },
+ {
+  "row": "A2z",
+  "guard": "lone CR ends a front-matter line",
+  "edit": "split lines at `\\n` and `\\r\\n` only",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 135 passed (136))"
  }
 ]
 ```

@@ -262,6 +262,28 @@ describe('isAuthorStyled', () => {
     ['br-like element brx', 'flowchart LR\nA["x<brx>"]-->B'],
     ['unterminated front matter does not hide it', '---\ntitle: x\nflowchart LR\nstyle A fill:red'],
     ['element in the body after front matter', '---\ntitle: x\n---\nflowchart LR\nA["<b>x</b>"]-->B'],
+    // Review 2906 F5, ruled by ccrc D-8826: the scan errs toward author-styled. A head starts a statement wherever the
+    // bundled Mermaid's lexer can start one, including after a closing token on the same line (a subgraph's `end`, a
+    // state's `}`) and in ER, where statements need no separator; `rect` takes a `:` as its end; and only a `<<name>>`
+    // annotation is spared by the `<` rule (a second `<` followed by a letter starts a tag in the HTML tokenizer).
+    ['flowchart: end then style', 'flowchart LR\nsubgraph S\nA\nend style A fill:#f00'],
+    ['flowchart: end then classDef', 'flowchart LR\nsubgraph S\nA\nend classDef hot fill:#f00'],
+    ['flowchart: end then linkStyle', 'flowchart LR\nA-->B\nsubgraph S\nA\nend linkStyle 0 stroke:#f00'],
+    ['state: closing brace then style', 'stateDiagram-v2\nstate X {\n[*] --> Y\n} style X fill:#f00'],
+    ['state: closing brace, no space, then style', 'stateDiagram-v2\nstate X {\n[*] --> Y\n}style X fill:#f00'],
+    ['er: separator-less style after a relation', 'erDiagram\nA ||--o{ B : has style A fill:#f00'],
+    ['er: style after an entity block', 'erDiagram\nA {\nstring x\n} style A fill:#f00'],
+    ['er: classDef after a relation', 'erDiagram\nA ||--o{ B : has classDef hot fill:#f00'],
+    ['sequence: rect with a colon, wrap', 'sequenceDiagram\nrect:wrap:rgb(255,0,0)\nA->>B: hi\nend'],
+    ['sequence: rect with a colon, nowrap', 'sequenceDiagram\nrect:nowrap:red\nA->>B: hi\nend'],
+    ['head ended by a colon', 'flowchart LR\nstyle:A fill:#f00'],
+    ['two angles then an element', 'flowchart LR\nA["<<font color=red>x<</font>"]-->B'],
+    ['two angles then a mark', 'flowchart LR\nA["<<mark>y"]-->B'],
+    ['an annotation does not hide the element after it', 'classDiagram\n<<interface>><b>A</b>'],
+    ['three angles then an element', 'flowchart LR\nA["<<<b>x"]-->B'],
+    ['semicolon then a head with no space', 'flowchart LR\nA-->B;style A fill:red'],
+    ['style after a closed directive', '%%{init: {"theme": "dark"}}%%\nflowchart LR\nstyle A fill:red'],
+    ['a directive never closed keeps what follows in the scan', '%%{init: {"theme": "dark"}\nflowchart LR\nstyle A fill:red'],
   ];
   it.each(styled)('is true: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(true));
 
@@ -282,6 +304,15 @@ describe('isAuthorStyled', () => {
     ['head inside a statement', 'flowchart LR\nA["style x"]-->B'],
     ['front matter hides its own heads', '---\ntitle: <b>x</b>\nconfig:\n  theme: base\nstyle: x\n---\nflowchart LR\nA-->B'],
     ['empty text', ''],
+    ['front matter closed by lone carriage returns hides its heads', '---\rtitle: x\rstyle: y\r---\rflowchart LR\rA-->B'],
+    ['a directive naming rect in its themeCSS', '%%{init: {"themeCSS": ".node rect { fill: red; }"}}%%\nflowchart LR\nA-->B'],
+    ['choice annotation', 'stateDiagram-v2\nstate c <<choice>>\n[*] --> c'],
+    ['join annotation', 'stateDiagram-v2\nstate j <<join>>\n[*] --> j'],
+    ['abstract annotation with a hyphen', 'classDiagram\nclass A\n<<some-kind>> A'],
+    ['async arrow with a hyphen', 'sequenceDiagram\nA <<-->> B: x'],
+    ['heads fused to a word before', 'flowchart LR\nrestyle A\nprefix B\nunbox C'],
+    ['heads with a word after', 'flowchart LR\nstyleX A\nboxes B\nclassDefs C\nrects D\nlinkStyles E\ntodayMarkers F'],
+    ['a head word quoted in a label', 'flowchart LR\nA["classDef"]-->B'],
     ['flowchart', 'flowchart TD\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]\n  B -->|no| A'],
     ['sequence', 'sequenceDiagram\n  participant A\n  A->>B: ping\n  loop Every minute\n    B-->>A: pong\n  end'],
     ['class', 'classDiagram\n  class Animal {\n    +String name\n  }\n  Animal <|-- Dog'],
@@ -293,12 +324,38 @@ describe('isAuthorStyled', () => {
   ];
   it.each(plain)('is false: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(false));
 
+  // Review 2906 F5: the widened scan keeps test 5's covered fixtures (the eight kinds, the flowchart twice) not author-styled.
+  it.each(['flowchart', 'flowchart-svg-labels', 'sequence', 'class', 'state', 'gantt', 'pie', 'er', 'gitgraph', 'directives', 'directives-front-matter'])(
+    'is false for the covered fixture %s',
+    (name) => {
+      const text = readFileSync(new URL(`../conformance/appearance/mermaid/${name}.mmd`, import.meta.url), 'utf8');
+      expect(isAuthorStyled(text)).toBe(false);
+    },
+  );
+
   // Linear on a run of blank lines (review of Task 3, finding 1): a body of Mermaid's 50 000-character cap of line breaks,
   // and twice that, each judged well inside the time a quadratic scan took (1.3 s and 4.9 s, measured).
   it('stays linear on a run of line breaks', () => {
     for (const n of [50_000, 100_000]) {
       const t0 = performance.now();
       expect(isAuthorStyled(`flowchart LR${'\n'.repeat(n)}A`)).toBe(false);
+      expect(performance.now() - t0, String(n)).toBeLessThan(200);
+    }
+  });
+
+  // Review 2906 F5: the widened heads, the annotation strip and the directive strip stay linear too.
+  it.each([
+    ['unclosed directives', (n: number) => '%%{'.repeat(n)],
+    ['closed directives', (n: number) => '%%{}%%'.repeat(n / 6)],
+    ['unclosed annotations', (n: number) => '<<a'.repeat(n / 3)],
+    ['spaces', (n: number) => `${' '.repeat(n)}x`],
+    ['closing braces', (n: number) => '}'.repeat(n)],
+    ['head-like words', (n: number) => 'styl '.repeat(n / 5)],
+  ])('stays linear on %s', (_name, make) => {
+    for (const n of [50_000, 100_000]) {
+      const text = make(n);
+      const t0 = performance.now();
+      isAuthorStyled(text);
       expect(performance.now() - t0, String(n)).toBeLessThan(200);
     }
   });
