@@ -337,7 +337,9 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 180_000);
 
-  it('keeps no replaced drawing alive: the live svg objects stay bounded across many changes', async () => {
+  // Chromium only: it counts live objects through the DevTools protocol's heap, which WebKit's driver does not offer. The
+  // engine-independent half is test/enhance-appearance-mermaid.test.ts, where every replaced svg is collected after gc.
+  it.skipIf(browser !== 'chromium')('keeps no replaced drawing alive: the live svg objects stay bounded across many changes', async () => {
     const doc = await openDoc(DOC, {}, { browser, csp: 'reader', enhance: false, mermaid: true, viewport: { width: 1200, height: 700 } });
     try {
       await boot(doc, { mode: DARK.mode, colour: DARK.colour });

@@ -811,8 +811,9 @@ describeBrowsers((browser) => {
       expect(a['mono']).toBe(`"Docreader Host Mono", ${b['mono'] as string}`);
       expect(a['serif']).toBe(b['serif']);
       expect(a['body'], 'the reading face').toBe(b['body']);
-      expect((a['code'] as string).startsWith('"Docreader Host Mono"'), a['code']).toBe(true);
-      expect((a['bar'] as string).startsWith('"Docreader Host Sans"'), a['bar']).toBe(true);
+      // A computed font-family keeps the quotes in Chromium and drops them in WebKit: read the first family either way.
+      expect(/^"?Docreader Host Mono"?,/.test(a['code'] as string), a['code']).toBe(true);
+      expect(/^"?Docreader Host Sans"?,/.test(a['bar'] as string), a['bar']).toBe(true);
     } finally {
       await mine.close();
       await old.close();
@@ -855,7 +856,7 @@ describeBrowsers((browser) => {
             plate: radius(plate),
             shadow: getComputedStyle(menu).boxShadow,
             row: getComputedStyle(root.querySelector('.aa-menu .opt') as Element).minHeight,
-            legend: [ls.fontSize, ls.fontWeight, ls.letterSpacing, ls.textTransform, ls.fontFamily.startsWith('"Docreader Host Mono"') ? 'mono' : ls.fontFamily].join(' | '),
+            legend: [ls.fontSize, ls.fontWeight, ls.letterSpacing, ls.textTransform, /^"?Docreader Host Mono"?,/.test(ls.fontFamily) ? 'mono' : ls.fontFamily].join(' | '),
           };
         }, rootSel);
       const got = await probe(doc);
@@ -1043,7 +1044,7 @@ describeBrowsers((browser) => {
         for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '', where);
         return { family, where };
       }, rootSel);
-      expect(got.family.startsWith('"Docreader Host Sans"'), got.family).toBe(true);
+      expect(/^"?Docreader Host Sans"?,/.test(got.family), got.family).toBe(true);
       expect(got.where.length).toBeGreaterThan(0);
       // the plain rule, and the drawer's own (a drawer is a narrow viewport's): both only under a fine pointer
       expect(new Set(got.where)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));

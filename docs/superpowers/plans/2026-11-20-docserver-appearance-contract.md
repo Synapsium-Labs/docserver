@@ -285,6 +285,7 @@ X1's share is 32 768 on both totals, so 5 137 are left. The bootstrap stays unde
 - **A redraw renders into a hidden temporary `pre`** and swaps the drawing in, because Mermaid empties the container it draws into; a failed redraw leaves the old drawing.
 - **Faces are seeded whenever a host gives them,** and used only while hosted. A face loads with `display: swap`, and with a `100 900` weight range when its WOFF2 directory holds an `fvar` table.
 - **The changelog** gains an `## Unreleased` entry above 1.1.0, which `test/package.test.ts` now reads for the hash bullets; the version is the release's.
+- **WebKit and the definition ring.** WebKit does not report `:focus-visible` on a Tab-focused SVG node, so 1.1.0's own rule never shows the ring there, with or without an appearance. Test 5 reads the ring's stroke, its contrast and the dot in both engines, as §10 asks, and whether the ring is shown in Chromium only. Carried for the library programme: on WebKit a keyboard-focused node has no visible indicator, as in 1.1.0.
 - **Not fixed, recorded:** the port parser can throw on a Proxy whose traps throw, which a structured clone cannot deliver; a Mermaid `parse` that never settles stalls the drawing queue while colours apply; focus on a figure tool button is not carried across a redraw (focus on a node is).
 
 ### Unmeasured here
