@@ -1921,6 +1921,39 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     expect(iframes()).toBe(2);
   });
 
+  it('F3: a class whose getters read #private fields mounts, with no fonts and with fonts (the getters see the host as this)', () => {
+    class Private {
+      readonly #g = assets.guard;
+      readonly #b = assets.bootstrap;
+      readonly #e = assets.enhance;
+      readonly #c = assets.css;
+      get guard(): string {
+        return this.#g;
+      }
+      get bootstrap(): string {
+        return this.#b;
+      }
+      get enhance(): string {
+        return this.#e;
+      }
+      get css(): string {
+        return this.#c;
+      }
+    }
+    const plain = mount(PLAIN, { assets: new Private() });
+    expect(plain.fallbacks()).toEqual([]);
+    expect(iframes()).toBe(1);
+    // The host's own object is handed on itself when it gives no `fonts`; with `fonts` a Proxy answers only that key.
+    const hosted = Object.defineProperty(new Private(), 'fonts', { value: { sans: GOOD }, enumerable: true });
+    const m = mount(PLAIN, { assets: hosted });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedOf(m.iframe.getAttribute('srcdoc') ?? '')['fonts']).toEqual({ sans: GOOD });
+    // A frozen host with an own non-configurable `fonts` still mounts (a Proxy over the host itself would break its invariant).
+    const frozen = mount(PLAIN, { assets: Object.freeze({ ...assets, fonts: { mono: GOOD } }) });
+    expect(frozen.fallbacks()).toEqual([]);
+    expect(seedOf(frozen.iframe.getAttribute('srcdoc') ?? '')['fonts']).toEqual({ mono: GOOD });
+  });
+
   it('F3: assets.mermaid filled after mount is seen by the next update()', () => {
     const live: Record<string, unknown> = { ...assets };
     const m = mount(PLAIN, { assets: live });

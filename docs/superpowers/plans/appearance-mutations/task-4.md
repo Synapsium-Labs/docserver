@@ -34,14 +34,21 @@ Each mutant was applied in place, `test/host-mount.test.ts` run through the flee
 
 ## Review 2906 F3
 
-The coordinator's ruling: no departure; `assets` stays live as in 1.1.0 and only `fonts` is read at mount. Row A4j above (the checked copy of `assets`) is superseded by the row below: `frameDocument` is handed a facade that inherits from the host's own object, with the checked faces as its one own property. The three new rows run in `test/host-mount.test.ts`; their red and green runs were measured with the in-memory frame build standing in for the committed manifest, which is stale until the generated files are rebuilt.
+The coordinator's ruling: no departure; `assets` stays live as in 1.1.0 and only `fonts` is read at mount. Row A4j above (the checked copy of `assets`) is superseded by the row below: `frameDocument` is handed a facade that inherits from the host's own object, with the checked faces as its one own property (follow-up: later replaced, see row F3b). The three new rows run in `test/host-mount.test.ts`; their red and green runs were measured with the in-memory frame build standing in for the committed manifest, which is stale until the generated files are rebuilt.
 
 | Row | Guard | Edit | Tests run | Result |
 |---|---|---|---|---|
 | F3a | Every asset but `fonts` is read live at each mount (an inherited `guard`, `bootstrap`, `enhance` or `css` mounts; a later `assets.mermaid` is seen by `update()`; a throwing Proxy is a fallback, never a throw) | `assetsOf` restored to the one-time snapshot of own properties | `test/host-mount.test.ts` (F3 rows) | red (3 failed: inherited assets fall back, a later `mermaid` is not seen, the Proxy's throw escapes `mountDocFrame`) |
 
+Follow-up to F3: the facade over `Object.create(assets)` is replaced. A host that gives no `fonts` is handed to `frameDocument` as it is; one that gives `fonts` (or inherits one) gets a Proxy over an empty target that answers `fonts` and forwards every other read to the host with the host as receiver, so a getter reading a `#private` field works in both cases.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F3b | A host with no `fonts` is handed on itself (a class with `#private` getters mounts) | the `Object.create` facade always handed on (the code before this follow-up) | `test/host-mount.test.ts` (the `#private` row) | red (1 failed: the mount fell back) |
+
 ```json
 [
-  {"row":"F3a","guard":"only fonts is read at mount; assets stay live","edit":"assetsOf restored to the snapshot","tests":"test/host-mount.test.ts F3 rows","result":"red"}
+  {"row":"F3a","guard":"only fonts is read at mount; assets stay live","edit":"assetsOf restored to the snapshot","tests":"test/host-mount.test.ts F3 rows","result":"red"},
+  {"row":"F3b","guard":"a host with no fonts is handed on itself","edit":"facade always handed on","tests":"test/host-mount.test.ts #private row","result":"red"}
 ]
 ```

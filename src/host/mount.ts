@@ -200,22 +200,28 @@ const isPlain = (v: unknown): v is object => {
 };
 
 /**
- * What every mount hands frameDocument as `assets`. Only `fonts` is read at mount (the review 2906 F3 ruling): the facade
- * inherits from the host's own object, so guard, bootstrap, enhance, css and mermaid are still read live by frameDocument,
- * as in 1.1.0 (inherited ones, a later `assets.mermaid` and a throwing Proxy trap included), and its one own property is
- * `fonts`, the checked faces (or undefined). `fonts` is read once as an own data property of any object `assets` (a getter
- * on it, or a malformed shape, is a TypeError at mount time, never a fallback; an inherited one is absent), so a later
- * change to it does not reach update(). A value that is not an object is passed through for frameDocument to refuse.
+ * What every mount hands frameDocument as `assets`. Only `fonts` is read at mount (the review 2906 F3 ruling): every other
+ * asset is read live by frameDocument by plain property access, as in 1.1.0 (inherited ones, a later `assets.mermaid` and a
+ * throwing Proxy trap included). A host that gives no `fonts` is handed on as it is, so it behaves exactly as in 1.1.0, a
+ * class whose getters read a #private field included. A host that gives `fonts` (an own data property: a getter on it, or a
+ * malformed shape, is a TypeError at mount time, never a fallback, and `fonts` is read once, so a later change to it does
+ * not reach update()) or has one only by inheritance (absent) gets a Proxy over an empty target that answers `fonts` with
+ * the checked faces and forwards every other read to the host with the host as the receiver, so its getters see it as
+ * `this`. The target is empty so that a frozen host's own `fonts` can never break a Proxy invariant. A value that is not an
+ * object is passed through for frameDocument to refuse.
  */
 function assetsOf(assets: unknown): unknown {
   if (typeof assets !== 'object' || assets === null) return assets;
   let d: PropertyDescriptor | undefined;
+  let inherited = false;
   try {
     d = Object.getOwnPropertyDescriptor(assets, 'fonts');
+    inherited = d === undefined && 'fonts' in assets;
   } catch {
     // A Proxy whose trap throws: nothing is read here; frameDocument reads it and the throw becomes a fallback, as in 1.1.0.
-    d = undefined;
+    return assets;
   }
+  if (d === undefined && !inherited) return assets;
   let faces: ReturnType<typeof fontsOf>;
   if (d !== undefined) {
     if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
@@ -226,9 +232,8 @@ function assetsOf(assets: unknown): unknown {
       throw new TypeError('docserver host: assets.fonts could not be read');
     }
   }
-  const facade: object = Object.create(assets);
-  Object.defineProperty(facade, 'fonts', { value: faces, enumerable: true });
-  return facade;
+  const host = assets;
+  return new Proxy({}, { get: (_t, key) => (key === 'fonts' ? faces : Reflect.get(host, key, host)) });
 }
 
 /** The own data properties of `v` as a record: an unknown key or a getter (unread) is a TypeError; undefined is absent. */
