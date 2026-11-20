@@ -473,7 +473,7 @@ function changePrefs(inst: Instance, change: Partial<Prefs>): void {
  * Host a new appearance on an instance whose state exists, in place (no remount): the state's theme becomes its mode, the
  * root takes the verdict, then, with the context built, the 'prefs' event (so Aa and the colour key resync) and the
  * 'appearance' event. Only a change of the popover rows' height (`controlRow`) asks for a relayout, and closes any open
- * popover first (the card and the menus, never the figure overlay): a popover is closed, never moved. Runs inside an
+ * popover first (the card and the menus, never the figure overlay, whose open copy follows the figure's redraw: diagram-tools.ts): a popover is closed, never moved. Runs inside an
  * operation of the instance.
  */
 function changeAppearance(inst: Instance, a: Appearance): void {
