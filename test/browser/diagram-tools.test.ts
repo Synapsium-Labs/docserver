@@ -576,6 +576,9 @@ describeBrowsers((browser) => {
       const tools = doc.page.locator('main[data-harness-root] figure .tools');
       const play = tools.getByRole('button', { name: 'Play this diagram step by step' });
       const animate = tools.getByRole('button', { name: 'Animate edges' });
+      // The tools are attached by the relayout that follows a drawing, after openDoc has resolved: wait for them (bounded),
+      // then read the drawing and assert as before (CI read the row while the relayout was still pending on WebKit).
+      await play.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
       const structure = await doc.page.evaluate(() => Array.from(document.querySelectorAll('main[data-harness-root] figure svg')).map((svg) => ({ nodes: Array.from(svg.querySelectorAll('g.node'), (node) => node.id), edges: Array.from(svg.querySelectorAll('path.flowchart-link'), (edge) => ({ id: edge.id, data: edge.getAttribute('data-id') })), tools: Array.from(svg.closest('figure')?.querySelectorAll('.tools button') ?? [], (button) => button.textContent) })));
       expect(await play.isVisible(), JSON.stringify(structure)).toBe(true);
       await play.click();
