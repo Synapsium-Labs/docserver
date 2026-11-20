@@ -284,3 +284,55 @@ The scan's directive exclusion is now Mermaid 12.1.0's own `directiveRegex`, cop
  }
 ]
 ```
+
+## Second review F12
+
+The `<<name>>` strip applies only when the first diagram keyword (after front matter, directives Mermaid removes and `%%` comment lines) is `classDiagram` or `stateDiagram`, the prefixes of Mermaid 12.1.0's detectors (`^\s*classDiagram`, `^\s*stateDiagram`; `classDiagram-v2` and `stateDiagram-v2` start with them). Elsewhere a `<<` before a letter counts as an element. The new cases were red against the previous scan (5 failed of the first batch, the five non-class, non-state kinds). Rows measured as above, sha256 checked after each restore.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| A2R6 | `<<name>>` is spared only in the class and state kinds | the annotation strip applies to every kind (`annotatesWithAngles(body) ? … : body` to the strip alone) | `test/appearance-mermaid.test.ts` | red (5 failed | 163 passed (168)) |
+| A2R7 | class diagrams spare `<<name>>` | `annotatesWithAngles` answers true for `stateDiagram` only | `test/appearance-mermaid.test.ts` | red (5 failed | 163 passed (168)) |
+| A2R8 | state diagrams spare `<<name>>` | `annotatesWithAngles` answers true for `classDiagram` only | `test/appearance-mermaid.test.ts` | red (7 failed | 161 passed (168)) |
+| A2R9 | a `%%` comment line before the opener is skipped | the kind scan skips blank lines only | `test/appearance-mermaid.test.ts` | red (1 failed | 167 passed (168)) |
+| A2R10 | a directive Mermaid does not remove is no comment line | `%%{` lines skipped as comments by the kind scan | `test/appearance-mermaid.test.ts` | red (1 failed | 168 passed (169)) |
+
+```json
+[
+ {
+  "row": "A2R6",
+  "guard": "`<<name>>` is spared only in the class and state kinds",
+  "edit": "the annotation strip applies to every kind (`annotatesWithAngles(body) ? \u2026 : body` to the strip alone)",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (5 failed | 163 passed (168))"
+ },
+ {
+  "row": "A2R7",
+  "guard": "class diagrams spare `<<name>>`",
+  "edit": "`annotatesWithAngles` answers true for `stateDiagram` only",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (5 failed | 163 passed (168))"
+ },
+ {
+  "row": "A2R8",
+  "guard": "state diagrams spare `<<name>>`",
+  "edit": "`annotatesWithAngles` answers true for `classDiagram` only",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (7 failed | 161 passed (168))"
+ },
+ {
+  "row": "A2R9",
+  "guard": "a `%%` comment line before the opener is skipped",
+  "edit": "the kind scan skips blank lines only",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 167 passed (168))"
+ },
+ {
+  "row": "A2R10",
+  "guard": "a directive Mermaid does not remove is no comment line",
+  "edit": "`%%{` lines skipped as comments by the kind scan",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 168 passed (169))"
+ }
+]
+```

@@ -304,6 +304,13 @@ describe('isAuthorStyled', () => {
     ['a directive Mermaid ends at its second word keeps the rest', '%%{ init x style }%%\nflowchart LR\nA-->B'],
     ['a directive removed between the halves of a head is drawn joined', 'flowchart LR\nA-->B\nst%%{x}%%yle A fill:red'],
     ['a directive after the diagram opener holds a head outside it', 'flowchart LR\n%%{init: {}}%%\nstyle A fill:red'],
+    // Second review F12 (ruled by ccrc D-8826): `<<name>>` is spared only where it is an annotation (class and state).
+    ['a directive left open hides the kind, so the annotation counts', '%%{init: {"theme": "dark"}\nclassDiagram\nclass A\n<<interface>> A'],
+    ['an annotation-shaped mark in a flowchart', 'flowchart LR\nA["<<mark>>x"]-->B'],
+    ['an annotation-shaped interface in a flowchart label', 'flowchart LR\nA["<<interface>>"]-->B'],
+    ['an annotation-shaped fork in a sequence message', 'sequenceDiagram\nA->>B: <<fork>>'],
+    ['an annotation-shaped mark in a gantt title', 'gantt\ntitle <<mark>>x'],
+    ['an annotation-shaped mark in an er label', 'erDiagram\nA ||--o{ B : "<<mark>>x"'],
   ];
   it.each(styled)('is true: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(true));
 
@@ -347,6 +354,11 @@ describe('isAuthorStyled', () => {
     ['two directives', '%%{init: {"theme": "dark"}}%%\n%%{init: {"themeCSS": "style classDef"}}%%\nflowchart LR\nA-->B'],
     ['a directive after the opener', 'flowchart LR\n%%{init: {"themeCSS": ".x rect {}"}}%%\nA-->B'],
     ['a directive with a space and no colon', '%%{ init {"themeCSS": "style"} }%%\nflowchart LR\nA-->B'],
+    ['a class diagram opened by a comment and a directive', '%%{init: {"theme": "dark"}}%%\n%% a comment\nclassDiagram\nclass A\n<<interface>> A'],
+    ['a class diagram after front matter', '---\ntitle: x\n---\nclassDiagram\nclass A\n<<abstract>> A'],
+    ['a classDiagram-v2 with an annotation', 'classDiagram-v2\nclass A\n<<service>> A'],
+    ['a stateDiagram with an annotation', 'stateDiagram\nstate c <<choice>>\n[*] --> c'],
+    ['an indented class diagram opener', '  \n   classDiagram\nclass A {\n  <<interface>>\n}'],
   ];
   it.each(plain)('is false: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(false));
 

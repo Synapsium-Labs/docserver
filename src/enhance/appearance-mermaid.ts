@@ -99,6 +99,16 @@ function withoutDirectives(body: string): string {
   return body.replace(DIRECTIVE, (m) => (m.endsWith('}%%') ? '' : m));
 }
 
+/** Whether the figure is a class or a state diagram, the kinds whose `<<name>>` is an annotation (Mermaid's detectors: `^\s*classDiagram` and `^\s*stateDiagram`, after front matter, directives and `%%` comment lines; a directive Mermaid does not remove is no comment). */
+function annotatesWithAngles(body: string): boolean {
+  for (const line of body.split(/\r\n|[\r\n]/)) {
+    const t = line.trimStart();
+    if (t === '' || (t.startsWith('%%') && !t.startsWith('%%{'))) continue;
+    return t.startsWith('classDiagram') || t.startsWith('stateDiagram');
+  }
+  return false;
+}
+
 /** Whether a figure's text styles itself, so it keeps 1.1.0's drawing (section 10, "Author-styled"). */
 export function isAuthorStyled(text: string): boolean {
   const lines = text.split(/\r\n|[\r\n]/);
@@ -115,8 +125,9 @@ export function isAuthorStyled(text: string): boolean {
     // nor a quoted word matches. A test, not a split (only csp-rules.ts splits on a semicolon, test/frame-csp.test.ts), and
     // linear: no group repeats.
     /(?:^|[\s;}])(?:classDef|style|linkStyle|rect|box|todayMarker)(?:[\s;:]|$)/i.test(body) ||
-    // An element: `<` or `</` and a letter other than a `<br>`, but for the `<<name>>` annotation, the only `<` form spared
-    // (a second `<` before a letter starts a tag in the HTML tokenizer, so `<<font color=red>` and `<<mark>` are styled).
-    /<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(body.replace(/<<[a-z][\w-]*>>/gi, ' '))
+    // An element: `<` or `</` and a letter other than a `<br>`. The `<<name>>` annotation is spared only in the kinds whose
+    // annotation it is (a class or a state diagram); anywhere else a second `<` before a letter starts a tag in the HTML
+    // tokenizer, so `A["<<mark>>x"]`, `<<font color=red>` and `<<mark>` are styled.
+    /<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(annotatesWithAngles(body) ? body.replace(/<<[a-z][\w-]*>>/gi, ' ') : body)
   );
 }
