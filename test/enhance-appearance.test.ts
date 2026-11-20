@@ -841,3 +841,158 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     expect(tip()).toEqual([DAYLIGHT.colour.surface, DAYLIGHT.colour.text, DAYLIGHT.colour.border]);
   });
 });
+
+// Second review F8: the `html` mark and `--dr-tip-*` are one shared write on the document element, and a page may hold
+// several hosted roots. The mark is counted (it stays while any hosted root with colours holds it) and the tooltip's three
+// properties follow the most recent hosted root with colours, last writer wins, because the tooltip is one element per
+// document. This block reads the page's `documentElement`, which the two-root mounts above never did.
+describe('second review F8: several hosted roots in one document share the html mark', () => {
+  const html = document.documentElement;
+  const TIP = ['--dr-tip-bg', '--dr-tip-fg', '--dr-tip-edge'];
+  const tip = (): string[] => TIP.map((p) => html.style.getPropertyValue(p));
+  const tipOf = (f: { colour: Record<AppearanceColourSlot, string> }): string[] => [f.colour.surface, f.colour.text, f.colour.border];
+  const marked = (): boolean => html.hasAttribute('data-docreader-hosted');
+
+  afterEach(() => {
+    html.removeAttribute('data-docreader-hosted');
+    html.removeAttribute('style');
+  });
+
+  it('two roots with different colours: html is marked and the tooltip follows the later one; destroying the first keeps both; destroying the last restores what was there', async () => {
+    html.setAttribute('data-docreader-hosted', 'host');
+    html.style.setProperty('--dr-tip-bg', 'red');
+    const a = mount();
+    const b = mount();
+    await enhance(a, { appearance: dark() });
+    await enhance(b, { appearance: light() });
+    expect(marked()).toBe(true);
+    expect(tip()).toEqual(tipOf(DAYLIGHT));
+    await destroyEnhancement(a);
+    expect(marked(), 'B is still hosted').toBe(true);
+    expect(html.getAttribute('data-docreader-hosted')).toBe('');
+    expect(tip(), "B's, untouched by A's teardown").toEqual(tipOf(DAYLIGHT));
+    await destroyEnhancement(b);
+    expect(html.getAttribute('data-docreader-hosted'), "what was there before the first hosted root").toBe('host');
+    expect(tip()).toEqual(['red', '', '']);
+  });
+
+  it('destroying the later root hands the tooltip back to the earlier one, which keeps the mark', async () => {
+    const a = mount();
+    const b = mount();
+    await enhance(a, { appearance: dark() });
+    await enhance(b, { appearance: light() });
+    await destroyEnhancement(b);
+    expect(marked()).toBe(true);
+    expect(tip()).toEqual(tipOf(PHOSPHOR));
+    await destroyEnhancement(a);
+    expect(marked()).toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+    expect(html.hasAttribute('style'), 'the empty style attribute the CSSOM left is gone').toBe(false);
+  });
+
+  it('a verdict with no colour group on the later root hands the tooltip to the earlier one; a root with none keeps the mark off while no other holds it', async () => {
+    const a = mount();
+    const b = mount();
+    await enhance(a, { appearance: dark() });
+    await enhance(b, { appearance: light() });
+    setEnhancementAppearance(b, { mode: 'light' });
+    expect(marked()).toBe(true);
+    expect(tip(), 'A still has colours, so the tooltip is A\'s').toEqual(tipOf(PHOSPHOR));
+    setEnhancementAppearance(a, { mode: 'dark' });
+    expect(marked(), 'no hosted root has colours now').toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+  });
+
+  it('a colourless op on the earlier root leaves the later root\'s tooltip alone', async () => {
+    const a = mount();
+    const b = mount();
+    await enhance(a, { appearance: dark() });
+    await enhance(b, { appearance: light() });
+    setEnhancementAppearance(a, { mode: 'dark' });
+    expect(marked()).toBe(true);
+    expect(tip()).toEqual(tipOf(DAYLIGHT));
+  });
+
+  it('last writer wins: an op with colours on the earlier root takes the tooltip back', async () => {
+    const a = mount();
+    const b = mount();
+    await enhance(a, { appearance: dark() });
+    await enhance(b, { appearance: light() });
+    setEnhancementAppearance(a, dark());
+    expect(tip()).toEqual(tipOf(PHOSPHOR));
+    await destroyEnhancement(a);
+    expect(tip(), 'A is gone: the tooltip follows the remaining root').toEqual(tipOf(DAYLIGHT));
+    expect(marked()).toBe(true);
+  });
+
+  it('a root that never had colours does not hold the mark, and its destroy leaves another\'s alone', async () => {
+    const a = mount();
+    const b = mount();
+    await enhance(a, { appearance: dark() });
+    await enhance(b, { appearance: { mode: 'light' } });
+    expect(tip()).toEqual(tipOf(PHOSPHOR));
+    await destroyEnhancement(b);
+    expect(marked()).toBe(true);
+    expect(tip()).toEqual(tipOf(PHOSPHOR));
+  });
+
+  it('a host that changed the mark or a tooltip property after the reader wrote it keeps its value when the last root leaves', async () => {
+    const a = mount();
+    await enhance(a, { appearance: dark() });
+    html.style.setProperty('--dr-tip-fg', 'orange');
+    html.removeAttribute('data-docreader-hosted');
+    await destroyEnhancement(a);
+    expect(html.style.getPropertyValue('--dr-tip-fg')).toBe('orange');
+    expect(marked()).toBe(false);
+    expect(html.style.getPropertyValue('--dr-tip-bg'), 'the ones it left alone are restored').toBe('');
+  });
+
+  it('a root that is the document element has the three tooltip properties on itself, and its colourless op removes them', async () => {
+    const parsed = new DOMParser().parseFromString(`<!doctype html><html><body>${render(DOC).html}</body></html>`, 'text/html');
+    const top = parsed.documentElement;
+    await enhance(top, { appearance: dark() });
+    expect(top.hasAttribute('data-docreader-hosted'), 'its own hosted attribute is the mark').toBe(true);
+    expect(TIP.map((p) => top.style.getPropertyValue(p))).toEqual(tipOf(PHOSPHOR));
+    setEnhancementAppearance(top, { mode: 'dark' });
+    expect(TIP.map((p) => top.style.getPropertyValue(p))).toEqual(['', '', '']);
+    setEnhancementAppearance(top, light());
+    expect(TIP.map((p) => top.style.getPropertyValue(p))).toEqual(tipOf(DAYLIGHT));
+    await destroyEnhancement(top);
+    expect(TIP.map((p) => top.style.getPropertyValue(p))).toEqual(['', '', '']);
+  });
+
+  it('setDocumentTip on a journal that is not live writes nothing and holds nothing; a refused value throws before any write', () => {
+    let alive = true;
+    const { journal, undoAll } = createJournal(() => alive, (fn) => fn());
+    expect(() => journal.setDocumentTip(html, ['red', 'url(x)', 'blue'])).toThrow(/refuses this value/);
+    expect(() => journal.setDocumentTip(html, ['red', 'x'.repeat(201), 'blue'])).toThrow(/refuses this value/);
+    expect(marked()).toBe(false);
+    alive = false;
+    journal.setDocumentTip(html, ['red', 'green', 'blue']);
+    expect(marked(), 'a journal that is not live writes nothing').toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+    alive = true;
+    journal.setDocumentTip(html, ['red', 'green', 'blue']);
+    expect(tip()).toEqual(['red', 'green', 'blue']);
+    expect(undoAll()).toEqual([]);
+    expect(marked()).toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+  });
+
+  it('a root of another document keeps its own count: the two documents do not share a mark', async () => {
+    const other = document.implementation.createHTMLDocument('other');
+    const parsed = new DOMParser().parseFromString(`<!doctype html><body>${render(DOC).html}</body>`, 'text/html');
+    const root = other.createElement('main');
+    root.append(...Array.from(parsed.body.childNodes).map((n) => other.importNode(n, true)));
+    other.body.append(root);
+    const here = mount();
+    await enhance(here, { appearance: dark() });
+    await enhance(root, { appearance: light() });
+    expect(tip()).toEqual(tipOf(PHOSPHOR));
+    expect(TIP.map((p) => other.documentElement.style.getPropertyValue(p))).toEqual(tipOf(DAYLIGHT));
+    await destroyEnhancement(root);
+    expect(other.documentElement.hasAttribute('data-docreader-hosted')).toBe(false);
+    expect(marked()).toBe(true);
+    expect(tip()).toEqual(tipOf(PHOSPHOR));
+  });
+});

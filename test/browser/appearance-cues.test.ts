@@ -1072,6 +1072,32 @@ describeBrowsers((browser) => {
     }
   });
 
+
+  it("Mermaid's tooltip, which sits in body outside the root, computes the verdict's surface, text and border (second review F8)", async () => {
+    // The tooltip is one element per document, and its three colours are the document element's properties; the jsdom rows of
+    // test/enhance-appearance.test.ts count the roots that hold them, and this row reads what a tooltip then looks like. (The
+    // harness mounts one `main` root: a root that is the document element, which carries the properties on itself, is a jsdom row.)
+    const c = PHOSPHOR_COLOURS().colour;
+    const doc = await open(browser, { appearance: PHOSPHOR_COLOURS() });
+    try {
+      const got = await doc.page.evaluate(() => {
+        const tip = document.createElement('div');
+        tip.className = 'mermaidTooltip';
+        document.body.append(tip);
+        const s = getComputedStyle(tip);
+        const out = { bg: s.backgroundColor, fg: s.color, edge: s.borderTopColor, parent: tip.parentElement === document.body };
+        tip.remove();
+        return out;
+      });
+      expect(got.parent).toBe(true);
+      expect(got.bg).toBe(css(c['surface'] as string));
+      expect(got.fg).toBe(css(c['text'] as string));
+      expect(got.edge).toBe(css(c['border'] as string));
+    } finally {
+      await doc.close();
+    }
+  });
+
 });
 
 /** The first fixture appearance (Phosphor & Ink): all 33 colours distinct enough to tell a ground from a mark. */

@@ -419,10 +419,12 @@ const TIP_PROPERTY = [['surface', '--dr-tip-bg'], ['text', '--dr-tip-fg'], ['bor
  * The one reach outside the root is Mermaid's tooltip, which the library places in `body`, out of reach of every rule and
  * custom property scoped to the root (the design's section 10, "Mermaid's tooltip"). While the verdict has a colour group
  * the document element of the root's own document carries `data-docreader-hosted` and the three properties `--dr-tip-bg`,
- * `--dr-tip-fg` and `--dr-tip-edge` (the verdict's `surface`, `text` and `border`), and has neither without one. They are
- * written through the journal like everything else, so a verdict the reader did not apply writes nothing and teardown puts
- * the document element back as it found it. A root that is itself the document element needs no mark: the tooltip is
- * inside it.
+ * `--dr-tip-fg` and `--dr-tip-edge` (the verdict's `surface`, `text` and `border`), and the root holds neither without one.
+ * A page may hold several hosted roots and the tooltip is one element per document, so the write is shared and counted
+ * (journal.setDocumentTip): the mark stays while any root holds it, the properties follow the most recent root with colours
+ * (last writer wins), and teardown lets go of the root's hold and never undoes another root's. The element's own values
+ * are put back when the last root leaves. A root that is itself the document element has its own `data-docreader-hosted`
+ * as the mark and carries the three properties on itself, through its journal.
  */
 export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearance, prev: Appearance | null = null): void {
   const skin = APPEARANCE_SLOTS.skin.filter((s) => a.skin?.[s] !== undefined);
@@ -440,10 +442,14 @@ export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearan
     if (v !== undefined || prev?.skin?.[s] !== undefined) journal.setStyle(root, SLOT_PROPERTY.skin[s], v ?? null);
   }
   const html = root.ownerDocument.documentElement;
-  if (html === root) return;
-  journal.setAttribute(html, 'data-docreader-hosted', a.colour === undefined ? null : '');
-  for (const [slot, property] of TIP_PROPERTY) {
-    const v = a.colour?.[slot];
-    if (v !== undefined || prev?.colour?.[slot] !== undefined) journal.setStyle(html, property, v ?? null);
+  if (html === root) {
+    // The root is the document element: its own `data-docreader-hosted` is the mark the tooltip's rule reads, and the
+    // three properties are its own inline style, journaled like the slots'.
+    for (const [slot, property] of TIP_PROPERTY) {
+      const v = a.colour?.[slot];
+      if (v !== undefined || prev?.colour?.[slot] !== undefined) journal.setStyle(html, property, v ?? null);
+    }
+    return;
   }
+  journal.setDocumentTip(html, a.colour === undefined ? null : [a.colour.surface, a.colour.text, a.colour.border]);
 }

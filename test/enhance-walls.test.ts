@@ -120,9 +120,10 @@ const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> 
     '.body': 1,
   },
   // cloneSvg reads CSSOM only on its detached SVG clone; no feature gains a style escape hatch.
-  'src/enhance/journal.ts': { '.style': 2 },
-  // The one reach outside the root (review 2906 F10): applyAppearance marks the document element of the root's own
-  // document for Mermaid's tooltip, which sits in `body`. It names the element once and writes it through the journal.
+  'src/enhance/journal.ts': { '.style': 3 },
+  // The one reach outside the root (review 2906 F10): applyAppearance names the document element of the root's own
+  // document once, for Mermaid's tooltip, which sits in `body`, and hands it to journal.setDocumentTip, whose one
+  // `.style` read (styleOf) is the third of journal.ts's sites (second review F8: the write is counted, not journaled).
   'src/enhance/state.ts': { documentElement: 1 },
 };
 
@@ -446,7 +447,7 @@ describe('enhance walls: CSP, purity and id lookups', () => {
     }
   });
 
-  it('the reach to the document element is one named site, in state.ts, and its writes are the journal\'s: a planted second reach or a direct style write goes red (review 2906 F10)', () => {
+  it('the reach to the document element is one named site, in state.ts, and its writes go through the journal\'s counted document write: a planted second reach or a direct style write goes red (review 2906 F10)', () => {
     const left = (file: string, snippet: string): string[] => {
       const name = path.join(ROOT, file);
       const text = `${readFileSync(name, 'utf8')}\n${snippet}\n`;
@@ -456,6 +457,8 @@ describe('enhance walls: CSP, purity and id lookups', () => {
     expect(left('src/enhance/state.ts', 'export const p1 = (r: HTMLElement): unknown => r.ownerDocument.documentElement;')).toEqual(['documentElement']);
     expect(left('src/enhance/state.ts', "export const p2 = (r: HTMLElement): void => r.ownerDocument.documentElement.style.setProperty('--dr-tip-bg', 'red');").sort()).toEqual(['.style', 'documentElement']);
     expect(left('src/enhance/settings.ts', 'export const p3 = (r: HTMLElement): unknown => r.ownerDocument.documentElement;')).toEqual(['documentElement']);
+    // journal.ts's `.style` count is exact: a fourth site (a second read of the document element's style) goes red (second review F8)
+    expect(left('src/enhance/journal.ts', "export const p5 = (h: HTMLElement): unknown => h.style;")).toEqual(['.style']);
     expect(left('src/enhance/state.ts', "export const p4 = (h: HTMLElement): void => { h['style'].setProperty('--dr-tip-bg', 'red'); };")).toEqual(['[\'style\']']);
   });
 

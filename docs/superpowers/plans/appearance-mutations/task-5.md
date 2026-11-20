@@ -343,3 +343,96 @@ env.fonts, the reader's one font wait (relayout's 'fonts' trigger and the Mermai
  }
 ]
 ```
+
+## Second review F8
+
+The html mark is counted and the tooltip's properties follow the most recent hosted root with colours. Rows measured on the file in place (original bytes saved, sha256 checked equal after each restore): `src/enhance/journal.ts` `cd176b25...ede`, `src/enhance/state.ts` `aa57b292...88`. The Chromium row ran on the browsers cached on this box (chromium 1243); WebKit is not available locally.
+
+| Row | Guard | File | Edit | Tests run | Result |
+|---|---|---|---|---|---|
+| F8a | one root's teardown or colourless op never unmarks another root | `src/enhance/journal.ts` | a holder leaving releases every holder (the list emptied on release) | `test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts` | red (6 failed, 124 passed of 130) |
+| F8b | the tooltip follows the most recent hosted root with colours (last writer wins) | `src/enhance/journal.ts` | first writer wins (a new hold goes to the front of the list) | `test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts` | red (3 failed, 127 passed of 130) |
+| F8c | a root that is the document element carries the three tooltip properties | `src/enhance/state.ts` | the document-element branch writes none of them (the old early return) | `test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts` | red (1 failed, 129 passed of 130) |
+| F8d | the element's own values are recorded before the first hold and put back after the last | `src/enhance/journal.ts` | the recorded mark is null (the host's own mark is lost) | `test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts` | red (2 failed, 128 passed of 130) |
+| F8e | a value the host changed since the reader wrote it stays | `src/enhance/journal.ts` | a property is put back whatever it holds now | `test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts` | red (1 failed, 129 passed of 130) |
+| F8f | a journal that is not live writes nothing and holds nothing | `src/enhance/journal.ts` | the live() check of setDocumentTip removed | `test/enhance-appearance.test.ts` | first green (130 of 130); the row 'setDocumentTip on a journal that is not live' was added, then red (1 failed, 86 passed of 87) |
+| F8g | teardown releases the root's hold | `src/enhance/journal.ts` | the release is a no-op | `test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts` | red (8 failed, 122 passed of 130) |
+| F8h | the journal's `.style` sites are counted | `test/enhance-walls.test.ts` | the allowed count of journal.ts lowered from 3 to 2 | `test/enhance-walls.test.ts` | red (3 failed, 12 passed of 15) |
+| F8i | the stylesheet's tooltip rule reads the three properties (Chromium) | `assets/reader.css (a copy, through the cues file's stylesheet override)` | the `html[data-docreader-hosted] > body > .mermaidTooltip` rule removed | `test/browser/appearance-cues.test.ts -t tooltip (Chromium)` | red (1 failed, 55 skipped) |
+
+```json
+[
+ {
+  "row": "F8a",
+  "guard": "one root's teardown or colourless op never unmarks another root",
+  "file": "src/enhance/journal.ts",
+  "edit": "a holder leaving releases every holder (the list emptied on release)",
+  "tests": "test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts",
+  "result": "red (6 failed, 124 passed of 130)"
+ },
+ {
+  "row": "F8b",
+  "guard": "the tooltip follows the most recent hosted root with colours (last writer wins)",
+  "file": "src/enhance/journal.ts",
+  "edit": "first writer wins (a new hold goes to the front of the list)",
+  "tests": "test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts",
+  "result": "red (3 failed, 127 passed of 130)"
+ },
+ {
+  "row": "F8c",
+  "guard": "a root that is the document element carries the three tooltip properties",
+  "file": "src/enhance/state.ts",
+  "edit": "the document-element branch writes none of them (the old early return)",
+  "tests": "test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts",
+  "result": "red (1 failed, 129 passed of 130)"
+ },
+ {
+  "row": "F8d",
+  "guard": "the element's own values are recorded before the first hold and put back after the last",
+  "file": "src/enhance/journal.ts",
+  "edit": "the recorded mark is null (the host's own mark is lost)",
+  "tests": "test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts",
+  "result": "red (2 failed, 128 passed of 130)"
+ },
+ {
+  "row": "F8e",
+  "guard": "a value the host changed since the reader wrote it stays",
+  "file": "src/enhance/journal.ts",
+  "edit": "a property is put back whatever it holds now",
+  "tests": "test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts",
+  "result": "red (1 failed, 129 passed of 130)"
+ },
+ {
+  "row": "F8f",
+  "guard": "a journal that is not live writes nothing and holds nothing",
+  "file": "src/enhance/journal.ts",
+  "edit": "the live() check of setDocumentTip removed",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "first green (130 of 130); the row 'setDocumentTip on a journal that is not live' was added, then red (1 failed, 86 passed of 87)"
+ },
+ {
+  "row": "F8g",
+  "guard": "teardown releases the root's hold",
+  "file": "src/enhance/journal.ts",
+  "edit": "the release is a no-op",
+  "tests": "test/enhance-appearance.test.ts test/enhance-lifecycle.test.ts",
+  "result": "red (8 failed, 122 passed of 130)"
+ },
+ {
+  "row": "F8h",
+  "guard": "the journal's `.style` sites are counted",
+  "file": "test/enhance-walls.test.ts",
+  "edit": "the allowed count of journal.ts lowered from 3 to 2",
+  "tests": "test/enhance-walls.test.ts",
+  "result": "red (3 failed, 12 passed of 15)"
+ },
+ {
+  "row": "F8i",
+  "guard": "the stylesheet's tooltip rule reads the three properties (Chromium)",
+  "file": "assets/reader.css (a copy, through the cues file's stylesheet override)",
+  "edit": "the `html[data-docreader-hosted] > body > .mermaidTooltip` rule removed",
+  "tests": "test/browser/appearance-cues.test.ts -t tooltip (Chromium)",
+  "result": "red (1 failed, 55 skipped)"
+ }
+]
+```
