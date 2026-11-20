@@ -104,9 +104,11 @@ export type MermaidDraw = (typeof MERMAID_DRAW)[number];
 
 /**
  * The ops the parent answers, each a boolean in the seed (FrameOptions.bridge: each defaults to true but `progress`,
- * which defaults to false, because a parent that never asked for progress should never be sent it; batch 1.1, C108).
+ * `places` and `printFigures`, which default to false, because a parent that never asked for progress, places or print
+ * figures should never be sent them; batch 1.1, C108, and the parity wire). `places` adds the `place` op and the `push` and
+ * `from` of `hash`; `printFigures` adds the `print-figure` op.
  */
-export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress'] as const);
+export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures'] as const);
 
 /**
  * The keys of `features`: three flags, `chrome`'s flags and `vocabulary`'s word lists, in groups (`status`,

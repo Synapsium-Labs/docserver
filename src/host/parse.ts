@@ -55,6 +55,8 @@ const REQUIRED_KEYS: Readonly<Record<FrameOp, readonly string[]>> = Object.freez
   hash: Object.freeze(['id']),
   version: Object.freeze([]),
   progress: Object.freeze(['p']),
+  place: Object.freeze(['kind']),
+  'print-figure': Object.freeze(['i', 'n', 'png']),
 });
 
 /** Own keys no message may carry: an own `__proto__`, `constructor` or `prototype` (checked before the key set). */
@@ -133,6 +135,11 @@ function judge(data: unknown, nonce: string): ParsedBridgeMessage {
   const t: unknown = tDesc !== undefined && 'value' in tDesc ? tDesc.value : undefined;
   if (typeof t !== 'string' || !(FRAME_OPS as readonly string[]).includes(t)) return refuse('unknown-op');
   const op = t as FrameOp;
+
+  // The parity wire's ops and keys (docserver parity T1) are in the tables; this parser reads none of them yet, and refuses what
+  // it does not read until the host's own task (T2) writes their grammar and their gating by the seed's bridge.
+  if (op === 'place' || op === 'print-figure') return refuse('unknown-op');
+  if (op === 'hash' && (keys.includes('push') || keys.includes('from'))) return refuse('keys');
 
   const allowed: readonly string[] = OP_KEYS[op];
   for (const k of keys) if (typeof k !== 'string' || !allowed.includes(k)) return refuse('keys');

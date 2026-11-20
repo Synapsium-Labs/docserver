@@ -23,7 +23,7 @@ import {
   type ParentToFrame,
 } from '../src/frame/index.js';
 // The wire helpers the frame runtime and `./host` read inside the package: never part of `./frame`'s public surface.
-import { COMMAND_OPS, FRAME_OPS, FRAME_PREF_VALUES, isBridgeStoreKey, isFullSha, isProgressThousandths, PARENT_OPS, PROGRESS_SOURCE } from '../src/frame/protocol.js';
+import { COMMAND_OPS, FRAME_OPS, FRAME_PREF_VALUES, isBridgeStoreKey, isFullSha, isProgressThousandths, PARENT_OPS, PLACE_KINDS, PROGRESS_SOURCE } from '../src/frame/protocol.js';
 
 const ROOT = new URL('../', import.meta.url);
 const readText = (rel: string): string => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -85,6 +85,10 @@ describe('U9 BRIDGE_LIMITS: exactly Reference §8.4 (ruling R5)', () => {
       frameStoreSetMaxPerWindow: 8,
       frameCopyMaxPerWindow: 4,
       frameChangesTimeoutMs: 35000,
+      printFiguresMax: 64,
+      printFigurePngMaxBytes: 1048576,
+      printFiguresTotalMaxBytes: 16777216,
+      printFigureSideMaxPx: 2048,
     });
     expect(Object.isFrozen(BRIDGE_LIMITS)).toBe(true);
   });
@@ -160,7 +164,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       prefs: ['t', 'theme', 'width', 'font'],
       'changes.result': ['t', 'sha', 'ranges', 'removedAfter', 'unavailable'],
       mermaid: ['t', 'text', 'unavailable'],
-      command: ['t', 'name'],
+      command: ['t', 'name', 'id', 'from'],
       appearance: ['t', 'v', 'appearance'],
       ready: ['t', 'v', 'nonce'],
       error: ['t', 'why'],
@@ -168,16 +172,18 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       navigate: ['t', 'href'],
       copy: ['t', 'text'],
       changes: ['t', 'sha'],
-      hash: ['t', 'id'],
+      hash: ['t', 'id', 'push', 'from'],
       version: ['t', 'sha', 'only'],
       progress: ['t', 'p'],
+      place: ['t', 'kind'],
+      'print-figure': ['t', 'i', 'n', 'png'],
     });
     expect(Object.isFrozen(OP_KEYS)).toBe(true);
     for (const keys of Object.values(OP_KEYS)) expect(Object.isFrozen(keys)).toBe(true);
   });
 
   it('FRAME_OPS and PARENT_OPS split it by direction, with no op in both', () => {
-    expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress']);
+    expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress', 'place', 'print-figure']);
     expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
     expect([...FRAME_OPS, ...PARENT_OPS].sort()).toEqual(Object.keys(OP_KEYS).sort());
   });
@@ -193,6 +199,9 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
     expectTypeOf<(typeof OP_KEYS)['appearance'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'appearance' }>>>();
     expectTypeOf<(typeof OP_KEYS)['progress'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'progress' }>>>();
     expectTypeOf<(typeof OP_KEYS)['ready'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'ready' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['hash'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'hash' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['place'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'place' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['print-figure'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'print-figure' }>>>();
   });
 
   it("FRAME_ACCEPTS is the port parser's list: the four ops of 1.1.0 and `appearance`, frozen, with no `hello`, and inside PARENT_OPS", () => {
@@ -211,10 +220,11 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
 });
 
 describe('B7: the command op and the progress op (batch 1.1, C108)', () => {
-  it("COMMAND_OPS is the four command names in the bar's order, frozen; the type follows it", () => {
-    expect([...COMMAND_OPS]).toEqual(['jump', 'settings', 'contents', 'outline']);
+  it("COMMAND_OPS is the four command names in the bar's order and the three of the parity wire, frozen; the type follows it", () => {
+    expect([...COMMAND_OPS]).toEqual(['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto', 'print-figures']);
     expect(Object.isFrozen(COMMAND_OPS)).toBe(true);
     expectTypeOf<Extract<ParentToFrame, { t: 'command' }>['name']>().toEqualTypeOf<(typeof COMMAND_OPS)[number]>();
+    expectTypeOf<Extract<ParentToFrame, { t: 'command'; name: 'goto' }>>().toEqualTypeOf<{ t: 'command'; name: 'goto'; id: string; from?: string }>();
     expectTypeOf<Extract<FrameToParent, { t: 'progress' }>['p']>().toEqualTypeOf<string>();
   });
 
@@ -325,6 +335,8 @@ const REQUIRED: Readonly<Record<string, readonly string[]>> = {
   hash: ['id'],
   version: [],
   progress: ['p'],
+  place: ['kind'],
+  'print-figure': ['i', 'n', 'png'],
   hello: ['v'],
   prefs: [],
   command: ['name'],
@@ -430,10 +442,18 @@ function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: 
     return text.length <= BRIDGE_LIMITS.mermaidMaxChars ? ACCEPT : refuse('oversize');
   }
   if (t === 'command') {
-    // command: exactly {name}, a string that is one of the four command names.
+    // command: {name}, a string that is one of the seven command names; `goto` alone carries `id` (required, the fragment
+    // grammar) and `from` (optional, a string of at most 4096 code units); every other name carries neither.
     const name = o['name'];
     if (typeof name !== 'string') return refuse('type');
-    return (['jump', 'settings', 'contents', 'outline'] as readonly string[]).includes(name) ? ACCEPT : refuse('type');
+    if (!(COMMAND_OPS as readonly string[]).includes(name)) return refuse('type');
+    if (name !== 'goto') return Object.hasOwn(o, 'id') || Object.hasOwn(o, 'from') ? refuse('keys') : ACCEPT;
+    if (!Object.hasOwn(o, 'id')) return refuse('keys');
+    if (typeof o['id'] !== 'string') return refuse('type');
+    if (!isFragmentId(o['id'])) return refuse('hash');
+    if (!Object.hasOwn(o, 'from')) return ACCEPT;
+    if (typeof o['from'] !== 'string') return refuse('type');
+    return o['from'].length <= 4096 ? ACCEPT : refuse('oversize');
   }
   if (t === 'appearance') {
     // appearance: exactly {v: 1, appearance}, where `appearance` is a plain object with no proto key at its top level
@@ -554,7 +574,10 @@ describe('conformance/bridge-cases.json: the M8.5 battery is present', () => {
   });
 
   it('each frame-to-parent op has an accepted case, and every reason but rate has a refused message case', () => {
-    for (const t of FRAME_OPS) expect(has((c, m) => m['t'] === t && c.verdict === 'accept'), t).toBe(true);
+    // `place` and `print-figure` (the parity wire, task 1) get their accepted cases in task 2, which writes `./host`'s parser
+    // for them: every frame-to-parent case is replayed through that parser (test/host-parse.test.ts), which does not read them yet.
+    const NO_CASE_YET = ['place', 'print-figure'];
+    for (const t of FRAME_OPS) expect(has((c, m) => m['t'] === t && c.verdict === 'accept'), t).toBe(!NO_CASE_YET.includes(t));
     for (const t of PARENT_OPS) expect(has((c, m) => m['t'] === t && c.verdict === 'accept'), t).toBe(true);
     const used = new Set(CASES.messages.map((c) => c.reason));
     expect(REASONS.filter((r) => r !== 'rate' && !used.has(r))).toEqual([]);
@@ -588,10 +611,11 @@ describe('B7.1 conformance/bridge-cases.json: the progress and command battery, 
   });
 
   it("command is accepted for each of the four names on the port; an unknown or non-string name is 'type', an extra key or a missing name 'keys'", () => {
-    for (const name of ['jump', 'settings', 'contents', 'outline']) {
+    for (const name of ['jump', 'settings', 'contents', 'outline', 'close-overlay', 'print-figures']) {
       expect(find((c, m) => m['t'] === 'command' && m['name'] === name && c.verdict === 'accept' && c.channel === 'port'), name).toHaveLength(1);
     }
-    expect(find((c, m) => m['t'] === 'command' && typeof m['name'] === 'string' && !['jump', 'settings', 'contents', 'outline'].includes(m['name']) && c.reason === 'type').length).toBeGreaterThanOrEqual(1);
+    expect(find((c, m) => m['t'] === 'command' && m['name'] === 'goto' && c.verdict === 'accept' && c.channel === 'port').length).toBeGreaterThanOrEqual(4);
+    expect(find((c, m) => m['t'] === 'command' && typeof m['name'] === 'string' && !(COMMAND_OPS as readonly string[]).includes(m['name']) && c.reason === 'type').length).toBeGreaterThanOrEqual(1);
     expect(find((c, m) => m['t'] === 'command' && Object.hasOwn(m, 'name') && typeof m['name'] !== 'string' && c.reason === 'type').length).toBeGreaterThanOrEqual(1);
     expect(find((c, m) => m['t'] === 'command' && m['name'] === 'jump' && Object.keys(m).length === 3 && c.reason === 'keys')).toHaveLength(1);
     expect(find((c, m) => m['t'] === 'command' && !Object.hasOwn(m, 'name') && c.reason === 'keys')).toHaveLength(1);
@@ -604,6 +628,60 @@ describe('B7.1 conformance/bridge-cases.json: the progress and command battery, 
     expect(c?.note ?? '').toMatch(/older than this release ignore it, as they ignore every op they do not know/);
     // The pin of that behaviour: an op the frame does not know is 'unknown-op' on the port.
     expect(find((x) => x.direction === 'parent-to-frame' && x.channel === 'port' && x.reason === 'unknown-op').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('the parity wire (docserver parity T1): the places, the print figures and the goto command', () => {
+  it('PLACE_KINDS is overlay and overlay-closed, frozen, and place carries exactly one of them', () => {
+    expect([...PLACE_KINDS]).toEqual(['overlay', 'overlay-closed']);
+    expect(Object.isFrozen(PLACE_KINDS)).toBe(true);
+    expectTypeOf<Extract<FrameToParent, { t: 'place' }>>().toEqualTypeOf<{ t: 'place'; kind: (typeof PLACE_KINDS)[number] }>();
+    expectTypeOf<Extract<FrameToParent, { t: 'place' }>['kind']>().toEqualTypeOf<'overlay' | 'overlay-closed'>();
+  });
+
+  it('print-figure is flat: i, n and png are strings; hash gains push (only the string true) and from', () => {
+    expectTypeOf<Extract<FrameToParent, { t: 'print-figure' }>>().toEqualTypeOf<{ t: 'print-figure'; i: string; n: string; png: string }>();
+    expectTypeOf<Extract<FrameToParent, { t: 'hash' }>>().toEqualTypeOf<{ t: 'hash'; id: string; push?: 'true'; from?: string }>();
+  });
+
+  it('the print limits are the design\'s, and the caps fit together: 64 figures of at most 1 MiB, 16 MiB in all, 2048 px a side', () => {
+    const L = BRIDGE_LIMITS;
+    expect([L.printFiguresMax, L.printFigurePngMaxBytes, L.printFiguresTotalMaxBytes, L.printFigureSideMaxPx]).toEqual([64, 1048576, 16777216, 2048]);
+    expect(L.printFiguresTotalMaxBytes).toBeLessThan(L.printFiguresMax * L.printFigurePngMaxBytes);
+    expect(L.printFiguresTotalMaxBytes % L.printFigurePngMaxBytes).toBe(0);
+  });
+
+  it('FRAME_ACCEPTS did not grow: place and print-figure go to the parent, and goto is a command (P1d)', () => {
+    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+    for (const op of ['place', 'print-figure']) {
+      expect(FRAME_OPS as readonly string[]).toContain(op);
+      expect(FRAME_ACCEPTS as readonly string[]).not.toContain(op);
+      expect(PARENT_OPS as readonly string[]).not.toContain(op);
+    }
+  });
+
+  it('the goto fixtures are in the corpus: an id alone, with a footnote id, at 256 code units, with a token, with a from of exactly 4096', () => {
+    const goto = CASES.messages.filter((c) => isPlain(c.message) && c.message['t'] === 'command' && c.message['name'] === 'goto');
+    const accepted = goto.filter((c) => c.verdict === 'accept');
+    expect(accepted.length).toBeGreaterThanOrEqual(5);
+    expect(accepted.some((c) => c.fill !== undefined && c.fill['from']?.times === 4096)).toBe(true);
+    expect(accepted.some((c) => c.fill !== undefined && c.fill['id']?.times === 256)).toBe(true);
+    expect(goto.some((c) => c.reason === 'oversize' && c.fill?.['from']?.times === 4097)).toBe(true);
+    expect(goto.some((c) => c.reason === 'hash' && c.fill?.['id']?.times === 257)).toBe(true);
+  });
+
+  it('every command without id or from has a refused case that carries one (close-overlay and print-figures take no other key)', () => {
+    for (const name of ['close-overlay', 'print-figures']) {
+      const refused = CASES.messages.filter((c) => isPlain(c.message) && c.message['name'] === name && c.verdict === 'refuse');
+      expect(refused.filter((c) => c.reason === 'keys' && Object.hasOwn(c.message as object, 'id')), name).toHaveLength(1);
+      expect(refused.filter((c) => c.reason === 'keys' && Object.hasOwn(c.message as object, 'from')), name).toHaveLength(1);
+    }
+  });
+
+  it('the ./frame entry exports the anchor helpers, the place kinds and the new limits (semver surface)', async () => {
+    const entry = (await import('../src/frame/index.js')) as Record<string, unknown>;
+    for (const name of ['ANCHOR_LIMITS', 'isAnchorToken', 'pngBytesOfBase64', 'PLACE_KINDS']) expect(Object.keys(entry), name).toContain(name);
+    expect((entry['BRIDGE_LIMITS'] as Record<string, unknown>)['printFiguresMax']).toBe(64);
   });
 });
 

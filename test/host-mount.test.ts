@@ -1197,18 +1197,18 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference Â
 
   it('the bridge switches follow which adapters exist', () => {
     const all = mount(PLAIN, { changes: () => Promise.resolve(null), onProgress: () => undefined });
-    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true });
+    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false });
     all.frame.destroy();
     const none = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined });
-    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false });
+    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false });
   });
 
   it('B7.2: progress is switched on by onProgress alone, and by nothing else (B7i)', () => {
     const without = mount(PLAIN, { changes: () => Promise.resolve(null) });
-    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
+    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false });
     without.frame.destroy();
     const only = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined, onProgress: () => undefined });
-    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true });
+    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true, places: false, printFigures: false });
   });
 
   it('features and prefs pass through to the seed', () => {

@@ -10,7 +10,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { MAX_DELETIONS, MAX_RANGES } from '../src/enhance/changes.js';
-import { BRIDGE_LIMITS, DOC_FIELDS, type FrameToParent } from '../src/frame/protocol.js';
+import { BRIDGE_LIMITS, COMMAND_OPS, DOC_FIELDS, type FrameToParent } from '../src/frame/protocol.js';
 import { createAdapters, fromBridgeKey, toBridgeKey } from '../src/frame-runtime/adapters.js';
 import { dispatchParentMessage, type DispatchTargets, type ReaderApi } from '../src/frame-runtime/dispatch.js';
 import { checkVocabulary, contentIntrinsics, materialise, MISSING_CLASS } from '../src/frame-runtime/content.js';
@@ -356,7 +356,7 @@ function recordingOutbox(): { box: Outbox; sent: FrameToParent[]; copies: string
   return { box, sent, copies, asked };
 }
 
-const ALL = { links: true, hash: true, copy: true, changes: true, versions: true, progress: true } as const;
+const ALL = { links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false } as const;
 const SHA40 = 'a'.repeat(40);
 
 describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.3; row L3.B8 unit half)', () => {
@@ -442,7 +442,7 @@ describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.
 
   it('each callback exists only when the seed\'s bridge allows it; storage always does', () => {
     const { box, sent } = recordingOutbox();
-    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false } });
+    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false } });
     expect([a.onLink, a.onHash, a.copy, a.changes, a.openVersion, a.onProgress]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
     a.link('x.md');
     expect(sent).toEqual([]);
@@ -534,6 +534,45 @@ describe("B7.4 the frame's port: a command reaches the reader, and a command tha
     expect(r.calls.map(([k]) => k)).toEqual(['command', 'command', 'command', 'command']);
     expect(r.calls.map(([, a]) => a)).toEqual(['jump', 'settings', 'contents', 'outline'].map((n) => [ROOT_EL, n]));
     expect((r.calls[0]?.[1] as unknown[])[0] === ROOT_EL).toBe(true);
+  });
+
+  it('goto hands the reader its id and from as a third argument; close-overlay and print-figures hand nothing more (ruling R1, P1h)', () => {
+    const r = reader();
+    const t = targets(r);
+    dispatchParentMessage({ t: 'command', name: 'goto', id: 'heading-two' }, t.to);
+    dispatchParentMessage({ t: 'command', name: 'goto', id: 'heading-two', from: '{"line":null,"offset":0,"y":0}' }, t.to);
+    dispatchParentMessage({ t: 'command', name: 'close-overlay' }, t.to);
+    dispatchParentMessage({ t: 'command', name: 'print-figures' }, t.to);
+    expect(r.calls).toEqual([
+      ['command', [ROOT_EL, 'goto', { id: 'heading-two' }]],
+      ['command', [ROOT_EL, 'goto', { id: 'heading-two', from: '{"line":null,"offset":0,"y":0}' }]],
+      ['command', [ROOT_EL, 'close-overlay']],
+      ['command', [ROOT_EL, 'print-figures']],
+    ]);
+    // `from` is absent, not undefined, when the message had none; the two older arities are two arguments.
+    expect(Object.hasOwn(r.calls[0]?.[1][2] as object, 'from')).toBe(false);
+    expect(r.calls[2]?.[1]).toHaveLength(2);
+    expect(r.calls[3]?.[1]).toHaveLength(2);
+  });
+
+  it('the older four commands still hand the reader two arguments: the root and the name', () => {
+    const r = reader();
+    const t = targets(r);
+    for (const name of ['jump', 'settings', 'contents', 'outline'] as const) dispatchParentMessage({ t: 'command', name }, t.to);
+    expect(r.calls.map(([, a]) => a.length)).toEqual([2, 2, 2, 2]);
+  });
+
+  it('the new commands are contained like the old: a throw changes nothing, and with no root, no API or no runEnhancementCommand they reach nothing', () => {
+    const throwing = reader({ runEnhancementCommand: () => { throw new Error('boom'); } });
+    for (const m of [{ t: 'command', name: 'goto', id: 'x' }, { t: 'command', name: 'close-overlay' }, { t: 'command', name: 'print-figures' }] as const) {
+      expect(() => dispatchParentMessage(m, targets(throwing).to), m.name).not.toThrow();
+      const r = reader();
+      dispatchParentMessage(m, targets(r, null).to);
+      expect(r.calls, `${m.name} without a root`).toEqual([]);
+      expect(() => dispatchParentMessage(m, targets(null).to), `${m.name} without an API`).not.toThrow();
+      const bare = reader({ runEnhancementCommand: undefined as never });
+      expect(() => dispatchParentMessage(m, targets(bare).to), `${m.name} without the runner`).not.toThrow();
+    }
   });
 
   it('a command that throws is contained, and the port keeps working: a later prefs, answer and mermaid still apply, and nothing is sent', () => {
@@ -778,18 +817,94 @@ describe('parseParentMessage: what the frame accepts on the port (Reference §6.
       channel?: string;
       ports?: number;
       message: Record<string, unknown> | null;
+      fill?: Record<string, { prefix?: string; unit: string; times: number; suffix?: string }>;
       verdict: 'accept' | 'refuse';
     }
     const cases = (JSON.parse(readText('conformance/bridge-cases.json')) as { messages: Case[] }).messages.filter(
       (c) => c.direction === 'parent-to-frame' && c.message?.['t'] === 'command' && c.channel === 'port' && (c.ports ?? 0) === 0,
     );
-    expect(cases.filter((c) => c.verdict === 'accept')).toHaveLength(4);
+    // One accepted case per name at least, goto's several: the names accepted are exactly COMMAND_OPS.
+    const accepted = cases.filter((c) => c.verdict === 'accept');
+    expect([...new Set(accepted.map((c) => c.message?.['name']))].sort()).toEqual([...COMMAND_OPS].sort());
+    expect(accepted.length).toBeGreaterThanOrEqual(COMMAND_OPS.length);
     expect(cases.filter((c) => c.verdict === 'refuse').length).toBeGreaterThanOrEqual(3);
+    // The case's message with its fills applied (bridge-cases.json's `about`).
+    const filled = (c: Case): Record<string, unknown> | null => {
+      if (c.message === null || c.fill === undefined) return c.message;
+      const m = { ...c.message };
+      for (const [k, f] of Object.entries(c.fill)) m[k] = `${f.prefix ?? ''}${f.unit.repeat(f.times)}${f.suffix ?? ''}`;
+      return m;
+    };
     for (const c of cases) {
-      const got = parseParentMessage(c.message);
-      if (c.verdict === 'accept') expect(got, c.label).toEqual(c.message);
+      const got = parseParentMessage(filled(c));
+      if (c.verdict === 'accept') expect(got, c.label).toEqual(filled(c));
       else expect(got, c.label).toBeNull();
     }
+  });
+
+  describe('command: close-overlay, goto and print-figures (docserver parity T1, ruling R1)', () => {
+    const TOKEN_TEXT = '{"line":"12","offset":4,"y":300}';
+
+    it('close-overlay and print-figures: exactly {name}; an id or a from on either is ignored (P1b)', () => {
+      for (const name of ['close-overlay', 'print-figures'] as const) {
+        expect(parseParentMessage({ t: 'command', name }), name).toEqual({ t: 'command', name });
+        expect(parseParentMessage({ t: 'command', name, id: 'x' }), `${name} id`).toBeNull();
+        expect(parseParentMessage({ t: 'command', name, from: TOKEN_TEXT }), `${name} from`).toBeNull();
+        expect(parseParentMessage({ t: 'command', name, id: 'x', from: TOKEN_TEXT }), `${name} both`).toBeNull();
+      }
+    });
+
+    it('the four older names take no id or from either', () => {
+      for (const name of ['jump', 'settings', 'contents', 'outline']) {
+        expect(parseParentMessage({ t: 'command', name, id: 'x' }), name).toBeNull();
+        expect(parseParentMessage({ t: 'command', name, from: 'x' }), name).toBeNull();
+      }
+    });
+
+    it('goto: an id by the fragment grammar, a from optional; the id is required (P1a)', () => {
+      expect(parseParentMessage({ t: 'command', name: 'goto', id: 'heading-two' })).toEqual({ t: 'command', name: 'goto', id: 'heading-two' });
+      expect(parseParentMessage({ t: 'command', name: 'goto', id: 'fnref1:1', from: TOKEN_TEXT })).toEqual({ t: 'command', name: 'goto', id: 'fnref1:1', from: TOKEN_TEXT });
+      for (const bad of [
+        { t: 'command', name: 'goto' },
+        { t: 'command', name: 'goto', from: TOKEN_TEXT },
+        { t: 'command', name: 'goto', id: undefined },
+        { t: 'command', name: 'goto', id: '' },
+        { t: 'command', name: 'goto', id: 'a b' },
+        { t: 'command', name: 'goto', id: '#x' },
+        { t: 'command', name: 'goto', id: 'a[b]' },
+        { t: 'command', name: 'goto', id: 'x'.repeat(257) },
+        { t: 'command', name: 'goto', id: 7 },
+        { t: 'command', name: 'goto', id: null },
+        { t: 'command', name: 'goto', id: ['x'] },
+        { t: 'command', name: 'goto', id: 'x', push: 'true' },
+        { t: 'command', name: 'goto', id: 'x', extra: 1 },
+        Object.defineProperty({ t: 'command', name: 'goto' }, 'id', { get: () => 'x', enumerable: true }),
+        Object.defineProperty({ t: 'command', name: 'goto', id: 'x' }, 'from', { get: () => TOKEN_TEXT, enumerable: true }),
+      ]) {
+        expect(parseParentMessage(bad), JSON.stringify(bad)).toBeNull();
+      }
+      expect(parseParentMessage({ t: 'command', name: 'goto', id: 'x'.repeat(256) })).toEqual({ t: 'command', name: 'goto', id: 'x'.repeat(256) });
+    });
+
+    it('goto: from is a string of at most 4096 code units, and nothing deeper (P1c, B4)', () => {
+      const at = (n: number): unknown => ({ t: 'command', name: 'goto', id: 'x', from: 'z'.repeat(n) });
+      expect(parseParentMessage(at(4096))).toEqual(at(4096));
+      expect(parseParentMessage(at(4097))).toBeNull();
+      expect(parseParentMessage(at(0))).toEqual(at(0));
+      // Astral characters count twice, as code units: 2048 of them are 4096 units, 2049 are 4098.
+      expect(parseParentMessage({ t: 'command', name: 'goto', id: 'x', from: '\u{1f600}'.repeat(2048) })).not.toBeNull();
+      expect(parseParentMessage({ t: 'command', name: 'goto', id: 'x', from: '\u{1f600}'.repeat(2049) })).toBeNull();
+      // The port parser does not read inside: a string that is no token passes, and the reader ignores it.
+      expect(parseParentMessage({ t: 'command', name: 'goto', id: 'x', from: 'not a token' })).not.toBeNull();
+      for (const from of [7, null, undefined, {}, ['x'], true]) {
+        expect(parseParentMessage({ t: 'command', name: 'goto', id: 'x', from }), String(typeof from)).toBeNull();
+      }
+    });
+
+    it('the bootstrap carries no copy of the anchor grammar: the parser reads the length of `from` and nothing else of it', () => {
+      const text = readText('src/frame-runtime/inbound.ts').replace(/^\s*\/\/.*$/gm, '');
+      expect(text).not.toMatch(/isAnchorToken|JSON\.parse|pngBytesOfBase64/);
+    });
   });
 
   describe('appearance: exactly {t, v: 1, appearance}, appearance a plain object of own data properties (the outer shape only)', () => {

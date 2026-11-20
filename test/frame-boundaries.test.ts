@@ -17,10 +17,11 @@
 // hard-coded four ops parsed from its src/frame-runtime/inbound.ts), except for the masked policy, which is computed and so
 // has no literal to parse: that entry's `csp` was copied from the published 1.1.0's frameCsp(), masked, and the copy is a
 // review check of the library wave. The second entry is the genesis landing's own. A later landing appends one entry by hand
-// and the rows below that compare the newest entry with the one before it are re-pinned in the same landing.
+// and writes its row of DELTAS (what the entry adds to the previous entry's two lists, at their end) in the same landing.
 //
-// Rows: the newest entry equals the computed values; FRAME_OPS equals the previous entry's; FRAME_ACCEPTS is the previous
-// entry's plus `appearance`; the port parser, driven with one well-formed message per op name of OP_KEYS, PARENT_OPS and
+// Rows: the newest entry equals the computed values; each entry's lists are the previous entry's plus its DELTAS row's additions
+// at the end (entry 1, the appearance contract: `appearance` to the accepted list; entry 2, the parity wire: `place` and
+// `print-figure` to the frame ops); the port parser, driven with one well-formed message per op name of OP_KEYS, PARENT_OPS and
 // FRAME_OPS and a planted name, accepts exactly the names of FRAME_ACCEPTS and refuses `hello`; the masked policy equals the
 // previous entry's and holds one hash source per script the frame inlines (the manifest's entries that carry one, KNOWN's
 // length). The behaviour rows (the srcdoc's CSP meta, the iframe's `csp` attribute and a port spy's count of frame-to-parent
@@ -56,6 +57,16 @@ function maskedCsp(policy: string): string {
     .join('; ');
 }
 
+/**
+ * The deltas of the record, keyed by entry index (0 is 1.1.0's, which has none) and append-only like the record: what each
+ * entry adds to the previous entry's two lists, at their end. A landing that appends an entry writes its row here; an entry
+ * with no row, and a row with no entry, red. Entry 1 is the appearance contract's, entry 2 the parity wire's.
+ */
+const DELTAS: readonly { readonly entry: number; readonly addsFrameOps: readonly string[]; readonly addsFrameAccepts: readonly string[] }[] = [
+  { entry: 1, addsFrameOps: [], addsFrameAccepts: ['appearance'] },
+  { entry: 2, addsFrameOps: ['place', 'print-figure'], addsFrameAccepts: [] },
+];
+
 const recordText = readFileSync(`${ROOT}${RECORD}`, 'utf8');
 const record = JSON.parse(recordText) as Entry[];
 const now = (): Entry => ({ frameOps: [...FRAME_OPS], frameAccepts: [...FRAME_ACCEPTS], csp: maskedCsp(frameCsp()) });
@@ -87,12 +98,42 @@ describe('the record: its shape and its newest entries', () => {
     expect(record.at(-1)).toEqual(now());
   });
 
-  it('FRAME_OPS equals the previous entry\'s: the contract adds no frame-to-parent op', () => {
-    expect([...FRAME_OPS]).toEqual(record.at(-2)?.frameOps);
+  it('every entry after the first has exactly one delta row, and every delta row has its entry (an entry with no row reds)', () => {
+    expect(DELTAS.map((d) => d.entry)).toEqual(record.slice(1).map((_, i) => i + 1));
+    expect(record).toHaveLength(DELTAS.length + 1);
   });
 
-  it('FRAME_ACCEPTS is the previous entry\'s plus `appearance`, and no other op', () => {
-    expect([...FRAME_ACCEPTS]).toEqual([...(record.at(-2)?.frameAccepts ?? []), 'appearance']);
+  it('each entry\'s two lists are the previous entry\'s in the same order with only the delta row\'s additions at the end', () => {
+    for (const d of DELTAS) {
+      const before = record[d.entry - 1];
+      const entry = record[d.entry];
+      expect(entry?.frameOps, `entry ${String(d.entry)} frameOps`).toEqual([...(before?.frameOps ?? []), ...d.addsFrameOps]);
+      expect(entry?.frameAccepts, `entry ${String(d.entry)} frameAccepts`).toEqual([...(before?.frameAccepts ?? []), ...d.addsFrameAccepts]);
+    }
+  });
+
+  it('a delta row adds no name the previous entry already holds, and no list repeats a name', () => {
+    for (const d of DELTAS) {
+      const before = record[d.entry - 1];
+      for (const name of d.addsFrameOps) expect(before?.frameOps, `entry ${String(d.entry)} ${name}`).not.toContain(name);
+      for (const name of d.addsFrameAccepts) expect(before?.frameAccepts, `entry ${String(d.entry)} ${name}`).not.toContain(name);
+    }
+    for (const e of record) {
+      expect(new Set(e.frameOps).size).toBe(e.frameOps.length);
+      expect(new Set(e.frameAccepts).size).toBe(e.frameAccepts.length);
+    }
+  });
+
+  it('the appearance contract\'s entry (1) adds no frame op and `appearance` to the accepted list; the parity wire\'s (2) adds exactly `place` and `print-figure` to the frame ops and nothing to the accepted list', () => {
+    expect(DELTAS).toEqual([
+      { entry: 1, addsFrameOps: [], addsFrameAccepts: ['appearance'] },
+      { entry: 2, addsFrameOps: ['place', 'print-figure'], addsFrameAccepts: [] },
+    ]);
+  });
+
+  it('the computed lists are the newest entry\'s: FRAME_OPS ends with `place` and `print-figure`, and FRAME_ACCEPTS is the five ops it was after the appearance contract', () => {
+    expect([...FRAME_OPS].slice(-2)).toEqual(['place', 'print-figure']);
+    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
   });
 
   it('the masked frameCsp() equals the previous entry\'s: the same directives in the same order, the same sources but the hashes', () => {
@@ -151,6 +192,8 @@ describe('the port parser accepts exactly FRAME_ACCEPTS: one well-formed message
     hash: { t: 'hash', id: 'x' },
     version: { t: 'version' },
     progress: { t: 'progress', p: '500' },
+    place: { t: 'place', kind: 'overlay' },
+    'print-figure': { t: 'print-figure', i: '0', n: '1', png: 'AAAA' },
   };
   const PLANTED = 'planted-op';
 

@@ -61,6 +61,14 @@ export const BRIDGE_LIMITS = Object.freeze({
   frameCopyMaxPerWindow: 4,
   /** Longer than changesTimeoutMs: the frame releases its one `changes` slot after this. */
   frameChangesTimeoutMs: 35000,
+  /** The most figures one print run may carry, and so the largest `n` of a `print-figure` (docserver parity T1). */
+  printFiguresMax: 64,
+  /** The most bytes one figure's PNG may decode to. */
+  printFigurePngMaxBytes: 1048576,
+  /** The most bytes all the figures of one run may decode to, together. */
+  printFiguresTotalMaxBytes: 16777216,
+  /** The most pixels either side of a figure's image may have (the frame draws within it; the host reads no pixels). */
+  printFigureSideMaxPx: 2048,
 } as const);
 
 /**
@@ -102,12 +110,18 @@ export const FRAME_PREF_VALUES = Object.freeze({
   font: Object.freeze(['serif', 'sans'] as const),
 });
 
+/** The kinds of a `place` op: the frame's overlay (the quick jump, settings, contents or outline) opened, or closed. */
+export const PLACE_KINDS = Object.freeze(['overlay', 'overlay-closed'] as const);
+export type PlaceKind = (typeof PLACE_KINDS)[number];
+
 /**
  * The command names a parent may send in a `command` op (batch 1.1, C108): the twin of L2's `COMMAND_NAMES`
  * (src/enhance/commands.ts), which L2 cannot import from here (it may import only its own siblings). Held equal by
- * test/enhance-mermaid-on-request.test.ts, beside the draw lists (C94(2)).
+ * test/enhance-mermaid-on-request.test.ts, beside the draw lists (C94(2)): L2's names first, in order, then the parity
+ * wire's `close-overlay`, `goto` and `print-figures`, which the reader gets handlers for in its own tasks (a reader that
+ * does not know a name answers false).
  */
-export const COMMAND_OPS = Object.freeze(['jump', 'settings', 'contents', 'outline'] as const);
+export const COMMAND_OPS = Object.freeze(['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto', 'print-figures'] as const);
 export type CommandOp = (typeof COMMAND_OPS)[number];
 
 /**
@@ -135,7 +149,9 @@ export type ParentToFrame =
   | { t: 'mermaid'; text: string }
   | { t: 'mermaid'; unavailable: true }
   /** A reader tool to toggle, by name (batch 1.1, C108): a frame older than this release ignores it, as it ignores every op it does not know. */
-  | { t: 'command'; name: CommandOp }
+  | { t: 'command'; name: Exclude<CommandOp, 'goto'> }
+  /** Go to a place of the document: `id` by the fragment grammar, `from` the opaque token of a `hash` op (at most ANCHOR_LIMITS.from code units); the reader judges the token. */
+  | { t: 'command'; name: 'goto'; id: string; from?: string }
   /**
    * The host's appearance while the frame is open (the appearance contract, src/enhance/appearance.ts): `{mode, colour?,
    * skin?, label?}`. The port parser checks only the outer shape; the reader script runs `parseAppearance` on the value. A
@@ -152,12 +168,19 @@ export type FrameToParent =
   | { t: 'navigate'; href: string }
   | { t: 'copy'; text: string }
   | { t: 'changes'; sha: string }
-  /** isFragmentId(id); never ''. */
-  | { t: 'hash'; id: string }
+  /**
+   * isFragmentId(id); never ''. `push` (only the string 'true') and `from` (a position token, at most ANCHOR_LIMITS.from
+   * code units) are sent only to a parent whose seed has `bridge.places`; every value stays a flat string.
+   */
+  | { t: 'hash'; id: string; push?: 'true'; from?: string }
   /** No keys: back to the latest. */
   | { t: 'version'; sha?: string; only?: string }
   /** How far the document has been read, in thousandths (isProgressThousandths); sent only when the seed's bridge asks for it. */
-  | { t: 'progress'; p: string };
+  | { t: 'progress'; p: string }
+  /** The frame's overlay opened or closed; sent only when the seed's bridge asks for places. */
+  | { t: 'place'; kind: PlaceKind }
+  /** One figure of a print run as a PNG, in base64: `i` of `n`, both canonical decimal strings; sent only when the seed's bridge asks for print figures. */
+  | { t: 'print-figure'; i: string; n: string; png: string };
 
 /**
  * Every key each op may carry, `t` included, by its `t`: the one table both parsers read. A key outside its op's set
@@ -169,7 +192,7 @@ export const OP_KEYS = Object.freeze({
   prefs: Object.freeze(['t', 'theme', 'width', 'font'] as const),
   'changes.result': Object.freeze(['t', 'sha', 'ranges', 'removedAfter', 'unavailable'] as const),
   mermaid: Object.freeze(['t', 'text', 'unavailable'] as const),
-  command: Object.freeze(['t', 'name'] as const),
+  command: Object.freeze(['t', 'name', 'id', 'from'] as const),
   appearance: Object.freeze(['t', 'v', 'appearance'] as const),
   ready: Object.freeze(['t', 'v', 'nonce'] as const),
   error: Object.freeze(['t', 'why'] as const),
@@ -177,13 +200,15 @@ export const OP_KEYS = Object.freeze({
   navigate: Object.freeze(['t', 'href'] as const),
   copy: Object.freeze(['t', 'text'] as const),
   changes: Object.freeze(['t', 'sha'] as const),
-  hash: Object.freeze(['t', 'id'] as const),
+  hash: Object.freeze(['t', 'id', 'push', 'from'] as const),
   version: Object.freeze(['t', 'sha', 'only'] as const),
   progress: Object.freeze(['t', 'p'] as const),
+  place: Object.freeze(['t', 'kind'] as const),
+  'print-figure': Object.freeze(['t', 'i', 'n', 'png'] as const),
 } satisfies Record<FrameToParent['t'] | ParentToFrame['t'], readonly string[]>);
 
 /** The ops the frame sends (`./host` reads only these). */
-export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress'] as const satisfies readonly FrameToParent['t'][]);
+export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress', 'place', 'print-figure'] as const satisfies readonly FrameToParent['t'][]);
 
 /** The ops the parent sends (the frame reads only these: hello on the window, the others on the port). */
 export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance'] as const satisfies readonly ParentToFrame['t'][]);

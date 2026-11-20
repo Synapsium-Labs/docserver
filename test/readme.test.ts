@@ -211,7 +211,7 @@ describe('README: the L3 sections exist and name their entries', () => {
       ...Object.keys((await import(HOST_ENTRY)) as object),
       ...Object.keys(await import('../src/highlight/index.js')),
     ].sort();
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(40);
     expect(names.filter((n) => !README.includes(`\`${n}\``) && !README.includes(`\`${n}(`))).toEqual([]);
   });
 });

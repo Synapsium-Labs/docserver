@@ -160,6 +160,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
     const entry = (await import('../src/frame/index.js')) as Record<string, unknown>;
     expect(Object.keys(entry).sort()).toEqual(
       [
+        'ANCHOR_LIMITS',
         'APPEARANCE_CONTRACT',
         'APPEARANCE_LABEL_DEFAULT',
         'APPEARANCE_PAIRS',
@@ -178,16 +179,19 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'MERMAID_HOSTED_KINDS',
         'MERMAID_LIMIT_CEILINGS',
         'OP_KEYS',
+        'PLACE_KINDS',
         'PREF_KEYS',
         'SEED_HTML_MAX_CHARS',
         'SEED_SCHEMA',
         'checkFrameCsp',
         'frameCsp',
         'frameDocument',
+        'isAnchorToken',
         'isFragmentId',
         'mermaidGate',
         'mermaidThemeOf',
         'parseAppearance',
+        'pngBytesOfBase64',
       ].sort(),
     );
   });
@@ -697,7 +701,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     expect(seed['prefs']).toEqual({ theme: 'dark', width: 'wide', font: 'sans' });
     expect(seed['snapshot']).toEqual([['pref:prefs', '{"theme":"dark"}'], ['doc:pos', '{"y":120}'], ['pref:ui', 'null']]);
     expect(seed['features']).toEqual(o.features);
-    expect(seed['bridge']).toEqual({ links: false, hash: true, copy: true, changes: false, versions: true, progress: false });
+    expect(seed['bridge']).toEqual({ links: false, hash: true, copy: true, changes: false, versions: true, progress: false, places: false, printFigures: false });
     expect(seed['mermaid']).toEqual({ maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request' });
     expect(validateSeed(seed)).toEqual({ ok: true, seed });
   });
@@ -712,7 +716,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
       snapshot: [],
       features: {},
       mermaid: null,
-      bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
+      bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false },
     });
   });
 
@@ -900,14 +904,15 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     expect(refusal(run)).toBe('no refusal');
     const seed = seedOf(run());
     expect(seed['version']).toEqual({ sha: null, draft: true, commits: null, only: null });
-    expect(seed['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
+    expect(seed['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false });
     expect(seed['features']).toEqual({});
   });
 });
 
-describe("B7.2 the progress switch: absent is false while every other bridge switch defaults to true (batch 1.1, C108)", () => {
+describe("B7.2 the progress switch: absent is false while the five answered bridge switches default to true (batch 1.1, C108)", () => {
   const d = (): RenderInput => plain();
-  const OTHERS = { links: true, hash: true, copy: true, changes: true, versions: true };
+  // The two switches of the parity wire (places, printFigures) are off by default too, as `progress` is; the five answered ops default to true.
+  const OTHERS = { links: true, hash: true, copy: true, changes: true, versions: true, places: false, printFigures: false };
 
   it('no bridge at all seeds progress false and the other switches true', () => {
     expect(seedOf(frame(d()))['bridge']).toEqual({ ...OTHERS, progress: false });
@@ -922,7 +927,32 @@ describe("B7.2 the progress switch: absent is false while every other bridge swi
   it('progress: true and progress: false are seeded as given; the others keep their defaults', () => {
     expect(seedOf(frame(d(), { bridge: { progress: true } }))['bridge']).toEqual({ ...OTHERS, progress: true });
     expect(seedOf(frame(d(), { bridge: { progress: false } }))['bridge']).toEqual({ ...OTHERS, progress: false });
-    expect(seedOf(frame(d(), { bridge: { progress: true, links: false, versions: false } }))['bridge']).toEqual({ ...OTHERS, links: false, versions: false, progress: true });
+    expect(seedOf(frame(d(), { bridge: { progress: true, links: false, versions: false } }))['bridge']).toEqual({ ...OTHERS, links: false, versions: false, progress: true, places: false, printFigures: false });
+  });
+
+  it('places and printFigures are off unless asked for, in any bridge that leaves them out (P1e)', () => {
+    for (const bridge of [undefined, {}, { links: false }, { progress: true }, { places: undefined, printFigures: undefined }] as const) {
+      const got = seedOf(frame(d(), bridge === undefined ? {} : { bridge: bridge as NonNullable<FrameOptions['bridge']> }))['bridge'] as Record<string, unknown>;
+      expect(got['places'], JSON.stringify(bridge)).toBe(false);
+      expect(got['printFigures'], JSON.stringify(bridge)).toBe(false);
+    }
+  });
+
+  it('places: true and printFigures: true are seeded as given, each alone, and the seed passes the validator', () => {
+    expect(seedOf(frame(d(), { bridge: { places: true } }))['bridge']).toEqual({ ...OTHERS, progress: false, places: true });
+    expect(seedOf(frame(d(), { bridge: { printFigures: true } }))['bridge']).toEqual({ ...OTHERS, progress: false, printFigures: true });
+    expect(seedOf(frame(d(), { bridge: { places: true, printFigures: true, progress: true } }))['bridge']).toEqual({ ...OTHERS, places: true, printFigures: true, progress: true });
+    expect(seedOf(frame(d(), { bridge: { places: false, printFigures: false } }))['bridge']).toEqual({ ...OTHERS, progress: false });
+    const seed = seedOf(frame(d(), { bridge: { places: true, printFigures: true } }));
+    expect(validateSeed(seed)).toEqual({ ok: true, seed });
+  });
+
+  it('a places or printFigures switch that is not a boolean is invalid-input', () => {
+    for (const k of ['places', 'printFigures']) {
+      for (const v of ['yes', 1, null, {}]) {
+        expect(refusal(() => frame(d(), { bridge: { [k]: v } as unknown as NonNullable<FrameOptions['bridge']> })), `${k} ${JSON.stringify(v)}`).toBe('invalid-input');
+      }
+    }
   });
 
   it('a seed with progress true passes the validator', () => {
@@ -943,7 +973,7 @@ describe('L3.M7 Task 3 the default keys: frameDocument\'s seed holds every schem
     images: [],
     snapshot: [],
     features: {},
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false },
   };
 
   it('mermaid off: exactly SEED_KEYS, each new key at its default, and the seed passes validateSeed', () => {
@@ -1167,11 +1197,11 @@ describe('the appearance contract: the derived srcdoc cap rises by both fields a
   /** SEED_FIELDS_MAX_CHARS at 1.1.0 (the commit aceb346's src/frame/seed.ts, evaluated): neither field was counted. */
   const SEED_FIELDS_MAX_CHARS_1_1_0 = 45768624;
 
-  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters', () => {
+  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters (the two bridge members of the parity wire among them)', () => {
     const faces = 2 * 174764;
     expect(faces).toBe(349528);
-    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`.
-    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length;
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`, and the parity wire's two bridge members (the cap counts a switch as `false`).
+    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length + `,"places":false`.length + `,"printFigures":false`.length;
     const rise = faces + MAXIMAL_APPEARANCE_TEXT().length + keys;
     expect(SEED_FIELDS_MAX_CHARS - SEED_FIELDS_MAX_CHARS_1_1_0).toBe(rise);
     const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
