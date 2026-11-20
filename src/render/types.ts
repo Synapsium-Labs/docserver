@@ -66,9 +66,14 @@ export interface ReaderVocabulary {
   /** Words that name the reader, in an owner line, an owner cell or a step's owner. Default: you. */
   readonly addressees?: readonly string[];
   /**
-   * Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`; also the bold label of a
-   * header line that stands alone before the first level-2 heading, when the byline has no such fact ("**Tracker:** AB-90").
-   * Default: none.
+   * Labels whose text names an item key, for `itemLink`. The byline's: the label of a fact, exactly and in any case ("Tracker:
+   * AB-12"). The header line's, when the byline has no such fact and no delta link: in the first paragraph after the title (or from
+   * the start with none) and before the first level-2 heading (a blockquote's first paragraph too, never the meta line) that has
+   * one, a bold label ("**Tracker:** AB-90", the colon inside the bold text or right after it) or a plain label at the start of a
+   * line ("Tracker: AB-90") anywhere in it; the keys read are those of the text from the label to the end of that line, which a
+   * newline, a `<br>` or the next bold label ends. A bold label may be any text; a plain label is a letter, then up to 31 letters,
+   * digits, spaces, `_`, `/` or `-` (the byline's, a capital then up to 18 letters or spaces), so a field outside those is matched
+   * as a bold label only, not refused. Default: none.
    */
   readonly itemFields?: readonly string[];
   /**
@@ -144,8 +149,9 @@ export interface RenderMeta {
    * The distinct item values the reader would ask its host `itemLink` for, in document order, at most 50, each at most 100
    * code units (a longer one is left out, not cut). Read only where the reader reads them (RenderOptions.reader): the byline
    * fact labelled with an item field, the first section headed with an item heading whose first code block opens on an
-   * `item:` line, and, when the byline has no item fact, a header line (a paragraph before the first level-2 heading that
-   * stands alone as an item field's bold label, a colon and keys: `**Tracker:** AB-90`). Empty without `reader`. Plain text, not escaped HTML.
+   * `item:` line, and, when the byline has no item fact, the keys of a header line: the line, in a paragraph after the title and
+   * before the first level-2 heading, that an item field's label opens (`**Tracker:** AB-90`), to its end. Empty without `reader`.
+   * Plain text, not escaped HTML.
    */
   items: readonly string[];
 }

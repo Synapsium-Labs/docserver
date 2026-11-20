@@ -102,9 +102,14 @@ export interface VocabularyOptions {
   /** Words that name the reader, in an owner line, an owner cell or a step's owner. Default: you. */
   readonly addressees?: readonly string[];
   /**
-   * Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`; also the bold label of a
-   * header line that stands alone before the first level-2 heading, when the byline has no such fact ("**Tracker:** AB-90").
-   * Default: none.
+   * Labels whose text names an item key, for `itemLink`. The byline's: the label of a fact, exactly and in any case ("Tracker:
+   * AB-12"). The header line's, when the byline has no such fact and no delta link: in the first paragraph after the title (or from
+   * the start with none) and before the first level-2 heading (a blockquote's first paragraph too, never the meta line) that has
+   * one, a bold label ("**Tracker:** AB-90", the colon inside the bold text or right after it) or a plain label at the start of a
+   * line ("Tracker: AB-90") anywhere in it; the keys read are those of the text from the label to the end of that line, which a
+   * newline, a `<br>` or the next bold label ends. A bold label may be any text; a plain label is a letter, then up to 31 letters,
+   * digits, spaces, `_`, `/` or `-` (the byline's, a capital then up to 18 letters or spaces), so a field outside those is matched
+   * as a bold label only, not refused. Default: none.
    */
   readonly itemFields?: readonly string[];
   /**

@@ -34,8 +34,6 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 | P4aj | the forwarded copy differs in more than itemLink | the wrapper adds a key | `src/frame-runtime/enhance-wrap.ts` | red: 1 failed \| 93 passed (94). with an itemLink function it forwards a copy that differs in itemLink alone, and leaves the host's o |
 | P4ak | the options are copied when itemLink is not a function | a copy is forwarded whatever itemLink is | `src/frame-runtime/enhance-wrap.ts` | red: 1 failed \| 93 passed (94). without an itemLink function it forwards the same root and the very same options object, and the rea |
 | P4al | the wrapper skips the href check | the wrapper passes any answer on | `src/frame-runtime/enhance-wrap.ts` | red: 2 failed \| 114 passed (116). answers the href only when it is an absolute https: URL, else null; draws only an absolute https: href: http:, javascript:, data:, relative and spaced hrefs are no link |
-| P4am | a tracker host planted in a source string | src names a tracker host | `src/frame/items.ts` | red: 1 failed \| 3 passed (4). src/ names no tracker host and no issue URL template |
-| P4an | a tracker host planted where the built reader keeps it | the built enhance asset names a tracker host | `src/frame-runtime/enhance-wrap.ts` | red: 2 failed \| 2 passed (4). src/ names no tracker host and no issue URL template; the guard, the bootstrap, the reader and its stylesheet name none |
 | P4ao | the answer of the items adapter not judged before the mount | a refused answer reaches frameDocument and fails the mount | `src/host/mount.ts` | red: 1 failed \| 172 passed (173). an answer the frame would refuse is no links: one warning, no items seeded, and the document still m |
 | P4ap | a refused answer not warned about | no warning for a refused answer | `src/host/mount.ts` | red: 1 failed \| 172 passed (173). an answer the frame would refuse is no links: one warning, no items seeded, and the document still m |
 | P4aq | a getter of the answer read | the answer is read through its accessors | `src/host/mount.ts` | red: 1 failed \| 172 passed (173). an answer the frame would refuse is no links: one warning, no items seeded, and the document still m |
@@ -61,6 +59,18 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 | P4bk | the meta line is read as a header | the reader does not leave the meta line out | `src/enhance/editorial.ts` | red: 3 failed \| 230 passed (233). is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; ; fixture: the meta line names a bold label; holds for every fixture under each part of the vocabulary alone |
 | P4bl | with no title the header is not read | render reads no header with no title | `src/render/items.ts` | red: 4 failed \| 82 passed (86). does not read before the title; with no title it reads from the start of the document; fixture: header line, no title; fixture: header blockquote, no title |
 | P4bm | with no title the header is not read | the reader reads no header with no title | `src/enhance/editorial.ts` | red: 4 failed \| 229 passed (233). with no title it reads from the start of the document, linking the line and routing its click; fixture: header line, no title; fixture: header blockquote, no title |
+| P4ae | the header line read beside a byline item fact (render) | render lists the header line whatever the byline has | `src/render/items.ts` | SUPERSEDED by P4bn (measured on round 1's code; the guard still exists and is re-measured on the present code). red: 4 failed \| 59 passed (63). is used only when the byline has no item fact: the byline keeps its precedence, and a delta key stil; fixture: header line with a byline fact; fixture: header line with an empty byline fact |
+| P4af | the header line read beside a byline item fact (reader) | the reader asks the header line whatever the byline has | `src/enhance/editorial.ts` | SUPERSEDED by P4bo (measured on round 1's code; the guard still exists and is re-measured on the present code). red: 4 failed \| 205 passed (209). is the third route: no byline item fact and no delta link, and only for a paragraph that stands alon; fixture: header line with a byline fact; fixture: header line with an empty byline fact |
+| P4am | a tracker host planted in a source string | src names a tracker host (`https://linear.app/team/issue/AB-1` in a string of `src/frame/items.ts` (read by `/linear\.app/` and `/\/issues?\/…/`)) | `src/frame/items.ts` | red: 1 failed \| 3 passed (4). src/ names no tracker host and no issue URL template |
+| P4an | a tracker host planted where the built reader keeps it | the built enhance asset names a tracker host (`https://acme.atlassian.net/browse/AB-1` returned by the built reader (read by `/\batlassian\.(?:net|com)\b/` and `/\/browse\/…/`)) | `src/frame-runtime/enhance-wrap.ts` | red: 2 failed \| 2 passed (4). src/ names no tracker host and no issue URL template; the guard, the bootstrap, the reader and its stylesheet name none |
+| P4bn | the header line read beside a byline item fact (render) | render lists the header line whatever the byline has (re-measures withdrawn P4ae on the present code) | `src/render/items.ts` | red: 4 failed \| 84 passed (88). is used only when the byline has no item fact: the byline keeps its precedence, and a delta key stil; fixture: header line with a byline fact; fixture: header line with an empty byline fact |
+| P4bo | the header line read beside a byline item fact (reader) | the reader links the header line whatever the byline has (re-measures withdrawn P4af) | `src/enhance/editorial.ts` | red: 4 failed \| 232 passed (236). is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; ; fixture: header line with a byline fact; fixture: header line with an empty byline fact |
+| P4bp | the header line read beside a delta link (reader) | the reader links the header line even when the delta key has a link | `src/enhance/editorial.ts` | red: 1 failed \| 235 passed (236). is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields;  |
+| P4bq | a blockquote's first paragraph only (render) | render reads the blockquote's last paragraph, not its first | `src/render/items.ts` | red: 3 failed \| 85 passed (88). is read from a blockquote's first paragraph, and from nothing else a list or a table holds; fixture: header blockquote, second paragraph; holds for every fixture under each part of the vocabulary alone |
+| P4br | a blockquote's first paragraph only (reader) | the reader reads the blockquote's last paragraph, not its first | `src/enhance/editorial.ts` | red: 2 failed \| 234 passed (236). fixture: header blockquote, second paragraph; holds for every fixture under each part of the vocabulary alone |
+| P4bs | the first paragraph with a label wins (render) | render goes on to later paragraphs and lists their keys too | `src/render/items.ts` | red: 3 failed \| 85 passed (88). reads the zone after the title up to the first level-2 heading, and the first paragraph that has the; fixture: header line, a first paragraph with the label wins; holds for every fixture under each part of the vocabulary alone |
+| P4bt | the first paragraph with a label wins (reader) | the reader links the last paragraph with a label, not the first | `src/enhance/editorial.ts` | red: 2 failed \| 234 passed (236). fixture: header line, a first paragraph with the label wins; holds for every fixture under each part of the vocabulary alone |
+| P4bu | a planted tracker host the word-bounded `jira` pattern finds | a `jira` host planted in a source string (`https://jira.example.org/browse/AB-1` in a string of `src/frame/items.ts` (read by `/\bjira\b/` and `/\/browse\/…/`)) | `src/frame/items.ts` | red: 1 failed \| 3 passed (4). src/ names no tracker host and no issue URL template |
 
 ## Review round 1
 
@@ -68,7 +78,11 @@ Rows P4y to P4aq guard the review round's four items: the header-line route in `
 
 ## Review round 2
 
-Rows P4y to P4ah of round 1 measured the header-line route as round 1 built it (a paragraph that was nothing but a label and its keys); round 2 replaced that shape (a label anywhere in a header paragraph, the keys of its line, in a zone after the title, a blockquote's first paragraph read), so those ten rows are withdrawn and the route is held by rows P4ar to P4bm, one pair (render and reader) per guard: the route itself, its gating by `itemFields`, the line's three bounds (a newline, a `<br>`, the next bold label), the blockquote, the zone's start (content before the title), the zone's end (the first level-2 heading), a plain label only at the start of a line, the meta line left out, and no title. Measured as above (`--maxWorkers=2 --reporter=json`, saved bytes and sha256 restored, each matched); the sha256 of each file as restored: `src/enhance/editorial.ts` `203ded1e4cfc6bf669a0456311473de512ec93c8ca1d56fc1ecec2a3cc6f47cf`, `src/render/items.ts` `acaacfd5d72c9e79f1cb5a22978815449929240a9c57aa00d32692dfa57779fd`. Notes: `render()` writes every `<br>` as `<br />` followed by a newline, so the `<br>` bound is redundant on its output; P4ax and P4ay (the `<br>` bound removed) were first green and went red once a test hands `collectItems` and the reader html with a `<br>` that has no newline after it. P4bh and P4bi (a plain label mid-line) likewise needed the case of a label after an inline element. P4aw (the reader reads past a newline) fails two tests by assertion and two by an `EnhanceError` of the mutated reader (its split crosses a node): the bound is held either way.
+Rows P4y to P4ah of round 1 measured the header-line route as round 1 built it (a paragraph that was nothing but a label and its keys); round 2 replaced that shape (a label anywhere in a header paragraph, the keys of its line, in a zone after the title, a blockquote's first paragraph read), so those ten rows are withdrawn (P4ae and P4af, whose guard still exists, are kept above as superseded, see round 3) and the route is held by rows P4ar to P4bm, one pair (render and reader) per guard: the route itself, its gating by `itemFields`, the line's three bounds (a newline, a `<br>`, the next bold label), the blockquote, the zone's start (content before the title), the zone's end (the first level-2 heading), a plain label only at the start of a line, the meta line left out, and no title. Measured as above (`--maxWorkers=2 --reporter=json`, saved bytes and sha256 restored, each matched); the sha256 of each file as restored: `src/enhance/editorial.ts` `203ded1e4cfc6bf669a0456311473de512ec93c8ca1d56fc1ecec2a3cc6f47cf`, `src/render/items.ts` `acaacfd5d72c9e79f1cb5a22978815449929240a9c57aa00d32692dfa57779fd`. Notes: `render()` writes every `<br>` as `<br />` followed by a newline, so the `<br>` bound is redundant on its output; P4ax and P4ay (the `<br>` bound removed) were first green and went red once a test hands `collectItems` and the reader html with a `<br>` that has no newline after it. P4bh and P4bi (a plain label mid-line) likewise needed the case of a label after an inline element. P4aw (the reader reads past a newline) fails two tests by assertion and two by an `EnhanceError` of the mutated reader (its split crosses a node): the bound is held either way.
+
+## Review round 3
+
+Rows P4bn to P4bu, and P4am and P4an measured again, on the code of round 3 (measured as above; the sha256 of each file as restored: `src/enhance/editorial.ts` `203ded1e4cfc6bf669a0456311473de512ec93c8ca1d56fc1ecec2a3cc6f47cf`, `src/frame-runtime/enhance-wrap.ts` `955028ffb80d859de32594b2ac2c87a1c5c50f89d1b11a87c95f1d5482348891`, `src/frame/items.ts` `1fa950b503a231c4787c52ab587e1ecefa23340290cf3679c3d7269c75a24bab`, `src/render/items.ts` `acaacfd5d72c9e79f1cb5a22978815449929240a9c57aa00d32692dfa57779fd`). P4ae and P4af of round 1 are kept above and marked superseded: they measured a guard that still exists (the header line is read only when the byline has no item fact), so it is re-measured as P4bn (render) and P4bo (reader); the reader's `delta === null` condition had no row and has P4bp. The other withdrawn round-1 rows (P4y to P4ad, P4ag, P4ah) measured the old shape of the route and have no counterpart. P4bq to P4bt hold "a blockquote's first paragraph only" (the mutant reads its last paragraph) and "the first paragraph with a label wins" (the mutant goes on, or keeps the last). P4am, P4an and P4bu record the host planted in their JSON (`planted`), under the word-bounded patterns of `test/no-tracker.test.ts`.
 
 ## Choices
 
@@ -526,35 +540,6 @@ Rows P4y to P4ah of round 1 measured the header-line route as round 1 built it (
     ]
   },
   {
-    "id": "P4am",
-    "guard": "a tracker host planted in a source string",
-    "edit": "src names a tracker host",
-    "file": "src/frame/items.ts",
-    "tests": "test/no-tracker.test.ts",
-    "rc": 1,
-    "failed": 1,
-    "passed": 3,
-    "total": 4,
-    "red": [
-      "no default tracker anywhere in the library > src/ names no tracker host and no issue URL template"
-    ]
-  },
-  {
-    "id": "P4an",
-    "guard": "a tracker host planted where the built reader keeps it",
-    "edit": "the built enhance asset names a tracker host",
-    "file": "src/frame-runtime/enhance-wrap.ts",
-    "tests": "test/no-tracker.test.ts",
-    "rc": 1,
-    "failed": 2,
-    "passed": 2,
-    "total": 4,
-    "red": [
-      "no default tracker anywhere in the library > src/ names no tracker host and no issue URL template",
-      "the built frame assets > the guard, the bootstrap, the reader and its stylesheet name none"
-    ]
-  },
-  {
     "id": "P4ao",
     "guard": "the answer of the items adapter not judged before the mount",
     "edit": "a refused answer reaches frameDocument and fails the mount",
@@ -967,6 +952,200 @@ Rows P4y to P4ah of round 1 measured the header-line route as round 1 built it (
       "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, no title",
       "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
     ]
+  },
+  {
+    "id": "P4ae",
+    "guard": "the header line read beside a byline item fact (render)",
+    "edit": "render lists the header line whatever the byline has",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 59,
+    "total": 63,
+    "red": [
+      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is used only when the byline has no item fact: the byline keeps its precedence, and a delta key still lists",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with a byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with an empty byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ],
+    "superseded_by": "P4bn",
+    "measured_at": "commit ce4d894 (round 1 code)"
+  },
+  {
+    "id": "P4af",
+    "guard": "the header line read beside a byline item fact (reader)",
+    "edit": "the reader asks the header line whatever the byline has",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 205,
+    "total": 209,
+    "red": [
+      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > is the third route: no byline item fact and no delta link, and only for a paragraph that stands alone",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with a byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with an empty byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ],
+    "superseded_by": "P4bo",
+    "measured_at": "commit ce4d894 (round 1 code)"
+  },
+  {
+    "id": "P4am",
+    "guard": "a tracker host planted in a source string",
+    "edit": "src names a tracker host",
+    "file": "src/frame/items.ts",
+    "tests": "test/no-tracker.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 3,
+    "total": 4,
+    "red": [
+      "no default tracker anywhere in the library > src/ names no tracker host and no issue URL template"
+    ],
+    "planted": "`https://linear.app/team/issue/AB-1` in a string of `src/frame/items.ts` (read by `/linear\\.app/` and `/\\/issues?\\/\u2026/`)"
+  },
+  {
+    "id": "P4an",
+    "guard": "a tracker host planted where the built reader keeps it",
+    "edit": "the built enhance asset names a tracker host",
+    "file": "src/frame-runtime/enhance-wrap.ts",
+    "tests": "test/no-tracker.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 2,
+    "total": 4,
+    "red": [
+      "no default tracker anywhere in the library > src/ names no tracker host and no issue URL template",
+      "the built frame assets > the guard, the bootstrap, the reader and its stylesheet name none"
+    ],
+    "planted": "`https://acme.atlassian.net/browse/AB-1` returned by the built reader (read by `/\\batlassian\\.(?:net|com)\\b/` and `/\\/browse\\/\u2026/`)"
+  },
+  {
+    "id": "P4bn",
+    "guard": "the header line read beside a byline item fact (render)",
+    "edit": "render lists the header line whatever the byline has (re-measures withdrawn P4ae on the present code)",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 84,
+    "total": 88,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is used only when the byline has no item fact: the byline keeps its precedence, and a delta key still lists",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with a byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with an empty byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bo",
+    "guard": "the header line read beside a byline item fact (reader)",
+    "edit": "the reader links the header line whatever the byline has (re-measures withdrawn P4af)",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 232,
+    "total": 236,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; never the meta line",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with a byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with an empty byline fact",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bp",
+    "guard": "the header line read beside a delta link (reader)",
+    "edit": "the reader links the header line even when the delta key has a link",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 235,
+    "total": 236,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; never the meta line"
+    ]
+  },
+  {
+    "id": "P4bq",
+    "guard": "a blockquote's first paragraph only (render)",
+    "edit": "render reads the blockquote's last paragraph, not its first",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 85,
+    "total": 88,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is read from a blockquote's first paragraph, and from nothing else a list or a table holds",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, second paragraph",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4br",
+    "guard": "a blockquote's first paragraph only (reader)",
+    "edit": "the reader reads the blockquote's last paragraph, not its first",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 234,
+    "total": 236,
+    "red": [
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, second paragraph",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bs",
+    "guard": "the first paragraph with a label wins (render)",
+    "edit": "render goes on to later paragraphs and lists their keys too",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 85,
+    "total": 88,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads the zone after the title up to the first level-2 heading, and the first paragraph that has the label",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, a first paragraph with the label wins",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bt",
+    "guard": "the first paragraph with a label wins (reader)",
+    "edit": "the reader links the last paragraph with a label, not the first",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 234,
+    "total": 236,
+    "red": [
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, a first paragraph with the label wins",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bu",
+    "guard": "a planted tracker host the word-bounded `jira` pattern finds",
+    "edit": "a `jira` host planted in a source string",
+    "file": "src/frame/items.ts",
+    "tests": "test/no-tracker.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 3,
+    "total": 4,
+    "red": [
+      "no default tracker anywhere in the library > src/ names no tracker host and no issue URL template"
+    ],
+    "planted": "`https://jira.example.org/browse/AB-1` in a string of `src/frame/items.ts` (read by `/\\bjira\\b/` and `/\\/browse\\/\u2026/`)"
   }
 ]
 ```
