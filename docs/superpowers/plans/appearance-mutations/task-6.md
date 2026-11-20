@@ -722,3 +722,21 @@ Measured on Chromium (`DOCREADER_BROWSERS=chromium`). Each row mutated a scratch
  }
 ]
 ```
+
+## Review 2906 F4
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F4-aa-hosted | the hosted Aa line is drawn in `text-muted` on `bg` (the design, section 6) | the `.aa-menu .aa-hosted` rule removed from assets/reader.css, so the line inherits the menu's `text` colour | `test/browser/appearance-cues.test.ts` (Chromium) | red: the hosted line computed the fixture's `text`, not its `text-muted` |
+
+```json
+[
+ {
+  "row": "F4-aa-hosted",
+  "guard": "the hosted Aa line is drawn in text-muted on bg",
+  "edit": "the .aa-menu .aa-hosted rule removed",
+  "tests": "appearance-cues.test.ts (chromium)",
+  "result": "red"
+ }
+]
+```

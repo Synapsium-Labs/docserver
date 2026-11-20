@@ -792,6 +792,25 @@ describeBrowsers((browser) => {
     }
   });
 
+  it('the hosted Aa line is drawn in text-muted, not the menu\'s text colour (the design, section 6: text-muted on bg)', async () => {
+    const c = PHOSPHOR.colour;
+    const doc = await open(browser, { appearance: PHOSPHOR });
+    try {
+      await doc.page.locator(`${rootSel} .aa-btn`).click();
+      const got = await doc.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        const line = root.querySelector('.aa-menu .aa-hosted') as HTMLElement;
+        return { line: getComputedStyle(line).color, menu: getComputedStyle(root.querySelector('.aa-menu') as Element).color, ground: getComputedStyle(root.querySelector('.aa-menu') as Element).backgroundColor };
+      }, rootSel);
+      expect(c['text-muted'], 'the fixture tells the muted colour from the text').not.toBe(c['text']);
+      expect(got.menu, 'the menu itself stays in text').toBe(css(c['text'] as string));
+      expect(got.line, 'the hosted line').toBe(css(c['text-muted'] as string));
+      expect(got.ground, 'on bg').toBe(css(c['bg'] as string));
+    } finally {
+      await doc.close();
+    }
+  });
+
   it('the faces: sans and mono take the host face first, the library\'s stack after it, and the serif reading face is untouched', async () => {
     const mine = await open(browser, { appearance: PHOSPHOR });
     const old = await open(browser, { appearance: PHOSPHOR, stylesheet: v110 });
