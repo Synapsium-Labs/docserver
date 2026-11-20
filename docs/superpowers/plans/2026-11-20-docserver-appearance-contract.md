@@ -252,6 +252,7 @@ flowchart LR
 
 ### Later
 - The release and its signed tag; the first consumer's re-pin.
+- Before the release: the browser old-cap row (`test/browser/frame-appearance.test.ts`, gated on `DOCREADER_MEASURE=1`), measured once on Chromium with headroom, and on WebKit through a workflow input (the coordinator's ruling; ccrc D-8824).
 - X2's additions (layouts, items, the place and overlay ops, print-figures, print mode), L2 of this programme, measured from this landing against X2's share.
 
 ## Results
