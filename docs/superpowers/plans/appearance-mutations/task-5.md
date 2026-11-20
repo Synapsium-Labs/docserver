@@ -196,7 +196,7 @@ The pre-decode guard of `src/frame-runtime/host-fonts.ts` is now `Math.ceil(CAP 
 
 The html mark moved behind the reader's journal (state.ts applyAppearance); the entry no longer touches `html`.
 
-Departure from Task 5's file list, for the plan's "Departures and readings" (that file is edited by other fixes at the same time, so the bullet is kept here): **The `html` mark is the reader's, written through its journal (review 2906 F10 and F11).** Task 5's file list had `enhance-entry.ts` set the `html` element's `data-docreader-hosted` and the three tooltip properties before handing a value to the reader. They are written instead by `applyAppearance` on the root's own document element through `journal.setAttribute` and `journal.setStyle` (the three names join `STYLE_PROPS`), so a value the reader did not apply writes nothing and teardown puts the element back; the entry hands the reader's functions over as they are. The reader's walls allow that one reach (`documentElement`, once, in `state.ts`) and the frame runtime's walls refuse any `.style`. A reader enhancing a page in place now marks that page's `html` element too, as the frame's reader always did.
+The departure this section's rows measure is recorded in the plan's "Departures and readings" ("The `html` mark is the reader's, written through its journal").
 
 | Row | Guard | Edit | Tests run | Result |
 |---|---|---|---|---|
