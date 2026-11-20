@@ -10,7 +10,12 @@
 //      that draw content (and on `::selection` while text is selected), are read in two pages that differ only in the
 //      stylesheet they are served: the current one, and `git show v1.1.0:assets/reader.css`, read at test time. The
 //      DOM is the same with no appearance, so the elements are compared in document order. A missing tag FAILS (A6).
-//      A self-test row proves the comparison goes red on a stylesheet that differs.
+//      The property list holds colours, borders, outline, shadow, text decoration, font, filter, opacity, radius and the sizes
+//      (width, height, min-height, font-size, margins). Twelve of the representative documents (DARKENED) are also read in 1.1.0's other
+//      colour modes (see Mode): the system's dark scheme and the stored theme `dark`, in every state, and four documents under print
+//      media, at rest and with text selected. One synthetic document renders all four status dots in the contents index.
+//      A self-test row proves the comparison goes red on a stylesheet that differs. DOCREADER_STYLE_UNDER_TEST=<file>
+//      serves a scratch copy of the stylesheet in place of the package's, to measure a mutation row without editing it.
 //  (b) PAIRS. With each of the twelve fixture appearances (conformance/appearance/fixtures.json), applied through the
 //      `appearance` option: every pair of APPEARANCE_PAIRS meets its floor, on the fixture's slot values with the
 //      stylesheet's `color-mix` arithmetic (8-bit rounding) in this file, and every pair the rendered documents draw (a
@@ -90,8 +95,18 @@ function allDocs(): Doc[] {
   const since = layout.find((d) => d.id === 'layout/since/menu') as Doc;
   // The changes menu needs a `changes` callback; the harness page turns a `changes` given as data into one (page/bootstrap.ts).
   const menu: Doc = { ...since, id: 'synthetic/changes-menu', options: { ...since.options, changes: { changed: [[1, 1]] } } };
+  // The contents index draws a status dot for each ID row that ends in a status word: one table, one row of each role, in a
+  // document the rail is drawn for (a title and three sections). The index tab is the stored one, so the dots are shown.
+  const dots: Doc = {
+    id: 'synthetic/status-dots',
+    markdown: ['# Status dots', '', '## 1. Decisions', '', '| ID | Decision | Status |', '|---|---|---|', '| D1 | A kept one | Agreed |', '| D2 | A waiting one | Pending |', '| D3 | A refused one | Rejected |', '| D4 | A later one | Deferred |', '', '## 2. Scope', '', 'The rail is drawn for a document: one title and three sections.', '', '## 3. Plan', '', 'Nothing more.', ''].join('\n'),
+    options: { storageKey: 'dots', storage: { snapshot: { 'docreader:ui': '{"sidetab":"index"}' } } },
+    viewport: { width: 1440, height: 900 },
+    csp: undefined,
+    html: undefined,
+  };
   const figure: Doc = { id: 'synthetic/figure', markdown: FIGURE_MARKDOWN, options: {}, viewport: undefined, csp: 'strict', html: (h) => `${h}${DRAWING}` };
-  return [...corpus, ...layout, menu, figure];
+  return [...corpus, ...layout, menu, dots, figure];
 }
 
 /** The documents every fixture appearance is run on: between them every chrome piece, mark, card, table and code block. */
@@ -99,13 +114,16 @@ const REPRESENTATIVE: readonly string[] = [
   'corpus/spec-template', 'corpus/tables', 'corpus/alerts', 'corpus/lists-tasks', 'corpus/footnotes',
   'layout/changes/rules', 'layout/changes/strip', 'synthetic/changes-menu', 'layout/cards/xrefs', 'layout/rail/marks-index',
   'layout/rail/drawer', 'layout/plans/plan', 'layout/ids/id-table', 'layout/blocks/code', 'layout/settings/attention',
-  'layout/jump/dialogs', 'layout/blocks/filter', 'layout/figures/captions', 'synthetic/figure',
+  'layout/jump/dialogs', 'layout/blocks/filter', 'layout/figures/captions', 'synthetic/figure', 'synthetic/status-dots',
+  'corpus/fences/main',
 ];
 
 // ───────── the browser side ─────────
 
 interface St {
   els: Element[];
+  /** The style string of each element of the last read (readStyles). */
+  rows: string[];
   pathOf(e: Element, depth?: number): string;
   parse(s: string): number[] | null;
   over(top: number[], bottom: number[]): number[];
@@ -166,7 +184,7 @@ async function helpers(page: Page): Promise<void> {
     const quiet = new CSSStyleSheet();
     quiet.replaceSync('*, *::before, *::after, *::selection { transition: none !important; animation: none !important; }');
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, quiet];
-    w.__st = { els: [], pathOf, parse, over, finish };
+    w.__st = { els: [], rows: [], pathOf, parse, over, finish };
   });
 }
 
@@ -182,14 +200,19 @@ const PROPS: readonly string[] = [
   'font-family', 'font-weight', 'font-style', 'filter', 'opacity',
   'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
   'letter-spacing', 'text-transform',
+  // Size: a rule that leaks into the no-appearance output moves a box before it moves a colour.
+  'width', 'height', 'min-height', 'font-size', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
 ];
 
 type Variant = '::before' | '::after' | '::selection';
 
 interface StyleRead {
-  /** The distinct style strings; each element's is `table[idx[i]]`. */
-  readonly table: readonly string[];
-  readonly idx: readonly number[];
+  /**
+   * A hash of each element's style string, in document order. The strings stay in the page (St.rows) and are fetched for the
+   * elements that differ only: the largest documents have tens of thousands of elements, and a string each (sizes make most of
+   * them unique) held in two pages at once, five documents at a time, is what the test slice's memory cap cut short.
+   */
+  readonly hashes: readonly string[];
 }
 
 /** Wait two frames, so scroll-driven and observer-driven class changes have run before a read. */
@@ -208,9 +231,18 @@ async function readStyles(page: Page, variants: readonly Variant[]): Promise<Sty
       const skip = new Set(['script', 'style', 'link', 'meta', 'title', 'head', 'template', 'noscript', 'base']);
       const els = [document.documentElement, document.body, ...Array.from(document.body.querySelectorAll('*'))].filter((e) => !skip.has(e.localName));
       st.els = els;
-      const table: string[] = [];
-      const seen = new Map<string, number>();
-      const idx: number[] = [];
+      const hash = (text: string): string => {
+        let h1 = 0x811c9dc5;
+        let h2 = 5381;
+        for (let k = 0; k < text.length; k += 1) {
+          const c = text.charCodeAt(k);
+          h1 = Math.imul(h1 ^ c, 16777619);
+          h2 = (Math.imul(h2, 33) + c) | 0;
+        }
+        return `${(h1 >>> 0).toString(36)}.${(h2 >>> 0).toString(36)}.${text.length.toString(36)}`;
+      };
+      const rows: string[] = [];
+      const hashes: string[] = [];
       for (const el of els) {
         const cs = getComputedStyle(el);
         let s = `${el.localName}|${props.map((p) => cs.getPropertyValue(p)).join('|')}`;
@@ -225,25 +257,21 @@ async function readStyles(page: Page, variants: readonly Variant[]): Promise<Sty
           }
           s += `~${v}=${props.map((p) => pc.getPropertyValue(p)).join('|')}`;
         }
-        let i = seen.get(s);
-        if (i === undefined) {
-          i = table.length;
-          table.push(s);
-          seen.set(s, i);
-        }
-        idx.push(i);
+        rows.push(s);
+        hashes.push(hash(s));
       }
-      return { table, idx };
+      st.rows = rows;
+      return { hashes };
     },
     [PROPS, variants] as const,
   );
 }
 
 /** What differs between two reads: a line for the first elements that do, with the properties that differ. */
-async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page, limit = 6): Promise<string[]> {
-  if (ra.idx.length !== rb.idx.length) return [`${label}: the pages have ${String(ra.idx.length)} and ${String(rb.idx.length)} elements`];
+async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page, pb: Page, limit = 6): Promise<string[]> {
+  if (ra.hashes.length !== rb.hashes.length) return [`${label}: the pages have ${String(ra.hashes.length)} and ${String(rb.hashes.length)} elements`];
   const bad: number[] = [];
-  for (let i = 0; i < ra.idx.length; i += 1) if (ra.table[ra.idx[i] as number] !== rb.table[rb.idx[i] as number]) bad.push(i);
+  for (let i = 0; i < ra.hashes.length; i += 1) if (ra.hashes[i] !== rb.hashes[i]) bad.push(i);
   if (bad.length === 0) return [];
   const out = [`${label}: ${String(bad.length)} element(s) differ`];
   /** One element's string, split: the element's own values, then each pseudo-element's, by name. */
@@ -259,8 +287,9 @@ async function differences(label: string, ra: StyleRead, rb: StyleRead, pa: Page
     return m;
   };
   for (const i of bad.slice(0, limit)) {
-    const a = split(ra.table[ra.idx[i] as number] as string);
-    const b = split(rb.table[rb.idx[i] as number] as string);
+    const [ta, tb] = await Promise.all([pa, pb].map((pg) => pg.evaluate((n) => (window as unknown as { __st: St }).__st.rows[n] as string, i)));
+    const a = split(ta as string);
+    const b = split(tb as string);
     const where = await pa.evaluate((n) => (window as unknown as { __st: St }).__st.pathOf((window as unknown as { __st: St }).__st.els[n] as Element, 6), i);
     const parts: string[] = [];
     for (const [name, xs] of a) {
@@ -500,18 +529,25 @@ const STATES: readonly State[] = [
 const reached = new Map<string, number>();
 
 /**
+ * A scratch copy of the stylesheet to read in place of the package's (DOCREADER_STYLE_UNDER_TEST=<file>), for measuring a
+ * mutation row without editing assets/reader.css: every page that is not given a stylesheet of its own is served this one.
+ */
+const STYLE_UNDER_TEST = process.env['DOCREADER_STYLE_UNDER_TEST'] === undefined || process.env['DOCREADER_STYLE_UNDER_TEST'] === '' ? undefined : readFileSync(process.env['DOCREADER_STYLE_UNDER_TEST'], 'utf8');
+
+/**
  * Open a document with the harness, and check that its stylesheet loaded: a page whose stylesheet request failed would be
  * unstyled in both pages of a comparison, and look like an equal pair. It is opened again (twice at most) before a failure.
  */
 async function open(doc: Doc, browser: BrowserName, extra: { options?: Readonly<Record<string, unknown>>; stylesheet?: string }): Promise<OpenedDoc> {
   let last = '';
+  const stylesheet = extra.stylesheet ?? STYLE_UNDER_TEST;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const opened = await openDoc(doc.markdown, extra.options ?? doc.options, {
       browser,
       ...(doc.viewport === undefined ? {} : { viewport: doc.viewport }),
       ...(doc.csp === undefined ? {} : { csp: doc.csp }),
       ...(doc.html === undefined ? {} : { html: doc.html }),
-      ...(extra.stylesheet === undefined ? {} : { stylesheet: extra.stylesheet }),
+      ...(stylesheet === undefined ? {} : { stylesheet }),
     });
     const rules = await opened.page.evaluate(() => Array.from(document.styleSheets).reduce((n, sheet) => n + sheet.cssRules.length, 0));
     if (rules > 200 && opened.missing.length === 0 && opened.aborted.length === 0) return opened;
@@ -521,27 +557,61 @@ async function open(doc: Doc, browser: BrowserName, extra: { options?: Readonly<
   throw new Error(`the stylesheet did not load in three tries: ${last}`);
 }
 
-/** One document, current stylesheet against `other`, in every state: the lines that differ. */
-async function compareDoc(doc: Doc, browser: BrowserName, other: string, count = true): Promise<string[]> {
-  const a = await open(doc, browser, {});
-  const b = await open(doc, browser, { stylesheet: other });
+/**
+ * The colour modes 1.1.0's stylesheet answers to, which (a) reads each of: the light default, the system's dark scheme (its
+ * `prefers-color-scheme: dark` block, with the theme left on auto), the stored theme `dark` (`data-theme="dark"`, a second
+ * copy of the dark rules) and print.
+ */
+type Mode = 'light' | 'scheme-dark' | 'theme-dark' | 'print';
+
+/** The options of a document with the stored theme set to dark (its other stored values kept). */
+function withDarkTheme(options: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const storage = (options['storage'] ?? {}) as { snapshot?: Record<string, string> };
+  const prefs = JSON.parse(storage.snapshot?.['docreader:prefs'] ?? '{}') as Record<string, unknown>;
+  return { ...options, storage: { ...storage, snapshot: { ...storage.snapshot, 'docreader:prefs': JSON.stringify({ ...prefs, theme: 'dark' }) } } };
+}
+
+/** Put an opened page in a mode, and check that it is in it: a mode that did not take would compare two light pages. */
+async function inMode(opened: OpenedDoc, mode: Mode, id: string): Promise<void> {
+  const page = opened.page;
+  if (mode === 'scheme-dark') await page.emulateMedia({ colorScheme: 'dark' });
+  if (mode === 'print') await page.emulateMedia({ media: 'print' });
+  await frames(page);
+  const got = await page.evaluate(() => ({
+    dark: matchMedia('(prefers-color-scheme: dark)').matches,
+    print: matchMedia('print').matches,
+    theme: document.querySelector('[data-docreader-root]')?.getAttribute('data-theme') ?? null,
+  }));
+  const want = { dark: mode === 'scheme-dark', print: mode === 'print', theme: mode === 'theme-dark' ? 'dark' : null };
+  if (got.dark !== want.dark || got.print !== want.print || got.theme !== want.theme) throw new Error(`${id}: the page is not in mode ${mode}: ${JSON.stringify(got)}`);
+}
+
+/** One document, current stylesheet against `other`, in the given states and mode: the lines that differ. */
+async function compareDoc(doc: Doc, browser: BrowserName, other: string, count = true, mode: Mode = 'light', only: readonly string[] | null = null): Promise<string[]> {
+  const options = mode === 'theme-dark' ? withDarkTheme(doc.options) : doc.options;
+  const a = await open(doc, browser, { options });
+  const b = await open(doc, browser, { options, stylesheet: other });
   const out: string[] = [];
   try {
+    await inMode(a, mode, doc.id);
+    await inMode(b, mode, doc.id);
     for (const st of STATES) {
       if (st.chromiumOnly === true && browser !== 'chromium') continue;
+      if (only !== null && !only.includes(st.name)) continue;
       const began = Date.now();
       const ok = [await st.apply(a.page), await st.apply(b.page)];
-      if (ok[0] !== ok[1]) out.push(`${doc.id} / ${st.name}: the state is reached on one page only`);
+      const label = `${doc.id}${mode === 'light' ? '' : ` [${mode}]`} / ${st.name}`;
+      if (ok[0] !== ok[1]) out.push(`${label}: the state is reached on one page only`);
       else if (ok[0] === true) {
-        if (count) reached.set(st.name, (reached.get(st.name) ?? 0) + 1);
+        if (count && mode === 'light') reached.set(st.name, (reached.get(st.name) ?? 0) + 1);
         const vars = st.variants ?? (['::before', '::after'] as const);
         const ra = await readStyles(a.page, vars);
         const rb = await readStyles(b.page, vars);
-        out.push(...(await differences(`${doc.id} / ${st.name}`, ra, rb, a.page)));
+        out.push(...(await differences(label, ra, rb, a.page, b.page)));
       }
       await st.clear(a.page);
       await st.clear(b.page);
-      if (process.env['DOCREADER_STYLE_TIMING'] === '1') console.log(`timing ${doc.id} ${st.name} ${String(Date.now() - began)} ms`);
+      if (process.env['DOCREADER_STYLE_TIMING'] === '1') console.log(`timing ${label} ${String(Date.now() - began)} ms`);
     }
   } finally {
     await a.close();
@@ -649,6 +719,14 @@ describe('the pairs (b): the library gate, on every fixture', () => {
 // ───────── (a) rows ─────────
 
 const DOCS = allDocs();
+/** The documents read under print media: one of prose and tables, one of code, one of changed marks, one with a figure. */
+/** The representative documents read in the dark modes: those with highlighted code, chrome, marks, cards, tables and the dots. */
+const DARKENED: readonly string[] = [
+  'corpus/fences/main', 'corpus/spec-template', 'corpus/tables', 'layout/blocks/code', 'layout/changes/rules', 'layout/cards/xrefs',
+  'layout/jump/dialogs', 'layout/rail/marks-index', 'layout/plans/plan', 'layout/settings/attention', 'synthetic/status-dots', 'synthetic/figure',
+];
+const PRINTED: readonly string[] = ['corpus/spec-template', 'layout/blocks/code', 'layout/changes/rules', 'synthetic/figure'];
+const reps = DOCS.filter((d) => REPRESENTATIVE.includes(d.id));
 
 describeBrowsers((browser) => {
   it('the v1.1.0 tag is in the checkout and its stylesheet is the 1.1.0 one', () => {
@@ -657,6 +735,18 @@ describeBrowsers((browser) => {
     expect(css).toContain('[data-docreader-root]');
     expect(css).not.toContain('data-docreader-hosted');
   });
+
+  it('the status-dots document shows the four dots of the contents index', async () => {
+    const d = await open(DOCS.find((x) => x.id === 'synthetic/status-dots') as Doc, browser, {});
+    try {
+      const shown = await d.page.evaluate(() =>
+        ['ok', 'wait', 'no', 'info'].map((role) => Array.from(document.querySelectorAll(`.toc-index .dot.${role}`)).filter((e) => e.getClientRects().length > 0).length),
+      );
+      expect(shown).toEqual([1, 1, 1, 1]);
+    } finally {
+      await d.close();
+    }
+  }, 60_000);
 
   it('the comparison goes red on a stylesheet that differs (the comparator is live)', async () => {
     const doc = DOCS.find((d) => d.id === 'corpus/headings') as Doc;
@@ -671,6 +761,22 @@ describeBrowsers((browser) => {
       it.concurrent(doc.id, async () => {
         const out = await compareDoc(doc, browser, v110());
         if (out.length > 0) throw new Error(`computed styles moved from ${TAG}:\n${out.join('\n')}`);
+      }, 180_000);
+    }
+
+    for (const mode of ['scheme-dark', 'theme-dark'] as const) {
+      for (const doc of reps.filter((d) => DARKENED.includes(d.id))) {
+        it.concurrent(`${doc.id} [${mode}]`, async () => {
+          const out = await compareDoc(doc, browser, v110(), true, mode);
+          if (out.length > 0) throw new Error(`computed styles moved from ${TAG} in ${mode}:\n${out.join('\n')}`);
+        }, 180_000);
+      }
+    }
+
+    for (const id of PRINTED) {
+      it.concurrent(`${id} [print]`, async () => {
+        const out = await compareDoc(DOCS.find((d) => d.id === id) as Doc, browser, v110(), true, 'print', ['rest', 'selection']);
+        if (out.length > 0) throw new Error(`computed styles moved from ${TAG} in print:\n${out.join('\n')}`);
       }, 180_000);
     }
 
@@ -908,7 +1014,6 @@ describeBrowsers((browser) => {
   };
 
   /** The documents of a row: the representative ones in every state, under all twelve fixtures; every document at rest, under two. */
-  const reps = DOCS.filter((d) => REPRESENTATIVE.includes(d.id));
   const SWEEP = ['Phosphor & Ink', 'Phosphor Daylight'];
   const AT_REST = ['rest', 'selection'];
 

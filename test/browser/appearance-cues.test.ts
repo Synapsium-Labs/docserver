@@ -71,6 +71,12 @@ const DOC = [
   '|---|---|---|',
   ...TWELVE,
   '',
+  'A highlighted block:',
+  '',
+  '```ts',
+  'const x = 1;',
+  '```',
+  '',
   '## 4. Tasks',
   '',
   '### Task 1: Do it',
@@ -94,6 +100,8 @@ const DOC = [
   '',
 ].join('\n');
 
+/** A mutant stylesheet (the mutation rows put a copy of the package's with one edit here, so the shared file is never touched). */
+const MUTANT = process.env['DOCREADER_CUES_CSS'] === undefined ? undefined : readFileSync(process.env['DOCREADER_CUES_CSS'], 'utf8');
 let v110 = '';
 beforeAll(() => {
   try {
@@ -205,7 +213,7 @@ async function open(browser: BrowserName, how: How = {}): Promise<OpenedDoc> {
     browser,
     csp: 'reader',
     viewport: { width: how.width ?? 1440, height: 900 },
-    ...(how.stylesheet === undefined ? {} : { stylesheet: how.stylesheet }),
+    ...(how.stylesheet !== undefined ? { stylesheet: how.stylesheet } : MUTANT === undefined ? {} : { stylesheet: MUTANT }),
   });
 }
 
@@ -295,6 +303,16 @@ describeBrowsers((browser) => {
           p.textContent = 'A changed paragraph inside a box.';
           (root.querySelector(host) as HTMLElement).append(p);
         }
+        for (const [cls, id] of [['gh-warning', 'gap-warning'], ['gh-caution', 'gap-caution']] as const) {
+          const box = document.createElement('div');
+          box.className = `gh-alert ${cls}`;
+          const p = document.createElement('p');
+          p.id = id;
+          p.className = 'chg';
+          p.textContent = 'A changed paragraph inside an alert.';
+          box.append(p);
+          root.append(box);
+        }
         const page = document.createElement('p');
         page.id = 'gap-page';
         page.className = 'chg';
@@ -306,6 +324,8 @@ describeBrowsers((browser) => {
         'gap-page': css(c['bg'] as string),
         'gap-short': css(c['surface'] as string),
         'gap-callout': mixed(c['wait'] as string, 4, c['bg'] as string),
+        'gap-warning': mixed(c['wait'] as string, 4, c['bg'] as string),
+        'gap-caution': mixed(c['no'] as string, 4, c['bg'] as string),
       };
       for (const [id, want] of Object.entries(wantGap)) {
         const el = doc.page.locator(`#${id === 'gap-callout' ? 'gap-calloutwaiting' : id}`);
@@ -314,7 +334,7 @@ describeBrowsers((browser) => {
         const gapX = Math.round(((runs[0] as Run).edge + (runs[1] as Run).edge) / 2 + 1);
         const px = await colourAt(doc.page, el, gapX);
         const have = `rgb(${px.join(', ')})`;
-        if (id === 'gap-callout') {
+        if (want.startsWith('color-mix')) {
           const probe = await doc.page.evaluate((v) => {
             const i = document.createElement('i');
             document.body.append(i);
@@ -378,6 +398,8 @@ describeBrowsers((browser) => {
         }
         return out;
       }, rootSel);
+      const hollow = await doc.page.evaluate((sel) => [`${sel} .toc-index .dot.wait`, `${sel} .ckey .sw.k-wait`].map((s) => getComputedStyle(document.querySelector(s) as Element).backgroundColor), rootSel);
+      expect(hollow, 'the wait ring is hollow').toEqual(['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)']);
       expect(new Set(Object.values(shapes).map((s) => s.dot)).size, JSON.stringify(shapes)).toBe(4);
       for (const [role, s] of Object.entries(shapes)) expect(s.swatch, role).toBe(s.dot);
     } finally {
@@ -813,7 +835,8 @@ describeBrowsers((browser) => {
             return e;
           };
           const code = make(root.querySelector('p') as Element, 'code', '');
-          make(root, 'div', 'codehilite');
+          const plainPre = make(root, 'pre', '');
+          make(plainPre, 'code', '').textContent = 'x';
           const fig = make(root, 'figure', 'mermaid-figure');
           const plate = make(fig, 'pre', 'mermaid');
           (root.querySelector('.aa-btn') as HTMLElement).click();
@@ -822,8 +845,10 @@ describeBrowsers((browser) => {
           const legend = root.querySelector('.aa-menu legend') as HTMLElement;
           const ls = getComputedStyle(legend);
           return {
-            control: radius(root.querySelector('.bar-tools button') as Element),
-            code: radius(root.querySelector('.codehilite') as Element),
+            control: radius(root.querySelector('.aa-menu .aa-btns button') as Element),
+            code: radius(root.querySelector('.codehilite > pre') as Element),
+            codeWrapper: radius(root.querySelector('.codehilite') as Element),
+            plainCode: radius(plainPre),
             inline: radius(code),
             popover: radius(menu),
             callout: radius(root.querySelector('.short') as Element),
@@ -838,6 +863,8 @@ describeBrowsers((browser) => {
       expect(got).toEqual({
         control: '7px',
         code: '7px',
+        codeWrapper: '7px',
+        plainCode: '7px',
         inline: '2px',
         popover: '13px',
         callout: '13px',
@@ -847,14 +874,91 @@ describeBrowsers((browser) => {
         legend: '12px | 500 | 0.96px | uppercase | mono',
       });
       expect(none['inline'], 'a slot the verdict holds').toBe('2px');
-      for (const k of ['control', 'code', 'popover', 'callout', 'plate', 'shadow', 'row', 'legend']) expect(none[k], `${k}: a slot it leaves out keeps 1.1.0's`).not.toBe(got[k]);
-      expect(none['control']).toBe('4px');
+      for (const k of ['control', 'code', 'codeWrapper', 'plainCode', 'popover', 'callout', 'plate', 'shadow', 'row', 'legend']) expect(none[k], `${k}: a slot it leaves out keeps 1.1.0's`).not.toBe(got[k]);
+      expect(none['control']).toBe('5px');
+      expect([none['code'], none['plainCode']]).toEqual(['3px', '3px']);
       expect(none['popover']).toBe('6px');
       expect(none['row']).toBe('auto');
       expect(none['legend']).toMatch(/^10\.5px \| 650 \| 1\.05px \| uppercase \| /);
     } finally {
       await doc.close();
       await bare.close();
+    }
+  });
+
+  it('the frame\'s own bar and the reading layout never take a skin value: with every slot set, they compute what 1.1.0 computes', async () => {
+    const mine = await open(browser, { appearance: { mode: 'dark', skin: SKIN } });
+    const old = await open(browser, { appearance: { mode: 'dark', skin: SKIN }, stylesheet: v110 });
+    try {
+      const read = (d: OpenedDoc): Promise<Record<string, string>> =>
+        d.page.evaluate((sel) => {
+          const root = document.querySelector(sel) as HTMLElement;
+          const out: Record<string, string> = {};
+          for (const s of ['.bar-tools button', '.bar-tools kbd', '.topbar-inner', '.running-head', '.aa-btn', 'h1', 'h2', 'p', '.byline', 'table', 'li']) {
+            const e = root.querySelector(s);
+            if (e === null) {
+              out[s] = 'missing';
+              continue;
+            }
+            const c = getComputedStyle(e);
+            out[s] = [c.borderTopLeftRadius, c.minHeight, c.fontSize, c.fontWeight, c.letterSpacing, c.textTransform, c.boxShadow, c.lineHeight].join(' | ');
+          }
+          return out;
+        }, rootSel);
+      const a = await read(mine);
+      const b = await read(old);
+      expect(b['.bar-tools kbd'], 'the bar has a keycap').not.toBe('missing');
+      expect(a).toEqual(b);
+      expect((a['.bar-tools button'] as string).startsWith('4px |'), a['.bar-tools button']).toBe(true);
+      expect((a['.bar-tools kbd'] as string).startsWith('3px |'), a['.bar-tools kbd']).toBe(true);
+    } finally {
+      await mine.close();
+      await old.close();
+    }
+  });
+
+  it('radiusLarge keeps the square ends of an attention bar (a waiting callout, what waits on you) and rounds a summary box all round', async () => {
+    const doc = await open(browser, { appearance: { mode: 'dark', skin: SKIN } });
+    try {
+      const got = await doc.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        const wait = document.createElement('div');
+        wait.className = 'rs-wait';
+        root.append(wait);
+        const corners = (e: Element): string => {
+          const c = getComputedStyle(e);
+          return [c.borderTopLeftRadius, c.borderTopRightRadius, c.borderBottomRightRadius, c.borderBottomLeftRadius].join(' ');
+        };
+        return { callout: corners(root.querySelector('.callout.waiting') as Element), strip: corners(wait), short: corners(root.querySelector('.short') as Element) };
+      }, rootSel);
+      expect(got).toEqual({ callout: '0px 13px 13px 0px', strip: '0px 13px 13px 0px', short: '13px 13px 13px 13px' });
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('the contents panel takes controlRow and the section type only as a drawer, never as the wide column', async () => {
+    const skin = { controlRow: '44px', sectionSize: '12px' };
+    const probe = (d: OpenedDoc): Promise<{ row: string; tab: string }> =>
+      d.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        const panel = root.querySelector('.doc-toc') as HTMLElement;
+        const tab = document.createElement('div');
+        tab.className = 'toc-tabs';
+        const b = document.createElement('button');
+        tab.append(b);
+        panel.append(tab);
+        return { row: getComputedStyle(root.querySelector('.toc-contents a') as Element).minHeight, tab: getComputedStyle(b).fontSize };
+      }, rootSel);
+    const column = await open(browser, { appearance: { mode: 'dark', skin }, width: 1440 });
+    const drawer = await open(browser, { appearance: { mode: 'dark', skin }, width: 1000 });
+    try {
+      expect(await probe(column), 'the wide column').toEqual({ row: '0px', tab: '11px' });
+      await drawer.page.locator(`${rootSel} .toc-btn`).click();
+      expect(await probe(drawer), 'the open drawer').toEqual({ row: '44px', tab: '12px' });
+    } finally {
+      await column.close();
+      await drawer.close();
     }
   });
 
