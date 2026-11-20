@@ -241,6 +241,68 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 120_000);
 
+  it('an appearance change refreshes an open full-screen copy: it is drawn again in the new colours, stays open, and its close returns focus to the new button (review 2906 F15)', async () => {
+    const doc = await openDoc(DOC, {}, { browser, csp: 'reader', enhance: false, mermaid: true });
+    try {
+      await doc.page.evaluate(script);
+      await doc.page.evaluate(
+        `(async () => {
+          const root = document.querySelector('main[data-harness-root]');
+          const load = () => import(${JSON.stringify(MERMAID_PATH)});
+          await window.__dg.enhance(root, { mermaid: { load }, appearance: ${JSON.stringify({ mode: DARK.mode, colour: DARK.colour })} });
+          while (root.getAttribute('data-docreader-diagrams') !== 'drawn') await new Promise((r) => setTimeout(r, 20));
+        })()`,
+      );
+      const figure = doc.page.locator('main[data-harness-root] figure.mermaid-figure').first();
+      await figure.locator('.tools button', { hasText: 'Full screen' }).click();
+      await doc.page.waitForSelector('.fig-overlay.open .fo-stage svg');
+      /** The first node's computed fill in the overlay's copy and in the figure's own drawing. */
+      const fills = (): Promise<{ copy: string; figure: string; open: boolean }> =>
+        doc.page.evaluate(() => {
+          const node = (scope: Element | null): string => {
+            const n = scope?.querySelector('g.node rect, g.node path') ?? null;
+            return n === null ? '' : getComputedStyle(n).fill;
+          };
+          const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+          return {
+            copy: node(root.querySelector('.fig-overlay.open .fo-stage')),
+            figure: node(root.querySelector('figure.mermaid-figure pre[data-docreader-chrome]')),
+            open: root.querySelector('.fig-overlay.open') !== null,
+          };
+        });
+      expect(await fills()).toEqual({ copy: rgb(DARK.colour['surface2']!), figure: rgb(DARK.colour['surface2']!), open: true });
+      // The reader zooms the copy in: the refreshed copy keeps that zoom while the new drawing's box is the same size.
+      await doc.page.locator('.fig-overlay.open .fo-in').click();
+      const transform = (): Promise<string> => doc.page.evaluate(() => getComputedStyle(document.querySelector('.fig-overlay.open .fo-stage svg') as Element).transform);
+      const zoomed = await transform();
+      const op = (a: unknown): Promise<void> => doc.page.evaluate((v) => (window as unknown as { __dg: { setEnhancementAppearance(r: Element, a: unknown): void } }).__dg.setEnhancementAppearance(document.querySelector('main[data-harness-root]') as Element, v), a);
+
+      await op({ mode: LIGHT.mode, colour: LIGHT.colour });
+      // The figure is drawn again, and the open copy follows it: a copy left as it was keeps the dark fill.
+      await doc.page.waitForFunction((fill) => {
+        const node = document.querySelector('main[data-harness-root] .fig-overlay.open .fo-stage g.node rect, main[data-harness-root] .fig-overlay.open .fo-stage g.node path');
+        return node !== null && getComputedStyle(node).fill === fill;
+      }, rgb(LIGHT.colour['surface2']!));
+      expect(await fills()).toEqual({ copy: rgb(LIGHT.colour['surface2']!), figure: rgb(LIGHT.colour['surface2']!), open: true });
+      expect(await doc.page.evaluate(() => document.querySelectorAll('.fig-overlay.open .fo-stage svg').length)).toBe(1);
+      expect(await transform(), 'the zoom of the copy is kept').toBe(zoomed);
+      // A second change: the refreshed copy is followed in its turn (it is the new drawing's copy, not the first one's).
+      await op({ mode: DARK.mode, colour: DARK.colour });
+      await doc.page.waitForFunction((fill) => {
+        const node = document.querySelector('main[data-harness-root] .fig-overlay.open .fo-stage g.node rect, main[data-harness-root] .fig-overlay.open .fo-stage g.node path');
+        return node !== null && getComputedStyle(node).fill === fill;
+      }, rgb(DARK.colour['surface2']!));
+
+      await doc.page.locator('.fig-overlay.open .fo-close').click();
+      await doc.page.waitForSelector('.fig-overlay.open', { state: 'detached' });
+      expect(await doc.page.evaluate(() => (document.activeElement as HTMLElement | null)?.textContent ?? ''), 'focus is back on the figure\'s Full screen button').toBe('Full screen');
+      expect(await doc.page.evaluate(() => document.activeElement?.isConnected === true && (document.activeElement.closest('figure.mermaid-figure') !== null))).toBe(true);
+      expect(await doc.violations()).toEqual([]);
+    } finally {
+      await doc.close();
+    }
+  }, 180_000);
+
   /** Four flowcharts a long way apart, so only the one the reader is at is in view. */
   const FAR = [
     '# Far apart',

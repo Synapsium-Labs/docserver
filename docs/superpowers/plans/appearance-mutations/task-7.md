@@ -252,3 +252,60 @@ Departures and notes recorded by the fix round:
 - **A `parse` that never settles (review 9)** stalls the module's queue while the host's colours apply: the kind is asked inside the queue, as the drawing is. With no colours `parse` is never called, so a Mermaid whose `parse` hangs is as 1.1.0 was there.
 - **A replaced drawing keeps nothing (review 2).** Each drawing has a journal of its own (diagrams.ts for the mark, role and label; diagram-tools.ts for its definition marks, cues, and its buttons' listeners), undone and dropped when a redraw replaces it, and undone with the instance. Bounded by the Chromium row above and by a collected-after-gc row in jsdom.
 - **Redraw and the reader (review 8).** Mermaid's tooltip over the replaced drawing is closed (the mouseout Mermaid closes it on), a definition card opened from one of its nodes is closed, and focus on a definition node goes to the node at the same index in the new drawing (left as an attribute on the svg, consumed by the tools). Focus on a tool button of the replaced drawing is not carried: the tools are built again.
+
+## Review 2906 F15
+
+Chosen: refresh, not close. `attach` runs on every relayout, and on a figure whose drawing was replaced it already rebuilds the tools; when the open full-screen copy was cloned from that replaced drawing, the copy is cloned again from the new one in place (zoom and position kept while the box is the same size, the readable fit made again when it is not) and the new full-screen button becomes the one focus returns to.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F15-refresh | an open full-screen copy follows an appearance change | the refresh call removed from the tools' rebuild for a replaced drawing | test/browser/appearance-mermaid-draw.test.ts (Chromium) | red: the copy keeps the dark fill while the figure is drawn in the light palette |
+| F15-source | only the figure the copy was cloned from refreshes it | `openFrom === bound` reduced to `openSvg !== null` (any figure's redraw refreshes the open copy) | test/browser/appearance-mermaid-draw.test.ts (Chromium) | red: the copy shows another figure's drawing |
+| F15-opener | focus returns to the new full-screen button | `opener = trigger` removed from the refresh | test/browser/appearance-mermaid-draw.test.ts (Chromium) | red: the old button is gone from the page, so closing leaves focus off the figure |
+| F15-follow | the refreshed copy is followed again by the next change | `openFrom = source` removed from the refresh | test/browser/appearance-mermaid-draw.test.ts (Chromium) | red: a second appearance change leaves the copy in the first change's colours |
+| F15-zoom | the copy's zoom and position stay while the drawing's box is the same size | the same-box branch replaced by an unconditional `fitReadable()` | test/browser/appearance-mermaid-draw.test.ts (Chromium) | red: the zoomed copy's transform is reset to the readable fit |
+
+```json
+[
+ {
+  "row": "F15-refresh",
+  "guard": "an open full-screen copy follows an appearance change",
+  "edit": "the refresh call removed from the tools' rebuild for a replaced drawing",
+  "tests": "test/browser/appearance-mermaid-draw.test.ts (Chromium)",
+  "result": "red",
+  "file": "src/enhance/diagram-tools.ts"
+ },
+ {
+  "row": "F15-source",
+  "guard": "only the figure the copy was cloned from refreshes it",
+  "edit": "`openFrom === bound` reduced to `openSvg !== null` (any figure's redraw refreshes the open copy)",
+  "tests": "test/browser/appearance-mermaid-draw.test.ts (Chromium)",
+  "result": "red",
+  "file": "src/enhance/diagram-tools.ts"
+ },
+ {
+  "row": "F15-opener",
+  "guard": "focus returns to the new full-screen button",
+  "edit": "`opener = trigger` removed from the refresh",
+  "tests": "test/browser/appearance-mermaid-draw.test.ts (Chromium)",
+  "result": "red",
+  "file": "src/enhance/diagram-tools.ts"
+ },
+ {
+  "row": "F15-follow",
+  "guard": "the refreshed copy is followed again by the next change",
+  "edit": "`openFrom = source` removed from the refresh",
+  "tests": "test/browser/appearance-mermaid-draw.test.ts (Chromium)",
+  "result": "red",
+  "file": "src/enhance/diagram-tools.ts"
+ },
+ {
+  "row": "F15-zoom",
+  "guard": "the copy's zoom and position stay while the drawing's box is the same size",
+  "edit": "the same-box branch replaced by an unconditional `fitReadable()`",
+  "tests": "test/browser/appearance-mermaid-draw.test.ts (Chromium)",
+  "result": "red",
+  "file": "src/enhance/diagram-tools.ts"
+ }
+]
+```
