@@ -798,3 +798,17 @@ Past `READ_LIMIT` (2 000) differing hashes, test 4 (a) reports the count line wi
 ```json
 [{"row":"T4-limit","guard":"more than 2 000 differing hashes report the count line","edit":"the bad.length <= READ_LIMIT guard removed","tests":"test/browser/appearance-style.test.ts -t \"third review F11\"","result":"red: 1 failed"}]
 ```
+
+## Third review, the CI race: test 4 reads after the reader's own marks
+
+CI's WebKit run at ba95309 (test (22)) read one page of `layout/diagram-tools/flowchart-link-data-id` before its definition cues were painted: 198 against 196 elements. Each page now waits, by itself and never compared with the other, for the reader's own marks: no figure drawing; every shown drawn figure's tools marked `data-diagram-tools="true"`; every defined node of a shown drawing holding its `.dn-ring` and `.dn-dot`. The wait is bounded at 10 s and fails, named. Measured on `test/browser/appearance-style.test.ts`, restored from a saved copy and compared byte for byte; the unmutated row passes (1 passed), and all of row (a) passes on Chromium (140 rows).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| T4-race-a | the wait does not hide a cue missing from one page | after the wait, the 1.1.0 page (the one whose root declares no `--focus`) loses one `.dn-ring` for the read and gets it back after it | `-t "no appearance.*flowchart-link-data-id"` (Chromium) | red at the comparison: `the pages have 198 and 197 elements` in each state |
+| T4-race-b | a page whose cues never finish fails, named | the same ring removed and not put back | the same | red at the wait: `the reader did not finish its figures within 10 s …` |
+
+```json
+[{"row":"T4-race-a","guard":"the wait does not hide a cue missing from one page","edit":"one .dn-ring removed from the 1.1.0 page for the read, after its wait, and put back","tests":"-t \"no appearance.*flowchart-link-data-id\" (Chromium)","result":"red: the pages have 198 and 197 elements"},
+ {"row":"T4-race-b","guard":"a page whose cues never finish fails, named","edit":"the same ring removed and not put back","tests":"the same","result":"red: the reader did not finish its figures within 10 s"}]
+```

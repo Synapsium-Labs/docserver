@@ -315,7 +315,7 @@ X1's share is 32 768 on both totals, so 2 786 are left (measured at the third re
 - F8: applied as written (635dbd1 and the pull request's description): the plan no longer held "1.5 MiB", so, as the coordinator ruled, the test header's "a 1.5 MiB document" reads "a document of about 1.4 MiB"; the description says "after each review's fix round".
 - F10: applied as written (fb7748b).
 - F11: applied as written (d938e27): row T4-limit red.
-- CI at ba95309 (test (22), WebKit) read one Mermaid case of test 4 (a) before its definition cues were painted (198 and 196 elements). By the coordinator's ruling, one test commit makes the read wait, bounded, until no figure is drawing and the count of cues and tool buttons holds over two frames; the comparison is unchanged, and row (a) passes on Chromium (140 rows).
+- The CI race (the coordinator's ruling of 2026-11-20): CI at ba95309, test (22), WebKit, read `layout/diagram-tools/flowchart-link-data-id` in test 4 (a) before its definition cues were painted, 198 against 196 elements. Before each read, each page waits for the reader's own marks, by itself and never compared with the other page: no figure drawing, every shown drawn figure's tools marked `data-diagram-tools="true"`, and every defined node of a shown drawing holding its `.dn-ring` and `.dn-dot`; bounded at 10 s, failing named. A cue removed from one page after its wait still reds the row at the comparison (198 against 197, row T4-race-a). The first attempt, 624e433, waited for a count steady over two frames and passed silently on a timeout; the commit after it replaced that wait.
 - F9: not applied, because F1 is applied; the coordinator's D-8826 text replaces it.
 - F12: no change, as ruled.
 

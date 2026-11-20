@@ -229,28 +229,35 @@ interface StyleRead {
 }
 
 /**
- * Wait until the reader's figures have settled, then two frames, so scroll-driven and observer-driven class changes have run
- * before a read. A figure's definition cues (a ring and a dot per defined node) and its tools are added after it is drawn;
- * WebKit read one page before its cues were painted (198 and 196 elements, the third round's CI), so the wait holds until no
- * figure is drawing and the count of cues and tool buttons is the same on two consecutive frames, bounded at 5 s.
+ * Wait until the reader has finished its figures, then two frames, so scroll-driven and observer-driven class changes have
+ * run before a read. A figure's tools and its definition cues (a ring and a dot on each defined node) are added after it is
+ * drawn: CI's WebKit run at the third round's tip read one page before its cues were painted (198 against 196 elements). The
+ * condition is the reader's own marks, on each page by itself and never compared between the two: no figure is drawing; every
+ * drawn figure that is shown has its tools marked `data-diagram-tools="true"`; and every defined node (`.dnode`) of a shown
+ * drawing holds its `.dn-ring` and `.dn-dot`. Bounded at 10 s; a page that does not get there fails, named.
  */
 async function settle(page: Page): Promise<void> {
-  await page
+  const done = await page
     .waitForFunction(
       () => {
         const root = document.querySelector('[data-docreader-root]');
         const st = root?.getAttribute('data-docreader-diagrams');
         if (st === 'drawing' || st === 'waiting') return false;
-        const n = document.querySelectorAll('.dn-ring, .dn-dot, figure .tools button').length;
-        const w = window as unknown as { __stCues?: number };
-        const same = w.__stCues === n;
-        w.__stCues = n;
-        return same;
+        for (const fig of Array.from(document.querySelectorAll('figure.mermaid-figure.drawn'))) {
+          const svg = fig.querySelector('pre.mermaid > svg');
+          if (svg === null || svg.getClientRects().length === 0) continue;
+          if (fig.querySelector('.tools[data-diagram-tools="true"]') === null) return false;
+          for (const g of Array.from(svg.querySelectorAll('.dnode'))) {
+            if (g.querySelector(':scope > .dn-ring') === null || g.querySelector(':scope > .dn-dot') === null) return false;
+          }
+        }
+        return true;
       },
       undefined,
-      { polling: 'raf', timeout: 5_000 },
+      { polling: 'raf', timeout: 10_000 },
     )
-    .catch(() => undefined);
+    .then(() => true, () => false);
+  if (!done) throw new Error("test 4 (a): the reader did not finish its figures within 10 s (a figure drawing, a shown figure's tools unmarked, or a defined node without its ring and dot)");
   await frames(page);
 }
 
