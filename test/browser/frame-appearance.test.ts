@@ -12,9 +12,10 @@
 // The cap row. The plan asks for a document at 1.1.0's default srcdoc cap (about 70 million characters, most of it the
 // html's 57 million-character share). That is not mounted here: the reader's startup over it takes minutes and the
 // srcdoc text alone is held several times over in the test process, the browser and the frame, which the 6 GB shared
-// slice does not carry. The row mounts a 1.5 MiB document with both faces at their largest real size and the largest
-// appearance; that the derived cap rises by exactly those two amounts, so such a document is never `too-large`, is the
-// Node row of test/frame-document.test.ts ("the derived srcdoc cap rises by both fields at their caps").
+// slice does not carry. The row mounts a 1.5 MiB document with both faces near the cap (the library's own serif face, 122 360
+// decoded bytes of the 131 072 allowed, for both roles) and the largest appearance. The old-cap row proper is a Node row, test 7's
+// in test/frame-document.test.ts (the html at its cap, with both faces at 131 072 decoded bytes and the largest appearance, is
+// framed within the derived cap and grows by exactly those two fields' seed text).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';

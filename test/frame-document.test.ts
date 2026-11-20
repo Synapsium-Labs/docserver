@@ -102,6 +102,14 @@ const DOCS: Readonly<Record<string, () => RenderInput>> = {
 const plain = (): RenderInput => DOCS['plain']?.() as RenderInput;
 /** The 33 colour slot names, as a mutable list. */
 const COLOUR_SLOTS: readonly string[] = APPEARANCE_SLOTS.colour;
+
+/** The longest appearance parseAppearance accepts, as the seed writes it (`<` escaped): three maximal shadows, every slot, a 64-character label. */
+const MAXIMAL_APPEARANCE_TEXT = (): string => {
+  const shadow = '-64px -64px 64px -8px rgba(255, 255, 255, 0.999)';
+  const colour = Object.fromEntries(COLOUR_SLOTS.map((k) => [k, '#ABCDEF']));
+  const skin = { radius: '24px', radiusSmall: '24px', radiusLarge: '24px', controlRow: '56px', popShadow: [shadow, shadow, shadow].join(', '), sectionFamily: 'mono', sectionSize: '16px', sectionWeight: '900', sectionTracking: '-0.100em', sectionCase: 'uppercase' };
+  return JSON.stringify({ mode: 'light', colour, skin, label: '<'.repeat(64) }).replace(/</g, '\\u003c');
+};
 /** The keys every seed carries: SEED_KEYS less the optional ones (a mount with no appearance and no faces writes none). */
 const REQUIRED_SEED_KEYS = SEED_KEYS.filter((k) => !OPTIONAL_SEED_KEYS.includes(k));
 
@@ -548,6 +556,16 @@ describe('L3.M7 each code at its boundary', () => {
     expect(seedText(out).length).toBeGreaterThan(SEED_HTML_MAX_CHARS);
     expect(escapedHtmlLength(`${atCap}a`)).toBe(SEED_HTML_MAX_CHARS + 1);
     expect(refusal(() => frame(doc(`${atCap}a`)))).toBe('too-large');
+    // Test 7's old-cap row: the same html with both faces at 131 072 decoded bytes and the largest appearance the validator
+    // accepts is framed too (the derived cap rose by exactly those), and the srcdoc grows by the seed text of the two fields.
+    const faceAtCap = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
+    expect(faceAtCap).toHaveLength(174764);
+    const maximal = JSON.parse(MAXIMAL_APPEARANCE_TEXT().replace(/\\u003c/g, '<')) as unknown;
+    const both = frame(doc(atCap), { appearance: maximal, assets: { ...assets, fonts: { sans: faceAtCap, mono: faceAtCap } } as FrameAssets });
+    expect(both.length).toBeLessThanOrEqual(MAX_SRCDOC_CHARS_DEFAULT);
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: nothing else of the srcdoc moves.
+    const fields = `,"appearance":`.length + MAXIMAL_APPEARANCE_TEXT().length + `,"fonts":{"sans":"","mono":""}`.length + 2 * faceAtCap.length;
+    expect(both.length - out.length).toBe(fields);
     // Longer than the cap before escaping: refused without being measured.
     expect(refusal(() => frame(doc('a'.repeat(SEED_HTML_MAX_CHARS + 1))))).toBe('too-large');
   }, 300_000);
@@ -1125,12 +1143,6 @@ describe('the appearance contract: FrameOptions.appearance and FrameAssets.fonts
 describe('the appearance contract: the derived srcdoc cap rises by both fields at their caps (section 2.2)', () => {
   /** SEED_FIELDS_MAX_CHARS at 1.1.0 (the commit aceb346's src/frame/seed.ts, evaluated): neither field was counted. */
   const SEED_FIELDS_MAX_CHARS_1_1_0 = 45768624;
-  const MAXIMAL_APPEARANCE_TEXT = (): string => {
-    const shadow = '-64px -64px 64px -8px rgba(255, 255, 255, 0.999)';
-    const colour = Object.fromEntries(COLOUR_SLOTS.map((k) => [k, '#ABCDEF']));
-    const skin = { radius: '24px', radiusSmall: '24px', radiusLarge: '24px', controlRow: '56px', popShadow: [shadow, shadow, shadow].join(', '), sectionFamily: 'mono', sectionSize: '16px', sectionWeight: '900', sectionTracking: '-0.100em', sectionCase: 'uppercase' };
-    return JSON.stringify({ mode: 'light', colour, skin, label: '<'.repeat(64) }).replace(/</g, '\\u003c');
-  };
 
   it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters', () => {
     const faces = 2 * 174764;

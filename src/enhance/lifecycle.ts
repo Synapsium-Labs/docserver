@@ -351,6 +351,11 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   });
   inst.state = state;
   if (!live()) return; // the snapshot is host code
+  // A setEnhancementAppearance call made before the state existed comes first, so a setEnhancementPrefs queued beside it
+  // meets a hosted state: its theme is ignored and never written (the host owns the theme).
+  const early = inst.pendingAppearance;
+  inst.pendingAppearance = null;
+  if (early !== null) state.host(early);
   // setEnhancementPrefs calls made before the state existed (while startup waited, or from the snapshot's code)
   const pending = inst.pendingPrefs;
   inst.pendingPrefs = null;
@@ -358,9 +363,6 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     state.setPrefs(pending); // may call the host's set()
     if (!live()) return;
   }
-  const early = inst.pendingAppearance;
-  inst.pendingAppearance = null;
-  if (early !== null) state.host(early);
   const operateHere = <T>(fn: () => T): T | undefined => operate(inst, fn);
   const journal = inst.control.journal;
   // The host's functions stay out of the context: features call them through `host` alone.
@@ -481,7 +483,7 @@ function changeAppearance(inst: Instance, a: Appearance): void {
   state.host(a);
   const { journal } = inst.control;
   applyPrefs(journal, inst.root, state.prefs);
-  applyAppearance(journal, inst.root, a);
+  applyAppearance(journal, inst.root, a, was);
   const ctx = inst.ctx;
   if (ctx === null) return;
   ctx.events.emit('prefs', Object.freeze({ ...state.prefs }));

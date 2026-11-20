@@ -122,6 +122,29 @@ describe('test 3: the seed paints before the first yield', () => {
     expect(root.getAttribute('data-theme')).toBe('light');
   });
 
+  it("a verdict with no colour group removes only the colour properties the last one wrote: a host's own inline token survives", async () => {
+    const root = mount();
+    root.style.setProperty('--bg', '#123456'); // the host's own token, never set by an appearance
+    root.style.setProperty('--dr-radius', '7px');
+    await enhance(root, { appearance: { mode: 'dark', skin: { sectionCase: 'none' } } });
+    expect(prop(root, '--bg')).toBe('#123456');
+    setEnhancementAppearance(root, { mode: 'dark' });
+    expect(prop(root, '--bg')).toBe('#123456');
+    expect(prop(root, '--dr-radius')).toBe('7px');
+    expect(prop(root, '--dr-section-case')).toBe(''); // what the first verdict wrote goes with it
+    // Two verdicts that write other slots do not touch it either.
+    setEnhancementAppearance(root, { mode: 'dark', colour: { ...PHOSPHOR.colour, bg: '#000000' } });
+    setEnhancementAppearance(root, { mode: 'dark', colour: PHOSPHOR.colour });
+    expect(prop(root, '--dr-radius')).toBe('7px');
+  });
+
+  it('a slot written by the last verdict is removed when the next leaves it out, colour or skin', async () => {
+    const root = mount();
+    await enhance(root, { appearance: dark({ skin: { radius: '4px' } }) });
+    setEnhancementAppearance(root, { mode: 'dark' });
+    expect(set(root, [...COLOUR_PROPS, ...SKIN_PROPS])).toEqual([]);
+  });
+
   it('destroy undoes every attribute and property the verdict wrote', async () => {
     const root = mount();
     await enhance(root, { appearance: dark({ skin: { radius: '4px' } }) });
@@ -303,6 +326,41 @@ describe('test 3: the stored theme', () => {
     for (const t of seen) expect(t).toBe('light');
   });
 
+  it('a setEnhancementPrefs({theme}) queued beside a queued appearance during startup is ignored for theme: the mount is hosted and nothing stored carries theme', async () => {
+    const sets: [string, string | null][] = [];
+    const root = mount();
+    const storage: ReaderStorage = {
+      // The snapshot is read while the state is being made: both calls are queued, the appearance first by the host's own order.
+      get snapshot(): Record<string, string> {
+        setEnhancementAppearance(root, { mode: 'light' });
+        setEnhancementPrefs(root, { theme: 'dark' });
+        return {};
+      },
+      set: (k, v) => void sets.push([k, v]),
+    };
+    await enhance(root, { storage });
+    expect(root.hasAttribute('data-docreader-hosted')).toBe(true);
+    expect(root.getAttribute('data-theme')).toBe('light');
+    expect(contextOf(root)!.state.prefs.theme).toBe('light');
+    setEnhancementPrefs(root, { width: 'wide' }); // a write that does happen
+    expect(sets.length).toBeGreaterThan(0);
+    for (const [, v] of sets) expect(JSON.parse(v as string)).not.toHaveProperty('theme');
+  });
+
+  it('a queued appearance is applied, never dropped: the mount it was queued on is hosted and shows its colours', async () => {
+    const root = mount();
+    const storage: ReaderStorage = {
+      get snapshot(): Record<string, string> {
+        setEnhancementAppearance(root, dark({ label: 'Queued' }));
+        return {};
+      },
+    };
+    await enhance(root, { storage });
+    expect(root.hasAttribute('data-docreader-hosted')).toBe(true);
+    expect(prop(root, '--bg')).toBe(PHOSPHOR.colour.bg);
+    expect(root.querySelector('p.aa-hosted')!.textContent).toBe('Queued');
+  });
+
   it('a mount with no appearance still writes theme (1.1.0)', async () => {
     const sets: [string, string | null][] = [];
     const root = mount();
@@ -441,10 +499,12 @@ describe('test 7: the host faces (a fake FontFace)', () => {
     status = 'unloaded';
     family: string;
     source: unknown;
-    constructor(family: string, source: unknown) {
+    descriptors: Record<string, string> | undefined;
+    constructor(family: string, source: unknown, descriptors?: Record<string, string>) {
       if (ctorThrows) throw new Error('ctor');
       this.family = family;
       this.source = source;
+      this.descriptors = descriptors;
       faces.push(this);
     }
     load(): Promise<FakeFace> {
@@ -480,6 +540,60 @@ describe('test 7: the host faces (a fake FontFace)', () => {
     expect(Array.from(new Uint8Array((faces[0]!.source as { buffer?: ArrayBuffer }).buffer ?? (faces[0]!.source as ArrayBuffer)))).toEqual(Array.from(bytes));
     expect(added).toEqual(faces);
     expect(deleted).toEqual([]);
+  });
+
+  // A synthetic WOFF2: the 48-byte header (numTables at offset 12) and a table directory of the given entries.
+  const entry = {
+    cmap: [0, 0x05], // flags (index 0), origLength; no transform
+    glyf: [10, 0x81, 0x00, 0x03], // transform version 0: origLength (two bytes), transformLength
+    loca: [11, 0x05, 0x00],
+    hmtx: [3 | (1 << 6), 0x10, 0x08], // version 1: transformLength follows
+    fvar: [47, 0x20],
+    arbitrary: [63, 0x61, 0x62, 0x63, 0x64, 0x05], // an explicit tag 'abcd', then origLength
+  };
+  const directory = (entries: number[][], numTables = entries.length): Uint8Array => {
+    const b = new Uint8Array(48);
+    b.set([0x77, 0x4f, 0x46, 0x32]);
+    b[13] = numTables;
+    return Uint8Array.from([...b, ...entries.flat()]);
+  };
+  const descriptorsOf = async (bytes: Uint8Array): Promise<Record<string, string> | undefined> => {
+    faces.length = 0;
+    await expect(loadHostFonts({ sans: b64(bytes) })).resolves.toBeUndefined();
+    expect(faces).toHaveLength(1);
+    return faces[0]!.descriptors;
+  };
+
+  it("every face is added with display 'swap', a static one with no weight range", async () => {
+    await loadHostFonts({ sans: b64(woff2()), mono: b64(directory([entry.cmap, entry.glyf, entry.hmtx])) });
+    expect(faces.map((f) => f.descriptors)).toEqual([{ display: 'swap' }, { display: 'swap' }]);
+  });
+
+  it('a variable face (an fvar entry in the directory) gets the weight range, after glyf, loca and hmtx entries whose transform lengths are skipped', async () => {
+    expect(await descriptorsOf(directory([entry.fvar]))).toEqual({ display: 'swap', weight: '100 900' });
+    expect(await descriptorsOf(directory([entry.cmap, entry.glyf, entry.loca, entry.hmtx, entry.fvar]))).toEqual({ display: 'swap', weight: '100 900' });
+    expect(await descriptorsOf(directory([entry.arbitrary, entry.glyf, entry.fvar]))).toEqual({ display: 'swap', weight: '100 900' });
+  });
+
+  it('a directory with no fvar entry, whatever else it names, is static', async () => {
+    expect(await descriptorsOf(directory([entry.cmap, entry.glyf, entry.loca, entry.hmtx, entry.arbitrary]))).toEqual({ display: 'swap' });
+    // glyf at version 0 carries a transformLength (here 0x00) after its origLength: skipped, so the entry after it is read as fvar.
+    expect(await descriptorsOf(directory([[10, 0x05, 0x00], [47, 0x20]]))).toEqual({ display: 'swap', weight: '100 900' });
+  });
+
+  it('a truncated directory, an integer that never ends, or a count beyond the buffer is static, and nothing throws', async () => {
+    expect(await descriptorsOf(directory([entry.cmap, [10, 0x81]], 5))).toEqual({ display: 'swap' }); // ends inside glyf's lengths
+    expect(await descriptorsOf(directory([[0, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81], entry.fvar]))).toEqual({ display: 'swap' }); // six continuation bytes
+    expect(await descriptorsOf(directory([entry.cmap], 60))).toEqual({ display: 'swap' }); // 60 entries promised, one present
+    expect(await descriptorsOf(directory([entry.cmap], 255))).toEqual({ display: 'swap' }); // beyond the 64 bound
+    const short = Uint8Array.from([0x77, 0x4f, 0x46, 0x32, 1, 2, 3]); // not even a header
+    expect(await descriptorsOf(short)).toEqual({ display: 'swap' });
+  });
+
+  it("the library's own variable faces are read as variable (the fvar index is the spec's 47)", async () => {
+    for (const file of ['source-sans-3-latin-wght-normal.woff2', 'source-serif-4-latin-opsz-normal.woff2']) {
+      expect(await descriptorsOf(new Uint8Array(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'fonts', file)))), file).toEqual({ display: 'swap', weight: '100 900' });
+    }
   });
 
   it('each role stands alone: only sans, only mono', async () => {
@@ -624,6 +738,33 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     const root = mount();
     await api.enhance(root, { appearance: dark() });
     api.setEnhancementAppearance(root, { mode: 'dark', colour: { ...PHOSPHOR.colour, surface: 'nope' } });
+    expect(html.hasAttribute('data-docreader-hosted')).toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+  });
+
+  it('the mark follows the reader: a reader call that throws leaves the html element as it was', async () => {
+    vi.doMock('../src/enhance/index.js', async (original) => ({
+      ...(await original<typeof import('../src/enhance/index.js')>()),
+      setEnhancementAppearance: () => {
+        throw new Error('the reader refused');
+      },
+    }));
+    try {
+      const api = await register();
+      expect(() => api.setEnhancementAppearance(mount(), dark())).toThrow('the reader refused');
+      expect(html.hasAttribute('data-docreader-hosted')).toBe(false);
+      expect(tip()).toEqual(['', '', '']);
+    } finally {
+      vi.doUnmock('../src/enhance/index.js');
+    }
+  });
+
+  it('destroying the reader clears the mark and the three tooltip properties', async () => {
+    const api = await register();
+    const root = mount();
+    await api.enhance(root, { appearance: dark() });
+    expect(html.hasAttribute('data-docreader-hosted')).toBe(true);
+    await (api as unknown as { destroyEnhancement(root: HTMLElement): Promise<void> }).destroyEnhancement(root);
     expect(html.hasAttribute('data-docreader-hosted')).toBe(false);
     expect(tip()).toEqual(['', '', '']);
   });

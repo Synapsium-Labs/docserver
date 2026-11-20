@@ -409,14 +409,23 @@ export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Pref
  * Put a host's appearance on the root (the appearance contract; the verdict is parseAppearance's): `data-docreader-hosted`,
  * `data-docreader-colours` while the verdict has a colour group, `data-docreader-skin` (its skin slots, space-separated;
  * absent with none) and each slot's custom property, written through the journal, or removed when the verdict leaves it
- * out (a verdict with no colour group removes every colour). The mode is the theme pref's, which applyPrefs puts on the
+ * out but `prev` (the verdict before this one, if any) had written it: only what the reader wrote is removed, so a host's own
+ * inline value on the root survives (a verdict with no colour group removes the colours the last one wrote). The mode is the theme pref's, which applyPrefs puts on the
  * root. Startup and every op take this one journaled path.
  */
-export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearance): void {
+export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearance, prev: Appearance | null = null): void {
   const skin = APPEARANCE_SLOTS.skin.filter((s) => a.skin?.[s] !== undefined);
   journal.setAttribute(root, 'data-docreader-hosted', '');
   journal.setAttribute(root, 'data-docreader-colours', a.colour === undefined ? null : '');
   journal.setAttribute(root, 'data-docreader-skin', skin.length === 0 ? null : skin.join(' '));
-  for (const s of APPEARANCE_SLOTS.colour) journal.setStyle(root, SLOT_PROPERTY.colour[s], a.colour?.[s] ?? null);
-  for (const s of APPEARANCE_SLOTS.skin) journal.setStyle(root, SLOT_PROPERTY.skin[s], a.skin?.[s] ?? null);
+  // `sans` or `mono`: a stylesheet cannot branch on a custom property's value, so the family is also an attribute.
+  journal.setAttribute(root, 'data-docreader-section-family', a.skin?.sectionFamily ?? null);
+  for (const s of APPEARANCE_SLOTS.colour) {
+    const v = a.colour?.[s];
+    if (v !== undefined || prev?.colour?.[s] !== undefined) journal.setStyle(root, SLOT_PROPERTY.colour[s], v ?? null);
+  }
+  for (const s of APPEARANCE_SLOTS.skin) {
+    const v = a.skin?.[s];
+    if (v !== undefined || prev?.skin?.[s] !== undefined) journal.setStyle(root, SLOT_PROPERTY.skin[s], v ?? null);
+  }
 }
