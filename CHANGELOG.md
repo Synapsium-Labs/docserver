@@ -16,6 +16,8 @@ Each release is built once from a signed tag, attested, and published with prove
 
 The appearance contract (a minor when released): a host can hand the frame one appearance (a mode, 33 base colours, ten skin values and a label) and two optional faces, at mount and while open. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows by one parent-to-frame operation, `appearance`, which an older frame ignores, and the seed by two optional keys, `appearance` and `fonts`. The version and its tag are set at release. **A host that serves the frame re-pins its page policy to the release** (the `csp` fields below), and `MAX_SRCDOC_CHARS_DEFAULT` moves with the assets and the two new seed fields' caps.
 
+The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
+
 - `assets/frame/bootstrap.js`: `48ae806ec738414592b54540efae4d08b18977c4120e090d5309511a549ab8a6`, csp `'sha256-SK6Absc4QUWStUVA765NCLGJd8QSDgkNUwlRGlSauKY='`
 
 ## 1.1.0

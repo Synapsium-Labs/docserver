@@ -559,6 +559,12 @@ npm run build                     # the Mermaid files, the frame assets and thei
 - A new or bumped dependency is an exact version at least 14 days old. Add it with
   `npm install --save-exact --before=<a date 14 days back> <name>@<x.y.z>`; npm then refuses a younger version.
 
+### Size by contract
+
+The frame's assets are counted in characters by two append-only tables, committed source: `conformance/size/shares.json` (each design's total and frame share, as the maintainers set it) and `conformance/size/growth.json` (the sizes measured when each landing landed, starting from the `baseline` row). Each holds one row per line, so an append never touches an earlier line, and `git log -L` over a row's line names the landing that measured it. `test/size-contract.test.ts` judges the landing, the checked-out commit, against its first parent: every earlier row is byte-equal, the newest growth row equals the recomputation from the committed `FRAME_MANIFEST`, and a design's growth stays within its share read from the parent's table.
+
+A landing's message (or, on a pull request, its description) carries exactly one line, anywhere in it, that starts `Size-Design: `; the rest of the line is the word that says what the landing may append. A design's name (a landing that changes that design's frame assets appends one growth row naming it; one that changes none appends nothing), `none` (changes no frame asset, appends nothing), `rebaseline` (library upkeep that changes assets: one row, counted against no design), `correction` (no asset change; two rows that move misattributed growth from one design to another), and `shares` (no asset change; share rows only). `baseline`, `none`, `rebaseline`, `correction` and `shares` are reserved words, never a design's name. A landing that lacks the line, or carries two, fails. Run it locally with `DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: <word>' ./node_modules/.bin/vitest run test/size-contract.test.ts`.
+
 ## Release verification
 
 Each release is built once from a signed tag, attested, and published to npm with provenance through trusted publishing, so no token exists anywhere. The first release is 1.0.0; the deprecated `0.0.0-reserve` and `0.0.0-stage` before it are empty placeholders: the first reserved the name on npm, and npm made the second itself during that first publish. Once a version is published, a consumer verifies it with the commands the release workflow itself runs after publishing, in a scratch directory, with `VERSION` set to the version (such as `1.0.0`):

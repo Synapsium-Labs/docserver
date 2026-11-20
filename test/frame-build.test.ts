@@ -294,7 +294,7 @@ describe('L3.M15: assets.json, FRAME_MANIFEST and prepack', () => {
     const b = built();
     for (const n of NAMES) {
       const f = b.files[n];
-      expect(FRAME_MANIFEST[n]).toEqual({ path: f.path, sha256: f.sha256, bytes: f.bytes, chars: f.text.length, csp: f.csp });
+      expect(FRAME_MANIFEST[n]).toEqual({ path: f.path, sha256: f.sha256, bytes: f.bytes, chars: f.text.length, csp: f.csp, layout: n === 'enhance' ? 'default' : null });
       expect(f.chars).toBe(f.text.length);
       expect(f.bytes).toBe(Buffer.byteLength(f.text, 'utf8'));
     }

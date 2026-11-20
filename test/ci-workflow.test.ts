@@ -64,6 +64,7 @@ interface Job {
   'runs-on'?: string;
   'timeout-minutes'?: number;
   permissions?: unknown;
+  env?: Record<string, unknown>;
   strategy?: { 'fail-fast'?: boolean; matrix?: { node?: unknown } };
   steps?: Step[];
 }
@@ -298,6 +299,10 @@ describe('ci.yml: triggers', () => {
     expect(wf.on?.['push']).toEqual({ branches: ['main'] });
   });
 
+  it('size by contract: a pull request run repeats when its description is edited (the landing text is the description)', () => {
+    expect(wf.on?.['pull_request']).toEqual({ types: ['opened', 'synchronize', 'reopened', 'edited'] });
+  });
+
   it('L3 Task 14: a call takes no inputs and no secrets, so the release runs exactly what a push runs', () => {
     expect(Object.hasOwn(wf.on ?? {}, 'workflow_call')).toBe(true);
     expect(wf.on?.['workflow_call']).toBeNull();
@@ -332,6 +337,15 @@ describe('ci.yml: the test job', () => {
     expect((install?.['timeout-minutes'] ?? Infinity) + Math.ceil(SUITE_MEASURED_MIN * 1.25) + OTHER_STEPS_MIN).toBeLessThanOrEqual(test['timeout-minutes'] ?? 0);
     expect(test.strategy?.['fail-fast']).toBe(false);
     expect(test.strategy?.matrix?.node).toEqual([22, 24]);
+  });
+
+  it("size by contract: the landing's text is a job-level env, the pull request's description on a pull request and empty otherwise, and no run script interpolates it", () => {
+    expect(test.env).toEqual({
+      DOCSERVER_SIZE_TEXT: "${{ github.event_name == 'pull_request' && github.event.pull_request.body || '' }}",
+    });
+    // A description is text a stranger writes: it reaches the test only through the environment, never inside a script.
+    for (const s of steps) expect(s.run ?? '', s.name ?? s.run).not.toMatch(/\$\{\{[^}]*(pull_request\.body|DOCSERVER_SIZE_TEXT)/);
+    for (const s of steps) expect(Object.keys(s.env ?? {}), s.name ?? s.run).not.toContain('DOCSERVER_SIZE_TEXT');
   });
 
   it('checks out full history, keeps no credentials in the workspace, sets up the matrix Node with the npm cache, and caches the browsers, each action pinned by commit sha', () => {
