@@ -228,12 +228,12 @@ function assetsOf(assets: unknown): { readonly value: unknown; readonly given: b
   if (d === undefined && !inherited) return { value: assets, given: false };
   let faces: ReturnType<typeof fontsOf>;
   if (d !== undefined) {
-    if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
+    if (!('value' in d)) throw new TypeError('pinax-lib host: assets.fonts must be a plain value, not a getter');
     try {
       faces = fontsOf(d.value);
     } catch (e) {
       if (e instanceof TypeError) throw e;
-      throw new TypeError('docserver host: assets.fonts could not be read');
+      throw new TypeError('pinax-lib host: assets.fonts could not be read');
     }
   }
   const host = assets;
@@ -242,13 +242,13 @@ function assetsOf(assets: unknown): { readonly value: unknown; readonly given: b
 
 /** The own data properties of `v` as a record: an unknown key or a getter (unread) is a TypeError; undefined is absent. */
 function ownData(v: unknown, where: string, allowed: readonly string[]): Record<string, unknown> {
-  if (typeof v !== 'object' || v === null) throw new TypeError(`docserver host: ${where} must be an object`);
+  if (typeof v !== 'object' || v === null) throw new TypeError(`pinax-lib host: ${where} must be an object`);
   const out: Record<string, unknown> = {};
   for (const k of Reflect.ownKeys(v)) {
-    if (typeof k !== 'string' || !allowed.includes(k)) throw new TypeError(`docserver host: ${where} has an unknown key ${String(k)}`);
+    if (typeof k !== 'string' || !allowed.includes(k)) throw new TypeError(`pinax-lib host: ${where} has an unknown key ${String(k)}`);
     const d = Object.getOwnPropertyDescriptor(v, k);
     if (d === undefined) continue;
-    if (!('value' in d)) throw new TypeError(`docserver host: ${where}.${k} must be a plain value, not a getter`);
+    if (!('value' in d)) throw new TypeError(`pinax-lib host: ${where}.${k} must be a plain value, not a getter`);
     if (d.value !== undefined) out[k] = d.value as unknown;
   }
   return out;
@@ -256,13 +256,13 @@ function ownData(v: unknown, where: string, allowed: readonly string[]): Record<
 
 /** Prefs: theme, width and font, each one of its values. */
 function prefsOf(p: unknown, where: string): Partial<FramePrefs> {
-  if (!isPlain(p)) throw new TypeError(`docserver host: ${where} must be a plain object`);
+  if (!isPlain(p)) throw new TypeError(`pinax-lib host: ${where} must be a plain object`);
   const f = ownData(p, where, Object.keys(FRAME_PREF_VALUES));
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(f)) {
     const values = (FRAME_PREF_VALUES as Readonly<Record<string, readonly string[]>>)[k] ?? [];
-    if (typeof v !== 'string') throw new TypeError(`docserver host: ${where}.${k} must be a string`);
-    if (!values.includes(v)) throw new RangeError(`docserver host: ${where}.${k} must be one of ${values.join(', ')}`);
+    if (typeof v !== 'string') throw new TypeError(`pinax-lib host: ${where}.${k} must be a string`);
+    if (!values.includes(v)) throw new RangeError(`pinax-lib host: ${where}.${k} must be one of ${values.join(', ')}`);
     out[k] = v;
   }
   return out as Partial<FramePrefs>;
@@ -298,40 +298,40 @@ function check(adapters: unknown): Checked {
   for (const name of CALLBACKS) {
     const fn = a[name];
     if (fn === undefined) continue;
-    if (typeof fn !== 'function') throw new TypeError(`docserver host: adapters.${name} must be a function`);
+    if (typeof fn !== 'function') throw new TypeError(`pinax-lib host: adapters.${name} must be a function`);
     callbacks[name] = fn as (...args: never[]) => unknown;
   }
-  if (callbacks.onFallback === undefined) throw new TypeError('docserver host: adapters.onFallback is required');
+  if (callbacks.onFallback === undefined) throw new TypeError('pinax-lib host: adapters.onFallback is required');
   const w = a['watchdogMs'];
-  if (typeof w !== 'number') throw new TypeError('docserver host: adapters.watchdogMs must be a number');
-  if (!Number.isInteger(w) || w < 1 || w > WATCHDOG_MAX_MS) throw new RangeError(`docserver host: adapters.watchdogMs must be an integer from 1 to ${String(WATCHDOG_MAX_MS)}`);
+  if (typeof w !== 'number') throw new TypeError('pinax-lib host: adapters.watchdogMs must be a number');
+  if (!Number.isInteger(w) || w < 1 || w > WATCHDOG_MAX_MS) throw new RangeError(`pinax-lib host: adapters.watchdogMs must be an integer from 1 to ${String(WATCHDOG_MAX_MS)}`);
   const draw = a['mermaidDraw'] ?? 'auto';
-  if (typeof draw !== 'string') throw new TypeError('docserver host: adapters.mermaidDraw must be a string');
-  if (!MERMAID_DRAW.includes(draw)) throw new RangeError(`docserver host: adapters.mermaidDraw must be one of ${MERMAID_DRAW.join(', ')}`);
+  if (typeof draw !== 'string') throw new TypeError('pinax-lib host: adapters.mermaidDraw must be a string');
+  if (!MERMAID_DRAW.includes(draw)) throw new RangeError(`pinax-lib host: adapters.mermaidDraw must be one of ${MERMAID_DRAW.join(', ')}`);
   const loader = a['loadMermaid'];
   let mermaidSource: Checked['mermaidSource'] = null;
   if (draw === 'after-ready') {
     // A source is required: the loader, else the Mermaid text among the assets (read as an own data property); when both
     // are given the loader is used. In any other mode `loadMermaid` is ignored, whatever it holds, and never called.
-    if (loader !== undefined && typeof loader !== 'function') throw new TypeError('docserver host: adapters.loadMermaid must be a function');
+    if (loader !== undefined && typeof loader !== 'function') throw new TypeError('pinax-lib host: adapters.loadMermaid must be a function');
     const given: unknown = isPlain(a['assets']) ? Object.getOwnPropertyDescriptor(a['assets'], 'mermaid')?.value : undefined;
     if (typeof loader === 'function') mermaidSource = loader as () => unknown;
     else if (typeof given === 'string') mermaidSource = given;
-    else throw new TypeError("docserver host: mermaidDraw 'after-ready' needs adapters.loadMermaid or adapters.assets.mermaid");
+    else throw new TypeError("pinax-lib host: mermaidDraw 'after-ready' needs adapters.loadMermaid or adapters.assets.mermaid");
   }
   const gate = a['mermaidGate'] ?? {};
-  if (!isPlain(gate)) throw new TypeError('docserver host: adapters.mermaidGate must be a plain object');
+  if (!isPlain(gate)) throw new TypeError('pinax-lib host: adapters.mermaidGate must be a plain object');
   // The gate checks its caps itself (TypeError, RangeError: caps only tighten); a document with no fence asks it now.
   mermaidGate({ fences: 0, largestChars: 0, totalChars: 0 }, gate);
   const title = a['title'] ?? DEFAULT_TITLE;
-  if (typeof title !== 'string') throw new TypeError('docserver host: adapters.title must be a string');
-  if (title.length < 1 || title.length > TITLE_MAX) throw new RangeError(`docserver host: adapters.title must be 1 to ${String(TITLE_MAX)} code units`);
+  if (typeof title !== 'string') throw new TypeError('pinax-lib host: adapters.title must be a string');
+  if (title.length < 1 || title.length > TITLE_MAX) throw new RangeError(`pinax-lib host: adapters.title must be 1 to ${String(TITLE_MAX)} code units`);
   const focus = a['focus'] ?? true;
-  if (typeof focus !== 'boolean') throw new TypeError('docserver host: adapters.focus must be a boolean');
+  if (typeof focus !== 'boolean') throw new TypeError('pinax-lib host: adapters.focus must be a boolean');
   const prefs = a['prefs'] === undefined ? {} : prefsOf(a['prefs'], 'adapters.prefs');
   let appearance: Appearance | undefined;
   if (a['appearance'] !== undefined) {
-    if (!isPlain(a['appearance'])) throw new TypeError('docserver host: adapters.appearance must be a plain object');
+    if (!isPlain(a['appearance'])) throw new TypeError('pinax-lib host: adapters.appearance must be a plain object');
     appearance = parseAppearance(a['appearance']).appearance;
   }
   // A malformed `fonts` is a host's programming error: it throws here, at mount time, and never as a fallback.
@@ -339,14 +339,14 @@ function check(adapters: unknown): Checked {
   let store: HostStore | null = null;
   const s = a['store'];
   if (s !== undefined) {
-    if (typeof s !== 'object' || s === null) throw new TypeError('docserver host: adapters.store must be an object');
+    if (typeof s !== 'object' || s === null) throw new TypeError('pinax-lib host: adapters.store must be an object');
     for (const m of ['getItem', 'setItem', 'removeItem', 'key'] as const) {
-      if (typeof (s as Record<string, unknown>)[m] !== 'function') throw new TypeError(`docserver host: adapters.store.${m} must be a function`);
+      if (typeof (s as Record<string, unknown>)[m] !== 'function') throw new TypeError(`pinax-lib host: adapters.store.${m} must be a function`);
     }
     store = createHostStore(s as HostStorage, a['storePrefix'] as string | undefined, a['docKey'] as string | undefined);
   } else {
-    if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('docserver host: adapters.storePrefix must be a string');
-    if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('docserver host: adapters.docKey must be a string');
+    if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('pinax-lib host: adapters.storePrefix must be a string');
+    if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('pinax-lib host: adapters.docKey must be a string');
   }
   return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
@@ -394,7 +394,7 @@ function windowOf(el: unknown): HostWindow {
   const doc: unknown = typeof el === 'object' && el !== null ? (el as { ownerDocument?: unknown }).ownerDocument : undefined;
   const win: unknown = typeof doc === 'object' && doc !== null ? (doc as { defaultView?: unknown }).defaultView : undefined;
   if (typeof win !== 'object' || win === null || typeof (el as { append?: unknown }).append !== 'function') {
-    throw new TypeError('docserver host: mountDocFrame needs an element of a document that has a window');
+    throw new TypeError('pinax-lib host: mountDocFrame needs an element of a document that has a window');
   }
   return win as HostWindow;
 }
@@ -413,7 +413,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     try {
       return Reflect.apply(fn, c.raw, args);
     } catch (e) {
-      console.warn('docserver host: an adapter threw', name, e);
+      console.warn('pinax-lib host: an adapter threw', name, e);
       return undefined;
     }
   };
@@ -444,7 +444,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     // could a console, so the call is contained too.
     const none = (reason: string): Build => {
       try {
-        console.warn('docserver host: the Mermaid build is unavailable', reason);
+        console.warn('pinax-lib host: the Mermaid build is unavailable', reason);
       } catch {
         // a console that throws is no reason to lose the answer
       }
@@ -529,7 +529,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       page = frameDocument(d, frameOptions);
     } catch (e) {
       const code: FrameErrorCode = e instanceof FrameError ? e.code : 'invalid-input';
-      if (INTERNAL.includes(code)) console.warn('docserver host: internal', code);
+      if (INTERNAL.includes(code)) console.warn('pinax-lib host: internal', code);
       teardown = null;
       call('onFallback', FALLBACK_OF[code]);
       return;
@@ -592,7 +592,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         post('text' in answer ? { t: 'mermaid', text: answer.text } : { t: 'mermaid', unavailable: true });
       } catch {
         try {
-          console.warn('docserver host: the Mermaid build could not be posted');
+          console.warn('pinax-lib host: the Mermaid build could not be posted');
         } catch {
           // a console that throws is no reason to fail the port
         }
@@ -626,7 +626,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         const fn = c.callbacks.changes;
         asked = fn === undefined ? null : Reflect.apply(fn, c.raw, [sha]);
       } catch (e) {
-        console.warn('docserver host: an adapter threw', 'changes', e);
+        console.warn('pinax-lib host: an adapter threw', 'changes', e);
         settle(null);
         return;
       }
@@ -796,7 +796,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendPrefs(checked);
     },
     setAppearance(a) {
-      if (!isPlain(a)) throw new TypeError('docserver host: appearance must be a plain object');
+      if (!isPlain(a)) throw new TypeError('pinax-lib host: appearance must be a plain object');
       if (destroyed) return;
       const verdict = parseAppearance(a).appearance;
       seedAppearance = verdict;
@@ -804,7 +804,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     },
     command(name) {
       if (typeof name !== 'string' || !(COMMAND_OPS as readonly string[]).includes(name)) {
-        throw new TypeError(`docserver host: command name must be one of ${COMMAND_OPS.join(', ')}`);
+        throw new TypeError(`pinax-lib host: command name must be one of ${COMMAND_OPS.join(', ')}`);
       }
       if (destroyed) return;
       sendCommand(name);

@@ -141,15 +141,15 @@ describe('package.json: exports keys', () => {
 describe('package.json: identity', () => {
   // Whether the package is private is pinned once, in test/public-ready.test.ts (L3 Task 14), so the v1 release PR
   // flips exactly one pin.
-  it('is the MIT, ESM package @synapsium-labs/docserver', () => {
-    expect(pkg.name).toBe('@synapsium-labs/docserver');
+  it('is the MIT, ESM package @synapsium-labs/pinax-lib', () => {
+    expect(pkg.name).toBe('@synapsium-labs/pinax-lib');
     expect(pkg.type).toBe('module');
     expect(pkg.license).toBe('MIT');
   });
 
   it('declares its modules free of side effects, but not its stylesheets or the module that freezes the appearance contract', () => {
     // A bundler drops a bare import of a file the package calls side-effect free, so with `false` webpack would
-    // drop `import '@synapsium-labs/docserver/assets/reader.css'` and ship no stylesheet. No module of the
+    // drop `import '@synapsium-labs/pinax-lib/assets/reader.css'` and ship no stylesheet. No module of the
     // package has a side effect on import (test/enhance-walls.test.ts and the render purity tests hold that).
     // The one module with a side effect: ./frame's appearance re-export freezes the contract's lists in place (their
     // home, src/enhance/appearance.ts, may make no call at its top level), so a bundler must keep its body.
