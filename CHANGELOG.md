@@ -19,7 +19,7 @@ The appearance contract (a minor when released): a host can hand the frame one a
 The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
 
 - `assets/frame/bootstrap.js`: `bfb497ab4efc3a91499bcc2d8977e5fa05fad4b4586c01539aca57c41a4b8f87`, csp `'sha256-v7SXq078OpFJm8wtiXfl+gX61LRYbAFTmspXxBpLj4c='`
-- `assets/frame/enhance.js`: `857b267fc825febc287fe94f7a6b26e4b3d4bbbe566bad2da9ba49cc8ff3e74f`, csp `'sha256-hXsmf8gl/rwof+lPemsm5LPUu75Wa60tqbpJzI/z508='`
+- `assets/frame/enhance.js`: `17d24733369354e280346a40a62e4f531829b7f17eeed94b17b498bdc83091dd`, csp `'sha256-F9JHMzaTVOKANGpApi5PUxgpt/F+7tlLF7SYvcgwkd0='`
 - `assets/frame/reader.css`: `fa06fea7be5bfeabee29e04b7163233f985ea26f31202f99f59247776857563c`
 - `assets/reader.css`: `539071166e38ff4396a8ca4184ad0797e0851d55a0fdffed01a264afe156d612`
 
