@@ -26,12 +26,23 @@ const DIAGRAMS_WAIT_MS = 45_000;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** Options read from the page: a `mermaid` given as data gets the load that imports the package's file. */
+/**
+ * Options read from the page: a `mermaid` given as data gets the load that imports the package's file, and a `changes` given
+ * as data (the `{ changed: [...] }` its callback resolves to) becomes that callback, so a case can show the changes menu.
+ */
 function withLoad(options: unknown): unknown {
-  if (!isRecord(options) || !isRecord(options['mermaid']) || Object.hasOwn(options['mermaid'], 'load')) return options;
-  // The specifier is built at run time, so the bundler leaves the import to the browser.
-  const file = new URL(MERMAID_PATH, document.baseURI).href;
-  return { ...options, mermaid: { ...options['mermaid'], load: () => import(file) } };
+  if (!isRecord(options)) return options;
+  let out: Record<string, unknown> = options;
+  if (isRecord(out['mermaid']) && !Object.hasOwn(out['mermaid'], 'load')) {
+    // The specifier is built at run time, so the bundler leaves the import to the browser.
+    const file = new URL(MERMAID_PATH, document.baseURI).href;
+    out = { ...out, mermaid: { ...out['mermaid'], load: () => import(file) } };
+  }
+  if (isRecord(out['changes'])) {
+    const answer = out['changes'];
+    out = { ...out, changes: () => Promise.resolve(answer) };
+  }
+  return out;
 }
 
 /** Resolve once the root's diagrams are no longer being drawn; false when that takes longer than DIAGRAMS_WAIT_MS. */

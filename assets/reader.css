@@ -242,7 +242,7 @@
 [data-docreader-root][data-docreader-root]:not(i) strong { font-weight: 640; }
 [data-docreader-root] a { color: var(--accent); text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; text-decoration-color: color-mix(in srgb, var(--accent) 38%, transparent); }
 [data-docreader-root] a:hover { color: var(--accent-hover); text-decoration-color: currentColor; }
-[data-docreader-root] :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+[data-docreader-root] :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
 [data-docreader-root] [tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
 [data-docreader-root][data-docreader-root]:not(i) [tabindex="-1"]:focus { outline: none; }
 [data-docreader-root] code { font-family: var(--mono); font-size: .8em; background: var(--code-inline-bg); padding: .08em .3em; border-radius: 3px; font-variant-numeric: normal; overflow-wrap: anywhere; hyphens: none; }
@@ -365,7 +365,7 @@
 [data-docreader-root] .chg-trig:hover,
 [data-docreader-root] .chg-trig[aria-expanded="true"] { color: var(--text); border-bottom-color: var(--text-faint); }
 [data-docreader-root] .chg-trig.on { color: var(--chg); border-bottom-color: color-mix(in srgb, var(--chg) 55%, transparent); font-weight: 600; }
-[data-docreader-root] .chg-trig:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-docreader-root] .chg-trig:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu { position: absolute; right: 0; top: calc(100% + 7px); z-index: 2150; width: min(440px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--pop-shadow); padding: 6px; font-family: var(--sans); font-size: 13.5px; line-height: 1.35; text-align: left; font-weight: 400; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu[hidden] { display: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-group { display: flex; flex-direction: column; }
@@ -393,8 +393,8 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-only:hover { border-color: var(--border); background: var(--surface); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-item:hover,
 [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-item:focus-visible { background: var(--surface); outline: none; }
-[data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
-[data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-only:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; background: var(--surface); }
+[data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-item:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+[data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-only:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; background: var(--surface); }
 @media (max-width: 700px) {
   [data-docreader-root] .chg-pick { margin-left: 0; flex-basis: 100%; }
   [data-docreader-root][data-docreader-root][data-docreader-root] .chg-menu .cm-hint { display: none; }
@@ -791,7 +791,7 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input { position: absolute; opacity: 0; inset: 0; margin: 0; width: 100%; height: 100%; cursor: pointer; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu label { flex: 1; text-align: center; font-size: 13px; font-weight: 600; color: var(--text-muted); padding: 6px 4px; cursor: pointer; user-select: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:checked + label { background: var(--surface2); color: var(--text); }
-[data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
+[data-docreader-root][data-docreader-root][data-docreader-root] .aa-menu input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
 /* ─── contents and index panels ──────────────────────────────────────────── */
 /* ─── the contents rail: a root-owned column wide, a root-local drawer below ─── */
 [data-docreader-root][data-docreader-root][data-docreader-root] .toc-btn,
@@ -914,7 +914,7 @@
 [data-docreader-root][data-docreader-root][data-docreader-root] .jump .box,
 [data-docreader-root][data-docreader-root][data-docreader-root] .keys .box { max-width: 620px; margin: 12vh auto 0; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 24px 70px rgba(0, 0, 0, .28); padding: 10px; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .jump input { width: 100%; box-sizing: border-box; font: inherit; font-size: 17px; padding: 10px 12px; border-radius: 4px; border: 0; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--text); }
-[data-docreader-root][data-docreader-root][data-docreader-root] .jump input:focus { outline: none; border-bottom-color: var(--accent); box-shadow: 0 1px 0 var(--accent); }
+[data-docreader-root][data-docreader-root][data-docreader-root] .jump input:focus { outline: none; border-bottom-color: var(--focus); box-shadow: 0 1px 0 var(--focus); }
 [data-docreader-root][data-docreader-root][data-docreader-root] .jump ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 56vh; overflow: auto; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .jump li { padding: 7px 10px; border-radius: 3px; cursor: pointer; font-size: 14.5px; display: flex; gap: .7em; align-items: baseline; }
 [data-docreader-root][data-docreader-root][data-docreader-root] .jump li .jt { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1233,6 +1233,73 @@
 @media (hover: none) and (pointer: coarse) {
   [data-docreader-root] .toc-foot .keys-btn { display: none; }
 }
+/* ─── hosted: an appearance from the host. Every rule below is gated by the root's presence attributes (data-docreader-hosted, -colours, -skin), so with none no rule matches and 1.1.0's computed styles stand. ─── */
+[data-docreader-root] { --focus: var(--accent); --accent-ink: initial; --code-ink: initial; --syn-comment: initial; --syn-keyword: initial; --syn-string: initial; --syn-number: initial; --syn-function: initial; --syn-type: initial; --syn-tag: initial; --syn-attr: initial; --syn-punct: initial; --syn-deleted: initial; --syn-inserted: initial; --chg-gap: var(--bg); --dr-radius: initial; --dr-radius-small: initial; --dr-radius-large: initial; --dr-control-row: initial; --dr-pop-shadow: initial; --dr-section-size: initial; --dr-section-weight: initial; --dr-section-tracking: initial; --dr-section-case: initial; }
+[data-docreader-root][data-docreader-hosted] { --sans: "Docreader Host Sans", "Docreader Sans", "Docreader Sans Fallback Arial", "Docreader Sans Fallback DejaVu", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; --mono: "Docreader Host Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+[data-docreader-root][data-docreader-colours] { --accent-hover: color-mix(in srgb, var(--accent) 80%, var(--text)); --accent-soft: color-mix(in srgb, var(--accent) 4%, var(--bg)); --th-bg: var(--accent-soft); --wait-soft: color-mix(in srgb, var(--wait) 4%, var(--bg)); --wait-tint: var(--wait-soft); --no-tint: color-mix(in srgb, var(--no) 4%, var(--bg)); --chg-tint: color-mix(in srgb, var(--chg) 4%, var(--bg)); --chg-soft: color-mix(in srgb, var(--chg) 4%, var(--surface)); --short-bg: var(--surface); --paper: var(--bg); --topbar-bg: var(--bg); --code-inline-bg: var(--surface2); --code-comment: var(--syn-comment); }
+[data-docreader-root][data-docreader-colours]:not(i) :is(.short, .callout.waiting) .chg:not(tr) { --chg-bg: color-mix(in srgb, var(--chg) 4%, var(--short-bg)); }
+[data-docreader-root][data-docreader-colours] pre.mermaid:is(:not(:has(> svg)), :has(> svg[data-docreader-hosted-figure])) { --plate: var(--surface); }
+[data-docreader-root][data-docreader-colours] ::selection { background: var(--accent); color: var(--accent-ink); }
+[data-docreader-root][data-docreader-colours] figure.mermaid-figure .tools button { background: var(--surface) !important; }
+[data-docreader-root][data-docreader-colours] figure.mermaid-figure .tools button:not(:hover, .on) { color: var(--text) !important; }
+[data-docreader-root][data-docreader-colours] figure.mermaid-figure .tools button.on { background: var(--accent) !important; color: var(--accent-ink) !important; }
+[data-docreader-root][data-docreader-colours] .fig-overlay.open { background: var(--bg); }
+[data-docreader-root][data-docreader-colours] .fig-overlay.open .fo-bar { color: var(--text); }
+[data-docreader-root][data-docreader-colours] .fig-overlay.open .fo-bar button { background: var(--surface); color: var(--text); }
+[data-docreader-root][data-docreader-colours] .fig-overlay.open .fo-bar button:not(:hover) { border-color: var(--border); }
+[data-docreader-root][data-docreader-colours] .rs-facts .sep { color: var(--text-muted); }
+[data-docreader-root][data-docreader-colours] .codehilite, [data-docreader-root][data-docreader-colours] pre:not(.mermaid) { color: var(--code-ink); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-code, .hljs-formula, .hljs-emphasis, .hljs-strong) { color: var(--code-ink); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-meta, .hljs-meta.prompt_) { color: var(--syn-comment); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-number, .hljs-symbol, .hljs-bullet) { color: var(--syn-number); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-string, .hljs-regexp, .hljs-char, .hljs-char.escape_, .hljs-meta .hljs-string) { color: var(--syn-string); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-attr, .hljs-attribute, .hljs-property, .hljs-variable, .hljs-template-variable, .hljs-variable.constant_, .hljs-selector-class, .hljs-selector-id, .language-json .hljs-attr, .language-yaml .hljs-attr) { color: var(--syn-attr); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-tag, .hljs-operator, .hljs-subst, .hljs-selector-attr, .hljs-selector-pseudo) { color: var(--syn-punct); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-title, .hljs-title.function_, .hljs-title.function_.invoke__, .hljs-link) { color: var(--syn-function); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-type, .hljs-built_in, .hljs-title.class_, .hljs-title.class_.inherited__) { color: var(--syn-type); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-keyword, .hljs-selector-tag, .hljs-section, .hljs-literal, .hljs-template-tag, .hljs-variable.language_, .hljs-meta .hljs-keyword) { color: var(--syn-keyword); }
+[data-docreader-root][data-docreader-colours] .codehilite :is(.hljs-name, .hljs-tag .hljs-name) { color: var(--syn-tag); }
+[data-docreader-root][data-docreader-colours] .codehilite .hljs-deletion { color: var(--syn-deleted); background: none; }
+[data-docreader-root][data-docreader-colours] .codehilite .hljs-addition { color: var(--syn-inserted); background: none; }
+[data-docreader-root][data-docreader-skin~="radius"] :is(.bar-tools button, .aa-menu .seg, .aa-menu .aa-btns button, figure.mermaid-figure .tools button, .fig-render button, .peek-btn, .code-copy, .short-view, .codehilite, pre.fig-src) { border-radius: var(--dr-radius) !important; }
+[data-docreader-root][data-docreader-skin~="radiusSmall"] :is(:not(pre) > code, kbd, .who) { border-radius: var(--dr-radius-small) !important; }
+[data-docreader-root][data-docreader-skin~="radiusLarge"] :is(.aa-menu, .chg-menu, .xcard, .jump .box, .keys .box, .callout.waiting, .short, .rs-wait, figure.mermaid-figure pre.mermaid) { border-radius: var(--dr-radius-large) !important; }
+@media (pointer: fine) {
+  [data-docreader-root][data-docreader-skin~="controlRow"] :is(.aa-menu .opt, .chg-menu .cm-item, .jump li, .keys :is(dt, dd), .toc-contents a, .toc-index a.ix) { min-height: var(--dr-control-row); }
+}
+[data-docreader-root][data-docreader-skin~="popShadow"] { --pop-shadow: var(--dr-pop-shadow); }
+[data-docreader-root][data-docreader-skin~="popShadow"] :is(.jump .box, .keys .box) { box-shadow: var(--dr-pop-shadow) !important; }
+@media screen and (max-width: 1239px) {
+  [data-docreader-root][data-docreader-skin~="popShadow"]:not(i).has-toc.toc-open > .doc-toc { box-shadow: var(--dr-pop-shadow); }
+}
+[data-docreader-root][data-docreader-skin~="sectionSize"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { font-size: var(--dr-section-size); }
+[data-docreader-root][data-docreader-skin~="sectionWeight"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { font-weight: var(--dr-section-weight); }
+[data-docreader-root][data-docreader-skin~="sectionTracking"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { letter-spacing: var(--dr-section-tracking); }
+[data-docreader-root][data-docreader-skin~="sectionCase"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { text-transform: var(--dr-section-case); }
+[data-docreader-root][data-docreader-section-family="mono"] :is(.aa-menu legend, .aa-menu .aa-kh, .chg-menu .cm-lab, .xcard .xc-k, .jump li .lvl:not(.id), .keys h2, .toc-tabs button, .ix-group) { font-family: var(--mono); }
+[data-docreader-root][data-docreader-hosted]:not(i) .chg:not(tr) { box-shadow: calc(var(--chg-x) * -1 + 3px) 0 0 var(--chg-bg), calc(var(--chg-x) * -1 + 1px) 0 0 var(--chg), calc(var(--chg-x) * -1 - 1px) 0 0 var(--chg-gap), calc(var(--chg-x) * -1 - 3px) 0 0 var(--chg); }
+[data-docreader-root][data-docreader-hosted]:not(i) .short .chg:not(tr) { --chg-gap: var(--short-bg); }
+[data-docreader-root][data-docreader-hosted]:not(i) .callout.waiting .chg:not(tr) { --chg-gap: var(--wait-soft); }
+[data-docreader-root][data-docreader-hosted]:not(i) tr.chg > td:first-child { box-shadow: inset 2px 0 0 var(--chg), inset 4px 0 0 var(--chg-tint), inset 6px 0 0 var(--chg); }
+@media (max-width: 700px) {
+  [data-docreader-root][data-docreader-hosted]:not(i) .stack tr.chg { box-shadow: inset 2px 0 0 var(--chg), inset 4px 0 0 var(--chg-tint), inset 6px 0 0 var(--chg); }
+}
+[data-docreader-root][data-docreader-root][data-docreader-root][data-docreader-hosted] .toc-index .dot.wait { background: none; }
+[data-docreader-root][data-docreader-hosted] .toc-index .dot.wait { border: 2px solid var(--wait); }
+[data-docreader-root][data-docreader-hosted] .toc-index .dot:is(.no, .info) { border-radius: 0; }
+[data-docreader-root][data-docreader-hosted] .toc-index .dot.info { height: 3px; }
+[data-docreader-root][data-docreader-hosted] .ckey .sw:is(.k-ok, .k-wait, .k-no, .k-info) { width: 7px; height: 7px; margin: 0 3.5px; border-radius: 50%; }
+[data-docreader-root][data-docreader-hosted] .ckey .sw.k-wait { background: none; border: 2px solid var(--wait); box-shadow: none; }
+[data-docreader-root][data-docreader-hosted] .ckey .sw:is(.k-no, .k-info) { border-radius: 0; }
+[data-docreader-root][data-docreader-hosted] .ckey .sw.k-info { height: 3px; }
+[data-docreader-root][data-docreader-hosted] a.xref { text-decoration-style: dashed; }
+[data-docreader-root][data-docreader-hosted] a.term { text-decoration-style: dotted; }
+[data-docreader-root][data-docreader-hosted] .jump li.sel { box-shadow: inset 2px 0 0 var(--accent); }
+[data-docreader-root][data-docreader-hosted] .aa-menu .opt label { font-weight: 400; }
+[data-docreader-root][data-docreader-hosted] .aa-menu input:checked + label { font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
+[data-docreader-root][data-docreader-hosted] .short-view button { font-weight: 400; }
+[data-docreader-root][data-docreader-hosted] .short-view button[aria-pressed="true"] { font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+[data-docreader-root][data-docreader-hosted] .tbl-tools input:focus-visible { outline: 2px solid var(--focus); }
 /* ─── print: light, whole tables, figures kept on one page, no chrome ────── */
 @media print {
   [data-docreader-root] svg .dn-dot,

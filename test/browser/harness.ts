@@ -233,6 +233,12 @@ export interface OpenHow {
   readonly html?: (html: string) => string;
   /** Serve the Mermaid file at MERMAID_PATH; default: when the options hold `mermaid`. */
   readonly mermaid?: boolean;
+  /**
+   * Serve this text at /assets/reader.css in place of the package's stylesheet, so a test can put two stylesheets over
+   * the same page (the appearance contract's test 4 compares the current one with the tagged 1.1.0 one). Default: the
+   * package's own.
+   */
+  readonly stylesheet?: string;
 }
 
 export interface OpenedDoc {
@@ -266,6 +272,7 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
   const html = how.html === undefined ? r.html : how.html(r.html);
   const policy = POLICIES[how.csp ?? 'strict'];
   const files = assetFiles();
+  if (how.stylesheet !== undefined) files.set('/assets/reader.css', { body: how.stylesheet, type: 'text/css' });
   files.set('/', { body: pageHtml(html, opts), type: 'text/html; charset=utf-8' });
   files.set('/harness.js', { body: await pageScript(), type: 'text/javascript; charset=utf-8' });
   files.set('/page.css', { body: 'html, body { margin: 0; }\n', type: 'text/css' });

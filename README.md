@@ -445,7 +445,7 @@ settingsButton.addEventListener('click', () => frame.command('settings'));
 This version's frame policy, whose four hash sources a page's `script-src` lists:
 
 ```text
-default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-v7SXq078OpFJm8wtiXfl+gX61LRYbAFTmspXxBpLj4c=' 'sha256-kOjXHHT7Nd+vXcvTLvCtQz9bnHwhnhYnCxWbWhw8n8E=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
+default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-v7SXq078OpFJm8wtiXfl+gX61LRYbAFTmspXxBpLj4c=' 'sha256-NDffABmrstdm3gi6HMrwUOXZxDNM8sQydBpH284ZQMA=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'
 ```
 
 A page that blocks any of them gets a fallback; the frame is never left partly working:
