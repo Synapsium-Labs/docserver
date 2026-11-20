@@ -1,6 +1,6 @@
 # Parity Task 1: mutation rows (the wire)
 
-Each row was measured in place on this wave's branch: the bytes of the file saved with their sha256, one edit applied, the tests named in the row run through the fleet test wrapper as `./node_modules/.bin/vitest run --maxWorkers=1 --reporter=json`, then the file restored from the saved bytes (`cp`) and its sha256 compared. The restore sha256 of each file is `src/frame-runtime/dispatch.ts` `759f38563e886a2903511802d0012a09f5c648e57a9d1b4a85db28eef2ecfb03`; `src/frame-runtime/inbound.ts` `2e684ba08883bd9ed2fabf4c02f0c780ca927a3d5932245e83225d9218d2e090`; `src/frame/anchor.ts` `e2595021d1b32393d307a5b8f8472a54e919943d063a8f8efd5be53e48133c26`; `src/frame/document.ts` `f0d337ab95f4f67c141a50eb9b747b29b4109b21ff8d989039434dd2df87e3fe`; `src/frame/protocol.ts` `cba5d6e7996e55b2f7604028c8be90faedfbd771fee8943ae099752ba46a11df`. Every row exited 1 and every failing test failed with an `AssertionError`; none went red through a load or compile failure. Rows P1a to P1c and P1h measure `test/frame-runtime.test.ts`, P1d `test/frame-protocol.test.ts` and `test/frame-boundaries.test.ts`, P1e `test/frame-document.test.ts` and `test/frame-seed.test.ts`, P1f and P1g `test/frame-anchor.test.ts`.
+Each row was measured in place on this wave's branch: the bytes of the file saved with their sha256, one edit applied, the tests named in the row run through the fleet test wrapper as `./node_modules/.bin/vitest run --maxWorkers=1 --reporter=json`, then the file restored from the saved bytes (`cp`) and its sha256 compared. The restore sha256 of each file is `src/frame-runtime/dispatch.ts` `759f38563e886a2903511802d0012a09f5c648e57a9d1b4a85db28eef2ecfb03`; `src/frame-runtime/inbound.ts` `2e684ba08883bd9ed2fabf4c02f0c780ca927a3d5932245e83225d9218d2e090`; `src/frame/anchor.ts` `e2595021d1b32393d307a5b8f8472a54e919943d063a8f8efd5be53e48133c26`; `src/frame/document.ts` `f0d337ab95f4f67c141a50eb9b747b29b4109b21ff8d989039434dd2df87e3fe`; `src/frame/protocol.ts` `cba5d6e7996e55b2f7604028c8be90faedfbd771fee8943ae099752ba46a11df`. Every row exited 1 and every failing test failed with an `AssertionError`; none went red through a load or compile failure. Rows P1a to P1c and P1h measure `test/frame-runtime.test.ts`, P1d `test/frame-protocol.test.ts` and `test/frame-boundaries.test.ts`, P1e `test/frame-document.test.ts` and `test/frame-seed.test.ts`, P1f, P1g and P1i `test/frame-anchor.test.ts`.
 
 | Row | Guard | Edit | File | Result |
 |---|---|---|---|---|
@@ -12,6 +12,7 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 | P1f | padding counted | `pngBytesOfBase64` takes its size from the length alone, ignoring the padding | `src/frame/anchor.ts` | red: 4 failed \| 47 passed (51). pngBytesOfBase64: the decoded size of canonical base64, from its length and padding, else null is the decoded size for every length from 0 to 40, and agrees with Node's decoder; pngBytesOfBase64: the decoded size of canonical base64, from its length and padding, else null counts the padding: one and two bytes in the last group are two and three characters of data; pngBytesOfBase64: the decoded size of canonical base64, from its length and padding, else null measures the print-figure edges: 1 048 575, 1 048 576 and 1 048 577 bytes, and 16 MiB; and 1 more |
 | P1g | y not negative | `isAnchorToken` accepts a `y` below zero | `src/frame/anchor.ts` | red: 3 failed \| 48 passed (51). isAnchorToken: every rejected shape of nav's check is rejected, and the two agree on every row a y below zero: refused, as nav refuses it; isAnchorToken: every rejected shape of nav's check is rejected, and the two agree on every row a y just below zero: refused, as nav refuses it; isAnchorToken: every rejected shape of nav's check is rejected, and the two agree on every row agrees with nav on a sweep of generated texts: every combination of line, offset and y, edges and breakers |
 | P1h | dispatch hands goto on | dispatch drops `goto` (the reader is never called for it) | `src/frame-runtime/dispatch.ts` | red: 1 failed \| 90 passed (91). B7.4 the frame's port: a command reaches the reader, and a command that fails never stops the port (batch 1.1, C108) goto hands the reader its id and from as a third argument; close-overlay and print-figures hand nothing more (ruling R1, P1h) |
+| P1i | a padded text has its unused bits zero | the canonical-bits check of a padded last character is removed (`QR==` and `QUK=` are then sized, not refused) | `src/frame/anchor.ts` | red: 1 failed \| 50 passed (51). pngBytesOfBase64: the decoded size of canonical base64, from its length and padding, else null wants the unused bits of the last character to be zero (canonical): QR== and QUK= are not the text that Node writes |
 
 ## Choices
 
@@ -155,6 +156,20 @@ Each row was measured in place on this wave's branch: the bytes of the file save
     "total": 91,
     "red": [
       "B7.4 the frame's port: a command reaches the reader, and a command that fails never stops the port (batch 1.1, C108) goto hands the reader its id and from as a third argument; close-overlay and print-figures hand nothing more (ruling R1, P1h)"
+    ]
+  },
+  {
+    "id": "P1i",
+    "guard": "a padded text has its unused bits zero",
+    "edit": "the canonical-bits check of a padded last character is removed (`QR==` and `QUK=` are then sized, not refused)",
+    "file": "src/frame/anchor.ts",
+    "tests": "test/frame-anchor.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 50,
+    "total": 51,
+    "red": [
+      "pngBytesOfBase64: the decoded size of canonical base64, from its length and padding, else null wants the unused bits of the last character to be zero (canonical): QR== and QUK= are not the text that Node writes"
     ]
   }
 ]

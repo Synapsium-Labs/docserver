@@ -39,6 +39,14 @@
 // set by that adapter alone) and is handed each as `Number(p) / 1000`; `DocFrame.command(name)` posts a `command` op after
 // focusing the iframe, once this mount is ready, and does nothing before it, after a fallback or after destroy().
 //
+// The parity additions (docserver parity T2): `onPlace` asks the frame to report its overlay (the seed's `bridge.places`,
+// set by that adapter alone) and, with it, `onHash` is handed a second argument, `{ push, from }`; `onPrintFigure` asks
+// for print figures (`bridge.printFigures`, by that adapter alone). A run of figures belongs to one `printFigures()` call
+// (plan choice B5): the parser refuses a `print-figure` with no open run, and each figure is checked against the run's
+// count, its indexes and its byte totals before the adapter sees it; the run ends at its last index, at the next
+// `printFigures()` call, and with the mount. `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
+// after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
+//
 // Teardown: a fallback clears the timers, closes the port, removes the iframe and calls onFallback once; it never
 // remounts. update() is a full remount (new iframe, channel, nonce and watchdog), never a srcdoc reassignment.
 // destroy() is idempotent and calls no adapter, also when host code that a mount step runs (a focusout at the focus)
@@ -47,18 +55,20 @@
 //
 // Import-inert: no module-level state. Each mount keeps its state in its own closure; two mounts share no port, nonce
 // or timer. The DOM is touched only inside mountDocFrame and the DocFrame it returns, through the element's own window.
+import { pngBytesOfBase64, isAnchorToken } from '../frame/anchor.js';
 import { frameCsp } from '../frame/csp.js';
 import { parseAppearance, type Appearance } from '../enhance/appearance.js';
 import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
+import { isFragmentId } from '../frame/fragment.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
-import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, type FrameToParent } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent, type PlaceKind } from '../frame/protocol.js';
 import { hex, sha256Text } from '../frame/sha256.js';
 import type { FramePrefs } from '../frame/wire-types.js';
 import { hiddenChars, type HiddenChar } from './copy.js';
 import { createLimiter, type Limiter } from './limits.js';
 import { classifyLink, type HostLink } from './links.js';
-import { parseBridgeMessage } from './parse.js';
+import { parseBridgeMessage, type ParseContext } from './parse.js';
 import { createHostStore, type HostStorage, type HostStore } from './store.js';
 
 /** Why a mount fell back: the host shows its own view of the document instead (Reference §1). */
@@ -112,7 +122,20 @@ export interface HostAdapters {
   readonly appearance?: Appearance;
   /** ./host never navigates or opens a window: the host decides. */
   onLink?(link: HostLink): void;
-  onHash?(id: string): void;
+  /**
+   * The frame went to a place of the document. With `onPlace` given (the seed's `bridge.places`) a second argument says how:
+   * `push` is true when the move is a new place in the host's history and `from` is the opaque position token the move
+   * came from (hand it back to `goto`), or null. Without `onPlace` it is called with the id alone, as before.
+   */
+  onHash?(id: string, entry?: { readonly push: boolean; readonly from: string | null }): void;
+  /** Giving it asks the frame to report its overlay: `'overlay'` when one opened, `'overlay-closed'` when it closed. */
+  onPlace?(kind: PlaceKind): void;
+  /**
+   * Giving it asks the frame for print figures after `DocFrame.printFigures()`: one call per figure, `i` of `n`, `png` the
+   * canonical base64 text of the image, at most 1 MiB decoded, and at most 16 MiB together for the run. ./host checks the
+   * text and the sizes and never decodes: the host decodes.
+   */
+  onPrintFigure?(f: { readonly i: number; readonly n: number; readonly png: string }): void;
   /** ./host never touches the clipboard: the host writes the text, after showing what `hidden` lists. */
   copy?(text: string, check: { readonly hidden: readonly HiddenChar[] }): void;
   changes?(sha: string): Promise<{ ranges: readonly (readonly [number, number])[]; removedAfter?: readonly number[] } | null>;
@@ -144,21 +167,45 @@ export interface DocFrame {
   /**
    * Runs one of the reader's tools without the reader's own bar, as a toggle (batch 1.1, C108): focuses the iframe, then
    * posts the command. Before the frame is ready, after destroy() and after a fallback it does nothing (it is not
-   * queued); a name outside the four throws a TypeError, whatever the state.
+   * queued); a name outside the four throws a TypeError, whatever the state. The wire's other command words are sent only
+   * by closeOverlay(), goto() and printFigures().
    */
-  command(name: (typeof COMMAND_OPS)[number]): void;
+  command(name: ToolCommand): void;
+  /**
+   * Closes the frame's overlay, if one is open (needs `onPlace`, else a TypeError, whatever the state). Posted once ready;
+   * before it, after destroy() and after a fallback it does nothing.
+   */
+  closeOverlay(): void;
+  /**
+   * Takes the reader to the place `id` (a fragment id, by the same grammar the frame's `hash` op carries), optionally from
+   * the position token an `onHash` entry gave as `from`. An `id` outside the grammar or a `from` that is not a token
+   * throws a TypeError, whatever the state, and so does a host with no `onPlace`; once ready it posts, and before it, after
+   * destroy() and after a fallback it does nothing.
+   */
+  goto(id: string, from?: string): void;
+  /**
+   * Opens one print run and asks the frame for its figures; they arrive through `onPrintFigure` (needs it, else a
+   * TypeError, whatever the state). A second call replaces the run. Before ready, after destroy() and after a fallback it
+   * does nothing.
+   */
+  printFigures(): void;
   /** Idempotent; calls no adapter. */
   destroy(): void;
 }
+
+/** The four tools `DocFrame.command` runs: the toggles of the reader's own bar. The wire's other command words have their own methods. */
+const TOOL_COMMANDS = Object.freeze(['jump', 'settings', 'contents', 'outline'] as const);
+export type ToolCommand = (typeof TOOL_COMMANDS)[number];
 
 /** Every key HostAdapters may hold. */
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
   'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
+  'onPlace', 'onPrintFigure',
 ]);
 
 /** The callbacks, each a function when given. */
-const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback'] as const);
+const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'onPlace', 'onPrintFigure'] as const);
 type CallbackName = (typeof CALLBACKS)[number];
 
 const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request', 'after-ready']);
@@ -432,7 +479,11 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   /** Posts an appearance verdict on the current mount's port (now or at its ready). */
   let sendAppearance: (a: Appearance) => void = () => undefined;
   /** Focuses the current mount's iframe and posts a command on its port; nothing before its ready or once it is gone. */
-  let sendCommand: (name: (typeof COMMAND_OPS)[number]) => void = () => undefined;
+  let sendCommand: (name: ToolCommand) => void = () => undefined;
+  /** Posts a command that moves no focus (close-overlay, goto) on the current mount's port, once it is ready. */
+  let sendWire: (m: Record<string, string>) => void = () => undefined;
+  /** Opens a print run on the current mount and posts print-figures, once it is ready. */
+  let sendPrintFigures: () => void = () => undefined;
 
   /** What every 'after-ready' mount of this DocFrame posts: the build, or that there is none. */
   type Build = { readonly text: string } | { readonly unavailable: true };
@@ -492,6 +543,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     });
   };
 
+  /** Asked for by giving onPlace, and by nothing else: it also gates a hash's `push` and `from`, and onHash's second argument. */
+  const places = c.callbacks.onPlace !== undefined;
+
   const mount = (d: RenderInput): void => {
     let live = true;
     let fellBack = false;
@@ -524,6 +578,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           versions: c.callbacks.openVersion !== undefined,
           // Asked for by giving onProgress, and by nothing else: a frame is never sent a progress nobody listens to.
           progress: c.callbacks.onProgress !== undefined,
+          // Likewise: places by onPlace alone, print figures by onPrintFigure alone.
+          places,
+          printFigures: c.callbacks.onPrintFigure !== undefined,
         },
       };
       page = frameDocument(d, frameOptions);
@@ -550,6 +607,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     let ready = false;
     let early = 0;
     let limiter: Limiter | null = null;
+    /** The open print run of this mount (B5); null when none is open. */
+    let run: { n: number | null; readonly seen: Set<number>; bytes: number } | null = null;
     let pending: Partial<FramePrefs> | null = null;
     let pendingAppearance: Appearance | null = null;
     let answer: Build | null = null;
@@ -655,8 +714,26 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           if (isFullSha(msg.sha)) answerChanges(msg.sha);
           return;
         case 'hash':
-          call('onHash', msg.id);
+          // The entry only under bridge.places: a 1.1-shaped host's onHash is called with the id alone.
+          if (places) call('onHash', msg.id, { push: msg.push === 'true', from: msg.from ?? null });
+          else call('onHash', msg.id);
           return;
+        case 'place':
+          call('onPlace', msg.kind);
+          return;
+        case 'print-figure': {
+          // The run is updated before the adapter is called, so a host that calls printFigures() from it opens a fresh run.
+          const i = Number(msg.i);
+          const n = Number(msg.n);
+          if (run !== null) {
+            run.n = n;
+            run.seen.add(i);
+            run.bytes += pngBytesOfBase64(msg.png) ?? 0;
+            if (i === n - 1) run = null;
+          }
+          call('onPrintFigure', { i, n, png: msg.png });
+          return;
+        }
         case 'progress':
           call('onProgress', Number(msg.p) / 1000);
           return;
@@ -700,7 +777,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
 
     port.onmessage = (e: MessageEvent): void => {
       if (!live) return;
-      const parsed = parseBridgeMessage(e.data, e.ports, nonce);
+      const context: ParseContext = { places, run };
+      const parsed = parseBridgeMessage(e.data, e.ports, nonce, context);
       if (!ready) {
         if (parsed.ok && parsed.msg.t === 'ready') onReady();
         else if (!parsed.ok && (parsed.reason === 'nonce' || parsed.reason === 'protocol')) fail(parsed.reason);
@@ -752,6 +830,15 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       iframe.focus();
       post({ t: 'command', name });
     };
+    sendWire = (m) => {
+      if (!live || !ready) return;
+      post({ t: 'command', ...m });
+    };
+    sendPrintFigures = () => {
+      if (!live || !ready) return;
+      run = { n: null, seen: new Set<number>(), bytes: 0 };
+      post({ t: 'command', name: 'print-figures' });
+    };
     teardown = () => {
       if (live) stop();
     };
@@ -787,6 +874,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendPrefs = () => undefined;
       sendAppearance = () => undefined;
       sendCommand = () => undefined;
+      sendWire = () => undefined;
+      sendPrintFigures = () => undefined;
       mount(d);
     },
     setPrefs(p) {
@@ -803,11 +892,28 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendAppearance(verdict);
     },
     command(name) {
-      if (typeof name !== 'string' || !(COMMAND_OPS as readonly string[]).includes(name)) {
-        throw new TypeError(`pinax-lib host: command name must be one of ${COMMAND_OPS.join(', ')}`);
+      if (typeof name !== 'string' || !(TOOL_COMMANDS as readonly string[]).includes(name)) {
+        throw new TypeError(`pinax-lib host: command name must be one of ${TOOL_COMMANDS.join(', ')}`);
       }
       if (destroyed) return;
       sendCommand(name);
+    },
+    closeOverlay() {
+      if (!places) throw new TypeError('pinax-lib host: closeOverlay needs adapters.onPlace');
+      if (destroyed) return;
+      sendWire({ name: 'close-overlay' });
+    },
+    goto(id, from) {
+      if (typeof id !== 'string' || !isFragmentId(id)) throw new TypeError('pinax-lib host: goto needs an id inside the fragment grammar');
+      if (from !== undefined && !isAnchorToken(from)) throw new TypeError('pinax-lib host: goto\'s from must be a position token');
+      if (!places) throw new TypeError('pinax-lib host: goto needs adapters.onPlace');
+      if (destroyed) return;
+      sendWire(from === undefined ? { name: 'goto', id } : { name: 'goto', id, from });
+    },
+    printFigures() {
+      if (c.callbacks.onPrintFigure === undefined) throw new TypeError('pinax-lib host: printFigures needs adapters.onPrintFigure');
+      if (destroyed) return;
+      sendPrintFigures();
     },
     destroy() {
       if (destroyed) return;
@@ -817,6 +923,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendPrefs = () => undefined;
       sendAppearance = () => undefined;
       sendCommand = () => undefined;
+      sendWire = () => undefined;
+      sendPrintFigures = () => undefined;
     },
   };
 }

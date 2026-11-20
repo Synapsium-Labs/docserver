@@ -8,6 +8,14 @@
 // descriptor, so a getter is refused unread; it never throws, whatever it is given. An accepted message is returned as a
 // fresh object holding only the keys it was sent. Refusals are checked in a fixed order, the fixtures' order: ports,
 // plain object, a prototype key, the op, the key set, the value types, then each op's own grammar.
+//
+// The parity wire (docserver parity T2) makes three verdicts depend on what the mount holds, which the caller passes as a
+// `ParseContext` (the parser still keeps nothing): `bridge.places` (a `place` op, and a `hash`'s `push` and `from`, are
+// refused without it) and the open print run (a `print-figure` is refused with none; plan choices B2 and B5). The reasons
+// are the closed list's: a `place` or `print-figure` the mount did not ask for is `unknown-op`, a `push` or `from` the
+// mount did not ask for is `keys`, a value outside its grammar or its run is `type` (a `from` over its cap, a figure or a
+// run over a byte cap, `oversize`).
+import { ANCHOR_LIMITS, isAnchorToken, pngBytesOfBase64 } from '../frame/anchor.js';
 import { isFragmentId } from '../frame/fragment.js';
 import {
   BRIDGE_LIMITS,
@@ -18,8 +26,10 @@ import {
   isFullSha,
   isProgressThousandths,
   OP_KEYS,
+  PLACE_KINDS,
   type ErrorWhy,
   type FrameToParent,
+  type PlaceKind,
 } from '../frame/protocol.js';
 
 /** Why a frame-to-parent message is refused: the parser's part of bridge-cases.json's closed list of reasons. */
@@ -43,6 +53,28 @@ export type BridgeRefusal =
 export type ParsedBridgeMessage = { readonly ok: true; readonly msg: FrameToParent } | { readonly ok: false; readonly reason: BridgeRefusal };
 
 type FrameOp = FrameToParent['t'];
+
+/**
+ * What the mount holds of one print run (plan choice B5): `n` is the run's figure count, set by its first accepted figure
+ * (null before it); `seen` the indexes accepted; `bytes` what they decode to, together.
+ */
+export interface PrintRunView {
+  readonly n: number | null;
+  readonly seen: ReadonlySet<number>;
+  readonly bytes: number;
+}
+
+/** The mount's state a verdict may depend on: `bridge.places` as seeded, and the open print run (null: none is open). */
+export interface ParseContext {
+  readonly places: boolean;
+  readonly run: PrintRunView | null;
+}
+
+/** A mount with no `onPlace`, no `onPrintFigure` and no open run: what a 1.1 host is. */
+const NO_CONTEXT: ParseContext = Object.freeze({ places: false, run: null });
+
+/** A canonical decimal of one to three digits: no sign, no leading zero, no point (a figure's `i` and `n`). */
+const FIGURE_NUMBER = /^(?:0|[1-9][0-9]{0,2})$/;
 
 /** The keys each frame op must carry, beside `t` (OP_KEYS lists the keys it may carry). */
 const REQUIRED_KEYS: Readonly<Record<FrameOp, readonly string[]>> = Object.freeze({
@@ -114,19 +146,20 @@ const refuse = (reason: BridgeRefusal): ParsedBridgeMessage => ({ ok: false, rea
 /**
  * Judges one message from the frame's port (Reference §11.3). `ports` is the event's `ports`: any transferred port is a
  * refusal. `nonce` is this mount's seed nonce, which a `ready` must echo with protocol 1. A ready is judged here like
- * any other op; dropping every other op before a valid ready, and the limits after it, are the caller's.
+ * any other op; dropping every other op before a valid ready, and the limits after it, are the caller's. `ctx` is the
+ * mount's state (see ParseContext); absent, it is a mount that asked for no place and no print figure.
  */
-export function parseBridgeMessage(data: unknown, ports: unknown, nonce: string): ParsedBridgeMessage {
+export function parseBridgeMessage(data: unknown, ports: unknown, nonce: string, ctx: ParseContext = NO_CONTEXT): ParsedBridgeMessage {
   if (!Array.isArray(ports) || ports.length !== 0) return refuse('port');
   try {
-    return judge(data, nonce);
+    return judge(data, nonce, ctx);
   } catch {
     // A revoked proxy or a throwing trap: never a plain message.
     return refuse('not-plain');
   }
 }
 
-function judge(data: unknown, nonce: string): ParsedBridgeMessage {
+function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMessage {
   if (!isPlainObject(data)) return refuse('not-plain');
   const keys = Reflect.ownKeys(data);
   for (const k of PROTO_KEYS) if (keys.includes(k)) return refuse('proto-key');
@@ -136,13 +169,10 @@ function judge(data: unknown, nonce: string): ParsedBridgeMessage {
   if (typeof t !== 'string' || !(FRAME_OPS as readonly string[]).includes(t)) return refuse('unknown-op');
   const op = t as FrameOp;
 
-  // The parity wire's ops and keys (docserver parity T1) are in the tables; this parser reads none of them yet, and refuses what
-  // it does not read until the host's own task (T2) writes their grammar and their gating by the seed's bridge.
-  if (op === 'place' || op === 'print-figure') return refuse('unknown-op');
-  if (op === 'hash' && (keys.includes('push') || keys.includes('from'))) return refuse('keys');
-
   const allowed: readonly string[] = OP_KEYS[op];
   for (const k of keys) if (typeof k !== 'string' || !allowed.includes(k)) return refuse('keys');
+  // A hash's `push` and `from` are the mount's own request (bridge.places): without it they are keys the op does not have.
+  if (op === 'hash' && !ctx.places && (keys.includes('push') || keys.includes('from'))) return refuse('keys');
   for (const k of REQUIRED_KEYS[op]) if (!keys.includes(k)) return refuse('keys');
 
   // Every value, read once by its descriptor: a getter is never called.
@@ -193,7 +223,44 @@ function judge(data: unknown, nonce: string): ParsedBridgeMessage {
     }
     case 'hash': {
       const id = str('id');
-      return isFragmentId(id) ? { ok: true, msg: { t: 'hash', id } } : refuse('hash');
+      if (!isFragmentId(id)) return refuse('hash');
+      const msg: { t: 'hash'; id: string; push?: 'true'; from?: string } = { t: 'hash', id };
+      if (values.has('push')) {
+        if (str('push') !== 'true') return refuse('type');
+        msg.push = 'true';
+      }
+      if (values.has('from')) {
+        const from = str('from');
+        if (from.length > ANCHOR_LIMITS.from) return refuse('oversize');
+        if (!isAnchorToken(from)) return refuse('type');
+        msg.from = from;
+      }
+      return { ok: true, msg };
+    }
+    case 'place': {
+      if (!ctx.places) return refuse('unknown-op');
+      const kind = str('kind');
+      return (PLACE_KINDS as readonly string[]).includes(kind) ? { ok: true, msg: { t: 'place', kind: kind as PlaceKind } } : refuse('type');
+    }
+    case 'print-figure': {
+      // In this order, each failure a refusal and nothing decoded before the last: an open run (B5); the index and the
+      // count, inside the grammar and the run; the PNG's size from its text, within its own cap; the run's total.
+      const run = ctx.run;
+      if (run === null) return refuse('unknown-op');
+      const iText = str('i');
+      const nText = str('n');
+      if (!FIGURE_NUMBER.test(iText) || !FIGURE_NUMBER.test(nText)) return refuse('type');
+      const i = Number(iText);
+      const n = Number(nText);
+      if (!(i < n && n <= BRIDGE_LIMITS.printFiguresMax)) return refuse('type');
+      if (run.n !== null && n !== run.n) return refuse('type');
+      if (run.seen.has(i)) return refuse('type');
+      const png = str('png');
+      const bytes = pngBytesOfBase64(png);
+      if (bytes === null) return refuse('type');
+      if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');
+      if (run.bytes + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes) return refuse('oversize');
+      return { ok: true, msg: { t: 'print-figure', i: iText, n: nText, png } };
     }
     case 'progress': {
       // The share in thousandths, a string inside PROGRESS_SOURCE; a string outside it is refused as `type` (no new reason, batch 1.1).

@@ -28,7 +28,7 @@ import { normaliseForCompare } from './normalise.js';
 import { checkOutputSafety } from './oracle.js';
 import { evaluateVerdict, type Verdict, type VerdictContext } from './verdict.js';
 
-export type { BridgeCases, BridgeFill, BridgeMessageCase, BridgeSequence, BridgeStep } from './bridge.js';
+export type { BridgeCases, BridgeFill, BridgeGiven, BridgeMessageCase, BridgeSequence, BridgeStep } from './bridge.js';
 export { buildInput, inputSize, MAX_INPUT_BYTES } from './hostile.js';
 export type { InputPart, InputSpec } from './hostile.js';
 export { normaliseForCompare } from './normalise.js';

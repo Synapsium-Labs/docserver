@@ -124,16 +124,13 @@ describe('the record: its shape and its newest entries', () => {
     }
   });
 
-  it('the appearance contract\'s entry (1) adds no frame op and `appearance` to the accepted list; the parity wire\'s (2) adds exactly `place` and `print-figure` to the frame ops and nothing to the accepted list', () => {
-    expect(DELTAS).toEqual([
-      { entry: 1, addsFrameOps: [], addsFrameAccepts: ['appearance'] },
-      { entry: 2, addsFrameOps: ['place', 'print-figure'], addsFrameAccepts: [] },
-    ]);
-  });
-
-  it('the computed lists are the newest entry\'s: FRAME_OPS ends with `place` and `print-figure`, and FRAME_ACCEPTS is the five ops it was after the appearance contract', () => {
-    expect([...FRAME_OPS].slice(-2)).toEqual(['place', 'print-figure']);
-    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+  it('the computed lists are the newest entry\'s, and each ends with the newest delta row\'s additions', () => {
+    const newest = record.at(-1);
+    const delta = DELTAS.at(-1);
+    expect([...FRAME_OPS]).toEqual(newest?.frameOps);
+    expect([...FRAME_ACCEPTS]).toEqual(newest?.frameAccepts);
+    expect([...FRAME_OPS].slice(FRAME_OPS.length - (delta?.addsFrameOps.length ?? 0))).toEqual(delta?.addsFrameOps);
+    expect([...FRAME_ACCEPTS].slice(FRAME_ACCEPTS.length - (delta?.addsFrameAccepts.length ?? 0))).toEqual(delta?.addsFrameAccepts);
   });
 
   it('the masked frameCsp() equals the previous entry\'s: the same directives in the same order, the same sources but the hashes', () => {

@@ -15,8 +15,10 @@ import {
   DOC_FIELDS,
   ERROR_WHY,
   FRAME_ACCEPTS,
+  isAnchorToken,
   isFragmentId,
   OP_KEYS,
+  pngBytesOfBase64,
   PREF_KEYS,
   type BridgeStoreKey,
   type FrameToParent,
@@ -259,9 +261,15 @@ interface MessageCase {
   readonly ports?: number;
   readonly message: unknown;
   readonly fill?: Readonly<Record<string, Fill>>;
+  readonly given?: Given;
   readonly verdict: 'accept' | 'refuse';
   readonly reason?: string;
   readonly note?: string;
+}
+/** What a case says the parent holds besides a valid ready (bridge-cases.json's `given`). */
+interface Given {
+  readonly places?: boolean;
+  readonly run?: { readonly n: number | null; readonly seen: readonly number[]; readonly bytes: number };
 }
 interface Step {
   readonly at: number;
@@ -360,8 +368,8 @@ function common(m: unknown, ops: readonly string[]): { fail: Verdict } | { msg: 
 
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
-/** `./host`'s reading of a frame-to-parent message (Reference §8.1, §11.3), once a valid ready is held. */
-function parentReads(m: unknown, ports: number, ctx: BridgeCases['context']): Verdict {
+/** `./host`'s reading of a frame-to-parent message (Reference §8.1, §11.3), once a valid ready is held, and `given` its state. */
+function parentReads(m: unknown, ports: number, ctx: BridgeCases['context'], given: Given = {}): Verdict {
   if (ports !== 0) return refuse('port');
   const c = common(m, FRAME_OPS);
   if ('fail' in c) return c.fail;
@@ -396,8 +404,36 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context']): Ve
       return utf8Bytes(msg['text'] as string) <= BRIDGE_LIMITS.copyMaxBytes ? ACCEPT : refuse('oversize');
     case 'changes':
       return isFullSha(msg['sha']) ? ACCEPT : refuse('sha');
-    case 'hash':
-      return isFragmentId(msg['id']) ? ACCEPT : refuse('hash');
+    case 'hash': {
+      // push and from are the parent's own request (bridge.places): without it they are keys the op does not have.
+      if (given.places !== true && (Object.hasOwn(msg, 'push') || Object.hasOwn(msg, 'from'))) return refuse('keys');
+      if (!isFragmentId(msg['id'])) return refuse('hash');
+      if (Object.hasOwn(msg, 'push') && msg['push'] !== 'true') return refuse('type');
+      if (Object.hasOwn(msg, 'from')) {
+        const from = msg['from'] as string;
+        if (from.length > 4096) return refuse('oversize');
+        if (!isAnchorToken(from)) return refuse('type');
+      }
+      return ACCEPT;
+    }
+    case 'place':
+      if (given.places !== true) return refuse('unknown-op');
+      return (PLACE_KINDS as readonly string[]).includes(msg['kind'] as string) ? ACCEPT : refuse('type');
+    case 'print-figure': {
+      const run = given.run;
+      if (run === undefined) return refuse('unknown-op');
+      const num = /^(?:0|[1-9][0-9]{0,2})$/;
+      const [iText, nText] = [msg['i'] as string, msg['n'] as string];
+      if (!num.test(iText) || !num.test(nText)) return refuse('type');
+      const [i, n] = [Number(iText), Number(nText)];
+      if (i >= n || n > BRIDGE_LIMITS.printFiguresMax) return refuse('type');
+      if (run.n !== null && run.n !== n) return refuse('type');
+      if (run.seen.includes(i)) return refuse('type');
+      const bytes = pngBytesOfBase64(msg['png'] as string);
+      if (bytes === null) return refuse('type');
+      if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');
+      return run.bytes + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes ? refuse('oversize') : ACCEPT;
+    }
     case 'version':
       for (const k of ['sha', 'only']) if (Object.hasOwn(msg, k) && !isFullSha(msg[k])) return refuse('sha');
       return ACCEPT;
@@ -538,6 +574,22 @@ describe('conformance/bridge-cases.json: its shape', () => {
     }
   });
 
+  it('a given names only places (a boolean) and a run (n, seen as distinct indexes below n, bytes), and only a frame-to-parent case has one', () => {
+    for (const c of CASES.messages) {
+      if (c.given === undefined) continue;
+      expect(c.direction, c.label).toBe('frame-to-parent');
+      expect(Object.keys(c.given).every((k) => k === 'places' || k === 'run'), c.label).toBe(true);
+      if (c.given.places !== undefined) expect(typeof c.given.places, c.label).toBe('boolean');
+      const run = c.given.run;
+      if (run === undefined) continue;
+      expect(Object.keys(run).sort(), c.label).toEqual(['bytes', 'n', 'seen']);
+      expect(Number.isInteger(run.bytes) && run.bytes >= 0, c.label).toBe(true);
+      expect(new Set(run.seen).size, c.label).toBe(run.seen.length);
+      const n = run.n;
+      if (n !== null) expect(Number.isInteger(n) && run.seen.every((i) => i >= 0 && i < n), c.label).toBe(true);
+    }
+  });
+
   it("the context's nonce and in-flight sha are in their grammars", () => {
     expect(CASES.context.nonce).toMatch(/^[0-9a-f]{32}$/);
     expect(isFullSha(CASES.context.inFlightSha)).toBe(true);
@@ -574,10 +626,7 @@ describe('conformance/bridge-cases.json: the M8.5 battery is present', () => {
   });
 
   it('each frame-to-parent op has an accepted case, and every reason but rate has a refused message case', () => {
-    // `place` and `print-figure` (the parity wire, task 1) get their accepted cases in task 2, which writes `./host`'s parser
-    // for them: every frame-to-parent case is replayed through that parser (test/host-parse.test.ts), which does not read them yet.
-    const NO_CASE_YET = ['place', 'print-figure'];
-    for (const t of FRAME_OPS) expect(has((c, m) => m['t'] === t && c.verdict === 'accept'), t).toBe(!NO_CASE_YET.includes(t));
+    for (const t of FRAME_OPS) expect(has((c, m) => m['t'] === t && c.verdict === 'accept'), t).toBe(true);
     for (const t of PARENT_OPS) expect(has((c, m) => m['t'] === t && c.verdict === 'accept'), t).toBe(true);
     const used = new Set(CASES.messages.map((c) => c.reason));
     expect(REASONS.filter((r) => r !== 'rate' && !used.has(r))).toEqual([]);
@@ -736,7 +785,7 @@ describe('conformance/bridge-cases.json: every message verdict agrees with the r
       const m = messageOf(c);
       const got =
         c.direction === 'frame-to-parent'
-          ? parentReads(m, c.ports ?? 0, CASES.context)
+          ? parentReads(m, c.ports ?? 0, CASES.context, c.given)
           : frameReads(m, c.ports ?? 0, c.channel ?? 'port', CASES.context);
       expect(got).toEqual(c.verdict === 'accept' ? ACCEPT : refuse(c.reason ?? ''));
     });

@@ -25,10 +25,22 @@ export interface BridgeMessageCase {
   readonly message: unknown;
   /** Keys set before judging (each absent from `message`). */
   readonly fill?: Readonly<Record<string, BridgeFill>>;
+  /**
+   * For a frame-to-parent message whose verdict depends on what the parent holds: `places` (its seed asked for bridge.places;
+   * absent is false) and `run`, the open print run (absent: none is open). A case with no `given` is a parent that asked for neither.
+   */
+  readonly given?: BridgeGiven;
   readonly verdict: 'accept' | 'refuse';
   /** A refusal's reason, one of BridgeCases.reasons. */
   readonly reason?: string;
   readonly note?: string;
+}
+
+/** What a parent holds besides a valid ready (BridgeMessageCase.given). */
+export interface BridgeGiven {
+  readonly places?: boolean;
+  /** The open print run: `n` the count its first accepted figure set (null before it), `seen` the indexes accepted, `bytes` what they decode to together. */
+  readonly run?: { readonly n: number | null; readonly seen: readonly number[]; readonly bytes: number };
 }
 
 /** One step of a timed sequence: frame-to-parent messages `at` ms after a valid ready, `count` times (absent: 1). */

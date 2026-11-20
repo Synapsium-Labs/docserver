@@ -2129,3 +2129,441 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp());
   });
 });
+
+// ───────── docserver parity T2: places, goto, close-overlay and print figures ─────────
+
+describe('docserver parity T2: the adapters, the seed and the three commands', () => {
+  const TOKEN = '{"line":null,"offset":0,"y":0}';
+  /** `n` zero bytes as canonical base64 text. */
+  const zeros = (bytes: number): string => 'AAAA'.repeat(Math.floor(bytes / 3)) + (bytes % 3 === 0 ? '' : bytes % 3 === 1 ? 'AA==' : 'AAA=');
+  const PNG = 'iVBORw0KGgo=';
+  const fig = (i: number, n: number, png: string = PNG): unknown => ({ t: 'print-figure', i: String(i), n: String(n), png });
+
+  /** What the adapters of one row saw, with the arguments kept as given. */
+  interface Calls {
+    readonly hash: unknown[][];
+    readonly place: unknown[];
+    readonly figures: unknown[];
+  }
+  function calls(): { readonly c: Calls; readonly over: Partial<Record<keyof HostAdapters, unknown>> } {
+    const c: Calls = { hash: [], place: [], figures: [] };
+    return {
+      c,
+      over: {
+        onHash: (...args: unknown[]) => c.hash.push(args),
+        onPlace: (k: unknown) => c.place.push(k),
+        onPrintFigure: (f: unknown) => c.figures.push(f),
+      },
+    };
+  }
+  const bridgeOf = (m: Mounted): Record<string, unknown> => seedOf(m.iframe.getAttribute('srcdoc') ?? '')['bridge'] as Record<string, unknown>;
+  const readyFake = (over: Partial<Record<keyof HostAdapters, unknown>>): Mounted => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const m = mount(PLAIN, over);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    return m;
+  };
+
+  describe('the seed', () => {
+    it('a 1.1-shaped host (neither new adapter) seeds both switches false, and its onHash is called with one argument', async () => {
+      const { c } = calls();
+      const m = await ready(PLAIN, { onHash: (...a: unknown[]) => c.hash.push(a) });
+      expect(bridgeOf(m)).toMatchObject({ hash: true, places: false, printFigures: false });
+      m.say({ t: 'hash', id: 'title' });
+      expect(c.hash).toEqual([['title']]);
+      expect(c.hash[0]).toHaveLength(1);
+    });
+
+    it('onPlace switches places on and by itself; onPrintFigure switches printFigures on and by itself; both together', () => {
+      const place = mount(PLAIN, { onPlace: () => undefined });
+      expect(bridgeOf(place)).toMatchObject({ places: true, printFigures: false });
+      const fig_ = mount(PLAIN, { onPrintFigure: () => undefined });
+      expect(bridgeOf(fig_)).toMatchObject({ places: false, printFigures: true });
+      const both = mount(PLAIN, { onPlace: () => undefined, onPrintFigure: () => undefined });
+      expect(bridgeOf(both)).toMatchObject({ places: true, printFigures: true });
+    });
+
+    it('both are known adapter keys and must be functions when given', () => {
+      for (const k of ['onPlace', 'onPrintFigure']) {
+        expect(() => mount(PLAIN, { [k]: 'x' }), k).toThrow(new RegExp(`adapters\\.${k} must be a function`));
+        expect(() => mount(PLAIN, { [k]: undefined }), k).not.toThrow();
+      }
+    });
+
+    it('an update() keeps the switches', () => {
+      const m = mount(PLAIN, { onPlace: () => undefined, onPrintFigure: () => undefined });
+      m.frame.update(input(PLAIN));
+      const fresh = container.querySelector('iframe') as HTMLIFrameElement;
+      expect(seedOf(fresh.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ places: true, printFigures: true });
+    });
+  });
+
+  describe('place and the hash entry', () => {
+    it('each place kind reaches onPlace, as the one argument, as a method of the adapters', async () => {
+      const seenKinds: [unknown, boolean][] = [];
+      const m = await ready(PLAIN, { onPlace(this: unknown, k: unknown) { seenKinds.push([k, this !== undefined]); } });
+      m.say({ t: 'place', kind: 'overlay' });
+      m.say({ t: 'place', kind: 'overlay-closed' });
+      expect(seenKinds).toEqual([['overlay', true], ['overlay-closed', true]]);
+      expect(m.fallbacks()).toEqual([]);
+    });
+
+    it('a kind outside the list is refused and never handed on; sixteen refusals close the frame', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (const kind of ['tab', 'Overlay', '', 1]) m.say({ t: 'place', kind });
+      expect(c.place).toEqual([]);
+      for (let i = 0; i < 11; i += 1) m.say({ t: 'place', kind: 'x' });
+      expect(m.fallbacks()).toEqual([]);
+      m.say({ t: 'place', kind: 'x' });
+      expect(m.fallbacks()).toEqual(['refusals']);
+    });
+
+    it('a place sent to a host with no onPlace is refused and counted, never handed on (a frame that was not asked)', async () => {
+      const { c } = calls();
+      const m = await ready(PLAIN, { onPrintFigure: (f: unknown) => c.figures.push(f) });
+      for (let i = 0; i < 15; i += 1) m.say({ t: 'place', kind: 'overlay' });
+      expect(m.fallbacks()).toEqual([]);
+      m.say({ t: 'place', kind: 'overlay' });
+      expect(m.fallbacks()).toEqual(['refusals']);
+      expect(c.place).toEqual([]);
+    });
+
+    it('under onPlace, onHash gets a second argument: push is true only for the literal, from is the token or null', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.say({ t: 'hash', id: 'title' });
+      m.say({ t: 'hash', id: 'title', push: 'true' });
+      m.say({ t: 'hash', id: 'title', from: TOKEN });
+      m.say({ t: 'hash', id: 'title', push: 'true', from: TOKEN });
+      expect(c.hash).toEqual([
+        ['title', { push: false, from: null }],
+        ['title', { push: true, from: null }],
+        ['title', { push: false, from: TOKEN }],
+        ['title', { push: true, from: TOKEN }],
+      ]);
+    });
+
+    it('a push or a from that is not valid is refused, never handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (const extra of [{ push: 'false' }, { push: true }, { from: 'x' }, { from: 'x'.repeat(4097) }]) m.say({ t: 'hash', id: 'title', ...extra });
+      expect(c.hash).toEqual([]);
+    });
+
+    it('without onPlace a hash with push or from is refused and counted, and a plain hash still reaches onHash with the id alone', async () => {
+      const { c } = calls();
+      const m = await ready(PLAIN, { onHash: (...a: unknown[]) => c.hash.push(a) });
+      m.say({ t: 'hash', id: 'title', push: 'true' });
+      m.say({ t: 'hash', id: 'title', from: TOKEN });
+      expect(c.hash).toEqual([]);
+      m.say({ t: 'hash', id: 'title' });
+      expect(c.hash).toEqual([['title']]);
+      for (let i = 0; i < 13; i += 1) m.say({ t: 'hash', id: 'title', push: 'true' });
+      expect(m.fallbacks()).toEqual([]);
+      m.say({ t: 'hash', id: 'title', push: 'true' });
+      expect(m.fallbacks()).toEqual(['refusals']);
+    });
+  });
+
+  describe('DocFrame.command is the four tools only', () => {
+    it('goto, close-overlay and print-figures throw a TypeError whose message lists the four, whatever the state, and post nothing', async () => {
+      const m = await ready(PLAIN, calls().over);
+      for (const name of ['goto', 'close-overlay', 'print-figures']) {
+        expect(() => m.frame.command(name as never), name).toThrow(TypeError);
+        expect(() => m.frame.command(name as never), name).toThrow(/jump, settings, contents, outline$/);
+      }
+      expect(frameBound(m)).toEqual([]);
+      m.frame.destroy();
+      expect(() => m.frame.command('goto' as never)).toThrow(TypeError);
+    });
+  });
+
+  describe('closeOverlay()', () => {
+    it('posts exactly {t:"command", name:"close-overlay"} once ready, and moves no focus', async () => {
+      const m = await ready(PLAIN, calls().over);
+      const other = document.createElement('button');
+      document.body.append(other);
+      other.focus();
+      m.frame.closeOverlay();
+      expect(frameBound(m)).toEqual([{ t: 'command', name: 'close-overlay' }]);
+      expect(Object.keys(frameBound(m)[0] as object)).toEqual(['t', 'name']);
+      expect(document.activeElement === other, 'the focus stays where it was').toBe(true);
+    });
+
+    it('does nothing before ready (and is not queued), after destroy() and after a fallback', async () => {
+      const m = mount(PLAIN, calls().over);
+      await m.loaded();
+      m.frame.closeOverlay();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(frameBound(m)).toEqual([]);
+      m.say({ t: 'error', why: 'render' });
+      m.frame.closeOverlay();
+      expect(frameBound(m)).toEqual([]);
+      const d = await ready(PLAIN, calls().over);
+      d.frame.destroy();
+      d.frame.closeOverlay();
+      expect(frameBound(d)).toEqual([]);
+    });
+
+    it('after update() the new mount is not ready: nothing is posted to either port until its own ready', async () => {
+      const m = await ready(PLAIN, calls().over);
+      m.frame.update(input(PLAIN));
+      const fresh = channels[channels.length - 1] as FakeChannel;
+      m.frame.closeOverlay();
+      expect(m.channel.port1.sent).toEqual([]);
+      expect(fresh.port1.sent).toEqual([]);
+      const nonce = NONCE_RE.exec((container.querySelector('iframe') as HTMLIFrameElement).getAttribute('srcdoc') ?? '')?.[1] ?? '';
+      fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+      m.frame.closeOverlay();
+      expect(fresh.port1.sent).toEqual([{ t: 'command', name: 'close-overlay' }]);
+    });
+
+    it('a host with no onPlace gets a TypeError, before ready, after ready and after destroy()', async () => {
+      const m = mount(PLAIN);
+      expect(() => m.frame.closeOverlay()).toThrow(TypeError);
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(() => m.frame.closeOverlay()).toThrow(/onPlace/);
+      m.frame.destroy();
+      expect(() => m.frame.closeOverlay()).toThrow(TypeError);
+      expect(frameBound(m)).toEqual([]);
+    });
+  });
+
+  describe('goto(id, from?)', () => {
+    it('posts {t, name, id} or {t, name, id, from} once ready, with exactly those keys and no focus moved', async () => {
+      const m = await ready(PLAIN, calls().over);
+      const other = document.createElement('button');
+      document.body.append(other);
+      other.focus();
+      m.frame.goto('heading-two');
+      m.frame.goto('fnref1:1', TOKEN);
+      expect(frameBound(m)).toEqual([
+        { t: 'command', name: 'goto', id: 'heading-two' },
+        { t: 'command', name: 'goto', id: 'fnref1:1', from: TOKEN },
+      ]);
+      expect(Object.keys(frameBound(m)[0] as object)).toEqual(['t', 'name', 'id']);
+      expect(document.activeElement === other).toBe(true);
+    });
+
+    it('an id outside the fragment grammar, or a from that is no token, throws a TypeError in every state and posts nothing', async () => {
+      const live = await ready(PLAIN, calls().over);
+      const early = mount(PLAIN, calls().over);
+      const gone = await ready(PLAIN, calls().over);
+      gone.frame.destroy();
+      for (const m of [live, early, gone]) {
+        for (const id of ['', 'a b', '#a', 'a[b]', 'x'.repeat(257), 1, null, undefined, {}]) expect(() => m.frame.goto(id as never), String(id)).toThrow(TypeError);
+        for (const from of ['x', '', '{}', '{"line":null,"offset":0,"y":-1}', 'x'.repeat(4097), 1, null, {}]) {
+          expect(() => m.frame.goto('title', from as never), String(from)).toThrow(TypeError);
+        }
+        expect(frameBound(m)).toEqual([]);
+      }
+      expect(() => live.frame.goto('x'.repeat(256))).not.toThrow();
+    });
+
+    it('does nothing before ready (not queued), after destroy() and after a fallback; a host with no onPlace gets a TypeError', async () => {
+      const m = mount(PLAIN, calls().over);
+      await m.loaded();
+      m.frame.goto('title');
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(frameBound(m)).toEqual([]);
+      m.say({ t: 'error', why: 'render' });
+      m.frame.goto('title');
+      expect(frameBound(m)).toEqual([]);
+      const d = await ready(PLAIN, calls().over);
+      d.frame.destroy();
+      d.frame.goto('title');
+      expect(frameBound(d)).toEqual([]);
+      const none = await ready();
+      expect(() => none.frame.goto('title')).toThrow(/onPlace/);
+      expect(frameBound(none)).toEqual([]);
+    });
+  });
+
+  describe('printFigures() and the run', () => {
+    it('needs onPrintFigure: a TypeError in every state, and nothing posted', async () => {
+      const m = mount(PLAIN, { onPlace: () => undefined });
+      expect(() => m.frame.printFigures()).toThrow(/onPrintFigure/);
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(() => m.frame.printFigures()).toThrow(TypeError);
+      m.frame.destroy();
+      expect(() => m.frame.printFigures()).toThrow(TypeError);
+      expect(frameBound(m)).toEqual([]);
+    });
+
+    it('posts exactly {t:"command", name:"print-figures"} once ready, and moves no focus', async () => {
+      const m = await ready(PLAIN, calls().over);
+      const other = document.createElement('button');
+      document.body.append(other);
+      other.focus();
+      m.frame.printFigures();
+      expect(frameBound(m)).toEqual([{ t: 'command', name: 'print-figures' }]);
+      expect(Object.keys(frameBound(m)[0] as object)).toEqual(['t', 'name']);
+      expect(document.activeElement === other).toBe(true);
+    });
+
+    it('before ready it posts nothing, queues nothing and opens no run: a figure after ready is refused', async () => {
+      const { c, over } = calls();
+      const m = mount(PLAIN, over);
+      await m.loaded();
+      m.frame.printFigures();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(frameBound(m)).toEqual([]);
+      m.say(fig(0, 1));
+      expect(c.figures).toEqual([]);
+    });
+
+    it('after destroy() and after a fallback it posts nothing', async () => {
+      const a = await ready(PLAIN, calls().over);
+      a.frame.destroy();
+      a.frame.printFigures();
+      expect(frameBound(a)).toEqual([]);
+      const b = await ready(PLAIN, calls().over);
+      b.say({ t: 'error', why: 'render' });
+      b.frame.printFigures();
+      expect(frameBound(b)).toEqual([]);
+    });
+
+    it('a figure with no run is refused, never handed on, and counted (the sixteenth closes the frame)', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (let i = 0; i < 15; i += 1) m.say(fig(0, 1));
+      expect(m.fallbacks()).toEqual([]);
+      m.say(fig(0, 1));
+      expect(m.fallbacks()).toEqual(['refusals']);
+      expect(c.figures).toEqual([]);
+    });
+
+    it('a figure reaches onPrintFigure as {i, n, png}: i and n numbers, the text unchanged; the run ends at its last index', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(0, 2));
+      m.say(fig(1, 2, 'QQ=='));
+      expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }, { i: 1, n: 2, png: 'QQ==' }]);
+      expect(typeof (c.figures[0] as { i: unknown }).i).toBe('number');
+      // the run ended at i = n - 1: another figure has none to join
+      m.say(fig(0, 2));
+      expect(c.figures).toHaveLength(2);
+    });
+
+    it('an index seen in the run, an n that changes and an index at or above n are refused and never handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(0, 3));
+      m.say(fig(0, 3));
+      m.say(fig(1, 4));
+      m.say(fig(3, 3));
+      m.say(fig(1, 3));
+      expect(c.figures).toEqual([{ i: 0, n: 3, png: PNG }, { i: 1, n: 3, png: PNG }]);
+    });
+
+    it('a second printFigures() call replaces the run: its indexes are free again and its n may differ', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(0, 3));
+      m.frame.printFigures();
+      m.say(fig(0, 5));
+      expect(c.figures).toEqual([{ i: 0, n: 3, png: PNG }, { i: 0, n: 5, png: PNG }]);
+      expect(frameBound(m)).toEqual([{ t: 'command', name: 'print-figures' }, { t: 'command', name: 'print-figures' }]);
+    });
+
+    it('the run belongs to its mount: after update() a figure with no new call is refused', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.frame.update(input(PLAIN));
+      const fresh = channels[channels.length - 1] as FakeChannel;
+      const nonce = NONCE_RE.exec((container.querySelector('iframe') as HTMLIFrameElement).getAttribute('srcdoc') ?? '')?.[1] ?? '';
+      fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+      fresh.port1.onmessage?.({ data: fig(0, 2), ports: [] });
+      expect(c.figures).toEqual([]);
+      m.frame.printFigures();
+      fresh.port1.onmessage?.({ data: fig(0, 2), ports: [] });
+      expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }]);
+    });
+
+    it('a host that calls printFigures() from onPrintFigure opens a fresh run at the last index', async () => {
+      const seenFigures: unknown[] = [];
+      let m!: Mounted;
+      m = await ready(PLAIN, { onPrintFigure: (f: unknown) => { seenFigures.push(f); if (seenFigures.length === 1) m.frame.printFigures(); } });
+      m.frame.printFigures();
+      m.say(fig(0, 1));
+      m.say(fig(0, 1));
+      expect(seenFigures).toHaveLength(2);
+    });
+
+    it('1048575 and 1048576 decoded bytes are handed on, 1048577 is refused and never handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (const bytes of [1048575, 1048576, 1048577]) {
+        m.frame.printFigures();
+        m.say(fig(0, 1, zeros(bytes)));
+      }
+      expect(c.figures.map((f) => (f as { png: string }).png.length)).toEqual([zeros(1048575).length, zeros(1048576).length]);
+    });
+
+    it('sixteen figures of 1048576 bytes pass; one more byte is refused by the total while within its own cap, and is not handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      const big = zeros(1048576);
+      for (let i = 0; i < 16; i += 1) m.say(fig(i, 17, big));
+      expect(c.figures).toHaveLength(16);
+      m.say(fig(16, 17, 'AA=='));
+      expect(c.figures).toHaveLength(16);
+      // the same figure fits a run that has room
+      m.frame.printFigures();
+      m.say(fig(0, 17, 'AA=='));
+      expect(c.figures).toHaveLength(17);
+    });
+
+    it('a refused figure takes none of the total: a refused big figure leaves room for the next', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, zeros(1048576)));
+      m.say(fig(15, 17, zeros(1048577)));
+      m.say(fig(15, 17, zeros(1048576)));
+      expect(c.figures).toHaveLength(16);
+      m.say(fig(16, 17, 'AA=='));
+      expect(c.figures).toHaveLength(16);
+    });
+
+    it('64 figures are handed on and a 65th is refused (n of 65, and a figure past the end of a run of 64), under the buckets: 16 a second, none refused by the rate', () => {
+      const { c, over } = calls();
+      const m = readyFake(over);
+      m.frame.printFigures();
+      for (let i = 0; i < 64; i += 1) {
+        m.say(fig(i, 64));
+        vi.advanceTimersByTime(63);
+      }
+      expect(c.figures).toHaveLength(64);
+      expect(c.figures.map((f) => (f as { i: number }).i)).toEqual(Array.from({ length: 64 }, (_, i) => i));
+      expect(m.fallbacks()).toEqual([]);
+      // the run is over: a 65th has none to join; nor does an n of 65 open one that large
+      m.say(fig(64, 64));
+      m.frame.printFigures();
+      m.say(fig(0, 65));
+      m.say(fig(64, 64));
+      expect(c.figures).toHaveLength(64);
+      // none of the 64 was refused, so only these three refusals count
+      for (let i = 0; i < 12; i += 1) m.say(fig(64, 64));
+      expect(m.fallbacks()).toEqual([]);
+      m.say(fig(64, 64));
+      expect(m.fallbacks()).toEqual(['refusals']);
+    });
+
+    it('a throwing onPrintFigure is caught and logged, and the run goes on', async () => {
+      const seenFigures: unknown[] = [];
+      const m = await ready(PLAIN, { onPrintFigure: (f: unknown) => { seenFigures.push(f); throw new Error('host'); } });
+      m.frame.printFigures();
+      m.say(fig(0, 2));
+      m.say(fig(1, 2));
+      expect(seenFigures).toHaveLength(2);
+      expect(m.fallbacks()).toEqual([]);
+    });
+  });
+});

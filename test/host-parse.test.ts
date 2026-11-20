@@ -5,9 +5,10 @@
 // getter, and keeps nothing between calls. Every non-ASCII character in a string is written as an escape (ruling R6).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isFragmentId } from '../src/frame/fragment.js';
-import { parseBridgeMessage } from '../src/host/parse.js';
+import { BRIDGE_LIMITS, PLACE_KINDS } from '../src/frame/protocol.js';
+import { parseBridgeMessage, type ParseContext } from '../src/host/parse.js';
 
 const ROOT = new URL('../', import.meta.url);
 const readText = (rel: string): string => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -24,6 +25,7 @@ interface MessageCase {
   readonly ports?: number;
   readonly message: unknown;
   readonly fill?: Readonly<Record<string, Fill>>;
+  readonly given?: { readonly places?: boolean; readonly run?: { readonly n: number | null; readonly seen: readonly number[]; readonly bytes: number } };
   readonly verdict: 'accept' | 'refuse';
   readonly reason?: string;
 }
@@ -48,6 +50,12 @@ function messageOf(c: MessageCase): unknown {
 const portsOf = (n: number): readonly unknown[] => Array.from({ length: n }, () => ({}));
 
 const FRAME_TO_PARENT = CASES.messages.filter((c) => c.direction === 'frame-to-parent');
+
+/** What a case says the parent holds (bridge-cases.json's `given`): places, and the open print run. */
+function contextOf(c: MessageCase): ParseContext {
+  const run = c.given?.run;
+  return { places: c.given?.places === true, run: run === undefined ? null : { n: run.n, seen: new Set(run.seen), bytes: run.bytes } };
+}
 
 describe('tsconfig.host.json: ./host typechecks in its own DOM project (Reference §12)', () => {
   // Task 10 (ledger C88(6)) moved src/host and its tests out of the root project, which has no DOM library, into this
@@ -78,7 +86,7 @@ describe('L3.H3 every frame-to-parent case of conformance/bridge-cases.json', ()
 
   for (const c of FRAME_TO_PARENT) {
     it(c.label, () => {
-      const got = parseBridgeMessage(messageOf(c), portsOf(c.ports ?? 0), NONCE);
+      const got = parseBridgeMessage(messageOf(c), portsOf(c.ports ?? 0), NONCE, contextOf(c));
       if (c.verdict === 'accept') expect(got).toEqual({ ok: true, msg: messageOf(c) });
       else expect(got).toEqual({ ok: false, reason: c.reason });
     });
@@ -147,6 +155,167 @@ describe('B7.1 progress: thousands of the share as a string, judged by its gramm
     expect(parseBridgeMessage({ t: 'progress' }, [], NONCE)).toEqual({ ok: false, reason: 'keys' });
     expect(parseBridgeMessage({ t: 'progress', p: '5', q: '6' }, [], NONCE)).toEqual({ ok: false, reason: 'keys' });
     for (const p of [5, null, ['5'], true]) expect(parseBridgeMessage({ t: 'progress', p }, [], NONCE), String(p)).toEqual({ ok: false, reason: 'type' });
+  });
+});
+
+describe('docserver parity T2: place, and a hash\'s push and from, are the mount\'s request (bridge.places)', () => {
+  const PLACES: ParseContext = { places: true, run: null };
+  const TOKEN = '{"line":null,"offset":0,"y":0}';
+
+  it('every place kind is accepted under bridge.places, with the key it was sent and nothing else', () => {
+    for (const kind of PLACE_KINDS) expect(parseBridgeMessage({ t: 'place', kind }, [], NONCE, PLACES), kind).toEqual({ ok: true, msg: { t: 'place', kind } });
+  });
+
+  it("without bridge.places a place is 'unknown-op', whatever the context's run, and with no context at all", () => {
+    expect(parseBridgeMessage({ t: 'place', kind: 'overlay' }, [], NONCE)).toEqual({ ok: false, reason: 'unknown-op' });
+    expect(parseBridgeMessage({ t: 'place', kind: 'overlay' }, [], NONCE, { places: false, run: { n: null, seen: new Set(), bytes: 0 } })).toEqual({ ok: false, reason: 'unknown-op' });
+  });
+
+  it('a place with a bad key set is a keys refusal before the gate, and a kind outside the list is a type refusal', () => {
+    expect(parseBridgeMessage({ t: 'place' }, [], NONCE)).toEqual({ ok: false, reason: 'keys' });
+    expect(parseBridgeMessage({ t: 'place', kind: 'overlay', x: '1' }, [], NONCE, PLACES)).toEqual({ ok: false, reason: 'keys' });
+    for (const kind of ['Overlay', 'overlay ', '', 'toString']) expect(parseBridgeMessage({ t: 'place', kind }, [], NONCE, PLACES), kind).toEqual({ ok: false, reason: 'type' });
+  });
+
+  it('a hash keeps the push and the from it was sent: both, one, neither', () => {
+    expect(parseBridgeMessage({ t: 'hash', id: 'a', push: 'true', from: TOKEN }, [], NONCE, PLACES)).toEqual({ ok: true, msg: { t: 'hash', id: 'a', push: 'true', from: TOKEN } });
+    expect(parseBridgeMessage({ t: 'hash', id: 'a', push: 'true' }, [], NONCE, PLACES)).toEqual({ ok: true, msg: { t: 'hash', id: 'a', push: 'true' } });
+    const only = parseBridgeMessage({ t: 'hash', id: 'a', from: TOKEN }, [], NONCE, PLACES);
+    expect(only.ok && Object.keys(only.msg)).toEqual(['t', 'id', 'from']);
+    const none = parseBridgeMessage({ t: 'hash', id: 'a' }, [], NONCE, PLACES);
+    expect(none.ok && Object.keys(none.msg)).toEqual(['t', 'id']);
+  });
+
+  it("without bridge.places either key is a 'keys' refusal, a valid value included (and with no context at all)", () => {
+    for (const extra of [{ push: 'true' }, { from: TOKEN }, { push: 'true', from: TOKEN }, { push: 'false' }]) {
+      expect(parseBridgeMessage({ t: 'hash', id: 'a', ...extra }, [], NONCE), JSON.stringify(extra)).toEqual({ ok: false, reason: 'keys' });
+      expect(parseBridgeMessage({ t: 'hash', id: 'a', ...extra }, [], NONCE, { places: false, run: null }), JSON.stringify(extra)).toEqual({ ok: false, reason: 'keys' });
+    }
+  });
+
+  it("push is the literal 'true' (a type refusal otherwise) and from is a position token (type), at most 4096 code units (oversize)", () => {
+    for (const push of ['false', 'True', 'TRUE', '1', '', ' true', 'true ']) {
+      expect(parseBridgeMessage({ t: 'hash', id: 'a', push }, [], NONCE, PLACES), JSON.stringify(push)).toEqual({ ok: false, reason: 'type' });
+    }
+    for (const from of ['', 'x', '[]', 'null', '{"line":null,"offset":0}', '{"line":null,"offset":0,"y":-1}', '{"line":"a b","offset":0,"y":0}']) {
+      expect(parseBridgeMessage({ t: 'hash', id: 'a', from }, [], NONCE, PLACES), JSON.stringify(from)).toEqual({ ok: false, reason: 'type' });
+    }
+    const pad = (n: number): string => `{"line":null,"offset":0,"y":0,"p":"${'x'.repeat(n - 37)}"}`;
+    expect(pad(4096)).toHaveLength(4096);
+    expect(parseBridgeMessage({ t: 'hash', id: 'a', from: pad(4096) }, [], NONCE, PLACES)).toMatchObject({ ok: true });
+    expect(parseBridgeMessage({ t: 'hash', id: 'a', from: pad(4097) }, [], NONCE, PLACES)).toEqual({ ok: false, reason: 'oversize' });
+  });
+
+  it('the id is judged first: a bad id with a good push is a hash refusal', () => {
+    expect(parseBridgeMessage({ t: 'hash', id: 'a b', push: 'true' }, [], NONCE, PLACES)).toEqual({ ok: false, reason: 'hash' });
+  });
+});
+
+describe('docserver parity T2: a print-figure is judged against the open run, in the brief\'s order, and its text is never decoded', () => {
+  const PNG = 'iVBORw0KGgo=';
+  const open = (n: number | null, seen: readonly number[] = [], bytes = 0): ParseContext => ({ places: false, run: { n, seen: new Set(seen), bytes } });
+  const fig = (i: string, n: string, png: string = PNG): unknown => ({ t: 'print-figure', i, n, png });
+  const verdict = (m: unknown, ctx: ParseContext): unknown => parseBridgeMessage(m, [], NONCE, ctx);
+  const max = (reason: string): { ok: false; reason: string } => ({ ok: false, reason });
+  /** Base64 text of `bytes` zero bytes. */
+  const zeros = (bytes: number): string => {
+    const full = Math.floor(bytes / 3);
+    const rest = bytes % 3;
+    return 'AAAA'.repeat(full) + (rest === 0 ? '' : rest === 1 ? 'AA==' : 'AAA=');
+  };
+
+  it('no open run is the first refusal, before the index, the size or the total are looked at', () => {
+    expect(verdict(fig('0', '1'), { places: true, run: null })).toEqual(max('unknown-op'));
+    expect(verdict(fig('x', 'y', '!'), { places: true, run: null })).toEqual(max('unknown-op'));
+    expect(parseBridgeMessage(fig('0', '1'), [], NONCE)).toEqual(max('unknown-op'));
+  });
+
+  it("i and n are canonical decimals: a leading zero, a sign, a point, an exponent, a space, a fourth digit and the empty text are 'type'", () => {
+    for (const bad of ['01', '00', '+1', '-0', '-1', '1.0', '1e1', ' 1', '1 ', '', '0x1', '\u0661', '1000']) {
+      expect(verdict(fig(bad, '64'), open(null)), `i ${JSON.stringify(bad)}`).toEqual(max('type'));
+      expect(verdict(fig('0', bad), open(null)), `n ${JSON.stringify(bad)}`).toEqual(max('type'));
+    }
+  });
+
+  it('0 <= i < n <= 64: n of 64 and i of 63 pass; n of 65, n of 0, i equal to n and i above n are refused', () => {
+    expect(verdict(fig('63', '64'), open(null))).toMatchObject({ ok: true });
+    expect(verdict(fig('0', '64'), open(null))).toMatchObject({ ok: true });
+    for (const [i, n] of [['0', '65'], ['0', '0'], ['64', '64'], ['3', '3'], ['4', '3'], ['99', '98']]) {
+      expect(verdict(fig(i as string, n as string), open(null)), `${String(i)} of ${String(n)}`).toEqual(max('type'));
+    }
+    expect(BRIDGE_LIMITS.printFiguresMax).toBe(64);
+  });
+
+  it("n must equal the run's once the run has one, and a run with no figure yet takes any n", () => {
+    expect(verdict(fig('1', '3'), open(3, [0]))).toMatchObject({ ok: true });
+    expect(verdict(fig('1', '4'), open(3, [0]))).toEqual(max('type'));
+    expect(verdict(fig('1', '2'), open(3, [0]))).toEqual(max('type'));
+    expect(verdict(fig('1', '2'), open(null))).toMatchObject({ ok: true });
+  });
+
+  it('an index seen in the run is refused, however many figures follow', () => {
+    for (const seen of [[0], [0, 1], [1, 2]]) expect(verdict(fig('1', '3'), open(3, seen)), seen.join()).toEqual(seen.includes(1) ? max('type') : { ok: true, msg: { t: 'print-figure', i: '1', n: '3', png: PNG } });
+  });
+
+  it('the order of the checks: the index before the text, the text before its size, the size before the total', () => {
+    const big = zeros(BRIDGE_LIMITS.printFigurePngMaxBytes + 1);
+    expect(verdict(fig('0', '3', '!!!!'), open(3, [0]))).toEqual(max('type'));
+    expect(verdict(fig('0', '3', big), open(3, [0]))).toEqual(max('type'));
+    expect(verdict(fig('1', '3', '!!!!'), open(3, [0]))).toEqual(max('type'));
+    expect(verdict(fig('1', '3', big), open(3, [0]))).toEqual(max('oversize'));
+    expect(verdict(fig('1', '3', zeros(1048576)), open(3, [0], BRIDGE_LIMITS.printFiguresTotalMaxBytes))).toEqual(max('oversize'));
+  });
+
+  it('1048575 and 1048576 decoded bytes pass, 1048577 is oversize: the size is read from the length and the padding', () => {
+    for (const [bytes, ok] of [[1048575, true], [1048576, true], [1048577, false]] as const) {
+      const got = verdict(fig('0', '1', zeros(bytes)), open(null));
+      expect(got, String(bytes)).toEqual(ok ? { ok: true, msg: { t: 'print-figure', i: '0', n: '1', png: zeros(bytes) } } : max('oversize'));
+    }
+  });
+
+  it('the run total: the run plus the figure may reach 16777216 and not one byte more', () => {
+    const cap = BRIDGE_LIMITS.printFiguresTotalMaxBytes;
+    expect(verdict(fig('1', '2', zeros(1048576)), open(2, [0], cap - 1048576))).toMatchObject({ ok: true });
+    expect(verdict(fig('1', '2', zeros(1048576)), open(2, [0], cap - 1048575))).toEqual(max('oversize'));
+    expect(verdict(fig('1', '2', PNG), open(2, [0], cap - 8))).toMatchObject({ ok: true });
+    expect(verdict(fig('1', '2', PNG), open(2, [0], cap - 7))).toEqual(max('oversize'));
+  });
+
+  it("the text must be canonical base64: another alphabet, a bad length, padding inside, a wrong last character and a non-string are 'type'", () => {
+    for (const png of ['-_-_', 'AAA', 'A', 'AA==AAAA', 'AA=A', 'A===', '====', 'QR==', 'QUJ=', 'AA= =', 'AAAA\n', 'AAA*']) {
+      expect(verdict(fig('0', '1', png), open(null)), JSON.stringify(png)).toEqual(max('type'));
+    }
+    expect(verdict({ t: 'print-figure', i: '0', n: '1', png: 1 }, open(null))).toEqual(max('type'));
+    expect(verdict(fig('0', '1', 'QQ=='), open(null))).toMatchObject({ ok: true });
+  });
+
+  it('the text is handed on as it came: no atob, no Buffer, no decode, and the message is a fresh object', () => {
+    const atob = vi.spyOn(globalThis, 'atob');
+    const from = vi.spyOn(Buffer, 'from');
+    try {
+      const m = fig('0', '1', zeros(300_000));
+      const got = verdict(m, open(null)) as { ok: true; msg: { png: string } };
+      expect(got.ok).toBe(true);
+      expect(got.msg.png).toBe((m as { png: string }).png);
+      expect(got.msg).not.toBe(m);
+      expect(atob).not.toHaveBeenCalled();
+      expect(from).not.toHaveBeenCalled();
+    } finally {
+      atob.mockRestore();
+      from.mockRestore();
+    }
+  });
+
+  it('a print-figure is judged by its run alone: bridge.places is no part of it', () => {
+    expect(parseBridgeMessage(fig('0', '1'), [], NONCE, { places: true, run: { n: null, seen: new Set(), bytes: 0 } })).toMatchObject({ ok: true });
+    expect(parseBridgeMessage(fig('0', '1'), [], NONCE, { places: false, run: { n: null, seen: new Set(), bytes: 0 } })).toMatchObject({ ok: true });
+  });
+
+  it('a key missing, an extra key and a value that is not a string are refused before the run is read', () => {
+    expect(verdict({ t: 'print-figure', i: '0', n: '1' }, open(null))).toEqual(max('keys'));
+    expect(verdict({ t: 'print-figure', i: '0', n: '1', png: PNG, x: '1' }, open(null))).toEqual(max('keys'));
+    expect(verdict({ t: 'print-figure', i: 0, n: '1', png: PNG }, open(null))).toEqual(max('type'));
+    expect(verdict({ t: 'print-figure', i: '0', n: '1' }, { places: false, run: null })).toEqual(max('keys'));
   });
 });
 
