@@ -979,8 +979,8 @@ describe('second review F8: several hosted roots in one document share the html 
     expect(tip()).toEqual(['', '', '']);
   });
 
-  it('a document-element root and another root cannot be hosted in one document, so the one never has the other\'s mark to undo (second review F8)', async () => {
-    // Ownership refuses a root that contains, or lies inside, another live root (lifecycle.ts, step 2), and every root of a
+  it('a document-element root and another root cannot be hosted in one document, so the one never has the other\'s mark to undo (second review F8) while both are attached to it', async () => {
+    // Ownership refuses a root that contains, or lies inside, another live root (lifecycle.ts, step 2), and every root attached to a
     // document lies inside its document element: the case "a document-element root is destroyed while another root holds a
     // tip" cannot be reached, whichever is enhanced first.
     const parsed = new DOMParser().parseFromString(`<!doctype html><html><body>${render(DOC).html}</body></html>`, 'text/html');
