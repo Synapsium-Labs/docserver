@@ -5,6 +5,20 @@
 // Every export here is semver surface from v1 (FD20). The package's export map gains `./frame` in Task 12.
 export { CSP_REFUSALS, checkFrameCsp, frameCsp } from './csp.js';
 export type { CspRefusal } from './csp.js';
+export {
+  APPEARANCE_CONTRACT,
+  APPEARANCE_LABEL_DEFAULT,
+  APPEARANCE_PAIRS,
+  APPEARANCE_SLOTS,
+  parseAppearance,
+} from './appearance.js';
+export type {
+  Appearance,
+  AppearanceColourSlot,
+  AppearanceRefusal,
+  AppearanceRefusalWhy,
+  AppearanceSkinSlot,
+} from './appearance.js';
 export { FrameError, frameDocument, MAX_SRCDOC_CHARS_DEFAULT } from './document.js';
 export type { FrameAssets, FrameErrorCode, FrameFeatures, FrameOptions, RenderInput } from './document.js';
 export { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';

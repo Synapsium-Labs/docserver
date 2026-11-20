@@ -146,6 +146,10 @@ describe("./frame's entry: Reference §1's full export list", () => {
     const entry = (await import('../src/frame/index.js')) as Record<string, unknown>;
     expect(Object.keys(entry).sort()).toEqual(
       [
+        'APPEARANCE_CONTRACT',
+        'APPEARANCE_LABEL_DEFAULT',
+        'APPEARANCE_PAIRS',
+        'APPEARANCE_SLOTS',
         'BRIDGE_LIMITS',
         'BRIDGE_PROTOCOL',
         'CSP_REFUSALS',
@@ -166,6 +170,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'frameDocument',
         'isFragmentId',
         'mermaidGate',
+        'parseAppearance',
       ].sort(),
     );
   });
