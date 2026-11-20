@@ -14,6 +14,7 @@ import {
   BRIDGE_PROTOCOL,
   DOC_FIELDS,
   ERROR_WHY,
+  FRAME_ACCEPTS,
   isFragmentId,
   OP_KEYS,
   PREF_KEYS,
@@ -44,7 +45,7 @@ describe("./frame's entry: the wire names of Reference §1 and Task 1's Produces
 
   it('exports the wire constants and the grammar that Reference §1 and Produces name', async () => {
     const entry = (await import('../src/frame/index.js')) as Record<string, unknown>;
-    for (const name of ['BRIDGE_PROTOCOL', 'SEED_SCHEMA', 'BRIDGE_LIMITS', 'PREF_KEYS', 'DOC_FIELDS', 'OP_KEYS', 'FRAGMENT_ID_GRAMMAR', 'isFragmentId']) {
+    for (const name of ['BRIDGE_PROTOCOL', 'SEED_SCHEMA', 'BRIDGE_LIMITS', 'PREF_KEYS', 'DOC_FIELDS', 'OP_KEYS', 'FRAME_ACCEPTS', 'FRAGMENT_ID_GRAMMAR', 'isFragmentId']) {
       expect(Object.keys(entry), name).toContain(name);
     }
   });
@@ -160,6 +161,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       'changes.result': ['t', 'sha', 'ranges', 'removedAfter', 'unavailable'],
       mermaid: ['t', 'text', 'unavailable'],
       command: ['t', 'name'],
+      appearance: ['t', 'v', 'appearance'],
       ready: ['t', 'v', 'nonce'],
       error: ['t', 'why'],
       'store.set': ['t', 'key', 'value'],
@@ -176,7 +178,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
 
   it('FRAME_OPS and PARENT_OPS split it by direction, with no op in both', () => {
     expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress']);
-    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid', 'command']);
+    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
     expect([...FRAME_OPS, ...PARENT_OPS].sort()).toEqual(Object.keys(OP_KEYS).sort());
   });
 
@@ -188,8 +190,17 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
     expectTypeOf<(typeof OP_KEYS)['prefs'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'prefs' }>>>();
     expectTypeOf<(typeof OP_KEYS)['mermaid'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'mermaid' }>>>();
     expectTypeOf<(typeof OP_KEYS)['command'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'command' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['appearance'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'appearance' }>>>();
     expectTypeOf<(typeof OP_KEYS)['progress'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'progress' }>>>();
     expectTypeOf<(typeof OP_KEYS)['ready'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'ready' }>>>();
+  });
+
+  it("FRAME_ACCEPTS is the port parser's list: the four ops of 1.1.0 and `appearance`, frozen, with no `hello`, and inside PARENT_OPS", () => {
+    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+    expect(Object.isFrozen(FRAME_ACCEPTS)).toBe(true);
+    expect(FRAME_ACCEPTS).not.toContain('hello');
+    for (const op of FRAME_ACCEPTS) expect(PARENT_OPS, op).toContain(op);
+    expect(FRAME_OPS.filter((op) => (FRAME_ACCEPTS as readonly string[]).includes(op))).toEqual([]);
   });
 
   it("FRAME_PREF_VALUES: the prefs op's enums (theme, width, font; the lens stays frame-local)", () => {
@@ -317,6 +328,7 @@ const REQUIRED: Readonly<Record<string, readonly string[]>> = {
   hello: ['v'],
   prefs: [],
   command: ['name'],
+  appearance: ['v', 'appearance'],
 };
 
 const refuse = (reason: string): Verdict => ({ verdict: 'refuse', reason });
@@ -389,7 +401,7 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context']): Ve
 
 /** The frame's reading of a parent-to-frame message (Reference §6.3 on the window, §6.5 on the port). */
 function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: BridgeCases['context']): Verdict {
-  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid', 'command']);
+  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
   if ('fail' in c) return c.fail;
   const o = c.msg;
   const t = o['t'];
@@ -422,6 +434,14 @@ function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: 
     const name = o['name'];
     if (typeof name !== 'string') return refuse('type');
     return (['jump', 'settings', 'contents', 'outline'] as readonly string[]).includes(name) ? ACCEPT : refuse('type');
+  }
+  if (t === 'appearance') {
+    // appearance: exactly {v: 1, appearance}, where `appearance` is a plain object with no proto key at its top level
+    // (the outer shape only: the reader's parseAppearance judges every value).
+    const app = o['appearance'];
+    if (o['v'] !== 1) return refuse('type');
+    if (!isPlain(app)) return refuse('type');
+    return ['__proto__', 'constructor', 'prototype'].some((k) => Object.hasOwn(app, k)) ? refuse('proto-key') : ACCEPT;
   }
   // changes.result: {sha, ranges, removedAfter?} or {sha, unavailable: true}, never both shapes.
   if (!Object.hasOwn(o, 'sha')) return refuse('keys');
@@ -584,6 +604,51 @@ describe('B7.1 conformance/bridge-cases.json: the progress and command battery, 
     expect(c?.note ?? '').toMatch(/older than this release ignore it, as they ignore every op they do not know/);
     // The pin of that behaviour: an op the frame does not know is 'unknown-op' on the port.
     expect(find((x) => x.direction === 'parent-to-frame' && x.channel === 'port' && x.reason === 'unknown-op').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('the appearance op: its fixtures, with the existing reasons only', () => {
+  const find = (pred: (c: MessageCase, m: Record<string, unknown>) => boolean): MessageCase[] =>
+    CASES.messages.filter((c) => isPlain(messageOf(c)) && pred(c, messageOf(c) as Record<string, unknown>));
+  const appearance = find((_c, m) => m['t'] === 'appearance');
+
+  it('is accepted on the port with exactly t, v 1 and a plain object, an empty one and a full one included', () => {
+    const accepted = appearance.filter((c) => c.verdict === 'accept');
+    expect(accepted.length).toBeGreaterThanOrEqual(3);
+    for (const c of accepted) {
+      expect(c.direction, c.label).toBe('parent-to-frame');
+      expect(c.channel, c.label).toBe('port');
+      expect(Object.keys(c.message as object).sort(), c.label).toEqual(['appearance', 't', 'v']);
+      expect((c.message as { v: unknown }).v, c.label).toBe(1);
+    }
+    expect(accepted.some((c) => Object.keys((c.message as { appearance: object }).appearance).length === 0)).toBe(true);
+    expect(accepted.some((c) => Object.hasOwn((c.message as { appearance: object }).appearance, 'colour'))).toBe(true);
+  });
+
+  it("refuses a missing v and a missing appearance as 'keys', another key as 'keys', a v that is not 1 and a value that is not a plain object as 'type'", () => {
+    const refused = appearance.filter((c) => c.verdict === 'refuse' && c.direction === 'parent-to-frame' && c.channel === 'port' && (c.ports ?? 0) === 0);
+    const reasonOf = (pred: (m: Record<string, unknown>) => boolean): (string | undefined)[] => refused.filter((c) => pred(c.message as Record<string, unknown>)).map((c) => c.reason);
+    expect(reasonOf((m) => !Object.hasOwn(m, 'v'))).toEqual(['keys']);
+    expect(reasonOf((m) => !Object.hasOwn(m, 'appearance'))).toEqual(['keys']);
+    expect(reasonOf((m) => Object.keys(m).length === 4)).toEqual(['keys']);
+    expect(reasonOf((m) => m['v'] === 2)).toEqual(['type']);
+    expect(reasonOf((m) => m['v'] === '1')).toEqual(['type']);
+    expect(reasonOf((m) => Array.isArray(m['appearance']))).toEqual(['type']);
+    expect(reasonOf((m) => m['appearance'] === null)).toEqual(['type']);
+    expect(reasonOf((m) => typeof m['appearance'] === 'string')).toEqual(['type']);
+    expect(reasonOf((m) => typeof m['appearance'] === 'number')).toEqual(['type']);
+    expect(reasonOf((m) => isPlain(m['appearance']) && Object.hasOwn(m['appearance'], '__proto__'))).toEqual(['proto-key']);
+  });
+
+  it("is refused on the window as 'unknown-op' and with a transferred port as 'port'", () => {
+    expect(appearance.filter((c) => c.channel === 'window').map((c) => c.reason)).toEqual(['unknown-op']);
+    expect(appearance.filter((c) => (c.ports ?? 0) === 1).map((c) => c.reason)).toEqual(['port']);
+  });
+
+  it('says in a note that the frame older than this release ignores it, and that the port parser judges the outer shape only', () => {
+    const [c] = appearance.filter((x) => x.verdict === 'accept');
+    expect(c?.note ?? '').toMatch(/older than this release ignore it, as they ignore every op they do not know/);
+    expect(appearance.map((x) => x.note ?? '').join(' ')).toMatch(/outer shape only/);
   });
 });
 

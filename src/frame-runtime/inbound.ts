@@ -1,5 +1,6 @@
-// What the frame accepts on its port (docserver L3, Task 5; plan Reference §6.5 and §8.2): `prefs`,
-// `changes.result`, `mermaid` and `command`. Anything else, or anything malformed, is ignored (null): the frame keeps no refusal count. `hello`
+// What the frame accepts on its port (docserver L3, Task 5; plan Reference §6.5 and §8.2): the ops of FRAME_ACCEPTS
+// (src/frame/protocol.ts), the parser's one list: `prefs`, `changes.result`, `mermaid`, `command` and `appearance`. Anything
+// else, or anything malformed, is ignored (null): the frame keeps no refusal count. `hello`
 // comes on the window, never on the port, and is the bootstrap's own check. Bundled into the bootstrap; DOM-free.
 //
 // A message is read as `./host`'s parser reads one: a plain object (prototype Object.prototype or null), own string
@@ -18,7 +19,11 @@
 //                   settled, it is the first) is the bootstrap's own check; this file judges the shape only (C107).
 //   command         exactly `name`, a string that is one of COMMAND_OPS; any other name, a non-string or another key is
 //                   ignored (batch 1.1, C108). Whether the reader has that tool is the reader's own answer.
-import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type CommandOp, type ParentToFrame } from '../frame/protocol.js';
+//   appearance      exactly `v` (the number 1) and `appearance`, a plain object (prototype Object.prototype or null) whose
+//                   own properties are all data properties with string keys and no proto key: the outer shape and nothing
+//                   deeper. The reader script runs the contract's full validator (parseAppearance) on every value it
+//                   applies, so a forged value meets the whole grammar in the frame (the appearance contract, section 8).
+import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_ACCEPTS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type CommandOp, type ParentToFrame } from '../frame/protocol.js';
 
 const getProto = Object.getPrototypeOf;
 const ownKeys = Reflect.ownKeys;
@@ -63,22 +68,28 @@ export function parseParentMessage(data: unknown): ParentToFrame | null {
   const m = own(data);
   if (m === null) return null;
   const t = m.get('t');
-  if (t !== 'prefs' && t !== 'changes.result' && t !== 'mermaid' && t !== 'command') return null;
-  const allowed: readonly string[] = OP_KEYS[t];
+  if (typeof t !== 'string' || !(FRAME_ACCEPTS as readonly string[]).includes(t)) return null;
+  const op = t as (typeof FRAME_ACCEPTS)[number];
+  const allowed: readonly string[] = OP_KEYS[op];
   for (const k of m.keys()) if (!allowed.includes(k)) return null;
-  if (t === 'command') {
+  if (op === 'appearance') {
+    // Every key of the op is required, so the key set above and the size settle the keys; then v, then the value.
+    const value = m.get('appearance');
+    return m.size === 3 && m.get('v') === 1 && own(value) !== null ? { t: 'appearance', v: 1, appearance: value as object } : null;
+  }
+  if (op === 'command') {
     const name = m.get('name');
     // Another key is already refused by the key set above, and a missing `name` is not a string.
     return typeof name === 'string' && (COMMAND_OPS as readonly string[]).includes(name) ? { t: 'command', name: name as CommandOp } : null;
   }
-  if (t === 'mermaid') {
+  if (op === 'mermaid') {
     const hasText = m.has('text');
     if (hasText === m.has('unavailable')) return null;
     if (!hasText) return m.get('unavailable') === true ? { t: 'mermaid', unavailable: true } : null;
     const text = m.get('text');
     return typeof text === 'string' && text.length <= BRIDGE_LIMITS.mermaidMaxChars ? { t: 'mermaid', text } : null;
   }
-  if (t === 'prefs') {
+  if (op === 'prefs') {
     const out: Record<string, string> = { t: 'prefs' };
     for (const [k, v] of m) {
       if (k === 't') continue;

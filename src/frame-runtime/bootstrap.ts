@@ -31,8 +31,11 @@
 // mode, whose seed carries no Mermaid script at all: nothing registers at boot and nothing is required (C107). Otherwise the seed's
 // html is materialised (content.ts: an inert parse, the closed vocabulary check, the image rewrite) into an `article`
 // root appended to the body, and enhance() runs on it with the frame's adapters (adapters.ts: the enhance callbacks
-// over the outbox, each only when the seed's bridge allows its op). A refusal of the content, enhance's rejection, or
-// a throw, is FAILED('render'). Enhance's `mermaid` option carries the seed's caps, secure keys and `draw`
+// over the outbox, each only when the seed's bridge allows its op). A seed that carries `fonts` has them handed to the
+// reader script's loadHostFonts first (contained: a throw loses the faces, never the frame), and a seed that carries an
+// `appearance` has it passed in enhance's options (a seed without one makes exactly 1.1.0's call); this file checks the
+// outer shape of both (seed.ts) and the reader script judges every value (the appearance contract, sections 2 and 8). A
+// refusal of the content, enhance's rejection, or a throw, is FAILED('render'). Enhance's `mermaid` option carries the seed's caps, secure keys and `draw`
 // (adapters.ts, enhanceMermaid). In 'auto' Mermaid mode, ready then waits until the root's `data-docreader-diagrams`
 // leaves `drawing` (a failed or partial drawing is not an error);
 // in 'on-request' and 'after-ready' modes nothing draws before ready, so it does not wait (waitsForDrawing; FD13);
@@ -50,7 +53,8 @@
 // enhancement's teardown and the port's close. Ready always comes first: the parent drops every op before a valid
 // ready, so an error sent first would be lost.
 //
-// On the port (inbound.ts; anything malformed is ignored): `prefs` goes to setEnhancementPrefs, and `changes.result`
+// On the port (inbound.ts; anything malformed is ignored; the ops are FRAME_ACCEPTS, protocol.ts): `prefs` goes to
+// setEnhancementPrefs, `appearance` to setEnhancementAppearance (contained), and `changes.result`
 // to the outbox's changes slot, which hands it to L2's `changes` callback (L2's readChangeSet checks it again).
 // `command` (batch 1.1, C108) goes to the reader's runEnhancementCommand(root, name), only once settled; the reader's
 // boolean (it answers false for a tool that is off, another overlay open, and so on) is ignored: there is no reply op,
@@ -398,8 +402,16 @@ interface EnhanceApi extends ReaderApi<HTMLElement> {
     try {
       root = materialise(doc, seed.html, seed.lang, new Map(seed.images), content);
       const v = seed.version;
+      if (seed.fonts !== undefined) {
+        try {
+          enhanceApi.loadHostFonts?.(seed.fonts);
+        } catch {
+          // a face that cannot load keeps that role in the library's own face; nothing here ends the frame
+        }
+      }
       await enhanceApi.enhance(root, {
         prefs: seed.prefs,
+        ...(seed.appearance === undefined ? {} : { appearance: seed.appearance }),
         storage: adapters.storage,
         namespace: FRAME_NAMESPACE,
         storageKey: FRAME_DOC_KEY,

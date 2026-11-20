@@ -4,7 +4,11 @@
 // own pure files (never manifest.generated.ts or document.ts, Reference 3) and holds no import of render() or L2.
 //
 // Schema 1 has closed keys: s, nonce, html, title, frontList, version, images, initialHash, lang, prefs, snapshot,
-// features, mermaid and bridge. Records (images, snapshot) are [key, value] pair arrays, so no `__proto__` key can exist.
+// features, mermaid and bridge, and two optional ones the appearance contract adds (OPTIONAL_SEED_KEYS, absent from a
+// mount with neither): `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
+// base64 text. The validator here checks their outer shape only, the bootstrap being small: the reader script runs
+// parseAppearance on the appearance, and the faces' signature and size are checked by frameDocument and again in the
+// reader script. Records (images, snapshot) are [key, value] pair arrays, so no `__proto__` key can exist.
 // Every field has its grammar and its cap (SEED_LIMITS). Several caps are copies of L2's (src/enhance/options.ts) and
 // render()'s (src/render/frontMatter.ts, src/render/types.ts): this file typechecks with no DOM library and the bootstrap
 // must not bundle those modules, so it cannot import them; test/frame-seed.test.ts holds each copy equal to its original.
@@ -14,6 +18,7 @@
 // src/frame/document.ts derives it (Task 7). The last two are size formulas only frameDocument and the tests read: each
 // is a `/* @__PURE__ */` call of a function, so esbuild drops it from the bootstrap, which uses only validateSeed (the
 // bootstrap's 32 KiB budget, Reference 12; test/frame-document.test.ts checks the built bootstrap for their names).
+import { APPEARANCE_SLOTS, type AppearanceSkinSlot } from '../enhance/appearance.js';
 import type { FrontEntry } from '../render/types.js';
 import { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';
 import {
@@ -74,7 +79,13 @@ export const SEED_LIMITS = Object.freeze({
   wordMaxCodeUnits: 64,
   /** The deepest any value of the seed may sit; the seed itself is depth 0. */
   depth: 32,
+  /** A host face (the appearance contract, section 2.2): at most 131 072 decoded bytes (128 KiB), 174 764 base64 characters. */
+  fontFaceMaxBytes: 131072,
+  fontFaceMaxChars: 174764,
 } as const);
+
+/** The faces a host may hand over, by role: the frame's sans (and chrome) and its mono. */
+export const FONT_ROLES = Object.freeze(['sans', 'mono'] as const);
 
 /** The image types the seed carries, as the data-URL grammar names them. */
 export const IMAGE_TYPES = Object.freeze(['png', 'jpeg', 'gif', 'webp', 'avif', 'svg+xml'] as const);
@@ -116,6 +127,12 @@ export const FEATURE_KEYS = Object.freeze({
 
 /** The reader prefs the bridge carries: theme, width and font, each optional (FRAME_PREF_VALUES). */
 export type SeedPrefs = FramePrefValues;
+
+/** The host's verdict (a parseAppearance result's `appearance`) as the seed carries it: strings, and groups of strings. */
+export type SeedAppearance = { readonly [key: string]: string | { readonly [key: string]: string } };
+
+/** The host's faces as base64 text, by role. */
+export type SeedFonts = { readonly sans?: string; readonly mono?: string };
 
 /** The document's version, as the reader's version tools read it; every sha full (40 or 64 lower-case hex). */
 export interface SeedVersion {
@@ -162,6 +179,10 @@ export interface Seed {
   readonly features: SeedFeatures;
   readonly mermaid: SeedMermaid | null;
   readonly bridge: SeedBridge;
+  /** The host's verdict; absent unless the mount is hosted. */
+  readonly appearance?: SeedAppearance;
+  /** The host's faces; absent unless the host handed a good one. */
+  readonly fonts?: SeedFonts;
 }
 
 /** A nonce: 128 bits as 32 lower-case hex digits. */
@@ -171,10 +192,13 @@ const NONCE = new RegExp(NONCE_SOURCE);
 /** A language tag, loosely BCP 47: a 2 to 8 letter primary tag, then subtags of 1 to 8 letters or digits. */
 export const LANG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/;
 
-/** The seed's keys, sorted: schema 1 has exactly these. */
+/** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */
 export const SEED_KEYS: readonly string[] = Object.freeze([
-  'bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version',
+  'appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version',
 ]);
+
+/** The keys a seed may leave out: a mount with no appearance and no faces writes the 1.1.0 seed, byte for byte. */
+export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(['appearance', 'fonts']);
 
 /** Keys refused at any depth: they could reach a prototype through a careless merge. */
 const PROTO_KEYS: readonly string[] = ['__proto__', 'constructor', 'prototype'];
@@ -279,6 +303,49 @@ function featuresMaxChars(): number {
   ]);
 }
 
+/**
+ * The longest value each skin slot's pattern and range accept, outer spaces aside (the appearance contract, section 2: the
+ * pattern table). `popShadow` is built in appearanceMaxChars from its parts: three shadows of four lengths and an `rgba()`.
+ * Held to parseAppearance by test/frame-seed.test.ts, which builds the maximal verdict from them and has it accepted.
+ */
+const SKIN_LONGEST: Readonly<Record<Exclude<AppearanceSkinSlot, 'popShadow'>, string>> = {
+  radius: '24px',
+  radiusSmall: '24px',
+  radiusLarge: '24px',
+  controlRow: '56px',
+  sectionFamily: 'mono',
+  sectionSize: '16px',
+  sectionWeight: '900',
+  sectionTracking: '-0.100em',
+  sectionCase: 'uppercase',
+};
+
+/**
+ * The longest seed text of the `appearance` field: the verdict of the longest value parseAppearance accepts. The longest mode
+ * word, all 33 colours of `#rrggbb`, every skin slot at its longest value, and a label of 64 code units of the character the
+ * seed writes longest (`<`, six characters). Only the slot names are read from the contract, never its validator.
+ */
+function appearanceMaxChars(): number {
+  // Inside the function, so the bundler drops it with the function: a top-level call is a side effect it keeps.
+  /**
+   * The longest `popShadow` the validator accepts: three shadows, each four lengths (an offset of -64px twice, a blur of
+   * 64px, a spread of -8px: the pattern admits `-?[1-9][0-9]?px` for each, the range keeps a blur from below 0 and a spread
+   * to 8) and the longest colour, `rgba(255, 255, 255, 0.999)`. 148 characters: the pattern alone would admit 154, with a
+   * 5-character blur and spread, which the range refuses.
+   */
+  const popShadowLongest = Array.from({ length: 3 }, () => '-64px -64px 64px -8px rgba(255, 255, 255, 0.999)').join(', ');
+  const colour = obj(APPEARANCE_SLOTS.colour.map((k) => member(k, raw(7))));
+  const skin = obj(
+    APPEARANCE_SLOTS.skin.map((k) => member(k, raw(k === 'popShadow' ? popShadowLongest.length : SKIN_LONGEST[k].length))),
+  );
+  return obj([member('mode', raw(longest(['light', 'dark', 'auto']))), member('colour', colour), member('skin', skin), member('label', str(64))]);
+}
+
+/** The longest seed text of `fonts`: both roles at the face cap (base64 never escapes). */
+function fontsMaxChars(): number {
+  return obj(FONT_ROLES.map((role) => member(role, raw(SEED_LIMITS.fontFaceMaxChars))));
+}
+
 function seedFieldsMaxChars(): number {
   const L = SEED_LIMITS;
   const frontKey = member('key', str(L.frontKeyMaxCodePoints));
@@ -316,6 +383,8 @@ function seedFieldsMaxChars(): number {
       ]),
     ),
     member('bridge', obj(BRIDGE_KEYS.map((k) => member(k, FALSE)))),
+    member('appearance', appearanceMaxChars()),
+    member('fonts', fontsMaxChars()),
   ]);
   return fields + imagePadding;
 }
@@ -529,6 +598,20 @@ function featuresWhy(v: unknown): string | null {
   return null;
 }
 
+/**
+ * The appearance's outer shape and nothing deeper: a plain object whose values are strings or plain objects of strings (the
+ * verdict's `mode` and `label`, its `colour` and `skin` groups). Its slots and values are the reader script's to judge.
+ */
+const appearanceOk = (v: unknown): boolean =>
+  isPlain(v) && Object.values(v).every((x) => typeof x === 'string' || (isPlain(x) && Object.values(x).every((y) => typeof y === 'string')));
+
+/** A face's alphabet: base64 (A-Za-z0-9+/), at most two `=` of padding, last. Its length is SEED_LIMITS.fontFaceMaxChars at most. */
+export const BASE64_FACE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** The faces' outer shape: only `sans` and `mono`, each a base64 string within the cap. The signature and decoded size are checked after. */
+const fontsOk = (v: unknown): boolean =>
+  isPlain(v) && onlyKeys(v, FONT_ROLES) && Object.values(v).every((f) => isString(f, SEED_LIMITS.fontFaceMaxChars) && BASE64_FACE.test(f));
+
 const capOk = (v: unknown, max: number): boolean => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= max);
 
 /** Mermaid's own failure: its key set (secure and draw required), then each key by name. */
@@ -569,7 +652,7 @@ export function validateSeed(v: unknown): SeedCheck {
   if (nonce === null) return fail('nonce');
   const h = hostile(v, 0);
   if (h !== null) return fail(h);
-  if (!sameKeys(v, SEED_KEYS)) return fail('keys');
+  if (!onlyKeys(v, SEED_KEYS) || !SEED_KEYS.every((k) => OPTIONAL_SEED_KEYS.includes(k) || Object.hasOwn(v, k))) return fail('keys');
   if (v['s'] !== SEED_SCHEMA) return fail('schema');
   if (!htmlOk(v['html'])) return fail('html');
   const title = v['title'];
@@ -594,5 +677,7 @@ export function validateSeed(v: unknown): SeedCheck {
   }
   const bridge = v['bridge'];
   if (!isPlain(bridge) || !sameKeys(bridge, BRIDGE_KEYS) || !Object.values(bridge).every(isBool)) return fail('bridge');
+  if (Object.hasOwn(v, 'appearance') && !appearanceOk(v['appearance'])) return fail('appearance');
+  if (Object.hasOwn(v, 'fonts') && !fontsOk(v['fonts'])) return fail('fonts');
   return { ok: true, seed: v as unknown as Seed };
 }

@@ -12,6 +12,12 @@ How versions move:
 
 Each release is built once from a signed tag, attested, and published with provenance through npm trusted publishing; the README's Release verification section gives the commands that check a published version.
 
+## Unreleased
+
+The appearance contract (a minor when released): a host can hand the frame one appearance (a mode, 33 base colours, ten skin values and a label) and two optional faces, at mount and while open. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows by one parent-to-frame operation, `appearance`, which an older frame ignores, and the seed by two optional keys, `appearance` and `fonts`. The version and its tag are set at release. **A host that serves the frame re-pins its page policy to the release** (the `csp` fields below), and `MAX_SRCDOC_CHARS_DEFAULT` moves with the assets and the two new seed fields' caps.
+
+- `assets/frame/bootstrap.js`: `48ae806ec738414592b54540efae4d08b18977c4120e090d5309511a549ab8a6`, csp `'sha256-SK6Absc4QUWStUVA765NCLGJd8QSDgkNUwlRGlSauKY='`
+
 ## 1.1.0
 
 A minor: new options and operations, and four asset hashes moved. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows additively (the new operations are `mermaid`, `command` and `progress`), and the seed gains keys and one draw value that only its own release's bootstrap reads. An earlier 1.0.1 was prepared and never tagged; its change is folded in first below, so no 1.0.1 exists.

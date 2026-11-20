@@ -200,13 +200,21 @@ describe('.npmrc', () => {
 describe('CHANGELOG.md: the newest entry', () => {
   // The entry's heading is the package's version, and every asset hash it names is the one assets/assets.json records
   // (the changelog's own rule). Which assets moved since the last release is checked by review, not by this test.
+  // Between releases one `## Unreleased` entry may stand above it (the appearance contract's landing, which moves asset
+  // hashes and leaves the version to the release): then the hash bullets are read from that entry, and the version
+  // heading from the entry below it.
   const changelog = readText('CHANGELOG.md');
   const version = (JSON.parse(readText('package.json')) as { version: string }).version;
-  const top = changelog.slice(changelog.indexOf('## '), changelog.indexOf('\n## ', changelog.indexOf('## ') + 3));
+  const entry = (from: number): string => changelog.slice(from, changelog.indexOf('\n## ', from + 3));
+  const first = entry(changelog.indexOf('## '));
+  const unreleased = first.startsWith('## Unreleased\n') ? first : null;
+  const versioned = unreleased === null ? first : entry(changelog.indexOf('## ') + first.length + 1);
+  const top = unreleased ?? versioned;
   const assets = readJson('assets/assets.json') as { version: string; files: { path: string; sha256: string }[] };
 
   it("is headed by the package's version, which assets.json and the lockfile's root share", () => {
-    expect(top.startsWith(`## ${version}\n`)).toBe(true);
+    expect(versioned.startsWith(`## ${version}\n`)).toBe(true);
+    expect(changelog.split('\n').filter((l) => l === '## Unreleased')).toHaveLength(unreleased === null ? 0 : 1);
     expect(assets.version).toBe(version);
     expect((lock as unknown as { version: string }).version).toBe(version);
     expect(lock.packages['']?.version).toBe(version);

@@ -7,6 +7,8 @@
 //   command         the reader's runEnhancementCommand(root, name), only when both the root and the reader's API are held;
 //                   its answer is ignored (there is no reply op) and a throw is contained: the port keeps working
 //   prefs           the reader's setEnhancementPrefs(root, prefs), under the same rule; a refused change leaves the prefs
+//   appearance      the reader's setEnhancementAppearance(root, value), under the same rule and with a throw contained;
+//                   the reader runs the contract's validator on the value, this file only passes it on
 //
 // The state check (settled, no protocol mismatch) is the caller's.
 import type { ParentToFrame } from '../frame/protocol.js';
@@ -17,6 +19,9 @@ export interface ReaderApi<R> {
   setEnhancementPrefs(root: R, prefs: unknown): void;
   /** Absent from a reader script that predates the commands; the frame and the script ship together, so it is there. */
   runEnhancementCommand?(root: R, name: string): unknown;
+  /** The appearance contract's two entries (the reader script ships with the frame, so both are there; optional so a reader script that predates them still registers). */
+  setEnhancementAppearance?(root: R, value: unknown): void;
+  loadHostFonts?(fonts: unknown): void;
 }
 
 /** The parts a parent message reaches. */
@@ -42,6 +47,14 @@ export function dispatchParentMessage<R>(m: ParentToFrame, to: DispatchTargets<R
         api.runEnhancementCommand?.(root, m.name);
       } catch {
         // a command that throws changes nothing for the parent, which gets no reply either way
+      }
+    }
+  } else if (m.t === 'appearance') {
+    if (root !== null && api !== null) {
+      try {
+        api.setEnhancementAppearance?.(root, m.appearance);
+      } catch {
+        // a value the reader cannot apply changes nothing for the parent, which gets no reply either way
       }
     }
   } else if (m.t === 'prefs' && root !== null && api !== null) {

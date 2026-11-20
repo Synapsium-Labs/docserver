@@ -19,6 +19,7 @@ import ts from 'typescript';
 import { beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { buildFrame, byteRules, checkFrame, scriptOptions, writeFrame, type BuiltFrame, type ByteRules } from '../scripts/build-frame.mjs';
 import { loadCorpus } from '../src/conformance/index.js';
+import { APPEARANCE_SLOTS, parseAppearance } from '../src/enhance/appearance.js';
 import { MAX_EDGES, MAX_TEXT_SIZE } from '../src/enhance/diagrams.js';
 import {
   checkFrameCsp,
@@ -43,7 +44,7 @@ import {
 } from '../src/frame/index.js';
 import { CSP_MAX_CHARS } from '../src/frame/csp-rules.js';
 import { HOST_VALUES_MAX } from '../src/frame/document.js';
-import { escapedHtmlLength, FEATURE_KEYS, IMAGE_BUDGET_CHARS, SEED_FIELDS_MAX_CHARS, SEED_KEYS, SEED_LIMITS, validateSeed } from '../src/frame/seed.js';
+import { escapedHtmlLength, FEATURE_KEYS, IMAGE_BUDGET_CHARS, OPTIONAL_SEED_KEYS, SEED_FIELDS_MAX_CHARS, SEED_KEYS, SEED_LIMITS, validateSeed } from '../src/frame/seed.js';
 import { base64, cspHash, hex, hexToBase64, sha256Text } from '../src/frame/sha256.js';
 import { render } from '../src/render/index.js';
 import {
@@ -99,6 +100,10 @@ const DOCS: Readonly<Record<string, () => RenderInput>> = {
   'details and footnotes': () => input(`${corpus('details/main.md')}\n\n${corpus('footnotes.md')}`),
 };
 const plain = (): RenderInput => DOCS['plain']?.() as RenderInput;
+/** The 33 colour slot names, as a mutable list. */
+const COLOUR_SLOTS: readonly string[] = APPEARANCE_SLOTS.colour;
+/** The keys every seed carries: SEED_KEYS less the optional ones (a mount with no appearance and no faces writes none). */
+const REQUIRED_SEED_KEYS = SEED_KEYS.filter((k) => !OPTIONAL_SEED_KEYS.includes(k));
 
 let built: BuiltFrame;
 let assets: FrameAssets;
@@ -156,6 +161,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'DOC_FIELDS',
         'ERROR_WHY',
         'FRAGMENT_ID_GRAMMAR',
+        'FRAME_ACCEPTS',
         'FRAME_MANIFEST',
         'FrameError',
         'MAX_SRCDOC_CHARS_DEFAULT',
@@ -643,7 +649,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
   it('every field at a real value is seeded as given, and the seed passes the bootstrap\'s validator', () => {
     const { r, o } = full();
     const seed = seedOf(frame({ ...r, images: withProtoRef() }, o));
-    expect(Object.keys(seed).sort()).toEqual([...SEED_KEYS]);
+    expect(Object.keys(seed).sort()).toEqual(REQUIRED_SEED_KEYS);
     expect(seed['version']).toEqual({ sha: SHA40, draft: true, commits: [COMMIT], only: SHA64 });
     expect(seed['images']).toEqual([['pic.png', PNG], ['__proto__', PNG]]);
     expect(seed['lang']).toBe('de-CH');
@@ -902,7 +908,7 @@ describe('L3.M7 Task 3 the default keys: frameDocument\'s seed holds every schem
   it('mermaid off: exactly SEED_KEYS, each new key at its default, and the seed passes validateSeed', () => {
     const d = r();
     const seed = seedOf(frame(d, { prefs: { theme: 'dark' } }));
-    expect(Object.keys(seed).sort()).toEqual([...SEED_KEYS]);
+    expect(Object.keys(seed).sort()).toEqual(REQUIRED_SEED_KEYS);
     expect(seed).toEqual({ s: 1, nonce: NONCE, html: d.result.html, title: d.result.meta.title, initialHash: null, lang: 'en', prefs: { theme: 'dark' }, mermaid: null, ...DEFAULTS });
     expect(validateSeed(seed)).toEqual({ ok: true, seed });
   });
@@ -913,7 +919,7 @@ describe('L3.M7 Task 3 the default keys: frameDocument\'s seed holds every schem
       [{ maxTextSize: 16384, maxEdges: 500 }, { maxTextSize: 16384, maxEdges: 500, secure: [], draw: 'auto' }],
     ] as const) {
       const seed = seedOf(frame(r(), { assets: withMermaid(), mermaid: m }));
-      expect(Object.keys(seed).sort()).toEqual([...SEED_KEYS]);
+      expect(Object.keys(seed).sort()).toEqual(REQUIRED_SEED_KEYS);
       expect(seed['mermaid']).toEqual(want);
       expect(validateSeed(seed)).toEqual({ ok: true, seed });
     }
@@ -943,10 +949,205 @@ describe("L3.M7 Task 3 the bootstrap bundles seed.ts's validator, not its srcdoc
     const named = await build({ ...scriptOptions('bootstrap'), minifyIdentifiers: false });
     const text = named.outputFiles[0]?.text ?? '';
     expect(text).toContain('function validateSeed(');
-    for (const name of ['IMAGE_BUDGET_CHARS', 'SEED_FIELDS_MAX_CHARS', 'seedFieldsMaxChars', 'snapshotMaxChars', 'featuresMaxChars', 'imageBudgetChars']) {
+    for (const name of ['IMAGE_BUDGET_CHARS', 'SEED_FIELDS_MAX_CHARS', 'seedFieldsMaxChars', 'snapshotMaxChars', 'featuresMaxChars', 'imageBudgetChars', 'appearanceMaxChars', 'fontsMaxChars', 'popShadowLongest', 'SKIN_LONGEST', 'APPEARANCE_SLOTS', 'parseAppearance']) {
       expect(text, name).not.toContain(name);
     }
     expect(built.files.bootstrap.bytes).toBeLessThanOrEqual(32768);
+  });
+});
+
+describe('the appearance contract: FrameOptions.appearance and FrameAssets.fonts, two optional seed fields', () => {
+  /** A woff2 face of `n` decoded bytes: the signature `wOF2` and zeros, as base64. */
+  const face = (n: number, signature = 'wOF2'): string => Buffer.concat([Buffer.from(signature, 'latin1'), Buffer.alloc(n - 4)]).toString('base64');
+  const withFonts = (fonts: unknown): FrameAssets => ({ ...assets, fonts } as FrameAssets);
+  const GOOD = face(2048);
+  const FULL = {
+    mode: 'dark',
+    colour: Object.fromEntries(COLOUR_SLOTS.map((k) => [k, '#0a0b0c'])),
+    skin: { radius: ' 6px ', popShadow: '0 12px 40px rgba(0, 0, 0, 0.55)', bogus: 'x' },
+    label: 'Appearance follows the app\'s settings',
+  };
+
+  it('with neither, the seed has neither key and the srcdoc is the same string as ever (an undefined of each counts as none)', () => {
+    const out = frame(plain());
+    expect(Object.hasOwn(seedOf(out), 'appearance')).toBe(false);
+    expect(Object.hasOwn(seedOf(out), 'fonts')).toBe(false);
+    expect(frame(plain(), { appearance: undefined, assets: withFonts(undefined) })).toBe(out);
+  });
+
+  it('an appearance is seeded as parseAppearance\'s verdict: its spaces dropped, a refused slot left out, the seed passing the bootstrap\'s validator', () => {
+    const seed = seedOf(frame(plain(), { appearance: FULL }));
+    const verdict = parseAppearance(FULL).appearance;
+    expect(verdict.colour).toBeDefined();
+    expect(verdict.skin).toEqual({ radius: '6px', popShadow: '0 12px 40px rgba(0, 0, 0, 0.55)' });
+    expect(seed['appearance']).toEqual(verdict);
+    expect(validateSeed(seed)).toEqual({ ok: true, seed });
+    // A partial colour group is refused whole; the rest of the value stands.
+    const partial = seedOf(frame(plain(), { appearance: { mode: 'light', colour: { bg: '#ffffff' }, label: 'x' } }))['appearance'];
+    expect(partial).toEqual({ mode: 'light', label: 'x' });
+  });
+
+  it('any value given is taken through parseAppearance and never throws: null, a string, an array, a getter, a cycle, a revoked proxy', () => {
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    const cyclic: Record<string, unknown> = { mode: 'dark' };
+    cyclic['self'] = cyclic;
+    const values: [string, unknown][] = [
+      ['null', null],
+      ['a string', 'dark'],
+      ['a number', 7],
+      ['an empty array', []],
+      ['an array', ['dark']],
+      ['a getter', Object.defineProperty({}, 'mode', { get: () => 'dark', enumerable: true })],
+      ['a cycle', cyclic],
+      ['a revoked proxy', revoked.proxy],
+      ['a bigint', { mode: 1n }],
+    ];
+    for (const [what, value] of values) {
+      const out = frame(plain(), { appearance: value });
+      const seed = seedOf(out);
+      expect(seed['appearance'], what).toEqual(parseAppearance(value).appearance);
+      expect(validateSeed(seed).ok).toBe(true);
+    }
+    expect(seedOf(frame(plain(), { appearance: null }))['appearance']).toEqual({ mode: 'auto' });
+  });
+
+  it('two good faces are seeded in role order, whatever order the host wrote them; one face alone is seeded alone', () => {
+    const both = seedOf(frame(plain(), { assets: withFonts({ mono: face(4096), sans: GOOD }) }));
+    expect(Object.keys(both['fonts'] as object)).toEqual(['sans', 'mono']);
+    expect(both['fonts']).toEqual({ sans: GOOD, mono: face(4096) });
+    expect(validateSeed(both).ok).toBe(true);
+    expect(seedOf(frame(plain(), { assets: withFonts({ mono: GOOD }) }))['fonts']).toEqual({ mono: GOOD });
+    expect(seedOf(frame(plain(), { assets: withFonts({ sans: GOOD, mono: undefined }) }))['fonts']).toEqual({ sans: GOOD });
+  });
+
+  it('a face outside the base64 alphabet, without the wOF2 signature, or over 131 072 decoded bytes is dropped silently; the other role stays', () => {
+    const bad: Record<string, string> = {
+      'a character outside the alphabet': `${GOOD.slice(0, 20)}!${GOOD.slice(21)}`,
+      'a hyphen (url-safe base64)': `${GOOD.slice(0, 20)}-${GOOD.slice(21)}`,
+      'an underscore (url-safe base64)': `${GOOD.slice(0, 20)}_${GOOD.slice(21)}`,
+      'a line feed': `${GOOD.slice(0, 20)}\n${GOOD.slice(21)}`,
+      'a space': `${GOOD} `,
+      'padding in the middle': `${GOOD.slice(0, 8)}==${GOOD.slice(8)}`,
+      'three paddings': `${GOOD}===`,
+      'wOF1': face(2048, 'wOF1'),
+      'a TrueType signature': face(2048, '\u0000\u0001\u0000\u0000'),
+      'WOFF': face(2048, 'wOFF'),
+      'empty': '',
+      'fewer than four bytes': Buffer.from('wOF').toString('base64'),
+      'one byte over the cap': face(131073),
+      'far over the cap': face(262144),
+    };
+    for (const [why, b64] of Object.entries(bad)) {
+      for (const role of ['sans', 'mono'] as const) {
+        const other = role === 'sans' ? 'mono' : 'sans';
+        const seed = seedOf(frame(plain(), { assets: withFonts({ [role]: b64, [other]: GOOD }) }));
+        expect(seed['fonts'], `${why} as ${role}`).toEqual({ [other]: GOOD });
+      }
+      expect(Object.hasOwn(seedOf(frame(plain(), { assets: withFonts({ sans: b64 }) })), 'fonts'), why).toBe(false);
+    }
+  });
+
+  it('the cap is exact: 131 072 decoded bytes (174 764 characters) is seeded, 131 073 is dropped; the signature may be all a face holds', () => {
+    const atCap = face(131072);
+    expect(atCap).toHaveLength(SEED_LIMITS.fontFaceMaxChars);
+    expect(atCap.endsWith('=')).toBe(true);
+    const seed = seedOf(frame(plain(), { assets: withFonts({ sans: atCap, mono: atCap }) }));
+    expect(seed['fonts']).toEqual({ sans: atCap, mono: atCap });
+    expect(validateSeed(seed).ok).toBe(true);
+    expect(Object.hasOwn(seedOf(frame(plain(), { assets: withFonts({ sans: face(131073) }) })), 'fonts')).toBe(false);
+    expect(seedOf(frame(plain(), { assets: withFonts({ sans: face(4) }) }))['fonts']).toEqual({ sans: face(4) });
+  });
+
+  it('a `fonts` that is not a plain object, has another key, holds a getter or a face that is not a string throws TypeError (never a FrameError)', () => {
+    class Faces {
+      sans = GOOD;
+    }
+    for (const fonts of [
+      null,
+      'wOF2',
+      7,
+      true,
+      [],
+      [GOOD],
+      new Map(),
+      new Faces(),
+      Object.create({ sans: GOOD }) as object,
+      { serif: GOOD },
+      { sans: GOOD, serif: GOOD },
+      { sans: GOOD, mono: GOOD, extra: GOOD },
+      { [Symbol('s')]: GOOD },
+      { sans: 1 },
+      { sans: null },
+      { sans: ['wOF2'] },
+      { sans: Buffer.from(GOOD, 'base64') },
+      { mono: { length: 4 } },
+      Object.defineProperty({}, 'sans', { get: () => GOOD, enumerable: true }),
+      Object.defineProperty({}, 'sans', { get: () => GOOD, enumerable: false }),
+    ]) {
+      expect(() => frame(plain(), { assets: withFonts(fonts) }), String(Object.prototype.toString.call(fonts))).toThrow(TypeError);
+      expect(refusal(() => frame(plain(), { assets: withFonts(fonts) })), String(Object.prototype.toString.call(fonts))).toBe('not a FrameError: TypeError');
+    }
+    expect(() => frame(plain(), { assets: withFonts({}) })).not.toThrow();
+  });
+
+  it('the CSP meta, the policy checks and every other element are the same with an appearance and both faces as without', () => {
+    const without = tree(frame(plain())).head.childNodes.filter(isElement);
+    const withBoth = tree(frame(plain(), { appearance: FULL, assets: withFonts({ sans: GOOD, mono: GOOD }) })).head.childNodes.filter(isElement);
+    expect(withBoth.map((e) => e.tagName)).toEqual(without.map((e) => e.tagName));
+    expect(attr(withBoth[0] as Element, 'content')).toBe(attr(without[0] as Element, 'content'));
+    for (const i of [1, 3, 4, 5]) expect(textOf(withBoth[i] as Element) === textOf(without[i] as Element), String(i)).toBe(true);
+    expect(textOf(withBoth[2] as Element)).not.toBe(textOf(without[2] as Element));
+  });
+
+  it("a face and an appearance take exactly their seed text: the srcdoc grows by `,\"appearance\":V` and `,\"fonts\":{...}` and by nothing else", () => {
+    const base = frame(plain());
+    const verdict = parseAppearance(FULL).appearance;
+    const out = frame(plain(), { appearance: FULL, assets: withFonts({ sans: GOOD, mono: face(4096) }) });
+    const fonts = { sans: GOOD, mono: face(4096) };
+    expect(out.length - base.length).toBe(`,"appearance":${JSON.stringify(verdict)}`.length + `,"fonts":${JSON.stringify(fonts)}`.length);
+  });
+
+  it("a hostile appearance or face holds no markup: the seed's text has no `<` and the CSP and element count are unchanged", () => {
+    const out = frame(plain(), { appearance: { mode: 'dark', label: '</script><script>x()</script>' }, assets: withFonts({ sans: GOOD }) });
+    const kids = tree(out).head.childNodes.filter(isElement);
+    expect(kids.map((e) => e.tagName)).toEqual(['meta', 'script', 'script', 'script', 'style', 'script']);
+    expect(seedText(out)).not.toMatch(/[<>&]/);
+    expect(seedOf(out)['appearance']).toEqual({ mode: 'dark', label: '</script><script>x()</script>' });
+  });
+});
+
+describe('the appearance contract: the derived srcdoc cap rises by both fields at their caps (section 2.2)', () => {
+  /** SEED_FIELDS_MAX_CHARS at 1.1.0 (the commit aceb346's src/frame/seed.ts, evaluated): neither field was counted. */
+  const SEED_FIELDS_MAX_CHARS_1_1_0 = 45768624;
+  const MAXIMAL_APPEARANCE_TEXT = (): string => {
+    const shadow = '-64px -64px 64px -8px rgba(255, 255, 255, 0.999)';
+    const colour = Object.fromEntries(COLOUR_SLOTS.map((k) => [k, '#ABCDEF']));
+    const skin = { radius: '24px', radiusSmall: '24px', radiusLarge: '24px', controlRow: '56px', popShadow: [shadow, shadow, shadow].join(', '), sectionFamily: 'mono', sectionSize: '16px', sectionWeight: '900', sectionTracking: '-0.100em', sectionCase: 'uppercase' };
+    return JSON.stringify({ mode: 'light', colour, skin, label: '<'.repeat(64) }).replace(/</g, '\\u003c');
+  };
+
+  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters', () => {
+    const faces = 2 * 174764;
+    expect(faces).toBe(349528);
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`.
+    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length;
+    const rise = faces + MAXIMAL_APPEARANCE_TEXT().length + keys;
+    expect(SEED_FIELDS_MAX_CHARS - SEED_FIELDS_MAX_CHARS_1_1_0).toBe(rise);
+    const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
+    const skeletonAndRest = MAX_SRCDOC_CHARS_DEFAULT - (SEED_HTML_MAX_CHARS + assetChars + IMAGE_BUDGET_CHARS + SEED_FIELDS_MAX_CHARS);
+    expect(skeletonAndRest).toBeGreaterThan(CSP_MAX_CHARS);
+    expect(MAX_SRCDOC_CHARS_DEFAULT - (SEED_HTML_MAX_CHARS + assetChars + IMAGE_BUDGET_CHARS + SEED_FIELDS_MAX_CHARS_1_1_0 + skeletonAndRest)).toBe(rise);
+  });
+
+  it("a srcdoc with both faces at the cap and the largest appearance, and the rest of the seed at its smallest, is within the cap with the html's whole share to spare", () => {
+    const atCap = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
+    const appearance = JSON.parse(MAXIMAL_APPEARANCE_TEXT().replace(/\\u003c/g, '<')) as unknown;
+    const out = frame(plain(), { appearance, assets: { ...assets, fonts: { sans: atCap, mono: atCap } } as FrameAssets });
+    expect(out.length).toBeLessThanOrEqual(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - IMAGE_BUDGET_CHARS);
+    const seed = seedOf(out);
+    expect(seed['appearance']).toEqual(parseAppearance(appearance).appearance);
+    expect(Object.keys(seed['fonts'] as object)).toEqual(['sans', 'mono']);
   });
 });
 
