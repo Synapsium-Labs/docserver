@@ -436,3 +436,33 @@ The html mark is counted and the tooltip's properties follow the most recent hos
  }
 ]
 ```
+
+### Follow-up: a document-element root's destroy
+
+The coordinator's ruling has no exception for "a root that IS the document element is destroyed while another root of its document still holds a tip". That case is unreachable: ownership (`lifecycle.ts`, step 2) refuses a root that contains, or lies inside, a live root, and every root of a document lies inside its document element, so the two can never be hosted together, whichever is enhanced first. The row pins the refusal and that the refused root writes nothing; no code change was needed. `src/enhance/lifecycle.ts` sha256 `6d518fd2...a85d`, checked after each restore.
+
+| Row | Guard | File | Edit | Tests run | Result |
+|---|---|---|---|---|---|
+| F8j | a root that is the document element and another root cannot be hosted in one document | `src/enhance/lifecycle.ts` | the registry scan of `claimed` (a live instance on an overlapping root refuses) disabled | `test/enhance-appearance.test.ts` | red (1 failed, 87 passed of 88) |
+| F8k | the same refusal through the ancestor walk of `claimed` | `src/enhance/lifecycle.ts` | the ancestor scan disabled (`if (false && ...)`) | `test/enhance-appearance.test.ts` | green (88 of 88): an equivalent mutant, the registry scan of F8j refuses the same pairs (the ancestor walk is the cheaper path to the same refusal), so the row reds only when both are gone |
+
+```json
+[
+ {
+  "row": "F8j",
+  "guard": "a root that is the document element and another root cannot be hosted in one document",
+  "file": "src/enhance/lifecycle.ts",
+  "edit": "the registry scan of `claimed` (a live instance on an overlapping root refuses) disabled",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "red (1 failed, 87 passed of 88)"
+ },
+ {
+  "row": "F8k",
+  "guard": "the same refusal through the ancestor walk of `claimed`",
+  "file": "src/enhance/lifecycle.ts",
+  "edit": "the ancestor scan disabled (`if (false && ...)`)",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "green (88 of 88): an equivalent mutant, the registry scan of F8j refuses the same pairs (the ancestor walk is the cheaper path to the same refusal), so the row reds only when both are gone"
+ }
+]
+```

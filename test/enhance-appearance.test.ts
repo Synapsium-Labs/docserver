@@ -979,6 +979,24 @@ describe('second review F8: several hosted roots in one document share the html 
     expect(tip()).toEqual(['', '', '']);
   });
 
+  it('a document-element root and another root cannot be hosted in one document, so the one never has the other\'s mark to undo (second review F8)', async () => {
+    // Ownership refuses a root that contains, or lies inside, another live root (lifecycle.ts, step 2), and every root of a
+    // document lies inside its document element: the case "a document-element root is destroyed while another root holds a
+    // tip" cannot be reached, whichever is enhanced first.
+    const parsed = new DOMParser().parseFromString(`<!doctype html><html><body>${render(DOC).html}</body></html>`, 'text/html');
+    const top = parsed.documentElement;
+    const inner = parsed.body.firstElementChild as HTMLElement;
+    await enhance(inner, { appearance: dark() });
+    await expect(enhance(top, { appearance: light() })).rejects.toMatchObject({ code: 'ownership' });
+    expect(TIP.map((p) => top.style.getPropertyValue(p)), "the refused root wrote nothing: the inner root's tip stands").toEqual(tipOf(PHOSPHOR));
+    await destroyEnhancement(inner);
+    expect(TIP.map((p) => top.style.getPropertyValue(p))).toEqual(['', '', '']);
+    await enhance(top, { appearance: dark() });
+    await expect(enhance(inner, { appearance: light() })).rejects.toMatchObject({ code: 'ownership' });
+    expect(TIP.map((p) => top.style.getPropertyValue(p))).toEqual(tipOf(PHOSPHOR));
+    await destroyEnhancement(top);
+  });
+
   it('a root of another document keeps its own count: the two documents do not share a mark', async () => {
     const other = document.implementation.createHTMLDocument('other');
     const parsed = new DOMParser().parseFromString(`<!doctype html><body>${render(DOC).html}</body>`, 'text/html');
