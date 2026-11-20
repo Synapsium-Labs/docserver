@@ -70,3 +70,17 @@ The ruling: `assets` stays live. `fonts` is read and checked at mount when the h
   {"row":"F6c","guard":"own fonts undefined is none","edit":"given for any own fonts","tests":"test/host-mount.test.ts F6 rows","result":"red"}
 ]
 ```
+
+## Second review F7
+
+The ruling: a row that observes the pass-through, so that deleting the guard reds it. `frameDocument` reads `assets` by plain `get` only, so `has` and `ownKeys` cannot tell the guard from the wrapper Proxy; what can is the identity of the object `frameDocument` is given (the file's existing stub of `frameDocument` now records it) and the host's own `get` trap, which sees the read of `fonts` only when the host is handed on as it is (the wrapper answers `fonts` itself and never forwards it). The two `F7` rows in `test/host-mount.test.ts` pin both; a host that gives `fonts`, or has one only by inheritance, is still wrapped, and the first row says so. Measured with the in-memory frame build standing in for the committed manifest.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F7 | A host that gives no `fonts` is handed on as it is (`if (d === undefined && !inherited) return ...`) | the line deleted, so every host goes through the Proxy | `test/host-mount.test.ts` (`F7` rows) | red (2 failed: the identity row and the `get`-trap row); the file was 123 passed before this row existed |
+
+```json
+[
+  {"row":"F7","guard":"a host with no fonts is handed on as it is","edit":"pass-through line deleted","tests":"test/host-mount.test.ts F7 rows","result":"red"}
+]
+```

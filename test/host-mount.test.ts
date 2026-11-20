@@ -29,13 +29,14 @@ import { HOST_CHANGES_MAX } from '../src/host/mount.js';
 import { render, scanRefs } from '../src/render/index.js';
 
 /** A frameDocument that throws the code a row names, else the real one (L3.H11's internal codes). */
-const stub = vi.hoisted(() => ({ code: null as string | null, calls: 0 }));
+const stub = vi.hoisted(() => ({ code: null as string | null, calls: 0, assets: [] as unknown[] }));
 vi.mock('../src/frame/document.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/frame/document.js')>();
   return {
     ...real,
     frameDocument: (...args: Parameters<typeof real.frameDocument>): string => {
       stub.calls += 1;
+      stub.assets.push((args[1] as { assets?: unknown } | undefined)?.assets);
       if (stub.code !== null) throw new real.FrameError(stub.code as never, 'stubbed');
       return real.frameDocument(...args);
     },
@@ -144,6 +145,7 @@ beforeEach(() => {
   channels.length = 0;
   stub.code = null;
   stub.calls = 0;
+  stub.assets = [];
   Object.assign(win, {
     MessageChannel: FakeChannel,
     setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
@@ -1907,6 +1909,37 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     m.frame.update(input(PLAIN));
     expect(m.fallbacks()).toEqual([]);
     expect(seedOf(lastSrcdoc())['fonts']).toEqual({ sans: GOOD });
+  });
+
+  // Second review F7: the pass-through guard of assetsOf. A host that gives no `fonts` reaches frameDocument as itself, so
+  // its identity, `this`, `has` and `ownKeys` are 1.1.0's. frameDocument only reads by plain `get`, so what tells the guard
+  // from the wrapper Proxy is the identity of the object it is given, and the host's own `get` trap seeing the `fonts` read.
+  it('F7: a host that gives no fonts is handed to frameDocument as itself, at mount and at every update(); one that gives fonts is not', () => {
+    const live = { ...assets } as Record<string, unknown>;
+    const m = mount(PLAIN, { assets: live });
+    expect(stub.assets.length).toBe(1);
+    expect(stub.assets[0] === live).toBe(true);
+    m.frame.update(input(PLAIN));
+    expect(stub.assets.length).toBe(2);
+    expect(stub.assets[1] === live).toBe(true);
+    // An inherited `fonts` is hidden from frameDocument, so the host is wrapped then, as it is for an own one.
+    const inherited = Object.assign(Object.create({ fonts: { sans: GOOD } }) as object, assets);
+    mount(PLAIN, { assets: inherited });
+    expect(stub.assets[2] === inherited).toBe(false);
+    const given = { ...assets, fonts: { sans: GOOD } };
+    mount(PLAIN, { assets: given });
+    expect(stub.assets[3] === given).toBe(false);
+  });
+
+  it('F7: frameDocument reads `fonts` from the host itself when it gives none (a get trap on the host sees it)', () => {
+    // A wrapper answers `fonts` by itself and never forwards it, so the host's own get trap sees that read only when the
+    // host is handed on as it is.
+    const hits: string[] = [];
+    const spy = new Proxy({ ...assets }, { get: (t, k, r) => { hits.push(String(k)); return Reflect.get(t, k, r); } });
+    const m = mount(PLAIN, { assets: spy });
+    expect(m.fallbacks()).toEqual([]);
+    expect(hits).toContain('fonts');
+    expect(hits).toContain('guard');
   });
 
   // Second review F6: `fonts` is read and checked at mount when the host gives it then; a host that gave none keeps a live
