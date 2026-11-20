@@ -32,12 +32,18 @@ name: ci
 # that moves an asset's hash without its rebuilt manifests is red. npm pack runs the prepack check
 # (scripts/verify-assets.mjs: every byte under assets/ is the one assets/assets.json names), and the smoke installs
 # the tarball whose name npm pack --json gives, never a name spelled from the version.
+# The size contract (test/size-contract.test.ts) judges the checked-out commit against its first parent and reads the landing's
+# text from DOCSERVER_SIZE_TEXT: on a pull request the pull request's description (so the run is repeated when the description
+# is edited: `edited` is among the pull_request types), otherwise empty, and the test then reads the commit message. The value is a
+# job-level env, read by the test from the environment; it is never interpolated into a run script, because a description is
+# text a stranger writes.
 # The release workflow (release.yml) runs this workflow as its test job, through workflow_call with no inputs and no
 # secrets, at the tag's commit: the same steps as a push, on both Node legs, under the token the caller grants it.
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
   workflow_call:
 
@@ -57,6 +63,8 @@ jobs:
     # The install step's worst case (22 minutes, two stalled attempts) plus the suite (36.4 minutes measured on
     # 2026-10-28) with a quarter of headroom; test/ci-workflow.test.ts holds the sum.
     timeout-minutes: 75
+    env:
+      DOCSERVER_SIZE_TEXT: ${{ github.event_name == 'pull_request' && github.event.pull_request.body || '' }}
     strategy:
       fail-fast: false
       matrix:

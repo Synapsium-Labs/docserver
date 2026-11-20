@@ -10,8 +10,9 @@
 //     once the instance is not live, so one the browser had already queued when the instance was destroyed is a no-op;
 //   - every schedule and subscription returns its own cancel, and the instance's teardown cancels all that are left,
 //     each with the window's own cancel (journal.defer, registered when the env is made);
-//   - fonts(maxMs) waits for the reader's two faces, bounded; a wait that ends once the instance is not live never
-//     settles, so nothing after it runs (a feature still checks live() after an await, as for any call-out). It
+//   - fonts(maxMs) waits for the reader's two faces, and for any host face (Docreader Host Sans or Mono) the font set holds
+//     until it has loaded or failed, bounded; a wait that ends once the instance is not live never settles,
+//     so nothing after it runs (a feature still checks live() after an await, as for any call-out). It
 //     answers true only once each face's load answered a face with the status 'loaded'. A load answers no face for a
 //     family no @font-face declares yet (a stylesheet still on its way): the wait then listens for the font set's next
 //     'loadingdone' and asks again, within the same bound, so it never answers true on the fallback faces
@@ -85,8 +86,9 @@ export interface Env {
   /** When the page is hidden for good or for the back-forward cache (the last moment to save a position). */
   onPageHide(fn: () => void): Cancel;
   /**
-   * Wait for the reader's faces (Docreader Serif and Docreader Sans) to load, at most `maxMs`: true once they have,
-   * false when the wait ran out, a load failed or the document has no font set. Never settles once not live.
+   * Wait for the reader's faces (Docreader Serif and Docreader Sans) to load, and for a host face (Docreader Host Sans or
+   * Mono) the font set holds to load or fail, at most `maxMs`: true once they have, false when the wait ran out, a library
+   * face failed or the document has no font set. Never settles once not live.
    */
   fonts(maxMs: number): Promise<boolean>;
   /** Watch elements' sizes; null where the window has no ResizeObserver. */
@@ -119,12 +121,37 @@ const MAX_DELAY = 2 ** 31 - 1;
 /** The faces fonts() waits for: the stylesheet's own (C43). */
 const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;
 
+/**
+ * The families a host's faces take (the frame runtime's host-fonts.ts gives them these names), which the stylesheet puts first
+ * in `--sans` and `--mono` while hosted: a measurement made before such a face loads is made on the fallback's metrics, so
+ * fonts() also waits for any face of these families the set holds, until it has loaded or failed (a failed face is dropped:
+ * the library's own stays in use). A set holding none (nothing is hosted) adds nothing to the wait.
+ */
+const HOST_FAMILIES: readonly string[] = ['Docreader Host Sans', 'Docreader Host Mono'];
+
 /** The font set's events after which fonts() asks again. */
 const HEARD = ['loading', 'loadingdone'] as const;
 
 /** Whether one face's load answered a loaded face: a list with at least one face whose status is 'loaded'. */
 function loadedFace(found: unknown): boolean {
   return Array.isArray(found) && found.some((f: unknown) => (f as { status?: unknown } | null | undefined)?.status === 'loaded');
+}
+
+/**
+ * A promise that settles once every face of a host family in `set` has loaded or failed (a face's `loaded` promise: already
+ * settled for a face that has, so the wait is no longer than the loading ones). A set that cannot be walked (a stand-in
+ * with no forEach) holds none to wait for; a face never asked to load is waited on until the bound.
+ */
+function hostFacesSettled(set: FontFaceSet): Promise<unknown> {
+  const waits: Promise<unknown>[] = [];
+  try {
+    set.forEach((face) => {
+      if (HOST_FAMILIES.includes(face.family.replace(/^["']|["']$/g, ''))) waits.push(face.loaded.catch(() => undefined));
+    });
+  } catch {
+    // a set that cannot be walked (no forEach, or one that throws): the library's faces alone are waited for
+  }
+  return Promise.all(waits);
 }
 
 /** A finite delay from 0 to MAX_DELAY. */
@@ -441,8 +468,9 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
           }
           loads.then(
             (found) => {
-              if (found.every(loadedFace)) finish(true);
-              else hear(set);
+              if (!found.every(loadedFace)) hear(set);
+              // The library's faces are in: a host face still loading is waited for too, within the same bound.
+              else void hostFacesSettled(set).then(() => finish(true));
             },
             () => {
               finish(false);

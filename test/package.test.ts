@@ -147,11 +147,15 @@ describe('package.json: identity', () => {
     expect(pkg.license).toBe('MIT');
   });
 
-  it('declares its modules free of side effects, but not its stylesheets', () => {
+  it('declares its modules free of side effects, but not its stylesheets or the module that freezes the appearance contract', () => {
     // A bundler drops a bare import of a file the package calls side-effect free, so with `false` webpack would
     // drop `import '@synapsium-labs/docserver/assets/reader.css'` and ship no stylesheet. No module of the
     // package has a side effect on import (test/enhance-walls.test.ts and the render purity tests hold that).
-    expect(pkg.sideEffects).toEqual(['*.css']);
+    // The one module with a side effect: ./frame's appearance re-export freezes the contract's lists in place (their
+    // home, src/enhance/appearance.ts, may make no call at its top level), so a bundler must keep its body.
+    expect(pkg.sideEffects).toEqual(['*.css', './dist/frame/appearance.js']);
+    // That module's source is the one that freezes (a moved freeze would leave the entry naming nothing that needs it).
+    expect(readText('src/frame/appearance.ts')).toMatch(/^Object\.freeze\(/m);
   });
 
   it('engines.node is >=22', () => {
@@ -200,13 +204,21 @@ describe('.npmrc', () => {
 describe('CHANGELOG.md: the newest entry', () => {
   // The entry's heading is the package's version, and every asset hash it names is the one assets/assets.json records
   // (the changelog's own rule). Which assets moved since the last release is checked by review, not by this test.
+  // Between releases one `## Unreleased` entry may stand above it (the appearance contract's landing, which moves asset
+  // hashes and leaves the version to the release): then the hash bullets are read from that entry, and the version
+  // heading from the entry below it.
   const changelog = readText('CHANGELOG.md');
   const version = (JSON.parse(readText('package.json')) as { version: string }).version;
-  const top = changelog.slice(changelog.indexOf('## '), changelog.indexOf('\n## ', changelog.indexOf('## ') + 3));
+  const entry = (from: number): string => changelog.slice(from, changelog.indexOf('\n## ', from + 3));
+  const first = entry(changelog.indexOf('## '));
+  const unreleased = first.startsWith('## Unreleased\n') ? first : null;
+  const versioned = unreleased === null ? first : entry(changelog.indexOf('## ') + first.length + 1);
+  const top = unreleased ?? versioned;
   const assets = readJson('assets/assets.json') as { version: string; files: { path: string; sha256: string }[] };
 
   it("is headed by the package's version, which assets.json and the lockfile's root share", () => {
-    expect(top.startsWith(`## ${version}\n`)).toBe(true);
+    expect(versioned.startsWith(`## ${version}\n`)).toBe(true);
+    expect(changelog.split('\n').filter((l) => l === '## Unreleased')).toHaveLength(unreleased === null ? 0 : 1);
     expect(assets.version).toBe(version);
     expect((lock as unknown as { version: string }).version).toBe(version);
     expect(lock.packages['']?.version).toBe(version);

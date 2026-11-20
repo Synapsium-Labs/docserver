@@ -1,0 +1,23 @@
+stateDiagram-v2
+  [*] --> Still
+  Still --> [*]
+  Still --> Moving
+  state Moving {
+    [*] --> Run
+    Run --> Fast
+    --
+    [*] --> Jump
+    Jump --> Land
+  }
+  Moving --> Fork
+  state Fork <<fork>>
+  Fork --> Decide
+  Fork --> Merge
+  state Decide <<choice>>
+  Decide --> Join : yes
+  Decide --> Merge : no
+  state Join <<join>>
+  state Merge <<join>>
+  Join --> [*]
+  Merge --> [*]
+  note right of Still : A note

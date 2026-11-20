@@ -1,0 +1,19 @@
+# A document with a figure
+
+**Spec** · 2026-11-20 · Status: Draft
+
+## 1. The figure
+
+A paragraph before the figure.
+
+```mermaid
+@@FIGURE@@
+```
+
+*Figure 1. A figure drawn for the appearance contract.*
+
+## 2. Words used here
+
+| Term | Meaning |
+|---|---|
+| Widget | A neutral thing named in the figure |

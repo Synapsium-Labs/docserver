@@ -20,6 +20,12 @@
 //    assets/frame/enhance.js gets a binder scan for global (not member) references to the forbidden names only (L2's own
 //    walls cover its source); and none of the three carries a test marker (`__TEST`, `process.env`, `import.meta.vitest`,
 //    or a branch on a name that says test, a member read off the global included; only RegExp's `.test(...)` is exempt).
+// 7. The host faces (appearance contract, Task 5): host-fonts.ts is the one module that decodes and loads a font from a
+//    string, so its three platform sinks are guarded sites like `open`: `atob` (the decode), `FontFace` (the constructor)
+//    and `.fonts` of a document (the set a face is added to and dropped from), each exactly once and nowhere else.
+// 8. No element's inline style (review 2906 F10): `style` and `attributeStyleMap`, as a member, a string key or a destructured
+//    property, appear nowhere in src/frame-runtime, with no allowed site. The frame's `html` element is marked by the
+//    reader's journal (src/enhance/state.ts), not by this runtime.
 // Every allowed site has a planted control: one more use at that site goes red, and so does each forbidden name.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -47,6 +53,9 @@ const FORBIDDEN: readonly string[] = [
   'getElementById', 'eval',
 ];
 
+/** Members the frame runtime never uses, by `.name`, a string key or a destructured property: an element's inline style. */
+const STYLE_MEMBERS: readonly string[] = ['style', 'attributeStyleMap'];
+
 /** Names never a global reference, and never a member of the global or of a document. */
 const PAGE_NAMES: readonly string[] = ['location', 'history', 'top'];
 
@@ -64,6 +73,8 @@ const SOURCE_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> =
   'bootstrap.ts': { 'Function.prototype.toString': 1, '.open': 1, postMessage: 1, "'message'": 2, '.onmessage': 1, 'createElement(script)': 1 },
   'content.ts': { DOMParser: 1 },
   'outbox.ts': { 'open()': 1 },
+  // The host faces' three sinks (header, 7): the decode, the constructor and the document's font set, once each.
+  'host-fonts.ts': { atob: 1, FontFace: 1, '.fonts of a document': 1 },
 };
 
 /** The same sites in the built scripts: the bootstrap bundles content.ts and outbox.ts. */
@@ -180,18 +191,21 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
       const fromPlatform = (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) || isGlobalRef(node, checker);
       if (t === 'DOMParser' && fromPlatform) site('DOMParser');
       if (t === 'postMessage' && fromPlatform) site('postMessage');
+      if ((t === 'atob' || t === 'FontFace') && fromPlatform) site(t);
       if ((PAGE_NAMES.includes(t) || t === 'open') && isGlobalRef(node, checker)) at(node, `global ${t}`);
     }
     if (ts.isPropertyAccessExpression(node)) {
       const name = node.name.text;
+      if (STYLE_MEMBERS.includes(name)) at(node.name, `.${name}`);
       if (name === 'open') site('.open');
       if (name === 'onmessage') site('.onmessage');
+      if (name === 'fonts' && isPageReceiver(node.expression, checker)) site('.fonts of a document');
       if (PAGE_NAMES.includes(name) && isPageReceiver(node.expression, checker)) at(node.name, `.${name} of the page`);
     }
     if (ts.isElementAccessExpression(node)) {
       const key = node.argumentExpression;
       if (ts.isStringLiteralLike(key)) {
-        if (banned.has(key.text)) at(key, `['${key.text}']`);
+        if (banned.has(key.text) || STYLE_MEMBERS.includes(key.text)) at(key, `['${key.text}']`);
         if (key.text === 'open') site('.open');
         if (key.text === 'postMessage') site('postMessage');
         if (PAGE_NAMES.includes(key.text) && isPageReceiver(node.expression, checker)) at(key, `['${key.text}'] of the page`);
@@ -200,7 +214,7 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
     if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
       const key = node.propertyName ?? node.name;
       const text = ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
-      if (text !== null && (banned.has(text) || PAGE_NAMES.includes(text) || text === 'open')) at(key, `{ ${text} }`);
+      if (text !== null && (banned.has(text) || STYLE_MEMBERS.includes(text) || PAGE_NAMES.includes(text) || text === 'open')) at(key, `{ ${text} }`);
       else if (ts.isComputedPropertyName(key) && builtString(key.expression)) at(key, '{ [<member built at run time>] }');
     }
     if ((ts.isMethodDeclaration(node) || ts.isPropertyAssignment(node)) && !inType(node)) {
@@ -371,10 +385,35 @@ describe('L3.M19: the frame runtime sources', () => {
     ['styles.ts', "export const p15 = (d: Document): Element => d.createElement('script');", 'createElement(script) x1, allowed x0'],
     ['adapters.ts', 'export const p9 = (o: { postMessage(m: unknown): void }): void => o.postMessage(1);', 'postMessage x1, allowed x0'],
     ['adapters.ts', 'export const p10 = (o: { open(): void }): void => o.open();', '.open x1, allowed x0'],
+    // The host faces' sinks (header, 7): one more use at the site, or one anywhere else, is over the count.
+    ['host-fonts.ts', "export const p16 = (s: string): string => atob(s);", 'atob x2, allowed x1'],
+    ['host-fonts.ts', "export const p17 = (b: Uint8Array): FontFace => new FontFace('x', b);", 'FontFace x2, allowed x1'],
+    ['host-fonts.ts', 'export const p18 = (): FontFaceSet => document.fonts;', '.fonts of a document x2, allowed x1'],
+    ['adapters.ts', "export const p19 = (s: string): string => atob(s);", 'atob x1, allowed x0'],
+    ['adapters.ts', "export const p20 = (b: Uint8Array): FontFace => new FontFace('x', b);", 'FontFace x1, allowed x0'],
+    ['adapters.ts', 'export const p21 = (): FontFaceSet => document.fonts;', '.fonts of a document x1, allowed x0'],
+    ['enhance-entry.ts', "export const p22 = (s: string): string => atob(s);", 'atob x1, allowed x0'],
   ] as const) {
     it(`a planted extra use in ${file} goes red: ${what}: ${snippet.replace(/^export const \w+ = /, '')}`, () => {
       expect(plant(file, snippet)).toContain(what);
     });
+  }
+
+  // No inline style from this runtime, whichever way it is reached (header, 8): the entry, which once wrote the html element's
+  // tooltip properties itself, included.
+  for (const [snippet, what] of [
+    ["export const s1 = (h: HTMLElement): void => h.style.setProperty('--dr-tip-bg', 'red');", '.style'],
+    ["export const s2 = (h: HTMLElement): void => { h.style.removeProperty('--dr-tip-bg'); };", '.style'],
+    ["export const s3 = (h: HTMLElement): unknown => h['style'];", "['style']"],
+    ['export const s4 = (h: HTMLElement): unknown => { const { style } = h; return style; };', '{ style }'],
+    ["export const s5 = (h: HTMLElement): void => { h.attributeStyleMap.set('color', 'red'); };", '.attributeStyleMap'],
+    ["export const s6 = (): void => { document.documentElement.style.setProperty('--dr-tip-fg', 'red'); };", '.style'],
+  ] as const) {
+    for (const file of ['enhance-entry.ts', 'adapters.ts']) {
+      it(`a planted style write in ${file} goes red: ${snippet.replace(/^export const \w+ = /, '').slice(0, 70)}`, () => {
+        expect(plant(file, snippet).join('\n')).toContain(what);
+      });
+    }
   }
 
   for (const [snippet, what] of [

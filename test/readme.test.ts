@@ -115,7 +115,7 @@ describe('README', () => {
 
   it('names every runtime export of ./enhance, including goToHash and runEnhancementCommand', () => {
     const names = Object.keys(enhance).sort();
-    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementPrefs']);
+    expect(names).toEqual(['EnhanceError', 'destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs']);
     expect(names.filter((name) => !README.includes(`\`${name}\``) && !README.includes(`\`${name}(`))).toEqual([]);
   });
 
@@ -211,7 +211,7 @@ describe('README: the L3 sections exist and name their entries', () => {
       ...Object.keys((await import(HOST_ENTRY)) as object),
       ...Object.keys(await import('../src/highlight/index.js')),
     ].sort();
-    expect(names).toHaveLength(28);
+    expect(names).toHaveLength(36);
     expect(names.filter((n) => !README.includes(`\`${n}\``) && !README.includes(`\`${n}(`))).toEqual([]);
   });
 });
@@ -262,7 +262,7 @@ describe('README: Hosting (./host)', () => {
     const s = section('Hosting');
     for (const name of [
       'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title', 'focus',
-      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid',
+      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid', 'appearance', 'setAppearance', 'fonts',
     ]) expect(s, name).toContain(`\`${name}\``);
     for (const reason of ['timeout', 'nonce', 'error', 'protocol', 'refusals', 'navigated', 'assets', 'too-large', 'invalid-input']) {
       expect(s, reason).toContain(`\`'${reason}'\``);
@@ -419,7 +419,7 @@ describe('README: the bridge', () => {
   it("scopes the flat rule to what the frame sends, and states the shapes changes.result carries, which the accepted fixtures hold (review T12-C1)", async () => {
     const { bridgeCases } = await import('../src/conformance/index.js');
     const s = section('The bridge');
-    // Every key that is neither `v` nor a string, in a message the fixtures accept: changes.result's three alone.
+    // Every key that is neither `v` nor a string, in a message the fixtures accept: changes.result's three, mermaid's flag and the appearance op's value.
     const shaped = new Set<string>();
     for (const c of bridgeCases().messages) {
       if (c.verdict !== 'accept') continue;
@@ -427,6 +427,7 @@ describe('README: the bridge', () => {
       for (const [k, v] of Object.entries(m)) if (k !== 'v' && typeof v !== 'string') shaped.add(`${c.direction} ${String(m['t'])} ${k}`);
     }
     expect([...shaped].sort()).toEqual([
+      'parent-to-frame appearance appearance',
       'parent-to-frame changes.result ranges',
       'parent-to-frame changes.result removedAfter',
       'parent-to-frame changes.result unavailable',
@@ -437,6 +438,9 @@ describe('README: the bridge', () => {
     expect(s).toContain('`ranges`, a list of `[from, to]` pairs of integers');
     expect(s).toContain('`removedAfter`, a list of integers');
     expect(s).toContain('`unavailable: true`');
+    // The appearance op's value is the one nested object the parent sends: the README says so, and that the frame judges its shape only.
+    expect(s).toContain('`appearance` carries `v: 1` and `appearance`, a plain object');
+    expect(s).toContain('`FRAME_ACCEPTS`');
   });
 
   it("states the mermaid op: exactly one of text (within its cap) or unavailable: true, only for an 'after-ready' frame, once, after ready", async () => {

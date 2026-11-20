@@ -33,6 +33,7 @@
 // is vocab.ts's: a list given replaces its default there. The namespace is the prefix of every storage key (state.ts),
 // `docreader` by default.
 import type { BoundCallback, HostCallbacks } from './host.js';
+import { hostedVerdict, type Appearance } from './appearance.js';
 import { EnhanceError, type CommitEntry, type FrontListEntry, type MermaidDraw, type Prefs, type ReaderStorage, type VocabularyOptions } from './types.js';
 
 /** Which parts of the chrome the reader builds (LD10). */
@@ -57,6 +58,8 @@ export interface MermaidSettings {
 /** The options after normalization: every field present, absent ones as null or their default. */
 export interface NormalizedOptions {
   readonly prefs: Readonly<Partial<Prefs>>;
+  /** The host's appearance, as parseAppearance judged it (appearance.ts); null when none was given, or the value was not a plain object. */
+  readonly appearance: Appearance | null;
   readonly storage: ReaderStorage | null;
   readonly storageKey: string | null;
   readonly info: NormalizedInfo | null;
@@ -110,7 +113,7 @@ export const OPTION_KEYS: readonly string[] = [
   'prefs', 'storage', 'storageKey', 'info', 'folds', 'signal',
   'posKey', 'keyboard', 'chrome', 'rules', 'initialHash',
   'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'mermaid',
-  'vocabulary', 'namespace',
+  'vocabulary', 'namespace', 'appearance',
 ];
 const INFO_KEYS: readonly string[] = ['title', 'frontList', 'sha', 'draft', 'commits', 'only'];
 const CHROME_KEYS: readonly string[] = ['bar', 'rail', 'settings', 'topSpace'];
@@ -495,6 +498,7 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
   });
   return {
     prefs: prefs === undefined ? {} : normalizePrefs(prefs),
+    appearance: hostedVerdict(fields['appearance']),
     storage: storage === undefined ? null : (storage as ReaderStorage),
     storageKey: storageKey === undefined ? null : storageKey,
     info: info === undefined ? null : normalizeInfo(info),

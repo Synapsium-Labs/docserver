@@ -14,8 +14,8 @@
 // waits for the first frame, as the reference's did); 'resize', the window's resize events debounced by
 // RESIZE_DEBOUNCE_MS (a burst is one run); 'prefs' and 'lens', when the prefs change (the lifecycle); 'folds' (folds.ts);
 // 'outline' (plans.ts); 'content' (a feature whose own work moved sizes, a drawn diagram say); and 'fonts': the reader's
-// two faces are waited for, at most FONTS_WAIT_MS (env.fonts), and a wait that ends with them loaded asks for one
-// run, so what was measured on the fallback metrics is measured again (LD5). env.fonts counts a face as loaded only
+// two faces, and a host's faces the font set holds, are waited for, at most FONTS_WAIT_MS (env.fonts), and a wait that ends
+// with them loaded asks for one run, so what was measured on the fallback metrics is measured again (LD5). env.fonts counts a face as loaded only
 // when the font set holds it loaded, so a stylesheet that arrives after enhance() delays the run until its faces
 // load, rather than letting it run at once on the fallback faces. A wait that runs out, or a load that fails, asks for
 // none: nothing changed. Nothing runs once the instance is not live: its frame and its timers are

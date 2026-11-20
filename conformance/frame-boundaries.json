@@ -1,0 +1,43 @@
+[
+  {
+    "frameOps": [
+      "ready",
+      "error",
+      "store.set",
+      "navigate",
+      "copy",
+      "changes",
+      "hash",
+      "version",
+      "progress"
+    ],
+    "frameAccepts": [
+      "prefs",
+      "changes.result",
+      "mermaid",
+      "command"
+    ],
+    "csp": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"
+  },
+  {
+    "frameOps": [
+      "ready",
+      "error",
+      "store.set",
+      "navigate",
+      "copy",
+      "changes",
+      "hash",
+      "version",
+      "progress"
+    ],
+    "frameAccepts": [
+      "prefs",
+      "changes.result",
+      "mermaid",
+      "command",
+      "appearance"
+    ],
+    "csp": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"
+  }
+]

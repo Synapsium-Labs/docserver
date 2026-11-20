@@ -48,7 +48,8 @@
 // Import-inert: no module-level state. Each mount keeps its state in its own closure; two mounts share no port, nonce
 // or timer. The DOM is touched only inside mountDocFrame and the DocFrame it returns, through the element's own window.
 import { frameCsp } from '../frame/csp.js';
-import { FrameError, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
+import { parseAppearance, type Appearance } from '../enhance/appearance.js';
+import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
 import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, type FrameToParent } from '../frame/protocol.js';
@@ -104,6 +105,11 @@ export interface HostAdapters {
   readonly title?: string;
   /** Default true: focus the iframe right after insertion (M8.1). */
   readonly focus?: boolean;
+  /**
+   * The host's appearance (the appearance contract), seeded into every mount: a plain object, taken through
+   * parseAppearance, so a bad slot never throws. Any value that is not a plain object is a TypeError.
+   */
+  readonly appearance?: Appearance;
   /** ./host never navigates or opens a window: the host decides. */
   onLink?(link: HostLink): void;
   onHash?(id: string): void;
@@ -129,6 +135,13 @@ export interface DocFrame {
   /** Posted once ready, else queued; seeds every later remount. */
   setPrefs(p: Partial<FramePrefs>): void;
   /**
+   * Posts the `appearance` op once ready, else queues it (the latest wins); seeds every later remount. An `a` that is not a
+   * plain object throws a TypeError, whatever the state; any plain object is taken through parseAppearance (its verdict is
+   * what is posted and seeded), so a bad slot never throws. After a fallback it posts nothing, and its verdict seeds a later
+   * update(); after destroy() it does nothing.
+   */
+  setAppearance(a: Appearance): void;
+  /**
    * Runs one of the reader's tools without the reader's own bar, as a toggle (batch 1.1, C108): focuses the iframe, then
    * posts the command. Before the frame is ready, after destroy() and after a fallback it does nothing (it is not
    * queued); a name outside the four throws a TypeError, whatever the state.
@@ -141,7 +154,7 @@ export interface DocFrame {
 /** Every key HostAdapters may hold. */
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
-  'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid',
+  'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
 ]);
 
 /** The callbacks, each a function when given. */
@@ -176,10 +189,56 @@ const FALLBACK_OF: Readonly<Record<FrameErrorCode, FallbackReason>> = Object.fre
 const INTERNAL: readonly FrameErrorCode[] = Object.freeze(['nonce', 'csp'] as const);
 
 const isPlain = (v: unknown): v is object => {
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
-  const p: unknown = Object.getPrototypeOf(v);
-  return p === Object.prototype || p === null;
+  try {
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+    const p: unknown = Object.getPrototypeOf(v);
+    return p === Object.prototype || p === null;
+  } catch {
+    // A Proxy whose trap throws is not a plain object; its own throw never escapes.
+    return false;
+  }
 };
+
+/**
+ * What a mount hands frameDocument as `assets`, and whether `fonts` was read for good. Only `fonts` is read here (the review
+ * 2906 F3 ruling); every other asset is read live by frameDocument by plain property access, as in 1.1.0 (inherited ones, a
+ * later `assets.mermaid` and a throwing Proxy trap included). A host that gives no `fonts` is handed on as it is, so it
+ * behaves exactly as in 1.1.0, a class whose getters read a #private field included. A host that gives `fonts` (an own data
+ * property: a getter on it, or a malformed shape, is a TypeError, never a fallback) or has one only by inheritance (absent)
+ * gets a Proxy over an empty target that answers `fonts` with the checked faces and forwards every other read to the host
+ * with the host as the receiver, so its getters see it as `this`. The target is empty so that a frozen host's own `fonts`
+ * can never break a Proxy invariant. A value that is not an object is passed through for frameDocument to refuse.
+ *
+ * `given` is true when the host gave an own `fonts` now (one that holds undefined is none): it was read and checked once, here, at mount, and a later change to
+ * it reaches no update(). When it is false the host's object stays live, and update() calls this again on it before it
+ * tears anything down, so a `fonts` the host adds later meets the same check, with the same TypeError, thrown by update()
+ * with the old mount left as it was.
+ */
+function assetsOf(assets: unknown): { readonly value: unknown; readonly given: boolean } {
+  if (typeof assets !== 'object' || assets === null) return { value: assets, given: false };
+  let d: PropertyDescriptor | undefined;
+  let inherited = false;
+  try {
+    d = Object.getOwnPropertyDescriptor(assets, 'fonts');
+    inherited = d === undefined && 'fonts' in assets;
+  } catch {
+    // A Proxy whose trap throws: nothing is read here; frameDocument reads it and the throw becomes a fallback, as in 1.1.0.
+    return { value: assets, given: false };
+  }
+  if (d === undefined && !inherited) return { value: assets, given: false };
+  let faces: ReturnType<typeof fontsOf>;
+  if (d !== undefined) {
+    if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
+    try {
+      faces = fontsOf(d.value);
+    } catch (e) {
+      if (e instanceof TypeError) throw e;
+      throw new TypeError('docserver host: assets.fonts could not be read');
+    }
+  }
+  const host = assets;
+  return { value: new Proxy({}, { get: (_t, key) => (key === 'fonts' ? faces : Reflect.get(host, key, host)) }), given: d !== undefined && d.value !== undefined };
+}
 
 /** The own data properties of `v` as a record: an unknown key or a getter (unread) is a TypeError; undefined is absent. */
 function ownData(v: unknown, where: string, allowed: readonly string[]): Record<string, unknown> {
@@ -212,10 +271,17 @@ function prefsOf(p: unknown, where: string): Partial<FramePrefs> {
 /** The checked adapters (step 1). */
 interface Checked {
   readonly raw: object;
+  /** The adapters' own `assets`, as given: the live object a later update() reads again when no `fonts` was given at mount. */
+  readonly rawAssets: unknown;
+  /** What the first mount hands frameDocument (see assetsOf). */
   readonly assets: unknown;
+  /** True when an own `fonts` was read at mount: it is then fixed for the DocFrame's life. */
+  readonly fontsGiven: boolean;
   readonly watchdogMs: number;
   readonly store: HostStore | null;
   readonly prefs: Partial<FramePrefs>;
+  /** The verdict of the adapters' `appearance`; undefined when none was given. */
+  readonly appearance: Appearance | undefined;
   readonly features: unknown;
   readonly gate: MermaidGateCaps;
   readonly draw: 'auto' | 'on-request' | 'after-ready';
@@ -263,6 +329,13 @@ function check(adapters: unknown): Checked {
   const focus = a['focus'] ?? true;
   if (typeof focus !== 'boolean') throw new TypeError('docserver host: adapters.focus must be a boolean');
   const prefs = a['prefs'] === undefined ? {} : prefsOf(a['prefs'], 'adapters.prefs');
+  let appearance: Appearance | undefined;
+  if (a['appearance'] !== undefined) {
+    if (!isPlain(a['appearance'])) throw new TypeError('docserver host: adapters.appearance must be a plain object');
+    appearance = parseAppearance(a['appearance']).appearance;
+  }
+  // A malformed `fonts` is a host's programming error: it throws here, at mount time, and never as a fallback.
+  const checkedAssets = assetsOf(a['assets']);
   let store: HostStore | null = null;
   const s = a['store'];
   if (s !== undefined) {
@@ -275,7 +348,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('docserver host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('docserver host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, assets: a['assets'], watchdogMs: w, store, prefs, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
+  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -347,11 +420,17 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
 
   /** The prefs every mount seeds: the adapters' own, then each setPrefs on top. */
   let seedPrefs: Partial<FramePrefs> = { ...c.prefs };
+  /** The verdict every mount seeds: the adapters', then each setAppearance on top (the latest). */
+  let seedAppearance: Appearance | undefined = c.appearance;
+  /** What every mount hands frameDocument as `assets`: the first mount's, and an update()'s when it read the live object again. */
+  let assets: unknown = c.assets;
   let destroyed = false;
   /** Tears the current mount down without a fallback (update, destroy); null when nothing is mounted. */
   let teardown: (() => void) | null = null;
   /** Posts prefs on the current mount's port (now or at its ready). */
   let sendPrefs: (p: Partial<FramePrefs>) => void = () => undefined;
+  /** Posts an appearance verdict on the current mount's port (now or at its ready). */
+  let sendAppearance: (a: Appearance) => void = () => undefined;
   /** Focuses the current mount's iframe and posts a command on its port; nothing before its ready or once it is gone. */
   let sendCommand: (name: (typeof COMMAND_OPS)[number]) => void = () => undefined;
 
@@ -431,8 +510,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const frameOptions: FrameOptions = {
         csp: policy,
         nonce,
-        assets: c.assets as FrameAssets,
+        assets: assets as FrameAssets,
         prefs: seedPrefs,
+        ...(seedAppearance === undefined ? {} : { appearance: seedAppearance }),
         ...(c.store === null ? {} : { snapshot: c.store.snapshot() }),
         mermaid: gated !== null && gated.inline ? { maxTextSize: gated.maxTextSize, draw: c.draw } : null,
         ...(c.features === undefined ? {} : { features: c.features as FrameFeatures }),
@@ -471,6 +551,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     let early = 0;
     let limiter: Limiter | null = null;
     let pending: Partial<FramePrefs> | null = null;
+    let pendingAppearance: Appearance | null = null;
     let answer: Build | null = null;
     let sent = false;
     const changeTimers = new Set<number>();
@@ -604,11 +685,16 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         deliver: effect,
       });
       for (let i = 0; i < early; i += 1) limiter.refuse();
-      call('onReady');
-      if (live && pending !== null) {
+      // The queued values go first, so a setPrefs or setAppearance made inside the host's onReady is posted after them and wins.
+      if (pending !== null) {
         post({ t: 'prefs', ...pending });
         pending = null;
       }
+      if (pendingAppearance !== null) {
+        post({ t: 'appearance', v: 1, appearance: pendingAppearance });
+        pendingAppearance = null;
+      }
+      call('onReady');
       deliver();
     };
 
@@ -654,6 +740,11 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       if (ready) post({ t: 'prefs', ...p });
       else pending = { ...(pending ?? {}), ...p };
     };
+    sendAppearance = (a) => {
+      if (!live) return;
+      if (ready) post({ t: 'appearance', v: 1, appearance: a });
+      else pendingAppearance = a;
+    };
     sendCommand = (name) => {
       if (!live || !ready) return;
       // The focus first, so the keys the tool uses reach the frame; it runs host code (a blur or focusout handler),
@@ -688,9 +779,13 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   return {
     update(d) {
       if (destroyed) return;
+      // A host that gave no `fonts` at mount keeps a live `assets`: read it again first, so that a malformed `fonts` it has
+      // added since is a TypeError from here, the same kind as at mount, with the current mount left as it is.
+      if (!c.fontsGiven) assets = assetsOf(c.rawAssets).value;
       teardown?.();
       teardown = null;
       sendPrefs = () => undefined;
+      sendAppearance = () => undefined;
       sendCommand = () => undefined;
       mount(d);
     },
@@ -699,6 +794,13 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       if (destroyed) return;
       seedPrefs = { ...seedPrefs, ...checked };
       sendPrefs(checked);
+    },
+    setAppearance(a) {
+      if (!isPlain(a)) throw new TypeError('docserver host: appearance must be a plain object');
+      if (destroyed) return;
+      const verdict = parseAppearance(a).appearance;
+      seedAppearance = verdict;
+      sendAppearance(verdict);
     },
     command(name) {
       if (typeof name !== 'string' || !(COMMAND_OPS as readonly string[]).includes(name)) {
@@ -713,6 +815,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       teardown?.();
       teardown = null;
       sendPrefs = () => undefined;
+      sendAppearance = () => undefined;
       sendCommand = () => undefined;
     },
   };

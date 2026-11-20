@@ -58,9 +58,9 @@ const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under str
 
 /** The runtime exports of each L3 entry, as the smoke lists them (sorted). */
 const FRAME_API = [
-  'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_MANIFEST', 'FrameError',
-  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
-  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isFragmentId', 'mermaidGate',
+  'APPEARANCE_CONTRACT', 'APPEARANCE_LABEL_DEFAULT', 'APPEARANCE_PAIRS', 'APPEARANCE_SLOTS', 'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_ACCEPTS', 'FRAME_MANIFEST', 'FrameError',
+  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_HOSTED_KINDS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
+  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isFragmentId', 'mermaidGate', 'mermaidThemeOf', 'parseAppearance',
 ];
 const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'MAX_LINE_CHARS', 'MAX_WHOLE_BLOCK_CHARS', 'createHighlighter', 'resolveLanguage'];
 
@@ -78,7 +78,7 @@ const SMOKE_LINES = [
   'consumer-smoke: the frame and highlight declarations typecheck with no DOM library and no ambient types',
   'consumer-smoke: @synapsium-labs/docserver/render resolves into node_modules',
   'consumer-smoke: a deep import is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',
-  'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementPrefs',
+  'consumer-smoke: @synapsium-labs/docserver/enhance imports in Node and exports exactly EnhanceError, destroyEnhancement, enhance, goToHash, runEnhancementCommand, setEnhancementAppearance, setEnhancementPrefs',
   'consumer-smoke: the stylesheet, the font licence and the Mermaid file resolve through ./assets/* into node_modules',
   "consumer-smoke: the Mermaid file imports through ./assets/*, and its one export is Mermaid's API, its start-on-load off",
   'consumer-smoke: a deep import of the enhance build is refused (ERR_PACKAGE_PATH_NOT_EXPORTED)',

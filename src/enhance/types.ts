@@ -194,6 +194,13 @@ export interface VocabularyOptions {
 export interface EnhanceOptions {
   /** Explicit starting prefs; they override stored ones. */
   prefs?: Partial<Prefs>;
+  /**
+   * The host's appearance (the appearance contract, appearance.ts), applied in the same synchronous run as the prefs: any
+   * value, judged by parseAppearance; one that is not a plain object leaves the mount as it is. With one, the mount is
+   * hosted for life: its `mode` replaces the theme pref, the stored theme is ignored and never written, and Aa shows one
+   * static line in place of its theme row.
+   */
+  appearance?: unknown;
   /** Absent: nothing persists, and the reader still works. */
   storage?: ReaderStorage;
   /** The per-document key namespace, such as "project-a:specs:x.md". Absent: no per-document state persists. */

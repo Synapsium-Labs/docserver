@@ -18,18 +18,30 @@
 // conditional like an attribute's: each property goes back to the value and priority it had, unless the host has
 // changed it since; an element that had no style attribute loses the empty one the CSSOM leaves.
 
+import { SLOT_PROPERTY, type SlotProperty } from './appearance.js';
+
 /** The attribute every element the library creates carries, so teardown and tests find chrome without classes. */
 export const CHROME_ATTR = 'data-docreader-chrome';
 
 /** The style properties setStyle writes without `important` (LD11's closed list). */
 export const STYLE_PROPS = [
   '--thead-h', '--fig-w', '--bar-h', 'left', 'top', 'right', 'width', 'max-height', 'transform', 'opacity', 'stroke-dasharray', 'stroke-dashoffset',
+  // Mermaid's tooltip colours, on a root that is its document's element (state.ts applyAppearance); on any other root the
+  // document element's are written by setDocumentTip, which keeps its own record.
+  '--dr-tip-bg', '--dr-tip-fg', '--dr-tip-edge',
 ] as const;
 
 /** The style properties setStyle writes only with `important`: a definition dot's and ring's paint. */
 export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width'] as const;
 
-export type StyleProp = (typeof STYLE_PROPS)[number] | (typeof IMPORTANT_STYLE_PROPS)[number];
+/**
+ * The host appearance's properties (appearance.ts SLOT_PROPERTY: every colour slot's custom property and every skin
+ * slot's), the closed list of the third kind: written without `important`, so they are in the first list's company.
+ * Derived on use (a call at the top level is refused), so the list cannot drift from the contract.
+ */
+const slotProps = (): readonly string[] => [...Object.values(SLOT_PROPERTY.colour), ...Object.values(SLOT_PROPERTY.skin)];
+
+export type StyleProp = (typeof STYLE_PROPS)[number] | (typeof IMPORTANT_STYLE_PROPS)[number] | SlotProperty;
 
 /** The longest style value setStyle writes, in code units. */
 const STYLE_VALUE_MAX = 200;
@@ -83,13 +95,95 @@ export interface Journal {
   defer(fn: () => void): void;
   /**
    * Set (a string) or remove (null) one style property through the CSSOM: a name of STYLE_PROPS, or with `important`
-   * one of IMPORTANT_STYLE_PROPS; anything else, or a refused value, throws. Undo restores the property's value and
+   * one of IMPORTANT_STYLE_PROPS; a name of STYLE_PROPS or a host appearance slot's property (SLOT_PROPERTY) only without it; anything else, or a refused value, throws. Undo restores the property's value and
    * priority only while they are still what the library last wrote, and removes the style attribute the CSSOM leaves
    * when the element had none and nothing is left in it.
    */
   setStyle(el: Styled, prop: StyleProp, value: string | null, important?: boolean): void;
+  /**
+   * Mermaid's tooltip, the one reach outside the root (the design's section 10): `tip` is the three colours the stylesheet reads
+   * for it (`--dr-tip-bg`, `--dr-tip-fg`, `--dr-tip-edge`) or null for none, and `html` the document element of the root's own
+   * document. The mark `data-docreader-hosted` and the three properties are one write shared by every root of the document,
+   * so they are not an entry of this journal's undo (one root's teardown would put back what another still needs): the
+   * document's record counts the roots that hold a tip. The mark stays while any holds one, and the properties follow the most
+   * recent one (last writer wins: the tooltip is one element per document). The element's own values are recorded when the first
+   * root holds a tip and put back when the last leaves (a value the host changed since stays). This journal's teardown releases
+   * its root's hold. A value setStyle would refuse throws, before any write.
+   */
+  setDocumentTip(html: HTMLElement, tip: TipColours | null): void;
   /** Clone an SVG into chrome and rebind a complete, validated local ID snapshot within that detached clone only. */
   cloneSvg(source: SVGSVGElement, ids: ReadonlyMap<string, string>): SVGSVGElement;
+}
+
+/** Mermaid's tooltip colours: background, text and border, as the three properties take them. */
+export type TipColours = readonly [bg: string, fg: string, edge: string];
+
+const TIP_PROPS = ['--dr-tip-bg', '--dr-tip-fg', '--dr-tip-edge'] as const;
+const TIP_MARK = 'data-docreader-hosted';
+
+/** One document element's tooltip record: what it held before the first holder, what the reader last wrote, and the holders. */
+interface DocumentTip {
+  readonly mark: string | null;
+  readonly hadStyle: boolean;
+  readonly props: readonly (readonly [value: string, priority: string])[];
+  lastMark: string | null;
+  lastProps: readonly string[];
+  /** The roots (by their journals) that hold a tip, the most recent writer last. */
+  holders: { readonly owner: object; readonly tip: TipColours }[];
+}
+
+/** Per document element: its record, while any root holds a tip (a lazy map, so nothing runs at import). */
+let documentTips: WeakMap<Element, DocumentTip> | undefined;
+
+const styleOf = (html: HTMLElement): CSSStyleDeclaration => html.style;
+
+function writeDocumentTip(html: HTMLElement, rec: DocumentTip): void {
+  const style = styleOf(html);
+  const latest = rec.holders[rec.holders.length - 1];
+  if (latest === undefined) {
+    // The last holder left: put back what the element held, each value only while it is still the reader's.
+    if (html.getAttribute(TIP_MARK) === rec.lastMark) {
+      if (rec.mark === null) html.removeAttribute(TIP_MARK);
+      else html.setAttribute(TIP_MARK, rec.mark);
+    }
+    TIP_PROPS.forEach((name, i) => {
+      if (style.getPropertyValue(name) !== rec.lastProps[i]) return; // the host changed it since: the host wins
+      const [value, priority] = rec.props[i] as readonly [string, string];
+      if (value === '') style.removeProperty(name);
+      else style.setProperty(name, value, priority);
+    });
+    if (!rec.hadStyle && style.length === 0 && html.getAttribute('style') !== null) html.removeAttribute('style');
+    return;
+  }
+  html.setAttribute(TIP_MARK, '');
+  rec.lastMark = '';
+  rec.lastProps = TIP_PROPS.map((name, i) => {
+    style.setProperty(name, latest.tip[i] as string);
+    return style.getPropertyValue(name);
+  });
+}
+
+/** One root's hold on its document element's tooltip: `tip` (a hold, now the most recent) or null (no hold). */
+function holdDocumentTip(html: HTMLElement, owner: object, tip: TipColours | null): void {
+  documentTips ??= new WeakMap();
+  let rec = documentTips.get(html);
+  if (rec === undefined) {
+    if (tip === null) return;
+    const style = styleOf(html);
+    rec = {
+      mark: html.getAttribute(TIP_MARK),
+      hadStyle: html.hasAttribute('style'),
+      props: TIP_PROPS.map((name) => [style.getPropertyValue(name), style.getPropertyPriority(name)] as const),
+      lastMark: null,
+      lastProps: ['', '', ''],
+      holders: [],
+    };
+    documentTips.set(html, rec);
+  }
+  rec.holders = rec.holders.filter((h) => h.owner !== owner);
+  if (tip !== null) rec.holders.push({ owner, tip });
+  writeDocumentTip(html, rec);
+  if (rec.holders.length === 0) documentTips.delete(html);
 }
 
 /** The lifecycle's own handle on a journal: the writer, plus the undo that teardown runs once. */
@@ -216,6 +310,7 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
   const attrs = new Map<Element, Map<string, AttrRecord>>();
   const classes = new Map<Element, Map<string, ClassRecord>>();
   const styles = new Map<Element, Map<string, StyleRecord>>();
+  const tipped = new Set<Element>();
 
   const journal: Journal = {
     setAttribute(el, name, value) {
@@ -342,6 +437,21 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
       undo.push(fn);
     },
 
+    setDocumentTip(html, tip) {
+      if (tip !== null) {
+        for (const v of tip) {
+          if (v.length > STYLE_VALUE_MAX || STYLE_VALUE_REFUSED.test(v)) throw new Error('docreader: journal.setDocumentTip refuses this value');
+        }
+      }
+      if (!live()) return;
+      if (tip !== null && !tipped.has(html)) {
+        // Teardown only lets go of this root's hold: the document's record decides what the element keeps.
+        tipped.add(html);
+        undo.push(() => holdDocumentTip(html, journal, null));
+      }
+      holdDocumentTip(html, journal, tip);
+    },
+
     cloneSvg(source, ids) {
       if (!live()) throw new Error('docreader: journal.cloneSvg after a destroy');
       const snapshot = new Map(ids);
@@ -406,8 +516,8 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
 
     setStyle(el, prop, value, important = false) {
       const name: string = prop;
-      const plain = (STYLE_PROPS as readonly string[]).includes(name);
       const loud = (IMPORTANT_STYLE_PROPS as readonly string[]).includes(name);
+      const plain = !loud && ((STYLE_PROPS as readonly string[]).includes(name) || slotProps().includes(name));
       if (!plain && !loud) throw new Error(`docreader: journal.setStyle refuses the property ${JSON.stringify(name)}`);
       if (loud !== important) throw new Error('docreader: journal.setStyle takes important only for fill, stroke and stroke-width, and those only with it');
       if (value !== null && (value.length > STYLE_VALUE_MAX || STYLE_VALUE_REFUSED.test(value))) {
@@ -459,6 +569,7 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
       attrs.clear();
       classes.clear();
       styles.clear();
+      tipped.clear();
       return faults;
     },
   };

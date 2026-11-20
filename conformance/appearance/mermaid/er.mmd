@@ -1,0 +1,20 @@
+erDiagram
+  CUSTOMER {
+    string name PK "the name"
+    int id FK
+    string email UK "unique"
+    string note
+  }
+  ORDER {
+    int number PK, FK "composite"
+    date placed
+  }
+  CUSTOMER ||--o{ ORDER : places
+  ORDER ||--|{ LINE : contains
+  LINE |o--o| ITEM : holds
+  ITEM }o--o{ TAG : has
+  TAG }|--|| GROUP : in
+  GROUP o|..|{ OWNER : owned
+  OWNER o{..}| SHOP : runs
+  SHOP |{..o| CITY : in
+  CITY ||..|| COUNTRY : of

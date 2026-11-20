@@ -19,15 +19,18 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DOC_BYTES, goldenDocuments, htmlCap, seedRatios } from '../scripts/measure-seed-ratio.mjs';
 import { loadCorpus } from '../src/conformance/index.js';
+import { APPEARANCE_SLOTS, parseAppearance } from '../src/enhance/appearance.js';
 import { LIMITS as ENHANCE_LIMITS, normalizeOptions } from '../src/enhance/options.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, FRAME_PREF_VALUES, PREF_KEYS } from '../src/frame/protocol.js';
 import {
   BRIDGE_KEYS,
   escapedHtmlLength,
   FEATURE_KEYS,
+  FONT_ROLES,
   IMAGE_BUDGET_CHARS,
   IMAGE_TYPES,
   MERMAID_DRAW,
+  OPTIONAL_SEED_KEYS,
   SECURE_KEY_SOURCE,
   SEED_FIELDS_MAX_CHARS,
   SEED_HTML_MAX_CHARS,
@@ -37,6 +40,7 @@ import {
   validateSeed,
   type MermaidDraw,
   type Seed,
+  type SeedAppearance,
 } from '../src/frame/seed.js';
 import { FM_LIST_MAX_ITEM, FM_LIST_MAX_ITEMS, FM_MAX_KEYS, FM_MAX_VALUE } from '../src/render/frontMatter.js';
 import { DEFAULT_MAX_IMAGES, render, scanRefs } from '../src/render/index.js';
@@ -181,9 +185,11 @@ describe('L3.M4 validateSeed: the shape', () => {
     for (const s of [base(), full()]) expect(validateSeed(s)).toEqual({ ok: true, seed: s });
   });
 
-  it("SEED_KEYS is schema 1's fourteen keys", () => {
-    expect([...SEED_KEYS]).toEqual(['bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
-    expect(Object.keys(base()).sort()).toEqual([...SEED_KEYS]);
+  it("SEED_KEYS is schema 1's fourteen keys and the two optional ones the appearance contract adds", () => {
+    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
+    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'fonts']);
+    expect(Object.keys(base()).sort()).toEqual(SEED_KEYS.filter((k) => !OPTIONAL_SEED_KEYS.includes(k)));
+    expect(Object.isFrozen(SEED_KEYS) && Object.isFrozen(OPTIONAL_SEED_KEYS)).toBe(true);
   });
 
   it("B7.6 BRIDGE_KEYS is the five answered ops and the progress switch; the seed's bridge keeps exactly those keys, closed", () => {
@@ -196,9 +202,14 @@ describe('L3.M4 validateSeed: the shape', () => {
     expect(validateSeed(loose({ extra: 1 }))).toEqual({ ok: false, nonce: NONCE, why: 'keys' });
   });
 
-  it('each key missing in turn: refused', () => {
+  it('each required key missing in turn: refused; each optional key missing: passes', () => {
+    for (const k of OPTIONAL_SEED_KEYS) {
+      const v = loose();
+      expect(Object.hasOwn(v, k), k).toBe(false);
+      expect(validateSeed(v), k).toMatchObject({ ok: true });
+    }
     for (const k of SEED_KEYS) {
-      if (k === 'nonce') continue;
+      if (k === 'nonce' || OPTIONAL_SEED_KEYS.includes(k)) continue;
       const v = loose();
       delete v[k];
       expect(validateSeed(v), k).toEqual({ ok: false, nonce: NONCE, why: 'keys' });
@@ -248,6 +259,90 @@ describe('L3.M4 validateSeed: the shape', () => {
     };
     expect(why(loose({ images: arrays(32) }))).toBe('depth');
     expect(why(loose({ images: arrays(31) }))).toBe('images');
+  });
+});
+
+describe('the appearance contract: the seed fields `appearance` and `fonts` (outer shape only)', () => {
+  const APP = { mode: 'dark', colour: { bg: '#101010', text: '#eeeeee' }, skin: { radius: '6px' }, label: 'x' };
+  const MAX_FACE = 174764;
+  const face = (n: number, tail = ''): string => `${'A'.repeat(n - tail.length)}${tail}`;
+
+  it('both are absent from the 1.1.0 seed, and the validator returns the seed itself either way', () => {
+    expect(Object.hasOwn(base(), 'appearance')).toBe(false);
+    expect(Object.hasOwn(base(), 'fonts')).toBe(false);
+    const withBoth = { ...base(), appearance: APP, fonts: { sans: 'd09GMg==', mono: 'd09GMg==' } };
+    expect(validateSeed(withBoth)).toEqual({ ok: true, seed: withBoth });
+    expect(why(throughText(withBoth as unknown as Seed))).toBe('ok');
+  });
+
+  it('appearance: a plain object whose values are strings or plain objects of strings, depth at most two below it', () => {
+    for (const ok of [{}, { mode: 'auto' }, APP, { colour: {}, skin: {} }, { anything: 'goes', here: { at: 'depth', one: 'only' } }]) {
+      expect(why(loose({ appearance: ok })), JSON.stringify(ok)).toBe('ok');
+    }
+    for (const bad of [
+      null,
+      'dark',
+      1,
+      true,
+      [],
+      ['dark'],
+      { mode: 1 },
+      { mode: null },
+      { mode: true },
+      { colour: { bg: 1 } },
+      { colour: { bg: null } },
+      { colour: ['#000000'] },
+      { colour: { bg: { deeper: 'x' } } },
+      { colour: { bg: ['#000000'] } },
+      { skin: { radius: undefined } },
+      { a: { b: { c: 'd' } } },
+    ]) {
+      expect(why(loose({ appearance: bad })), JSON.stringify(bad)).toBe('appearance');
+    }
+    // A non-plain object, or a proto key, is the seed's own `proto` refusal at any depth, before the field's.
+    expect(why(loose({ appearance: JSON.parse('{"__proto__":{"a":"b"}}') as unknown }))).toBe('proto');
+    expect(why(loose({ appearance: new Map() }))).toBe('proto');
+    expect(why(loose({ appearance: Object.create({ mode: 'dark' }) as object }))).toBe('proto');
+  });
+
+  it("appearance: `undefined` as an own key is not 'absent' (a JSON seed cannot carry it)", () => {
+    expect(why(loose({ appearance: undefined }))).toBe('appearance');
+    expect(why(loose({ fonts: undefined }))).toBe('fonts');
+  });
+
+  it('fonts: a plain object with only `sans` and `mono`, each a base64 string of at most 174 764 characters', () => {
+    expect(FONT_ROLES).toEqual(['sans', 'mono']);
+    expect(SEED_LIMITS.fontFaceMaxBytes).toBe(131072);
+    expect(SEED_LIMITS.fontFaceMaxChars).toBe(4 * Math.ceil(131072 / 3));
+    expect(SEED_LIMITS.fontFaceMaxChars).toBe(MAX_FACE);
+    for (const ok of [{}, { sans: 'd09GMg==' }, { mono: 'd09GMg' }, { sans: 'd09GMg==', mono: '' }, { sans: 'AAAA/+9z==' }, { sans: face(MAX_FACE), mono: face(MAX_FACE, '=') }]) {
+      expect(why(loose({ fonts: ok })), JSON.stringify(ok).slice(0, 60)).toBe('ok');
+    }
+    for (const bad of [
+      null,
+      'd09GMg==',
+      [],
+      ['d09GMg=='],
+      { serif: 'd09GMg==' },
+      { sans: 'd09GMg==', mono: 'd09GMg==', serif: 'd09GMg==' },
+      { sans: 1 },
+      { sans: null },
+      { sans: ['d09GMg=='] },
+      { sans: 'd09G-g==' },
+      { sans: 'd09G_g==' },
+      { sans: 'd09G g==' },
+      { sans: 'd09GMg==\n' },
+      { sans: 'd09=Mg==' },
+      { sans: 'd09GMg===' },
+      { sans: 'd09GMg=A' },
+      { sans: '\u0661' },
+      { sans: face(MAX_FACE + 1) },
+      { mono: face(MAX_FACE + 1, '=') },
+    ]) {
+      expect(why(loose({ fonts: bad })), JSON.stringify(bad)?.slice(0, 60)).toBe('fonts');
+    }
+    expect(why(loose({ fonts: new Map() }))).toBe('proto');
+    expect(why(loose({ fonts: JSON.parse('{"__proto__":"d09GMg=="}') as unknown }))).toBe('proto');
   });
 });
 
@@ -659,6 +754,86 @@ describe('L3.M20 escapedHtmlLength: the html as the seed carries it', () => {
   });
 });
 
+/**
+ * The longest verdict parseAppearance accepts, built here from the grammar and its ranges, independent of seed.ts: the
+ * longest mode word, 33 colours of `#rrggbb`, every skin slot at its longest value and a label of 64 `<`.
+ */
+function maximalAppearance(): Record<string, unknown> {
+  const shadow = '-64px -64px 64px -8px rgba(255, 255, 255, 0.999)';
+  return {
+    mode: 'light',
+    colour: Object.fromEntries(APPEARANCE_SLOTS.colour.map((k) => [k, '#ABCDEF'])),
+    skin: {
+      radius: '24px',
+      radiusSmall: '24px',
+      radiusLarge: '24px',
+      controlRow: '56px',
+      popShadow: [shadow, shadow, shadow].join(', '),
+      sectionFamily: 'mono',
+      sectionSize: '16px',
+      sectionWeight: '900',
+      sectionTracking: '-0.100em',
+      sectionCase: 'uppercase',
+    },
+    label: '<'.repeat(64),
+  };
+}
+
+describe('L3.M20 the appearance field\'s cap: the longest verdict parseAppearance accepts, as the seed writes it', () => {
+  it('parseAppearance accepts the maximal value whole, and drops no outer space (there are none)', () => {
+    const v = maximalAppearance();
+    const r = parseAppearance(v);
+    expect(r.refused).toEqual([]);
+    expect(r.appearance).toEqual(v);
+    expect(r.appearance.skin?.popShadow).toHaveLength(148);
+    expect(r.appearance.label).toHaveLength(64);
+    expect(Object.keys(r.appearance.colour ?? {})).toHaveLength(33);
+  });
+
+  it("popShadow's pattern alone admits 154 characters, which its range refuses: 148 is the longest accepted", () => {
+    const wide = '-64px -64px -64px -64px rgba(255, 255, 255, 0.999)';
+    const triple = [wide, wide, wide].join(', ');
+    expect(triple).toHaveLength(154);
+    expect(parseAppearance({ mode: 'dark', skin: { popShadow: triple } }).refused).toEqual([{ key: 'skin.popShadow', why: 'range' }]);
+    // The same value one length-character shorter in the blur and the spread, the most the ranges allow.
+    expect(parseAppearance({ mode: 'dark', skin: { popShadow: [wide, wide, wide].map((x) => x.replace('-64px -64px -64px -64px', '-64px -64px 64px -8px')).join(', ') } }).refused).toEqual([]);
+  });
+
+  it('no skin slot has a value one character longer that is accepted (the table of longest values)', () => {
+    for (const [slot, longer] of [
+      ['radius', '024px'],
+      ['controlRow', '056px'],
+      ['sectionSize', '116px'],
+      ['sectionWeight', '1000'],
+      ['sectionTracking', '-0.1000em'],
+      ['sectionCase', 'uppercasex'],
+      ['sectionFamily', 'monos'],
+    ] as const) {
+      const r = parseAppearance({ mode: 'dark', skin: { [slot]: longer } });
+      expect(r.refused.map((x) => x.key), slot).toEqual([`skin.${slot}`]);
+    }
+  });
+
+  it("each label character the seed writes longest is `<`: no accepted character escapes to more than six", () => {
+    let worst = 0;
+    for (let c = 0; c <= 0xffff; c += 1) {
+      const ch = String.fromCharCode(c);
+      if (parseAppearance({ mode: 'dark', label: ch }).refused.length === 0) worst = Math.max(worst, escapedHtmlLength(ch));
+    }
+    expect(worst).toBe(6);
+    expect(escapedHtmlLength('<')).toBe(6);
+  });
+
+  it("the cap is the maximal verdict's seed text: the seed with it, less the seed without it, is its member in the cap's formula", () => {
+    const without = serializeSeed(base());
+    const withApp = serializeSeed({ ...base(), appearance: maximalAppearance() as SeedAppearance });
+    // `,"appearance":` and the value, its `<` written as the six-character escape.
+    const value = JSON.stringify(maximalAppearance()).replace(/</g, '\\u003c');
+    expect(value).toContain('\\u003c'.repeat(64));
+    expect(withApp.length - without.length).toBe(`,"appearance":`.length + value.length);
+  });
+});
+
 describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from their formulas', () => {
   it('IMAGE_BUDGET_CHARS = 4 x ceil(5242880 / 3) + 512 x the longest data-URL prefix', () => {
     const prefix = Math.max(...['png', 'jpeg', 'gif', 'webp', 'avif', 'svg+xml'].map((t) => `data:image/${t};base64,`.length));
@@ -712,6 +887,8 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       features: maximalFeatures(L.words, () => lt(L.wordMaxCodeUnits)) as Seed['features'],
       mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as MermaidDraw },
       bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false },
+      appearance: maximalAppearance() as SeedAppearance,
+      fonts: { sans: 'A'.repeat(SEED_LIMITS.fontFaceMaxChars), mono: `${'A'.repeat(SEED_LIMITS.fontFaceMaxChars - 1)}=` },
     };
   }
 
@@ -725,6 +902,21 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
     // Base64 bodies padded one image at a time take at most 4 characters each beyond 4 x ceil(total / 3).
     const padding = 4 * (SEED_LIMITS.images - 1);
     expect(text.length - urls + padding).toBe(SEED_FIELDS_MAX_CHARS);
+  });
+
+  it("the two fields' share of SEED_FIELDS_MAX_CHARS is both faces at their cap, the appearance's longest text and their keys: 2 x 174764 + the appearance + the key overhead", () => {
+    const s = maximalSeed();
+    const { appearance, fonts, ...rest } = s;
+    expect(appearance).toBeDefined();
+    expect(fonts).toBeDefined();
+    const padding = 4 * (SEED_LIMITS.images - 1);
+    const urls = s.images.reduce((n, [, u]) => n + u.length, 0);
+    const old = serializeSeed(rest as Seed).length - urls + padding;
+    const appearanceText = JSON.stringify(appearance).replace(/</g, '\\u003c').length;
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: each member's comma and key, and the fonts object's own punctuation.
+    const overhead = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length;
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead);
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead);
   });
 
   it("each string field's worst case is six characters per code point: no character escapes longer", () => {

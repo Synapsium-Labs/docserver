@@ -23,11 +23,17 @@
 // (seed.ts's validateSeed), so frameDocument never emits a seed its own bootstrap refuses. On top of it, the frame's own
 // rules: Mermaid's maxTextSize and maxEdges at most MERMAID_LIMIT_CEILINGS (a host may only lower them), the html within
 // SEED_HTML_MAX_CHARS as the seed carries it, the whole string within maxSrcdocChars (at most MAX_SRCDOC_CHARS_DEFAULT),
-// and an initialHash outside FRAGMENT_ID_GRAMMAR seeded as null, never refused (ruling R1). Every supplied asset is
+// and an initialHash outside FRAGMENT_ID_GRAMMAR seeded as null, never refused (ruling R1). The appearance contract adds two
+// optional seed fields: `FrameOptions.appearance` is taken through parseAppearance and its verdict seeded (a bad slot never
+// throws), and `FrameAssets.fonts` is read for its faces (a `fonts` that is not a plain object, has a key but `sans` and
+// `mono`, or holds a face that is not a string is a TypeError, a host's programming error; a face outside the base64
+// alphabet, without the wOF2 signature or over 131 072 decoded bytes is dropped silently, and with no good face the seed
+// has no `fonts` key). Every supplied asset is
 // verified, Mermaid's too when Mermaid is off or its draw is 'after-ready' (Reference §4: "any supplied asset"); in
 // 'after-ready' no script of Mermaid's is emitted and assets.mermaid is not required, while the policy must still list
 // its hash (the frame inserts the build over the port after ready, ledger C107). The skeleton is written in one place
 // (srcdoc), and MAX_SRCDOC_CHARS_DEFAULT counts it at its longest (ruling C92).
+import { parseAppearance } from '../enhance/appearance.js';
 import type { FrontEntry, RenderOutcome } from '../render/types.js';
 import { cssHazards, scriptHazards } from './bytes.js';
 import { checkFrameCsp } from './csp.js';
@@ -37,9 +43,11 @@ import { FRAME_MANIFEST } from './manifest.generated.js';
 import { isFragmentId } from './fragment.js';
 import { FRAME_PREF_VALUES, type BridgeStoreKey } from './protocol.js';
 import {
+  BASE64_FACE,
   BRIDGE_KEYS,
   escapedHtmlLength,
   FEATURE_KEYS,
+  FONT_ROLES,
   IMAGE_BUDGET_CHARS,
   isNonce,
   SEED_FIELDS_MAX_CHARS,
@@ -49,6 +57,8 @@ import {
   validateSeed,
   type MermaidDraw,
   type Seed,
+  type SeedAppearance,
+  type SeedFonts,
   type SeedMermaid,
 } from './seed.js';
 import { hex, sha256Text } from './sha256.js';
@@ -112,6 +122,13 @@ export interface FrameAssets {
   readonly css: string;
   /** assets/mermaid/mermaid.frame.js; required when FrameOptions.mermaid is non-null, unless its draw is 'after-ready'. */
   readonly mermaid?: string;
+  /**
+   * The host's own faces, base64 woff2, for the frame's sans (and chrome) and mono roles. A `fonts` that is not a plain
+   * object, a key other than `sans` and `mono`, or a face that is not a string throws TypeError. A face outside the base64
+   * alphabet, without the `wOF2` signature or over 131 072 decoded bytes is dropped silently, and that role keeps the
+   * library's own face.
+   */
+  readonly fonts?: { readonly sans?: string; readonly mono?: string };
 }
 
 /** The layout's feature switches and word lists, as plain data. */
@@ -144,6 +161,11 @@ export interface FrameOptions {
     readonly draw?: MermaidDraw;
   } | null;
   readonly features?: FrameFeatures;
+  /**
+   * The host's appearance (the appearance contract, src/enhance/appearance.ts): any value, taken through parseAppearance,
+   * whose verdict is seeded, so a bad slot never throws. Absent: no `appearance` key in the seed and an unhosted frame.
+   */
+  readonly appearance?: unknown;
   /**
    * Which ops the parent answers; each defaults to true except `progress`, which defaults to false (the frame sends
    * `progress` only to a parent that asked for it). A false leaves that enhance callback absent.
@@ -342,6 +364,48 @@ function pairsOf(b: Budget, v: unknown, what: string): [string, unknown][] {
   return ownEntries(v, what).map(([k, x]) => [k, dataOf(b, x, `${what}[${JSON.stringify(k)}]`, 1)]);
 }
 
+/** A base64 character's six bits, or -1: the first six characters of a face are decoded to read its signature. */
+const sextet = (c: string): number => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(c);
+
+/** Base64 as `atob` reads it: whole quanta, then an optional final quantum of two or three characters with its padding. */
+const STRICT_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?$/;
+
+/** True for a face the frame may load: the base64 alphabet, at most the cap in characters and in decoded bytes, and the woff2 signature `wOF2`. */
+function goodFace(b64: string): boolean {
+  if (b64.length > SEED_LIMITS.fontFaceMaxChars || b64.length < 6 || !BASE64_FACE.test(b64) || !STRICT_BASE64.test(b64)) return false;
+  const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  if (Math.floor(((b64.length - pad) * 3) / 4) > SEED_LIMITS.fontFaceMaxBytes) return false;
+  const [a, b, c, d, e, f] = Array.from({ length: 6 }, (_, i) => sextet(b64.charAt(i)));
+  if ([a, b, c, d, e, f].some((x) => x === undefined || x < 0)) return false;
+  // The first four decoded bytes, 'w' 'O' 'F' '2'.
+  const bytes = [((a as number) << 2) | ((b as number) >> 4), (((b as number) & 15) << 4) | ((c as number) >> 2), (((c as number) & 3) << 6) | (d as number), ((e as number) << 2) | ((f as number) >> 4)];
+  return bytes.join(',') === '119,79,70,50';
+}
+
+/**
+ * The faces of `assets.fonts`, or undefined when there is none to seed. A `fonts` that is not a plain object, a key other
+ * than `sans` and `mono` (a symbol too), a getter or a face that is not a string is a TypeError; a face that fails goodFace
+ * is dropped. A property whose value is undefined is left out, as every host value is. Written in role order.
+ */
+export function fontsOf(f: unknown): SeedFonts | undefined {
+  if (f === undefined) return undefined;
+  if (!isPlainObject(f)) throw new TypeError('frameDocument: assets.fonts must be a plain object');
+  const faces: Record<string, unknown> = {};
+  for (const k of Reflect.ownKeys(f)) {
+    if (typeof k !== 'string' || !(FONT_ROLES as readonly string[]).includes(k)) throw new TypeError('frameDocument: assets.fonts has a key other than sans and mono');
+    const d = Object.getOwnPropertyDescriptor(f, k);
+    if (d === undefined || !('value' in d)) throw new TypeError(`frameDocument: assets.fonts.${k} must be a plain value, not a getter`);
+    if (d.value !== undefined && typeof d.value !== 'string') throw new TypeError(`frameDocument: assets.fonts.${k} must be a string`);
+    faces[k] = d.value;
+  }
+  const out: Record<string, string> = {};
+  for (const role of FONT_ROLES) {
+    const face = faces[role];
+    if (typeof face === 'string' && goodFace(face)) out[role] = face;
+  }
+  return Object.keys(out).length === 0 ? undefined : (out as SeedFonts);
+}
+
 /** Mermaid's settings, copied and completed with `secure: []` and `draw: 'auto'`; above a ceiling is refused. */
 function mermaidOf(b: Budget, m: unknown): SeedMermaid | null {
   if (m === undefined || m === null) return null;
@@ -399,6 +463,11 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const b: Budget = { left: HOST_VALUES_MAX };
   const version = fieldsOf(b, r.version, 'version', ['sha', 'draft', 'commits', 'only']);
   const mermaidOptions = mermaidOf(b, o.mermaid);
+  // The two optional fields of the appearance contract: the host's verdict, and the faces that pass.
+  const assetsRaw: unknown = o.assets;
+  // The faces are seeded whenever a host gives them; the frame loads them, and its stylesheet uses them only while hosted.
+  const fonts = typeof assetsRaw === 'object' && assetsRaw !== null ? fontsOf((assetsRaw as FrameAssets).fonts) : undefined;
+  const appearance = o.appearance === undefined ? undefined : (parseAppearance(o.appearance).appearance as SeedAppearance);
   const fields: Seed = {
     s: 1,
     nonce: o.nonce,
@@ -419,6 +488,8 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
     features: fieldsOf(b, o.features, 'features') as Seed['features'],
     mermaid: mermaidOptions,
     bridge: bridgeOf(b, o.bridge),
+    ...(appearance === undefined ? {} : { appearance }),
+    ...(fonts === undefined ? {} : { fonts }),
   };
   // Every field but the html (judged above, by its own cap) through the bootstrap's own validator.
   const check = validateSeed(fields);

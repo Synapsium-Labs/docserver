@@ -4,5 +4,6 @@
 // mountDocFrame() call does. The package's export map gains `./host` in Task 12.
 export { mountDocFrame } from './mount.js';
 export type { DocFrame, FallbackReason, HostAdapters } from './mount.js';
+export type { Appearance } from '../enhance/appearance.js';
 export type { HostLink } from './links.js';
 export type { HiddenChar } from './copy.js';

@@ -61,6 +61,7 @@
 // happens (the journal refuses writes, and features check live() after every call-out), then tears down now, or
 // when the outermost operation unwinds. The promise settles after the teardown; every call for that root returns
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
+import { hostedVerdict, type Appearance } from './appearance.js';
 import { createBar } from './bar.js';
 import { createCommands } from './commands.js';
 import { createEnv } from './env.js';
@@ -72,12 +73,12 @@ import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { createKeys } from './keys.js';
 import { createNavigation, createPosition } from './nav.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
-import { createOverlays } from './overlays.js';
+import { createOverlays, OVERLAY_ORDER } from './overlays.js';
 import { sectionMinutes } from './reading.js';
 import { collectBlocks, createEvents, createFigures, createIndex, createPage, createPlan, createTerms } from './registry.js';
 import { createRelayout } from './relayout.js';
 import { createReveal } from './reveal.js';
-import { applyPrefs, createReaderState, type ReaderState } from './state.js';
+import { applyAppearance, applyPrefs, createReaderState, type ReaderState } from './state.js';
 import { hash, textTools } from './text.js';
 import { EnhanceError, type EnhanceOptions, type FeatureContext, type Prefs, type ResolvedInfo, type SectionUnit } from './types.js';
 import { createVocab } from './vocab.js';
@@ -102,6 +103,8 @@ interface Instance {
   state: ReaderState | null;
   /** setEnhancementPrefs changes made before startup created the state; applied as soon as it exists. */
   pendingPrefs: Partial<Prefs> | null;
+  /** The newest setEnhancementAppearance verdict made before startup created the state: hosted, over the options', as soon as it exists. */
+  pendingAppearance: Appearance | null;
   /** The context features were built with, once startup made it. */
   ctx: FeatureContext | null;
   /** The features startup builds, in order: the second phase starts their `after`s once startup succeeded. */
@@ -348,6 +351,11 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   });
   inst.state = state;
   if (!live()) return; // the snapshot is host code
+  // A setEnhancementAppearance call made before the state existed comes first, so a setEnhancementPrefs queued beside it
+  // meets a hosted state: its theme is ignored and never written (the host owns the theme).
+  const early = inst.pendingAppearance;
+  inst.pendingAppearance = null;
+  if (early !== null) state.host(early);
   // setEnhancementPrefs calls made before the state existed (while startup waited, or from the snapshot's code)
   const pending = inst.pendingPrefs;
   inst.pendingPrefs = null;
@@ -425,7 +433,9 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     },
   };
   inst.ctx = ctx;
+  // The prefs and the host's appearance, in this one synchronous run: the first paint is already the host's.
   applyPrefs(journal, root, state.prefs);
+  if (state.hosted !== null) applyAppearance(journal, root, state.hosted);
   const list = features();
   inst.built = list;
   // chrome.topSpace false: the root's top padding is trimmed by the stylesheet (C108).
@@ -457,6 +467,31 @@ function changePrefs(inst: Instance, change: Partial<Prefs>): void {
   ctx.events.emit('prefs', Object.freeze({ ...now }));
   if (now.width !== was.width || now.font !== was.font) ctx.relayout('prefs');
   if (now.lens !== was.lens) ctx.relayout('lens');
+}
+
+/**
+ * Host a new appearance on an instance whose state exists, in place (no remount): the state's theme becomes its mode, the
+ * root takes the verdict, then, with the context built, the 'prefs' event (so Aa and the colour key resync) and the
+ * 'appearance' event. Only a change of the popover rows' height (`controlRow`) asks for a relayout, and closes any open
+ * popover first (the card and the menus, never the figure overlay, whose open copy follows the figure's redraw: diagram-tools.ts): a popover is closed, never moved. Runs inside an
+ * operation of the instance.
+ */
+function changeAppearance(inst: Instance, a: Appearance): void {
+  const state = inst.state;
+  if (state === null) return;
+  const was = state.hosted;
+  state.host(a);
+  const { journal } = inst.control;
+  applyPrefs(journal, inst.root, state.prefs);
+  applyAppearance(journal, inst.root, a, was);
+  const ctx = inst.ctx;
+  if (ctx === null) return;
+  ctx.events.emit('prefs', Object.freeze({ ...state.prefs }));
+  ctx.events.emit('appearance', a);
+  if (was?.skin?.controlRow !== a.skin?.controlRow) {
+    for (const kind of OVERLAY_ORDER) if (kind !== 'figure') ctx.overlays.close(kind);
+    ctx.relayout('prefs');
+  }
 }
 
 /**
@@ -580,6 +615,7 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
     teardownPending: false,
     state: null,
     pendingPrefs: null,
+    pendingAppearance: null,
     ctx: null,
     built: [],
     destroyed: null,
@@ -659,5 +695,25 @@ export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): v
       return;
     }
     changePrefs(inst, change);
+  });
+}
+
+/**
+ * Hand an enhanced root a host's appearance (the appearance contract; appearance.ts): applied in place, at once, and the
+ * mount is hosted for good (an op on a mount that had none makes it hosted). The value goes through parseAppearance, slot
+ * by slot, the colour group all or nothing; one that is not a plain object changes nothing, as does a root that is not
+ * enhanced. Never throws. A call made while `enhance` is still starting is kept (the newest wins) and applied as soon as
+ * the reader state exists. What a verdict puts on the page it puts through applyAppearance, the root's journal, and only
+ * once the reader holds it: a root the reader does not hold leaves the root and the document element as they were.
+ */
+export function setEnhancementAppearance(root: HTMLElement, value: unknown): void {
+  if (!isElement(root)) return;
+  const verdict = hostedVerdict(value);
+  if (verdict === null) return;
+  const inst = findByRoot(root);
+  if (inst === undefined) return;
+  operate(inst, () => {
+    if (inst.state === null) inst.pendingAppearance = verdict;
+    else changeAppearance(inst, verdict);
   });
 }

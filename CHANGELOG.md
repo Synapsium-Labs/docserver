@@ -12,6 +12,17 @@ How versions move:
 
 Each release is built once from a signed tag, attested, and published with provenance through npm trusted publishing; the README's Release verification section gives the commands that check a published version.
 
+## Unreleased
+
+The appearance contract (a minor when released): a host can hand the frame one appearance (a mode, 33 base colours, ten skin values and a label) and two optional faces, at mount and while open. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows by one parent-to-frame operation, `appearance`, which an older frame ignores, and the seed by two optional keys, `appearance` and `fonts`. The version and its tag are set at release. **A host that serves the frame re-pins its page policy to the release** (the `csp` fields below), and `MAX_SRCDOC_CHARS_DEFAULT` moves with the assets and the two new seed fields' caps.
+
+The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
+
+- `assets/frame/bootstrap.js`: `bfb497ab4efc3a91499bcc2d8977e5fa05fad4b4586c01539aca57c41a4b8f87`, csp `'sha256-v7SXq078OpFJm8wtiXfl+gX61LRYbAFTmspXxBpLj4c='`
+- `assets/frame/enhance.js`: `ba16d04952e3960597436fefb94df1638c4c1f15f30e17647978651681852cd1`, csp `'sha256-uhbQSVLjlgWXQ2/vuU3xY4xMHxXzDhdkeXhlFoGFLNE='`
+- `assets/frame/reader.css`: `811bd9b312c7009ba6368599c6a2a8b2284265ec68041f22f184175f84d9cd2f`
+- `assets/reader.css`: `19011025e3f40c49f9585d7d09c6948d7c9861c2d092a2717ff5a7f5f8f2455d`
+
 ## 1.1.0
 
 A minor: new options and operations, and four asset hashes moved. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows additively (the new operations are `mermaid`, `command` and `progress`), and the seed gains keys and one draw value that only its own release's bootstrap reads. An earlier 1.0.1 was prepared and never tagged; its change is folded in first below, so no 1.0.1 exists.

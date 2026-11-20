@@ -588,6 +588,57 @@ describe("B7.4 the frame's port: a command reaches the reader, and a command tha
   it("adapters' onProgress goes to enhance's options only when it exists", () => {
     expect(source).toMatch(/\.\.\.\(adapters\.onProgress === undefined \? \{\} : \{ onProgress: adapters\.onProgress \}\)/);
   });
+
+  describe('the appearance op reaches the reader (the appearance contract, Task 3)', () => {
+    const APP = { mode: 'dark', colour: { bg: '#101010' }, label: 'x' } as const;
+
+    it("appearance runs the reader's setEnhancementAppearance(root, value) once, with that root and that very value, and nothing else is called", () => {
+      const calls: [string, unknown[]][] = [];
+      const r = reader({ setEnhancementAppearance: (...a: unknown[]) => void calls.push(['appearance', a]) } as Partial<ReaderApi<typeof ROOT_EL>>);
+      const t = targets(r);
+      dispatchParentMessage({ t: 'appearance', v: 1, appearance: APP }, t.to);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[0]).toBe('appearance');
+      expect((calls[0]?.[1] as unknown[])[0] === ROOT_EL).toBe(true);
+      expect((calls[0]?.[1] as unknown[])[1] === APP).toBe(true);
+      expect(r.calls).toEqual([]);
+      expect(t.seen).toEqual([]);
+    });
+
+    it('a throw is contained and the port keeps working: a later prefs, command, answer and mermaid still apply, and nothing is sent', () => {
+      const r = reader({
+        setEnhancementAppearance: () => {
+          throw new Error('boom');
+        },
+      } as Partial<ReaderApi<typeof ROOT_EL>>);
+      const t = targets(r);
+      expect(() => dispatchParentMessage({ t: 'appearance', v: 1, appearance: APP }, t.to)).not.toThrow();
+      dispatchParentMessage({ t: 'prefs', theme: 'dark' }, t.to);
+      dispatchParentMessage({ t: 'command', name: 'jump' }, t.to);
+      dispatchParentMessage(ANSWER, t.to);
+      dispatchParentMessage({ t: 'mermaid', unavailable: true }, t.to);
+      expect(r.calls).toEqual([['prefs', [ROOT_EL, { theme: 'dark' }]], ['command', [ROOT_EL, 'jump']]]);
+      expect(t.seen).toEqual(['answer aaaa', 'mermaid mermaid']);
+    });
+
+    it('before the reader enhanced (no root), with no reader API, or with a reader that predates the op, it reaches nothing and throws nothing', () => {
+      const calls: unknown[] = [];
+      const withOp = reader({ setEnhancementAppearance: (...a: unknown[]) => void calls.push(a) } as Partial<ReaderApi<typeof ROOT_EL>>);
+      expect(() => dispatchParentMessage({ t: 'appearance', v: 1, appearance: APP }, targets(withOp, null).to)).not.toThrow();
+      expect(() => dispatchParentMessage({ t: 'appearance', v: 1, appearance: APP }, targets(null).to)).not.toThrow();
+      const old = reader();
+      expect(() => dispatchParentMessage({ t: 'appearance', v: 1, appearance: APP }, targets(old).to)).not.toThrow();
+      expect(calls).toEqual([]);
+      expect(old.calls).toEqual([]);
+    });
+
+    it('the bootstrap hands the seed\'s fonts to loadHostFonts before enhance, contained, and passes the seed\'s appearance only when it has one', () => {
+      expect(source).toMatch(/seed\.fonts !== undefined/);
+      expect(source).toMatch(/loadHostFonts\?\.\(seed\.fonts\)/);
+      expect(source.indexOf('loadHostFonts?.(seed.fonts)')).toBeLessThan(source.indexOf('await enhanceApi.enhance(root'));
+      expect(source).toMatch(/\.\.\.\(seed\.appearance === undefined \? \{\} : \{ appearance: seed\.appearance \}\)/);
+    });
+  });
 });
 
 describe('parseParentMessage: what the frame accepts on the port (Reference §6.5, §8.2)', () => {
@@ -739,6 +790,91 @@ describe('parseParentMessage: what the frame accepts on the port (Reference §6.
       if (c.verdict === 'accept') expect(got, c.label).toEqual(c.message);
       else expect(got, c.label).toBeNull();
     }
+  });
+
+  describe('appearance: exactly {t, v: 1, appearance}, appearance a plain object of own data properties (the outer shape only)', () => {
+    const app = { mode: 'dark', colour: { bg: '#101010' }, label: 'x' };
+
+    it('accepts a plain object, an empty one, a null-prototype one and a nested value of any shape (the reader judges the values)', () => {
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: app })).toEqual({ t: 'appearance', v: 1, appearance: app });
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: {} })).toEqual({ t: 'appearance', v: 1, appearance: {} });
+      const bare = Object.assign(Object.create(null) as object, { mode: 'dark' });
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: bare })).not.toBeNull();
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: { mode: 7, colour: [1, 2], skin: null, what: { deep: { deeper: 1 } } } })).not.toBeNull();
+      expect(parseParentMessage(structuredClone({ t: 'appearance', v: 1, appearance: app }))).toEqual({ t: 'appearance', v: 1, appearance: app });
+    });
+
+    it('the accepted value is the one the port carried, never a copy of a different shape', () => {
+      const got = parseParentMessage({ t: 'appearance', v: 1, appearance: app });
+      expect(got !== null && got.t === 'appearance' && got.appearance === app).toBe(true);
+    });
+
+    it('refuses a missing v, a v other than the number 1, a missing value, another key, and a value that is not a plain object', () => {
+      for (const bad of [
+        { t: 'appearance', appearance: app },
+        { t: 'appearance', v: 2, appearance: app },
+        { t: 'appearance', v: 0, appearance: app },
+        { t: 'appearance', v: '1', appearance: app },
+        { t: 'appearance', v: true, appearance: app },
+        { t: 'appearance', v: 1 },
+        { t: 'appearance', v: 1, appearance: app, extra: 1 },
+        { t: 'appearance', v: 1, appearance: undefined },
+        { t: 'appearance', v: 1, appearance: null },
+        { t: 'appearance', v: 1, appearance: 'dark' },
+        { t: 'appearance', v: 1, appearance: 1 },
+        { t: 'appearance', v: 1, appearance: [] },
+        { t: 'appearance', v: 1, appearance: [app] },
+        { t: 'appearance', v: 1, appearance: new Map() },
+        { t: 'appearance', v: 1, appearance: new Date(0) },
+        { t: 'appearance', v: 1, appearance: Object.create({ mode: 'dark' }) as object },
+        { t: 'appearance', v: 1, appearance: () => app },
+      ]) {
+        expect(parseParentMessage(bad), String(JSON.stringify(bad))).toBeNull();
+      }
+    });
+
+    it('refuses a value holding a getter, a symbol key or a proto key, at its top level (a nested one is the reader\'s to judge)', () => {
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: Object.defineProperty({}, 'mode', { get: () => 'dark', enumerable: true }) })).toBeNull();
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: Object.defineProperty({}, 'mode', { get: () => 'dark', enumerable: false }) })).toBeNull();
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: { [Symbol('s')]: 1 } })).toBeNull();
+      for (const key of ['__proto__', 'constructor', 'prototype']) {
+        expect(parseParentMessage({ t: 'appearance', v: 1, appearance: JSON.parse(`{"${key}":{"x":1}}`) as unknown }), key).toBeNull();
+      }
+      expect(parseParentMessage({ t: 'appearance', v: 1, appearance: { colour: JSON.parse('{"__proto__":1}') as unknown } })).not.toBeNull();
+    });
+
+    it('refuses the op itself when it holds a getter, a proto key or is not plain', () => {
+      expect(parseParentMessage(Object.defineProperty({ t: 'appearance', v: 1 }, 'appearance', { get: () => app, enumerable: true }))).toBeNull();
+      expect(parseParentMessage(Object.defineProperty({ t: 'appearance', appearance: app }, 'v', { get: () => 1, enumerable: true }))).toBeNull();
+      expect(parseParentMessage(JSON.parse('{"t":"appearance","v":1,"appearance":{},"__proto__":{}}') as unknown)).toBeNull();
+    });
+
+    it("every parent-to-frame fixture of the op is judged as its verdict says, by the frame's own parser", () => {
+      interface Case {
+        label: string;
+        direction: string;
+        channel?: string;
+        ports?: number;
+        message: Record<string, unknown> | null;
+        verdict: 'accept' | 'refuse';
+      }
+      const cases = (JSON.parse(readText('conformance/bridge-cases.json')) as { messages: Case[] }).messages.filter(
+        (c) => c.direction === 'parent-to-frame' && c.message?.['t'] === 'appearance' && c.channel === 'port' && (c.ports ?? 0) === 0,
+      );
+      expect(cases.filter((c) => c.verdict === 'accept').length).toBeGreaterThanOrEqual(3);
+      expect(cases.filter((c) => c.verdict === 'refuse').length).toBeGreaterThanOrEqual(8);
+      for (const c of cases) {
+        const got = parseParentMessage(c.message);
+        if (c.verdict === 'accept') expect(got, c.label).toEqual(c.message);
+        else expect(got, c.label).toBeNull();
+      }
+    });
+  });
+
+  it('the accepted-t check reads FRAME_ACCEPTS, the parser\'s one list (no op name is written in the parser\'s own check)', () => {
+    const text = readText('src/frame-runtime/inbound.ts').replace(/^\s*\/\/.*$/gm, '');
+    expect(text).toContain('FRAME_ACCEPTS');
+    expect(text).not.toMatch(/t !== 'prefs'/);
   });
 
   it('ignores hello, a frame op, an unknown op, a non-plain object, a prototype key and a getter', () => {

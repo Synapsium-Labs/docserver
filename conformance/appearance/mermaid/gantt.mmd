@@ -1,0 +1,19 @@
+gantt
+  title Plan
+  dateFormat YYYY-MM-DD
+  axisFormat %d %b
+  excludes weekends
+  section Work
+  Done task :done, d1, 2026-02-02, 4d
+  Active task :active, a1, after d1, 4d
+  Critical task :crit, c1, after a1, 3d
+  Critical done :crit, done, cd1, 2026-02-02, 3d
+  Critical active :crit, active, ca1, after cd1, 3d
+  Plain task :p1, after ca1, 3d
+  A label far too long for its short bar so that it overflows the bar :o1, after p1, 1d
+  Milestone :milestone, m1, 2026-02-18, 0d
+  Vertical marker :vert, v1, 2026-02-13, 0d
+  Linked task :l1, after m1, 2d
+  click l1 href "#x"
+  section More
+  Second section task :s1, 2026-02-09, 5d

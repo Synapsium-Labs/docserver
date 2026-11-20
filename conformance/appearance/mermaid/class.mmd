@@ -1,0 +1,36 @@
+classDiagram
+  note "A general note"
+  namespace Shapes {
+    class Shape {
+      +String name
+      +area() double
+    }
+    class Circle
+  }
+  class Animal~T~ {
+    +List~T~ items
+    +feed(T food) void
+  }
+  class Pet {
+    <<interface>>
+    +play()
+  }
+  class Owner
+  class Vet
+  class Toy
+  class Food
+  class Home
+  class Park
+  class Leash
+  class Tag
+  Shape <|-- Circle : inheritance
+  Animal *-- Pet : composition
+  Animal o-- Owner : aggregation
+  Owner --> Vet : association
+  Vet -- Toy : link
+  Toy ..> Food : dependency
+  Food ..|> Home : realization
+  Home .. Park : dashed link
+  Park ()-- Leash : lollipop
+  Tag <|-- Leash
+  note for Circle "A note for a class"

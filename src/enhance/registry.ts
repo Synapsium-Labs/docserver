@@ -22,8 +22,9 @@
 //            plans.ts; until then empty.
 //   page     the title block's parts: the byline, the facts panel's seam (`facts`), the items waiting on the reader
 //            and their box: published once, by editorial.ts (the first feature built); until then empty.
-//   events   `on(name, fn)` (returns its cancel) and `emit(name, payload)`, for six names: 'prefs' (the lifecycle, when
-//            the prefs change), 'relayout' (relayout.ts, after each run), 'spy' (scroll.ts), 'marks' (marks.ts),
+//   events   `on(name, fn)` (returns its cancel) and `emit(name, payload)`, for seven names: 'prefs' (the lifecycle, when
+//            the prefs change), 'appearance' (the lifecycle, when a host's appearance is applied; it carries the verdict),
+//            'relayout' (relayout.ts, after each run), 'spy' (scroll.ts), 'marks' (marks.ts),
 //            'changes' (changes.ts) and 'reveal' (reveal.ts). A listener runs in the emitter's operation; each runs even
 //            when one before it threw, and the first throw is thrown again once all have run. Nothing is emitted once
 //            the instance is not live, and a listener that destroys it stops the rest.
@@ -32,6 +33,7 @@
 // never an object's properties, so an ID or a term such as `__proto__` or `constructor` is an ordinary key (RF1).
 //
 // Import-inert: declarations only.
+import type { Appearance } from './appearance.js';
 import type { Cancel } from './env.js';
 import { CHROME_ATTR } from './journal.js';
 import { before, inOrder } from './text.js';
@@ -237,6 +239,8 @@ export type MarkState = 'unread' | 'read' | 'changed';
 export interface EventMap {
   /** The prefs in force, after a change. */
   prefs: Readonly<Prefs>;
+  /** A host's appearance was applied (the seed's is applied before any feature builds, so only later ones emit): the verdict. */
+  appearance: Appearance;
   /** A relayout ran, for these reasons. */
   relayout: { readonly reasons: readonly RelayoutReason[] };
   /** The section (h2) and the read-mark unit at the reading line changed. */
@@ -252,7 +256,7 @@ export interface EventMap {
 export type EventName = keyof EventMap;
 
 /** The events, in the order the header lists them. */
-export const EVENT_NAMES: readonly EventName[] = ['prefs', 'relayout', 'spy', 'marks', 'changes', 'reveal'];
+export const EVENT_NAMES: readonly EventName[] = ['prefs', 'relayout', 'spy', 'marks', 'changes', 'reveal', 'appearance'];
 
 export interface Events {
   /** Listen; the cancel stops it. Throws for a name not in EVENT_NAMES. */

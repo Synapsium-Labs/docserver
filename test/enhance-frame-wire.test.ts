@@ -41,7 +41,7 @@ describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", ()
 });
 
 describe("the frame's registered reader api (C-F4)", () => {
-  it('the enhance entry registers exactly the five members, runEnhancementCommand among them', async () => {
+  it('the enhance entry registers exactly the seven members, runEnhancementCommand and the two appearance members among them', async () => {
     const script = document.createElement('script');
     const seen: unknown[] = [];
     script.addEventListener('docserver:register', (e) => void seen.push((e as CustomEvent).detail));
@@ -55,7 +55,7 @@ describe("the frame's registered reader api (C-F4)", () => {
     expect(seen).toHaveLength(1);
     const detail = seen[0] as { name: string; api: Record<string, unknown> };
     expect(detail.name).toBe('enhance');
-    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'runEnhancementCommand', 'setEnhancementPrefs']);
+    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs']);
     expect(typeof detail.api['runEnhancementCommand']).toBe('function');
   });
 });

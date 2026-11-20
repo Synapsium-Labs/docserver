@@ -135,7 +135,13 @@ export type ParentToFrame =
   | { t: 'mermaid'; text: string }
   | { t: 'mermaid'; unavailable: true }
   /** A reader tool to toggle, by name (batch 1.1, C108): a frame older than this release ignores it, as it ignores every op it does not know. */
-  | { t: 'command'; name: CommandOp };
+  | { t: 'command'; name: CommandOp }
+  /**
+   * The host's appearance while the frame is open (the appearance contract, src/enhance/appearance.ts): `{mode, colour?,
+   * skin?, label?}`. The port parser checks only the outer shape; the reader script runs `parseAppearance` on the value. A
+   * frame older than this release ignores the op, as it ignores every op it does not know.
+   */
+  | { t: 'appearance'; v: 1; appearance: object };
 
 /** What the frame sends, on the port only. Flat; every value a string except v. */
 export type FrameToParent =
@@ -164,6 +170,7 @@ export const OP_KEYS = Object.freeze({
   'changes.result': Object.freeze(['t', 'sha', 'ranges', 'removedAfter', 'unavailable'] as const),
   mermaid: Object.freeze(['t', 'text', 'unavailable'] as const),
   command: Object.freeze(['t', 'name'] as const),
+  appearance: Object.freeze(['t', 'v', 'appearance'] as const),
   ready: Object.freeze(['t', 'v', 'nonce'] as const),
   error: Object.freeze(['t', 'why'] as const),
   'store.set': Object.freeze(['t', 'key', 'value'] as const),
@@ -179,4 +186,12 @@ export const OP_KEYS = Object.freeze({
 export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress'] as const satisfies readonly FrameToParent['t'][]);
 
 /** The ops the parent sends (the frame reads only these: hello on the window, the others on the port). */
-export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid', 'command'] as const satisfies readonly ParentToFrame['t'][]);
+export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance'] as const satisfies readonly ParentToFrame['t'][]);
+
+/**
+ * The parent-to-frame op names the frame's port parser accepts (src/frame-runtime/inbound.ts reads this one list, built into
+ * the bootstrap). It is not PARENT_OPS, which the frame does not read: `hello` is in PARENT_OPS, comes on the window and is the
+ * bootstrap's own check, and the port parser refuses it. 1.1.0 hard-coded the first four here; the appearance contract adds
+ * `appearance`. conformance/frame-boundaries.json records the list at every landing that changes it (test/frame-boundaries.test.ts).
+ */
+export const FRAME_ACCEPTS = Object.freeze(['prefs', 'changes.result', 'mermaid', 'command', 'appearance'] as const satisfies readonly ParentToFrame['t'][]);
