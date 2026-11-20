@@ -746,6 +746,12 @@ describe('release.yml: post-verify (L3.W9)', () => {
     expect(wait).toMatch(/for attempt in \$\(seq 1 20\); do/);
     expect(wait).toContain('exit 1');
   });
+
+  it("post-verify's registry wait asks for package.json's own name, so it never polls a name the release does not publish", () => {
+    const name = (JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { name: string }).name;
+    const views = (stepsOf('post-verify')[1]?.run ?? '').split('\n').filter((l) => l.includes('npm view'));
+    expect(views.map((l) => l.trim())).toEqual([`if npm view "${name}@\${VERSION:?}" version > /dev/null 2>&1; then exit 0; fi`]);
+  });
 });
 
 describe('release.yml: pinned actions (L3.W8)', () => {

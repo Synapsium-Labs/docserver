@@ -6,7 +6,7 @@
 
 Please report a vulnerability privately, through GitHub's private vulnerability reporting: open a draft security advisory at <https://github.com/Synapsium-Labs/pinax-lib/security/advisories/new>. Do not open a public issue, pull request or discussion about it, and do not include a working exploit anywhere public.
 
-Say which version you tested (`npm ls @synapsium-labs/pinax-lib`), which entry is involved (`./render`, `./enhance`, `./frame`, `./host`, `./highlight` or a shipped asset), and the smallest input that shows the problem. A Markdown document, the options you passed, and what you expected beside what happened are usually enough.
+Say which version you tested (`npm ls @synapsium-labs/pinax-lib`, or `npm ls @synapsium-labs/docserver` for 1.0.0 and 1.1.0, which were published under the library's name before the rename; until the first pinax-lib version is out, every installation is one of those two), which entry is involved (`./render`, `./enhance`, `./frame`, `./host`, `./highlight` or a shipped asset), and the smallest input that shows the problem. A Markdown document, the options you passed, and what you expected beside what happened are usually enough.
 
 ## What happens next
 
@@ -14,7 +14,7 @@ The maintainers acknowledge a report in the advisory, agree a fix and a release 
 
 ## Supported versions
 
-Only the latest published version receives fixes. The two versions before 1.0.0, `0.0.0-reserve` and `0.0.0-stage`, are empty, deprecated placeholders: the first reserved the name on npm, and npm made the second itself during that first publish.
+Only the latest published version receives fixes. Versions 1.0.0 and 1.1.0 were published as `@synapsium-labs/docserver`, the library's name before the rename. The two versions of that name before 1.0.0, `0.0.0-reserve` and `0.0.0-stage`, are empty, deprecated placeholders: the first reserved the name on npm, and npm made the second itself during that first publish.
 
 ## Verifying what you install
 
