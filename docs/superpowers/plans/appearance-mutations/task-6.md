@@ -786,3 +786,15 @@ The two mutants that justified widening test 4's sweeps (recorded before only in
  {"row":"F13-keys-ground-2","guard":"row (c) reads every document in every state","edit":"the keys sheet's ground made the literal #123456 (scratch stylesheet)","tests":"test/browser/appearance-style.test.ts -t \"closed grounds.*every document, every state\" (Chromium)","result":"red on both rows (9 elements, 99 documents)"}
 ]
 ```
+
+## Third review F11
+
+Past `READ_LIMIT` (2 000) differing hashes, test 4 (a) reports the count line without reading the rows. Measured on `test/browser/appearance-style.test.ts`, restored from a saved copy and compared byte for byte.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| T4-limit | more than 2 000 differing hashes report the count line | `if (lines.length === 0 && bad.length <= READ_LIMIT) return [];` made `if (lines.length === 0) return [];` | `test/browser/appearance-style.test.ts -t "third review F11"` | red: 1 failed |
+
+```json
+[{"row":"T4-limit","guard":"more than 2 000 differing hashes report the count line","edit":"the bad.length <= READ_LIMIT guard removed","tests":"test/browser/appearance-style.test.ts -t \"third review F11\"","result":"red: 1 failed"}]
+```

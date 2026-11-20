@@ -782,6 +782,16 @@ const PRINTED: readonly string[] = ['corpus/spec-template', 'layout/blocks/code'
 const reps = DOCS.filter((d) => REPRESENTATIVE.includes(d.id));
 
 describe('test 4 (a): the comparison predicate and the per-element line', () => {
+  it('differences(): more than READ_LIMIT differing hashes report the count line, unread (third review F11)', async () => {
+    // 2 001 elements whose hashes differ but whose rows read the same: within the limit they would be read and dropped; past it
+    // the count is reported as differing, whatever the values.
+    const n = READ_LIMIT + 1;
+    const ra = { hashes: Array.from({ length: n }, (_, i) => `a${String(i)}`) } as unknown as StyleRead;
+    const rb = { hashes: Array.from({ length: n }, (_, i) => `b${String(i)}`) } as unknown as StyleRead;
+    const page = { evaluate: async (): Promise<string> => Promise.resolve('p|0px') } as unknown as Page;
+    const out = await differences('two reads', ra, rb, page, page);
+    expect(out[0]).toBe(`two reads: ${String(n)} element(s) differ`);
+  });
   it('same(): px values within 0.1 px are equal; 0.25 px and 0.5 px apart differ (a tolerance widened to 0.5 px is red)', () => {
     expect(same('3px', '3px')).toBe(true);
     expect(same('3px', '3.05px')).toBe(true);
