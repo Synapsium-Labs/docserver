@@ -77,7 +77,7 @@ The ruling: a row that observes the pass-through, so that deleting the guard red
 
 | Row | Guard | Edit | Tests run | Result |
 |---|---|---|---|---|
-| F7 | A host that gives no `fonts` is handed on as it is (`if (d === undefined && !inherited) return ...`) | the line deleted, so every host goes through the Proxy | `test/host-mount.test.ts` (`F7` rows) | red (2 failed: the identity row and the `get`-trap row); the file was 123 passed before this row existed |
+| F7 | A host that gives no `fonts` is handed on as it is (`if (d === undefined && !inherited) return ...`) | the line deleted, so every host goes through the Proxy | `test/host-mount.test.ts` (`F7` rows) | red (2 failed: the identity row and the `get`-trap row); the file was 127 passed before this row existed (at fb86399) |
 
 ```json
 [

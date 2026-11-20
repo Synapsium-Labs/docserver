@@ -292,8 +292,8 @@ The `<<name>>` strip applies only when the first diagram keyword (after front ma
 | Row | Guard | Edit | Tests run | Result |
 |---|---|---|---|---|
 | A2R6 | `<<name>>` is spared only in the class and state kinds | the annotation strip applies to every kind (`annotatesWithAngles(body) ? … : body` to the strip alone) | `test/appearance-mermaid.test.ts` | red (5 failed | 163 passed (168)) |
-| A2R7 | class diagrams spare `<<name>>` | `annotatesWithAngles` answers true for `stateDiagram` only | `test/appearance-mermaid.test.ts` | red (5 failed | 163 passed (168)) |
-| A2R8 | state diagrams spare `<<name>>` | `annotatesWithAngles` answers true for `classDiagram` only | `test/appearance-mermaid.test.ts` | red (7 failed | 161 passed (168)) |
+| A2R7 | class diagrams spare `<<name>>` | `annotatesWithAngles` answers true for `stateDiagram` only | `test/appearance-mermaid.test.ts` | red (7 failed | 162 passed (169), as the third review measured; the first record transposed A2R7's and A2R8's counts) |
+| A2R8 | state diagrams spare `<<name>>` | `annotatesWithAngles` answers true for `classDiagram` only | `test/appearance-mermaid.test.ts` | red (5 failed | 164 passed (169), as the third review measured) |
 | A2R9 | a `%%` comment line before the opener is skipped | the kind scan skips blank lines only | `test/appearance-mermaid.test.ts` | red (1 failed | 167 passed (168)) |
 | A2R10 | a directive Mermaid does not remove is no comment line | `%%{` lines skipped as comments by the kind scan | `test/appearance-mermaid.test.ts` | red (1 failed | 168 passed (169)) |
 
@@ -311,14 +311,14 @@ The `<<name>>` strip applies only when the first diagram keyword (after front ma
   "guard": "class diagrams spare `<<name>>`",
   "edit": "`annotatesWithAngles` answers true for `stateDiagram` only",
   "tests": "test/appearance-mermaid.test.ts",
-  "result": "red (5 failed | 163 passed (168))"
+  "result": "red (7 failed | 162 passed (169))"
  },
  {
   "row": "A2R8",
   "guard": "state diagrams spare `<<name>>`",
   "edit": "`annotatesWithAngles` answers true for `classDiagram` only",
   "tests": "test/appearance-mermaid.test.ts",
-  "result": "red (7 failed | 161 passed (168))"
+  "result": "red (5 failed | 164 passed (169))"
  },
  {
   "row": "A2R9",
