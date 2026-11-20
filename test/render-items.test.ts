@@ -11,7 +11,7 @@ import { destroyEnhancement, enhance } from '../src/enhance/index.js';
 import type { VocabularyOptions } from '../src/enhance/types.js';
 import { compileVocab, defaultVocabulary, mergeVocabulary } from '../src/enhance/vocab.js';
 import type { VocabularyOptions as WireVocabularyOptions } from '../src/frame/wire-types.js';
-import { ITEM_KEY_SOURCE, ITEM_LINE, ITEM_VALUE_MAX_CODE_UNITS, MAX_ITEMS, itemKeyScan, itemPatterns } from '../src/render/items.js';
+import { collectItems, ITEM_KEY_SOURCE, ITEM_LINE, ITEM_VALUE_MAX_CODE_UNITS, MAX_ITEMS, itemKeyScan, itemPatterns } from '../src/render/items.js';
 import { EMPTY_META } from '../src/render/render.js';
 import { render } from '../src/render/index.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
@@ -52,7 +52,8 @@ describe('meta.items: the byline route', () => {
   it('lists nothing for a byline with no item field, a meta line the reader does not take, or no title', () => {
     expect(items(byline('Owner: AB-12'))).toEqual([]);
     // The meta paragraph must open on bold text and hold a middle dot, and not end on a colon.
-    expect(items('# T\n\nTracker: AB-12 · 2026-10-12\n')).toEqual([]);
+    // (a plain label at the start of a line is the header-line route's, which reads the whole line)
+    expect(items('# T\n\nTracker: AB-12 · 2026-10-12\n')).toEqual(['AB-12']);
     expect(items('# T\n\n**Spec** · Tracker: AB-12:\n')).toEqual([]);
     expect(items('**Spec** · 2026-10-12 · Tracker: AB-12\n')).toEqual([]);
     // After the first level-2 heading it is no byline.
@@ -106,19 +107,79 @@ describe('meta.items: the delta route', () => {
   });
 });
 
-describe('meta.items: the header-line route (a paragraph that stands alone as an item field\'s label and its keys)', () => {
-  const header = (line: string, rest = ''): string => `# T\n\n${line}\n\n## S\n\nBody.\n${rest}`;
+describe('meta.items: the header-line route (an item field\'s label anywhere in a header paragraph, its line\'s keys)', () => {
+  const header = (para: string, rest = ''): string => `# T\n\n${para}\n\n## S\n\nBody.\n${rest}`;
 
-  it('lists the keys of `**Field:** AB-90`, with the colon inside the bold text or right after it, and of several keys', () => {
+  it('reads a one-line header: the colon inside the bold text or right after it, and a plain label at the start of a line', () => {
     expect(items(header('**Tracker:** AB-90'))).toEqual(['AB-90']);
     expect(items(header('**Tracker**: AB-90'))).toEqual(['AB-90']);
+    expect(items(header('Tracker: AB-90'))).toEqual(['AB-90']);
     expect(items(header('**ticket:** AB-90, CD-7; `EF-3`  AB-90'))).toEqual(['AB-90', 'CD-7', 'EF-3']);
   });
 
-  it('is read before or after the meta line, and wherever it stands before the first level-2 heading', () => {
-    expect(items('**Tracker:** AB-90\n\n# T\n\n## S\n')).toEqual(['AB-90']);
+  it('reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle, last', () => {
+    expect(items(header('**Tracker:** AB-90\n**Status:** Draft\n**Author:** someone'))).toEqual(['AB-90']);
+    expect(items(header('**Status:** Draft\n**Tracker:** AB-90\n**Author:** someone'))).toEqual(['AB-90']);
+    expect(items(header('**Status:** Draft\n**Author:** someone\n**Tracker:** AB-90'))).toEqual(['AB-90']);
+    expect(items(header('**Status:** Draft\nTracker: AB-90\nAuthor: someone'))).toEqual(['AB-90']);
+  });
+
+  it('takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label ends it', () => {
+    // The newline.
+    expect(items(header('**Status:** CD-1\n**Tracker:** AB-90\n**Author:** EF-2'))).toEqual(['AB-90']);
+    expect(items(header('**Tracker:** none\nAB-90 is on the next line'))).toEqual([]);
+    // The `<br>` (a hard break, and the raw tag).
+    expect(items(header('**Tracker:** AB-90  \nCD-7 after a hard break'))).toEqual(['AB-90']);
+    expect(items(header('**Tracker:** AB-90<br>CD-7 after a tag'))).toEqual(['AB-90']);
+    // The next bold label, on the same line.
+    expect(items(header('**Tracker:** AB-90 **Owner:** CD-7'))).toEqual(['AB-90']);
+    expect(items(header('**Owner:** CD-7 **Tracker:** AB-90 **Author:** EF-2'))).toEqual(['AB-90']);
+    expect(items(header('**Owner**: CD-7 **Tracker**: AB-90 **Author**: EF-2'))).toEqual(['AB-90']);
+    // A plain label mid-line is no label, and does not end the line.
+    expect(items(header('Draft Tracker: AB-90'))).toEqual([]);
+    expect(items(header('Draft `x` Tracker: AB-90'))).toEqual([]);
+    expect(items(header('**Status:** Draft Tracker: AB-90'))).toEqual([]);
+    expect(items(header('**Tracker:** AB-90 and Owner: CD-7'))).toEqual(['AB-90', 'CD-7']);
+  });
+
+  it('ends the line at a `<br>` with no newline after it, as html that render() did not write may (collectItems on its own)', () => {
+    const at = (html: string): readonly string[] => collectItems(html, ['Tracker'], []);
+    expect(at('<h1>T</h1><p><strong>Tracker:</strong> AB-1<br>CD-2</p><h2>S</h2>')).toEqual(['AB-1']);
+    expect(at('<h1>T</h1><p><strong>Status:</strong> x<br><strong>Tracker:</strong> AB-1<br>CD-2<br>EF-3</p>')).toEqual(['AB-1']);
+    expect(at('<h1>T</h1><p><strong>Tracker:</strong> AB-1<br />CD-2</p>')).toEqual(['AB-1']);
+  });
+
+  it('lists every key of the line, with sentences, code and an author\'s link around them', () => {
+    expect(items(header('**Tracker:** see AB-90 and [CD-7](https://x.example/a) and `EF-3`'))).toEqual(['AB-90', 'EF-3']);
+    expect(items(header('**Tracker:** `AB-90` **Owner:** `CD-7`'))).toEqual(['AB-90']);
+  });
+
+  it('is read from a blockquote\'s first paragraph, and from nothing else a list or a table holds', () => {
+    expect(items(header('> **Status:** Draft\n> **Tracker:** AB-90'))).toEqual(['AB-90']);
+    expect(items(header('> A note.\n>\n> **Tracker:** AB-90'))).toEqual([]);
+    expect(items(header('- **Tracker:** AB-90'))).toEqual([]);
+    expect(items(header('| a |\n|---|\n| **Tracker:** AB-90 |'))).toEqual([]);
+    expect(items(header('A first paragraph.\n\n> **Tracker:** AB-90'))).toEqual(['AB-90']);
+  });
+
+  it('reads the zone after the title up to the first level-2 heading, and the first paragraph that has the label', () => {
+    expect(items('# T\n\nAn intro.\n\n**Owner:** CD-7\n\n**Tracker:** AB-90\n\n**Tracker:** EF-3\n\n## S\n')).toEqual(['AB-90']);
+    expect(items('# T\n\n## S\n\n**Tracker:** AB-90\n')).toEqual([]);
+    expect(items('# T\n\n### Sub\n\n**Tracker:** AB-90\n\n## S\n')).toEqual(['AB-90']);
+  });
+
+  it('does not read before the title; with no title it reads from the start of the document', () => {
+    expect(items('**Tracker:** AB-90\n\n# T\n\n## S\n')).toEqual([]);
+    expect(items('Intro\n\n**Tracker:** AB-90\n\n# T\n\n## S\n')).toEqual([]);
+    expect(items('**Tracker:** AB-90\n\n## S\n')).toEqual(['AB-90']);
+    expect(items('> **Tracker:** AB-90\n\n## S\n')).toEqual(['AB-90']);
+    expect(items('**Tracker:** AB-90\n')).toEqual(['AB-90']);
+  });
+
+  it('is read before or after the meta line, but never from the meta line itself', () => {
     expect(items('# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n**Tracker:** AB-90\n\n## S\n')).toEqual(['AB-90']);
     expect(items('# T\n\n**Tracker:** AB-90\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n## S\n')).toEqual(['AB-90']);
+    expect(items('# T\n\n**Spec** \u00b7 a note **Tracker:** AB-90\n\n## S\n')).toEqual([]);
   });
 
   it('is used only when the byline has no item fact: the byline keeps its precedence, and a delta key still lists', () => {
@@ -128,25 +189,16 @@ describe('meta.items: the header-line route (a paragraph that stands alone as an
     expect(items(`# T\n\n**Tracker:** AB-90\n${delta('Delta', '')}item: CD-2\n\`\`\`\n`)).toEqual(['AB-90', 'CD-2']);
   });
 
-  it('is no header line when the paragraph has other text, is not a root child, is past the first level-2 heading or has no key', () => {
-    expect(items(header('**Tracker:** AB-90 is the one'))).toEqual([]);
-    expect(items(header('**Tracker:** see AB-90'))).toEqual([]);
-    // With a middle dot it is the meta line, and its first fact is the byline's item fact (CD-7 is another fact): the byline route's.
-    expect(items(header('**Tracker:** AB-90 \u00b7 CD-7'))).toEqual(['AB-90']);
-    expect(items(header('**Tracker:** AB-90, \u00b7 note'))).toEqual(['AB-90']);
-    expect(items(header('**Tracker:** none'))).toEqual([]);
-    expect(items(header('**Tracker:**'))).toEqual([]);
-    expect(items(header('Tracker: AB-90'))).toEqual([]);
-    expect(items(header('**Tracker** AB-90'))).toEqual([]);
+  it('is no header line without an item field\'s label: another label, a label with no colon, a label of a past-the-zone paragraph', () => {
     expect(items(header('**Owner:** AB-90'))).toEqual([]);
-    expect(items(header('Text **Tracker:** AB-90'))).toEqual([]);
-    expect(items(header('> **Tracker:** AB-90'))).toEqual([]);
-    expect(items(header('- **Tracker:** AB-90'))).toEqual([]);
-    expect(items('# T\n\n## S\n\n**Tracker:** AB-90\n')).toEqual([]);
-    expect(items('**Tracker:** AB-90\n\n## S\n')).toEqual([]);
+    expect(items(header('**Tracker** AB-90'))).toEqual([]);
+    expect(items(header('**Tracker:**'))).toEqual([]);
+    expect(items(header('Text **Tracker:** AB-90'))).toEqual(['AB-90']); // a bold label anywhere in the line
+    expect(items(header('Tracker is AB-90'))).toEqual([]);
+    expect(items(header('The tracker: AB-90'))).toEqual([]);
   });
 
-  it('is off without the item fields (P4: the vocabulary gates it), and never scans the body', () => {
+  it('is off without the item fields (the vocabulary gates it), and never scans the body', () => {
     expect(items(header('**Tracker:** AB-90'), {})).toEqual([]);
     expect(items(header('**Tracker:** AB-90'), { itemHeadings: ['Delta'] })).toEqual([]);
     expect(items(header('**Tracker:** AB-90', '\n**Tracker:** CD-7\n'))).toEqual(['AB-90']);
@@ -318,18 +370,36 @@ const FIXTURES: Record<string, string> = {
   'sixteen keys': byline(`Tracker: ${Array.from({ length: 16 }, (_, i) => `AB-${String(i + 1)}`).join(' ')}`),
   'header line': '# T\n\n**Tracker:** AB-90\n\n## S\n\nBody.\n',
   'header line, colon outside': '# T\n\n**Tracker**: AB-90\n\n## S\n',
+  'header line, plain label': '# T\n\nTracker: AB-90\n\n## S\n',
   'header line with several keys and code': '# T\n\n**Ticket:** AB-90, `CD-7`; EF-3\n\n## S\n',
+  'header paragraph, the item line first': '# T\n\n**Tracker:** AB-90\n**Status:** Draft\n**Author:** someone\n\n## S\n',
+  'header paragraph, the item line in the middle': '# T\n\n**Status:** Draft\n**Tracker:** AB-90\n**Author:** CD-7\n\n## S\n',
+  'header paragraph, the item line last': '# T\n\n**Status:** Draft\n**Author:** CD-7\n**Tracker:** AB-90\n\n## S\n',
+  'header paragraph, plain labels': '# T\n\nStatus: Draft\nTracker: AB-90\nAuthor: CD-7\n\n## S\n',
+  'header line bounded by a hard break': '# T\n\n**Tracker:** AB-90  \nCD-7 after the break\n\n## S\n',
+  'header line, a plain label after an inline element': '# T\n\nDraft `x` Tracker: AB-90\n\n## S\n',
+  'header line bounded by a br tag': '# T\n\n**Tracker:** AB-90<br>CD-7 after the tag\n\n## S\n',
+  'header line bounded by the next bold label': '# T\n\n**Owner:** CD-7 **Tracker:** AB-90 **Author:** EF-2\n\n## S\n',
+  'header line, colon outside, next bold label': '# T\n\n**Owner**: CD-7 **Tracker**: AB-90 **Author**: EF-2\n\n## S\n',
+  'header line, a plain label mid-line': '# T\n\nDraft Tracker: AB-90\n\n## S\n',
+  'header line, the keys on the next line': '# T\n\n**Tracker:** none\nAB-90 is on the next line\n\n## S\n',
+  'header blockquote': '# T\n\n> **Status:** Draft\n> **Tracker:** AB-90\n\n## S\n',
+  'header blockquote, second paragraph': '# T\n\n> A note.\n>\n> **Tracker:** AB-90\n\n## S\n',
   'header line before the title': '**Tracker:** AB-90\n\n# T\n\n## S\n',
+  'header line before the title, a note first': 'Intro\n\n**Tracker:** AB-90\n\n# T\n\n## S\n',
+  'header line, no title': '**Tracker:** AB-90\n\n## S\n',
+  'header blockquote, no title': '> **Tracker:** AB-90\n\n## S\n',
   'header line after the meta line': '# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n**Tracker:** AB-90\n\n## S\n',
   'header line before the meta line': '# T\n\n**Tracker:** AB-90\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n## S\n',
+  'the meta line names a bold label': '# T\n\n**Spec** \u00b7 a note **Tracker:** AB-90\n\n## S\n',
   'header line with a byline fact': '# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: AB-1\n\n**Tracker:** AB-90\n\n## S\n',
   'header line with an empty byline fact': '# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: none yet\n\n**Tracker:** AB-90\n\n## S\n',
   'header line with a delta': `# T\n\n**Tracker:** AB-90\n${delta('Delta', '')}item: CD-2\n\`\`\`\n`,
-  'header line with other text': '# T\n\n**Tracker:** AB-90 is the one\n\n## S\n',
+  'header line with a sentence': '# T\n\n**Tracker:** see AB-90 and [CD-7](https://x.example/a) and `EF-3`\n\n## S\n',
   'header line, not an item field': '# T\n\n**Owner:** AB-90\n\n## S\n',
-  'header line in a quote and a list': '# T\n\n> **Tracker:** AB-90\n\n- **Tracker:** CD-7\n\n## S\n',
+  'header line, a first paragraph with the label wins': '# T\n\n**Tracker:** AB-90\n\n**Tracker:** CD-7\n\n## S\n',
+  'header line in a list and a table': '# T\n\n- **Tracker:** AB-90\n\n| a |\n|---|\n| **Tracker:** CD-7 |\n\n## S\n',
   'header line past the first section': '# T\n\n## S\n\n**Tracker:** AB-90\n',
-  'header line without a title': '**Tracker:** AB-90\n\n## S\n',
   'a long key': byline(`Tracker: AB-${'1'.repeat(150)} CD-2`),
 };
 

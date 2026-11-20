@@ -23,11 +23,15 @@
 //     an item field, every key in its text (split off its text node and wrapped, never re-typed) and every code
 //     element whose text is a key (wrapped whole). An author's own link is left as the author wrote it;
 //   - the header-line route (a document whose header predates the meta line), the third, used only when neither of the
-//     two gave a link and the byline has no item fact: a paragraph that is a child of the root, before its first level-2
-//     heading, that stands alone as a label and its keys, `**Tracker:** AB-90` (the bold text is an item field, then a
-//     colon, then keys with nothing between them but white space, commas and semicolons). Its keys are linked where
-//     they stand, as the byline route links them. A paragraph with any other text (a sentence that names a key, or the
-//     meta line itself) is no header line, and nothing outside such a paragraph is ever scanned for keys.
+//     two gave a link and the byline has no item fact. The zone is the elements after the title (the `h1`'s following
+//     siblings, up to the first level-2 heading; with no `h1`, the document's start): each `p`, and a blockquote's first
+//     `p`, except the meta line. In the first such paragraph that has one, the item field's label is found anywhere: a bold
+//     `**Tracker:**` (the colon inside the bold text or right after it) or a plain `Tracker:` at the start of a line, the
+//     label one of `vocabulary.itemFields`. A header is several lines in one paragraph (soft line breaks), `**Status:**
+//     Draft` / `**Tracker:** AB-90` / `**Author:** someone`, so the item's keys are the text from the label to the end of
+//     THAT line, which a newline, a `<br>` or the next bold label ends. They are linked where they stand, as the byline
+//     route links them (a text node is split at the line's ends, never re-typed). Content before the `h1` is not a header,
+//     and nothing outside such a line is ever scanned for keys;
 // The host is asked once per key, for at most ITEM_LINKS.keys keys in a document; a key past them stays text. At most
 // ITEM_LINKS.links links are written in a document (one key named many times is many links), the first in document
 // order; a key past them stays text. The host's answer is used only when it is a string of 1 to ITEM_LINKS.href code
@@ -216,30 +220,110 @@ function deltaKey(root: HTMLElement, vocab: Vocab): string | null {
   return null;
 }
 
-/**
- * The header-line route's paragraph: the first child of the root before its first level-2 heading that stands alone as an
- * item field's label and its keys (see the header). Its first child is a `strong` whose text is an item field, with its
- * colon inside (`**Tracker:**`) or right after it (`**Tracker**:`); what follows is the keys with only white space, commas
- * and semicolons between them, and at least one key. Answers the paragraph and the nodes after its label; null when there
- * is none. Read before any node moves.
- */
-function legacyHeader(root: HTMLElement, vocab: Vocab): { readonly el: Element; readonly nodes: readonly Node[] } | null {
-  for (const p of Array.from(root.children)) {
-    if (p.localName === 'h2') return null;
-    const label = p.firstChild;
-    if (p.localName !== 'p' || !isStrong(label)) continue;
-    const nodes = Array.from(p.childNodes).slice(1);
-    let name = txt(label);
-    let rest = nodes.map((n) => n.textContent ?? '').join('');
-    if (name.endsWith(':')) name = name.slice(0, -1).trim();
-    else if (/^\s*:/.test(rest)) rest = rest.replace(/^\s*:/, '');
-    else continue;
-    if (!vocab.itemField.test(name)) continue;
-    const keys = rest.match(vocab.itemKeyScan());
-    if (keys === null || rest.replace(vocab.itemKeyScan(), '').replace(/[\s,;]/g, '') !== '') continue;
-    return { el: p, nodes };
+/** One piece of a header paragraph: a run of a text node (`s` to `e`), a line break, or an element. */
+type Atom = { readonly k: 'run'; readonly node: Text; readonly s: number; readonly e: number } | { readonly k: 'nl' } | { readonly k: 'el'; readonly node: Element };
+
+/** A paragraph's pieces, its text nodes cut at their newlines and a `br` a line break. */
+function atomsOf(p: Element): Atom[] {
+  const out: Atom[] = [];
+  for (const c of Array.from(p.childNodes)) {
+    if (c.nodeType === 3) {
+      const t = c as Text;
+      let s = 0;
+      for (;;) {
+        const nl = t.data.indexOf('\n', s);
+        const e = nl < 0 ? t.data.length : nl;
+        if (e > s) out.push({ k: 'run', node: t, s, e });
+        if (nl < 0) break;
+        out.push({ k: 'nl' });
+        s = nl + 1;
+      }
+    } else if (c.nodeType === 1) out.push((c as Element).localName === 'br' ? { k: 'nl' } : { k: 'el', node: c as Element });
+  }
+  return out;
+}
+
+const runText = (a: Atom & { k: 'run' }): string => a.node.data.slice(a.s, a.e);
+
+/** A bold label at atom `i`: its name, and the atom index and offset the line's text starts from. Null when it is none. */
+function boldLabel(atoms: readonly Atom[], i: number): { readonly name: string; readonly from: number; readonly at: number } | null {
+  const a = atoms[i];
+  if (a?.k !== 'el' || a.node.localName !== 'strong') return null;
+  const t = txt(a.node);
+  if (t.endsWith(':')) return { name: t.slice(0, -1).trim(), from: i + 1, at: 0 };
+  const next = atoms[i + 1];
+  const colon = next?.k === 'run' ? /^\s*:/.exec(runText(next)) : null;
+  return colon === null || next?.k !== 'run' ? null : { name: t, from: i + 1, at: colon[0].length };
+}
+
+/** A piece of the header line's text: a run of a text node, or an element. */
+interface Piece {
+  readonly node: Node;
+  readonly s: number;
+  readonly e: number;
+}
+
+/** The header line of one paragraph: its item field's label found anywhere, and the pieces from it to the end of its line. */
+function headerLine(p: Element, vocab: Vocab): readonly Piece[] | null {
+  const atoms = atomsOf(p);
+  for (let i = 0; i < atoms.length; i += 1) {
+    const a = atoms[i];
+    let from = -1;
+    let at = 0;
+    let name = '';
+    if (a?.k === 'run' && (i === 0 || atoms[i - 1]?.k === 'nl')) {
+      const m = /^\s*([A-Za-z][A-Za-z0-9 _/-]{0,31}):/.exec(runText(a));
+      if (m !== null) {
+        name = (m[1] ?? '').trim();
+        from = i;
+        at = m[0].length;
+      }
+    } else {
+      const label = boldLabel(atoms, i);
+      if (label !== null) ({ name, from, at } = label);
+    }
+    if (from < 0 || !vocab.itemField.test(name)) continue;
+    const pieces: Piece[] = [];
+    for (let j = from; j < atoms.length; j += 1) {
+      const b = atoms[j];
+      if (b === undefined || b.k === 'nl' || (j > from && boldLabel(atoms, j) !== null)) break;
+      if (b.k === 'el') pieces.push({ node: b.node, s: 0, e: 0 });
+      else if ((j === from ? b.s + at : b.s) < b.e) pieces.push({ node: b.node, s: j === from ? b.s + at : b.s, e: b.e });
+    }
+    return pieces;
   }
   return null;
+}
+
+/**
+ * The header-line route's paragraph and line (see the header). The zone is the elements after the title (`h1`'s following
+ * siblings; with no `h1`, the root's children) up to the first level-2 heading; its paragraphs, and a blockquote's first
+ * paragraph, but the meta line, are read in order, and the first with an item field's label gives its line. Read before any
+ * node moves; null when there is none.
+ */
+function legacyHeader(root: HTMLElement, h1: Element | null, vocab: Vocab): { readonly el: Element; readonly pieces: readonly Piece[] } | null {
+  const meta = h1 === null ? null : metaParagraph(h1);
+  for (let n = h1 === null ? root.firstElementChild : h1.nextElementSibling; n !== null && n.localName !== 'h2'; n = n.nextElementSibling) {
+    const p = n.localName === 'blockquote' ? Array.from(n.children).find((c) => c.localName === 'p') : n.localName === 'p' ? n : undefined;
+    if (p === undefined || p === meta) continue;
+    const pieces = headerLine(p, vocab);
+    if (pieces !== null) return { el: p, pieces };
+  }
+  return null;
+}
+
+/**
+ * The nodes of a header line, each text run cut out of its text node (split at its ends, never re-typed), ready for linkKeys.
+ * A run that fills its node is the node.
+ */
+function headerNodes(ctx: FeatureContext, pieces: readonly Piece[]): Node[] {
+  return pieces.map(({ node, s, e }) => {
+    if (node.nodeType !== 3) return node;
+    let t = node as Text;
+    if (e < t.data.length) ctx.journal.split(t, e);
+    if (s > 0) t = ctx.journal.split(t, s);
+    return t;
+  });
 }
 
 /** A key in a byline value: in a text node at `at`, or a code element whose text is the key. */
@@ -520,7 +604,7 @@ export function buildEditorial(ctx: FeatureContext): void {
       if (!ctx.live()) return;
       if (href !== null) delta = { key, href };
     }
-    const header = links === null ? null : legacyHeader(root, ctx.vocab); // read before any node moves
+    const header = links === null ? null : legacyHeader(root, h1, ctx.vocab); // read before any node moves
     const { el: byline, kinds, meta, item } = buildByline(ctx, h1, minutes, delta, links);
     // The byline route: the keys of the item fact's own nodes (call-outs, then writes). With a delta there are none:
     // the item fact shows the delta's link, and its own nodes stay in the hidden meta line.
@@ -528,7 +612,7 @@ export function buildEditorial(ctx: FeatureContext): void {
     links?.route(byline);
     // The header-line route: only when no delta link and no item fact in the byline gave the document its key.
     if (links !== null && header !== null && delta === null && item === null) {
-      if (!linkKeys(ctx, header.nodes, links)) return;
+      if (!linkKeys(ctx, headerNodes(ctx, header.pieces), links)) return;
       links.route(header.el as HTMLElement);
     }
     for (const f of front ?? []) if (!f.list && ctx.vocab.kindKey.test(f.key)) kinds.push(f.vals.join(', '));
@@ -550,6 +634,14 @@ export function buildEditorial(ctx: FeatureContext): void {
       const built = buildFacts(doc, lists, ctx.live);
       journal.insert(built.panel, parent, after.nextSibling);
       facts = built.seam;
+    }
+  } else if (ctx.host.present.has('itemLink')) {
+    // With no title there is no byline and no delta route, and the header line is read from the document's start.
+    const links = itemLinks(ctx);
+    const header = legacyHeader(root, null, ctx.vocab);
+    if (header !== null) {
+      if (!linkKeys(ctx, headerNodes(ctx, header.pieces), links)) return;
+      links.route(header.el as HTMLElement);
     }
   }
 

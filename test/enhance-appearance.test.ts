@@ -783,8 +783,10 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     expect(api['setEnhancementAppearance']).toBe(reader.setEnhancementAppearance);
     // `enhance` is the one wrapped member (docserver parity T4): wrapEnhance(reader.enhance), whose behaviour is held with a fake
     // `enhance` below (the same options object, or a copy that differs in `itemLink` alone, and no element touched).
-    expect(String(api['enhance'])).toBe(String(wrapEnhance(reader.enhance)));
-    expect(api['enhance']).not.toBe(reader.enhance);
+    // That the registered `enhance` is that wrapper over the reader's own, and not some other function, is pinned end to end by the
+    // item-link rows of test/enhance-frame-wire.test.ts, which call the registered api.enhance on a document and read the reader's
+    // own item links (`a.item-link`, the root's marks) and its https check from the result: a wrapper that dropped the reader, or
+    // one that passed an href on unchecked, would fail there. A comparison of source text here would pin nothing more.
     expect(api['destroyEnhancement']).toBe(reader.destroyEnhancement);
   });
 

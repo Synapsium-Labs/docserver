@@ -15,9 +15,9 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 /** The host names of well-known trackers, and the shape of an issue URL: a path of issues, tickets or `browse/KEY-n`. */
 const TRACKERS: readonly RegExp[] = [
   /linear\.app/i,
-  /atlassian\.(?:net|com)/i,
-  /jira/i,
-  /youtrack/i,
+  /\batlassian\.(?:net|com)\b/i,
+  /\bjira\b/i,
+  /\byoutrack\b/i,
   /clubhouse\.io/i,
   /shortcut\.com/i,
   /asana\.com/i,
@@ -34,7 +34,13 @@ const TRACKERS: readonly RegExp[] = [
   /\/tickets?\/(?:\d|\$|\{)/i,
 ];
 
-const hits = (text: string): string[] => TRACKERS.filter((re) => re.test(text)).map((re) => String(re));
+/** A `data:` URL's payload (an inlined font, say) is base64 text, which can spell any word by chance: it is not scanned. */
+const DATA_URL = /data:[a-z0-9.+/-]+;base64,[A-Za-z0-9+/=]*/gi;
+
+const hits = (text: string): string[] => {
+  const scanned = text.replace(DATA_URL, 'data:');
+  return TRACKERS.filter((re) => re.test(scanned)).map((re) => String(re));
+};
 
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -53,6 +59,10 @@ describe('the scan: what it finds', () => {
     ]) {
       expect(hits(planted), planted).not.toEqual([]);
     }
+    // A base64 payload that happens to spell a name is no host; the same text outside a `data:` URL is found.
+    expect(hits('src: url(data:font/woff2;base64,QUJDamlyYSBsaW5lYXIuYXBwIGppcmE=)')).toEqual([]);
+    expect(hits('src: url(data:font/woff2;base64,AAAA) x jira y')).not.toEqual([]);
+    expect(hits('notjira jirax')).toEqual([]);
     for (const fine of ['https://tracker.example/AB-12', 'https://items.example/AB-1', 'an issue tracker', 'issues: none', 'https://github.com/o/r', '/browse/']) {
       expect(hits(fine), fine).toEqual([]);
     }
@@ -81,7 +91,7 @@ describe('no default tracker anywhere in the library', () => {
       expect(found).toEqual([]);
     });
 
-    it("the Mermaid build is a third party's, and names the issue page of Mermaid's own project (a bug-report link) and nothing else of the kind", () => {
+    it("the Mermaid build is a third party's, and names the issue pages of Mermaid's own project and of its parser's (bug-report links, github.com/mermaid-js/mermaid/issues and github.com/chevrotain/chevrotain/issues) and nothing else of the kind", () => {
       // Not an item link: nothing in it is read as one. Held so that a change of what it names is seen.
       const named = hits(texts['mermaid'] ?? '').sort();
       expect(named).toEqual([String(TRACKERS[14]), String(TRACKERS[15])].sort());

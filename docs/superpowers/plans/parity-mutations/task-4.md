@@ -30,16 +30,6 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 | P4v | an itemLink with no items | the frame offers itemLink when the seed has no items | `src/frame-runtime/adapters.ts` | red: 1 failed \| 21 passed (22). with no items the adapter has no itemLink: the option is an empty object, spread to nothing |
 | P4w | an empty list seeded | an empty items key written | `src/frame/document.ts` | red: 1 failed \| 245 passed (246). seeds the links as given, in order, and with none the srcdoc is the one without the option, byte for byte |
 | P4x | the bootstrap does not hand itemLink to the reader | the one bootstrap line removed | `src/frame-runtime/bootstrap.ts` | red: 1 failed \| 2 passed (6). a seeded value is drawn as the reader's item link and an unseeded one stays text; the click goes out as naviga |
-| P4y | the header-line route removed from meta.items | render reads no header line | `src/render/items.ts` | red: 12 failed \| 51 passed (63). lists the keys of `**Field:** AB-90`, with the colon inside the bold text or right after it, and of ; is read before or after the meta line, and wherever it stands before the first level-2 heading; is used only when the byline has no item fact: the byline keeps its precedence, and a delta key stil |
-| P4z | the header-line route removed from the reader | the reader links no header line | `src/enhance/editorial.ts` | red: 11 failed \| 198 passed (209). links the keys where they stand, with a click listener on the paragraph, and leaves the label as it ; is not used once the delta key has a link, and is when it has none; destroy puts the paragraph back as the author wrote it |
-| P4aa | the header line read without itemFields (render) | any bold label opens a header line in render | `src/render/items.ts` | red: 4 failed \| 59 passed (63). is no header line when the paragraph has other text, is not a root child, is past the first level-2 ; is off without the item fields (P4: the vocabulary gates it), and never scans the body; fixture: header line, not an item field |
-| P4ab | the header line read without itemFields (reader) | any bold label opens a header line in the reader | `src/enhance/editorial.ts` | red: 3 failed \| 206 passed (209). is the third route: no byline item fact and no delta link, and only for a paragraph that stands alon; fixture: header line, not an item field; holds for every fixture under each part of the vocabulary alone |
-| P4ac | a paragraph with other text read as a header line (render) | render does not require the paragraph to stand alone | `src/render/items.ts` | red: 3 failed \| 60 passed (63). is no header line when the paragraph has other text, is not a root child, is past the first level-2 ; fixture: header line with other text; holds for every fixture under each part of the vocabulary alone |
-| P4ad | a paragraph with other text read as a header line (reader) | the reader does not require the paragraph to stand alone | `src/enhance/editorial.ts` | red: 3 failed \| 206 passed (209). is the third route: no byline item fact and no delta link, and only for a paragraph that stands alon; fixture: header line with other text; holds for every fixture under each part of the vocabulary alone |
-| P4ae | the header line read beside a byline item fact (render) | render lists the header line whatever the byline has | `src/render/items.ts` | red: 4 failed \| 59 passed (63). is used only when the byline has no item fact: the byline keeps its precedence, and a delta key stil; fixture: header line with a byline fact; fixture: header line with an empty byline fact |
-| P4af | the header line read beside a byline item fact (reader) | the reader asks the header line whatever the byline has | `src/enhance/editorial.ts` | red: 4 failed \| 205 passed (209). is the third route: no byline item fact and no delta link, and only for a paragraph that stands alon; fixture: header line with a byline fact; fixture: header line with an empty byline fact |
-| P4ag | a paragraph past the first level-2 heading read (render) | render reads the body for a header line | `src/render/items.ts` | red: 3 failed \| 60 passed (63). is no header line when the paragraph has other text, is not a root child, is past the first level-2 ; fixture: header line past the first section; holds for every fixture under each part of the vocabulary alone |
-| P4ah | a paragraph past the first level-2 heading read (reader) | the reader reads the body for a header line | `src/enhance/editorial.ts` | red: 3 failed \| 206 passed (209). is the third route: no byline item fact and no delta link, and only for a paragraph that stands alon; fixture: header line past the first section; holds for every fixture under each part of the vocabulary alone |
 | P4ai | the frame's enhance wrapper writes an attribute | the wrapper touches the root | `src/frame-runtime/enhance-wrap.ts` | red: 2 failed \| 92 passed (94). touches no element, attribute or text, in the root or the document, on either path; src/frame-runtime/enhance-wrap.ts names no DOM, global or storage API (the walls test's own kind of  |
 | P4aj | the forwarded copy differs in more than itemLink | the wrapper adds a key | `src/frame-runtime/enhance-wrap.ts` | red: 1 failed \| 93 passed (94). with an itemLink function it forwards a copy that differs in itemLink alone, and leaves the host's o |
 | P4ak | the options are copied when itemLink is not a function | a copy is forwarded whatever itemLink is | `src/frame-runtime/enhance-wrap.ts` | red: 1 failed \| 93 passed (94). without an itemLink function it forwards the same root and the very same options object, and the rea |
@@ -49,10 +39,36 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 | P4ao | the answer of the items adapter not judged before the mount | a refused answer reaches frameDocument and fails the mount | `src/host/mount.ts` | red: 1 failed \| 172 passed (173). an answer the frame would refuse is no links: one warning, no items seeded, and the document still m |
 | P4ap | a refused answer not warned about | no warning for a refused answer | `src/host/mount.ts` | red: 1 failed \| 172 passed (173). an answer the frame would refuse is no links: one warning, no items seeded, and the document still m |
 | P4aq | a getter of the answer read | the answer is read through its accessors | `src/host/mount.ts` | red: 1 failed \| 172 passed (173). an answer the frame would refuse is no links: one warning, no items seeded, and the document still m |
+| P4ar | the header-line route removed | render reads no header line | `src/render/items.ts` | red: 33 failed \| 53 passed (86). lists nothing for a byline with no item field, a meta line the reader does not take, or no title; reads a one-line header: the colon inside the bold text or right after it, and a plain label at the ; reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle |
+| P4as | the header-line route removed | the reader links no header line | `src/enhance/editorial.ts` | red: 23 failed \| 210 passed (233). links the keys of the item line of a multi-line header paragraph where they stand, and nothing of th; cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are; reads a blockquote's first paragraph, and the zone after the title only |
+| P4at | the header line read without itemFields | any bold or plain label opens a header line in render | `src/render/items.ts` | red: 15 failed \| 71 passed (86). reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle; takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label en; is read from a blockquote's first paragraph, and from nothing else a list or a table holds |
+| P4au | the header line read without itemFields | any label opens a header line in the reader | `src/enhance/editorial.ts` | red: 14 failed \| 219 passed (233). links the keys of the item line of a multi-line header paragraph where they stand, and nothing of th; cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are; reads a blockquote's first paragraph, and the zone after the title only |
+| P4av | a text newline does not end the line | render reads past a soft line break | `src/render/items.ts` | red: 5 failed \| 81 passed (86). reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle; takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label en; fixture: header paragraph, plain labels |
+| P4aw | a text newline does not end the line | the reader reads past a soft line break | `src/enhance/editorial.ts` | red: 4 failed \| 229 passed (233). cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are; fixture: header paragraph, plain labels; fixture: header line, the keys on the next line |
+| P4ax | a br does not end the line | render reads past a `<br>` | `src/render/items.ts` | red: 1 failed \| 87 passed (88). ends the line at a `<br>` with no newline after it, as html that render() did not write may (collect |
+| P4ay | a br does not end the line | the reader reads past a `<br>` | `src/enhance/editorial.ts` | red: 1 failed \| 235 passed (236). ends the line at a br with no newline after it (html the renderer did not write) |
+| P4az | the next bold label does not end the line | render reads to the end of the line past another bold label | `src/render/items.ts` | red: 5 failed \| 81 passed (86). takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label en; lists every key of the line, with sentences, code and an author's link around them; fixture: header line bounded by the next bold label |
+| P4ba | the next bold label does not end the line | the reader reads to the end of the line past another bold label | `src/enhance/editorial.ts` | red: 4 failed \| 229 passed (233). cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are; fixture: header line bounded by the next bold label; fixture: header line, colon outside, next bold label |
+| P4bb | a blockquote's first paragraph is not read | render reads no blockquote | `src/render/items.ts` | red: 5 failed \| 81 passed (86). is read from a blockquote's first paragraph, and from nothing else a list or a table holds; does not read before the title; with no title it reads from the start of the document; fixture: header blockquote |
+| P4bc | a blockquote's first paragraph is not read | the reader reads no blockquote | `src/enhance/editorial.ts` | red: 4 failed \| 229 passed (233). reads a blockquote's first paragraph, and the zone after the title only; fixture: header blockquote; fixture: header blockquote, no title |
+| P4bd | content before the title is read | render starts the zone at the document's start | `src/render/items.ts` | red: 4 failed \| 82 passed (86). does not read before the title; with no title it reads from the start of the document; fixture: header line before the title; fixture: header line before the title, a note first |
+| P4be | content before the title is read | the reader starts the zone at the document's start | `src/enhance/editorial.ts` | red: 4 failed \| 229 passed (233). reads a blockquote's first paragraph, and the zone after the title only; fixture: header line before the title; fixture: header line before the title, a note first |
+| P4bf | the zone does not end at the first level-2 heading | render reads the body for a header line | `src/render/items.ts` | red: 3 failed \| 83 passed (86). reads the zone after the title up to the first level-2 heading, and the first paragraph that has the; fixture: header line past the first section; holds for every fixture under each part of the vocabulary alone |
+| P4bg | the zone does not end at the first level-2 heading | the reader reads the body for a header line | `src/enhance/editorial.ts` | red: 3 failed \| 230 passed (233). reads a blockquote's first paragraph, and the zone after the title only; fixture: header line past the first section; holds for every fixture under each part of the vocabulary alone |
+| P4bh | a plain label counts mid-line | render reads a plain `Label:` anywhere in a line | `src/render/items.ts` | red: 3 failed \| 85 passed (88). takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label en; fixture: header line, a plain label after an inline element; holds for every fixture under each part of the vocabulary alone |
+| P4bi | a plain label counts mid-line | the reader reads a plain `Label:` anywhere in a line | `src/enhance/editorial.ts` | red: 2 failed \| 234 passed (236). fixture: header line, a plain label after an inline element; holds for every fixture under each part of the vocabulary alone |
+| P4bj | the meta line is read as a header | render does not leave the meta line out | `src/render/items.ts` | red: 3 failed \| 83 passed (86). is read before or after the meta line, but never from the meta line itself; fixture: the meta line names a bold label; holds for every fixture under each part of the vocabulary alone |
+| P4bk | the meta line is read as a header | the reader does not leave the meta line out | `src/enhance/editorial.ts` | red: 3 failed \| 230 passed (233). is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; ; fixture: the meta line names a bold label; holds for every fixture under each part of the vocabulary alone |
+| P4bl | with no title the header is not read | render reads no header with no title | `src/render/items.ts` | red: 4 failed \| 82 passed (86). does not read before the title; with no title it reads from the start of the document; fixture: header line, no title; fixture: header blockquote, no title |
+| P4bm | with no title the header is not read | the reader reads no header with no title | `src/enhance/editorial.ts` | red: 4 failed \| 229 passed (233). with no title it reads from the start of the document, linking the line and routing its click; fixture: header line, no title; fixture: header blockquote, no title |
 
 ## Review round 1
 
-Rows P4y to P4aq guard the review round's four items: the header-line route in `meta.items` and in the reader (P4y to P4ah), the frame's `enhance` wrapper (P4ai to P4al), the tracker scan (P4am, P4an) and the `items` adapter's answer judged by `./host` (P4ao to P4aq). Each was measured as above (`--maxWorkers=2 --reporter=json`, saved bytes and sha256 restored; each matched); the sha256 of each file as restored: `src/enhance/editorial.ts` `e2efe51145f36bd8df9b9dcb06ca9a9a03509167f65d0a525a69d8d32214289a`, `src/frame-runtime/enhance-wrap.ts` `955028ffb80d859de32594b2ac2c87a1c5c50f89d1b11a87c95f1d5482348891`, `src/frame/items.ts` `1fa950b503a231c4787c52ab587e1ecefa23340290cf3679c3d7269c75a24bab`, `src/host/mount.ts` `067b3d647d9b392c971282aa0d0ecc3fbac82a9d0ac1a6c95a2cdfad56a692aa`, `src/render/items.ts` `f9a4ab2b5034823f1e1c90e66d1d5848afc6dca9210a5ba7b91f56acd9658059`. P4aj's first edit (adding `folds: false` to a copy of options that already held it) stayed green because it changed nothing, and was replaced by one that adds a key (`extra: 1`); the row above is the second. P4ao to P4aq were measured again after the warning's wording changed (a semicolon in it broke the policy-reader scan of `test/frame-csp.test.ts`).
+Rows P4y to P4aq guard the review round's four items: the header-line route in `meta.items` and in the reader (P4y to P4ah, withdrawn in round 2, see below), the frame's `enhance` wrapper (P4ai to P4al), the tracker scan (P4am, P4an) and the `items` adapter's answer judged by `./host` (P4ao to P4aq). Each was measured as above (`--maxWorkers=2 --reporter=json`, saved bytes and sha256 restored; each matched); the sha256 of each file as restored: `src/enhance/editorial.ts` `e2efe51145f36bd8df9b9dcb06ca9a9a03509167f65d0a525a69d8d32214289a`, `src/frame-runtime/enhance-wrap.ts` `955028ffb80d859de32594b2ac2c87a1c5c50f89d1b11a87c95f1d5482348891`, `src/frame/items.ts` `1fa950b503a231c4787c52ab587e1ecefa23340290cf3679c3d7269c75a24bab`, `src/host/mount.ts` `067b3d647d9b392c971282aa0d0ecc3fbac82a9d0ac1a6c95a2cdfad56a692aa`, `src/render/items.ts` `f9a4ab2b5034823f1e1c90e66d1d5848afc6dca9210a5ba7b91f56acd9658059`. P4aj's first edit (adding `folds: false` to a copy of options that already held it) stayed green because it changed nothing, and was replaced by one that adds a key (`extra: 1`); the row above is the second. P4ao to P4aq were measured again after the warning's wording changed (a semicolon in it broke the policy-reader scan of `test/frame-csp.test.ts`).
+
+## Review round 2
+
+Rows P4y to P4ah of round 1 measured the header-line route as round 1 built it (a paragraph that was nothing but a label and its keys); round 2 replaced that shape (a label anywhere in a header paragraph, the keys of its line, in a zone after the title, a blockquote's first paragraph read), so those ten rows are withdrawn and the route is held by rows P4ar to P4bm, one pair (render and reader) per guard: the route itself, its gating by `itemFields`, the line's three bounds (a newline, a `<br>`, the next bold label), the blockquote, the zone's start (content before the title), the zone's end (the first level-2 heading), a plain label only at the start of a line, the meta line left out, and no title. Measured as above (`--maxWorkers=2 --reporter=json`, saved bytes and sha256 restored, each matched); the sha256 of each file as restored: `src/enhance/editorial.ts` `203ded1e4cfc6bf669a0456311473de512ec93c8ca1d56fc1ecec2a3cc6f47cf`, `src/render/items.ts` `acaacfd5d72c9e79f1cb5a22978815449929240a9c57aa00d32692dfa57779fd`. Notes: `render()` writes every `<br>` as `<br />` followed by a newline, so the `<br>` bound is redundant on its output; P4ax and P4ay (the `<br>` bound removed) were first green and went red once a test hands `collectItems` and the reader html with a `<br>` that has no newline after it. P4bh and P4bi (a plain label mid-line) likewise needed the case of a label after an inline element. P4aw (the reader reads past a newline) fails two tests by assertion and two by an `EnhanceError` of the mutated reader (its split crosses a node): the bound is held either way.
 
 ## Choices
 
@@ -452,175 +468,6 @@ Rows P4y to P4aq guard the review round's four items: the header-line route in `
     ]
   },
   {
-    "id": "P4y",
-    "guard": "the header-line route removed from meta.items",
-    "edit": "render reads no header line",
-    "file": "src/render/items.ts",
-    "tests": "test/render-items.test.ts",
-    "rc": 1,
-    "failed": 12,
-    "passed": 51,
-    "total": 63,
-    "red": [
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > lists the keys of `**Field:** AB-90`, with the colon inside the bold text or right after it, and of several keys",
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is read before or after the meta line, and wherever it stands before the first level-2 heading",
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is used only when the byline has no item fact: the byline keeps its precedence, and a delta key still lists",
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is off without the item fields (P4: the vocabulary gates it), and never scans the body",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, colon outside"
-    ]
-  },
-  {
-    "id": "P4z",
-    "guard": "the header-line route removed from the reader",
-    "edit": "the reader links no header line",
-    "file": "src/enhance/editorial.ts",
-    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
-    "rc": 1,
-    "failed": 11,
-    "passed": 198,
-    "total": 209,
-    "red": [
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > links the keys where they stand, with a click listener on the paragraph, and leaves the label as it was",
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > is not used once the delta key has a link, and is when it has none",
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > destroy puts the paragraph back as the author wrote it",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, colon outside",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with several keys and code"
-    ]
-  },
-  {
-    "id": "P4aa",
-    "guard": "the header line read without itemFields (render)",
-    "edit": "any bold label opens a header line in render",
-    "file": "src/render/items.ts",
-    "tests": "test/render-items.test.ts",
-    "rc": 1,
-    "failed": 4,
-    "passed": 59,
-    "total": 63,
-    "red": [
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is no header line when the paragraph has other text, is not a root child, is past the first level-2 heading or has no key",
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is off without the item fields (P4: the vocabulary gates it), and never scans the body",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, not an item field",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4ab",
-    "guard": "the header line read without itemFields (reader)",
-    "edit": "any bold label opens a header line in the reader",
-    "file": "src/enhance/editorial.ts",
-    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
-    "rc": 1,
-    "failed": 3,
-    "passed": 206,
-    "total": 209,
-    "red": [
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > is the third route: no byline item fact and no delta link, and only for a paragraph that stands alone",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, not an item field",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4ac",
-    "guard": "a paragraph with other text read as a header line (render)",
-    "edit": "render does not require the paragraph to stand alone",
-    "file": "src/render/items.ts",
-    "tests": "test/render-items.test.ts",
-    "rc": 1,
-    "failed": 3,
-    "passed": 60,
-    "total": 63,
-    "red": [
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is no header line when the paragraph has other text, is not a root child, is past the first level-2 heading or has no key",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with other text",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4ad",
-    "guard": "a paragraph with other text read as a header line (reader)",
-    "edit": "the reader does not require the paragraph to stand alone",
-    "file": "src/enhance/editorial.ts",
-    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
-    "rc": 1,
-    "failed": 3,
-    "passed": 206,
-    "total": 209,
-    "red": [
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > is the third route: no byline item fact and no delta link, and only for a paragraph that stands alone",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with other text",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4ae",
-    "guard": "the header line read beside a byline item fact (render)",
-    "edit": "render lists the header line whatever the byline has",
-    "file": "src/render/items.ts",
-    "tests": "test/render-items.test.ts",
-    "rc": 1,
-    "failed": 4,
-    "passed": 59,
-    "total": 63,
-    "red": [
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is used only when the byline has no item fact: the byline keeps its precedence, and a delta key still lists",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with a byline fact",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with an empty byline fact",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4af",
-    "guard": "the header line read beside a byline item fact (reader)",
-    "edit": "the reader asks the header line whatever the byline has",
-    "file": "src/enhance/editorial.ts",
-    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
-    "rc": 1,
-    "failed": 4,
-    "passed": 205,
-    "total": 209,
-    "red": [
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > is the third route: no byline item fact and no delta link, and only for a paragraph that stands alone",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with a byline fact",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line with an empty byline fact",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4ag",
-    "guard": "a paragraph past the first level-2 heading read (render)",
-    "edit": "render reads the body for a header line",
-    "file": "src/render/items.ts",
-    "tests": "test/render-items.test.ts",
-    "rc": 1,
-    "failed": 3,
-    "passed": 60,
-    "total": 63,
-    "red": [
-      "meta.items: the header-line route (a paragraph that stands alone as an item field's label and its keys) > is no header line when the paragraph has other text, is not a root child, is past the first level-2 heading or has no key",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line past the first section",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
-    "id": "P4ah",
-    "guard": "a paragraph past the first level-2 heading read (reader)",
-    "edit": "the reader reads the body for a header line",
-    "file": "src/enhance/editorial.ts",
-    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
-    "rc": 1,
-    "failed": 3,
-    "passed": 206,
-    "total": 209,
-    "red": [
-      "the item link, by the header-line route: a paragraph standing alone as an item field's label and its keys > is the third route: no byline item fact and no delta link, and only for a paragraph that stands alone",
-      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line past the first section",
-      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
-    ]
-  },
-  {
     "id": "P4ai",
     "guard": "the frame's enhance wrapper writes an attribute",
     "edit": "the wrapper touches the root",
@@ -747,6 +594,378 @@ Rows P4y to P4aq guard the review round's four items: the header-line route in `
     "total": 173,
     "red": [
       "docserver parity T4: the items adapter resolves the document's item values into seeded links > an answer the frame would refuse is no links: one warning, no items seeded, and the document still mounts (S2)"
+    ]
+  },
+  {
+    "id": "P4ar",
+    "guard": "the header-line route removed",
+    "edit": "render reads no header line",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 33,
+    "passed": 53,
+    "total": 86,
+    "red": [
+      "meta.items: the byline route > lists nothing for a byline with no item field, a meta line the reader does not take, or no title",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads a one-line header: the colon inside the bold text or right after it, and a plain label at the start of a line",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle, last",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label ends it",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > lists every key of the line, with sentences, code and an author's link around them",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is read from a blockquote's first paragraph, and from nothing else a list or a table holds"
+    ]
+  },
+  {
+    "id": "P4as",
+    "guard": "the header-line route removed",
+    "edit": "the reader links no header line",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 23,
+    "passed": 210,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > links the keys of the item line of a multi-line header paragraph where they stand, and nothing of the other lines",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are split, never re-typed",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > reads a blockquote's first paragraph, and the zone after the title only",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; never the meta line",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, colon outside"
+    ]
+  },
+  {
+    "id": "P4at",
+    "guard": "the header line read without itemFields",
+    "edit": "any bold or plain label opens a header line in render",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 15,
+    "passed": 71,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle, last",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label ends it",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is read from a blockquote's first paragraph, and from nothing else a list or a table holds",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads the zone after the title up to the first level-2 heading, and the first paragraph that has the label",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is no header line without an item field's label: another label, a label with no colon, a label of a past-the-zone paragraph",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is off without the item fields (the vocabulary gates it), and never scans the body"
+    ]
+  },
+  {
+    "id": "P4au",
+    "guard": "the header line read without itemFields",
+    "edit": "any label opens a header line in the reader",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 14,
+    "passed": 219,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > links the keys of the item line of a multi-line header paragraph where they stand, and nothing of the other lines",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are split, never re-typed",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > reads a blockquote's first paragraph, and the zone after the title only",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > with no title it reads from the start of the document, linking the line and routing its click",
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; never the meta line",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header paragraph, the item line in the middle"
+    ]
+  },
+  {
+    "id": "P4av",
+    "guard": "a text newline does not end the line",
+    "edit": "render reads past a soft line break",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 5,
+    "passed": 81,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads the item line of a multi-line header paragraph, wherever it stands in it: first, in the middle, last",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label ends it",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header paragraph, plain labels",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, the keys on the next line",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4aw",
+    "guard": "a text newline does not end the line",
+    "edit": "the reader reads past a soft line break",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 229,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are split, never re-typed",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header paragraph, plain labels",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, the keys on the next line",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4ax",
+    "guard": "a br does not end the line",
+    "edit": "render reads past a `<br>`",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 87,
+    "total": 88,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > ends the line at a `<br>` with no newline after it, as html that render() did not write may (collectItems on its own)"
+    ]
+  },
+  {
+    "id": "P4ay",
+    "guard": "a br does not end the line",
+    "edit": "the reader reads past a `<br>`",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 235,
+    "total": 236,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > ends the line at a br with no newline after it (html the renderer did not write)"
+    ]
+  },
+  {
+    "id": "P4az",
+    "guard": "the next bold label does not end the line",
+    "edit": "render reads to the end of the line past another bold label",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 5,
+    "passed": 81,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label ends it",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > lists every key of the line, with sentences, code and an author's link around them",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line bounded by the next bold label",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, colon outside, next bold label",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4ba",
+    "guard": "the next bold label does not end the line",
+    "edit": "the reader reads to the end of the line past another bold label",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 229,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are split, never re-typed",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line bounded by the next bold label",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, colon outside, next bold label",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bb",
+    "guard": "a blockquote's first paragraph is not read",
+    "edit": "render reads no blockquote",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 5,
+    "passed": 81,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is read from a blockquote's first paragraph, and from nothing else a list or a table holds",
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > does not read before the title; with no title it reads from the start of the document",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, no title",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bc",
+    "guard": "a blockquote's first paragraph is not read",
+    "edit": "the reader reads no blockquote",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 229,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > reads a blockquote's first paragraph, and the zone after the title only",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, no title",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bd",
+    "guard": "content before the title is read",
+    "edit": "render starts the zone at the document's start",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 82,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > does not read before the title; with no title it reads from the start of the document",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line before the title",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line before the title, a note first",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4be",
+    "guard": "content before the title is read",
+    "edit": "the reader starts the zone at the document's start",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 229,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > reads a blockquote's first paragraph, and the zone after the title only",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line before the title",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line before the title, a note first",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bf",
+    "guard": "the zone does not end at the first level-2 heading",
+    "edit": "render reads the body for a header line",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 83,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > reads the zone after the title up to the first level-2 heading, and the first paragraph that has the label",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line past the first section",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bg",
+    "guard": "the zone does not end at the first level-2 heading",
+    "edit": "the reader reads the body for a header line",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 230,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > reads a blockquote's first paragraph, and the zone after the title only",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line past the first section",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bh",
+    "guard": "a plain label counts mid-line",
+    "edit": "render reads a plain `Label:` anywhere in a line",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 85,
+    "total": 88,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > takes the text from the label to the end of THAT line: a newline, a `<br>` or the next bold label ends it",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, a plain label after an inline element",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bi",
+    "guard": "a plain label counts mid-line",
+    "edit": "the reader reads a plain `Label:` anywhere in a line",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 234,
+    "total": 236,
+    "red": [
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, a plain label after an inline element",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bj",
+    "guard": "the meta line is read as a header",
+    "edit": "render does not leave the meta line out",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 83,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > is read before or after the meta line, but never from the meta line itself",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: the meta line names a bold label",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bk",
+    "guard": "the meta line is read as a header",
+    "edit": "the reader does not leave the meta line out",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 230,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; never the meta line",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: the meta line names a bold label",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bl",
+    "guard": "with no title the header is not read",
+    "edit": "render reads no header with no title",
+    "file": "src/render/items.ts",
+    "tests": "test/render-items.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 82,
+    "total": 86,
+    "red": [
+      "meta.items: the header-line route (an item field's label anywhere in a header paragraph, its line's keys) > does not read before the title; with no title it reads from the start of the document",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, no title",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, no title",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
+    ]
+  },
+  {
+    "id": "P4bm",
+    "guard": "with no title the header is not read",
+    "edit": "the reader reads no header with no title",
+    "file": "src/enhance/editorial.ts",
+    "tests": "test/render-items.test.ts,test/enhance-vocab.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 229,
+    "total": 233,
+    "red": [
+      "the item link, by the header-line route: an item field's label anywhere in a header paragraph, the keys of its line > with no title it reads from the start of the document, linking the line and routing its click",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header line, no title",
+      "meta.items equals the keys the enhance step asks itemLink for > fixture: header blockquote, no title",
+      "meta.items equals the keys the enhance step asks itemLink for > holds for every fixture under each part of the vocabulary alone"
     ]
   }
 ]

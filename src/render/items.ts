@@ -11,9 +11,12 @@
 //     block opens (its first line that is not blank) with `item: <key>`; a section whose first code block names none passes
 //     to the next one;
 //   - the header-line route, for a document whose header predates the meta line, used only when the byline has no item fact
-//     (and the host gave no link for a delta key): a paragraph that is a child of the root before its first level-2 heading
-//     and stands alone as `**Tracker:** AB-90`, the bold text an item field, then a colon, then keys with only white space,
-//     commas and semicolons between them. Its keys are listed; a paragraph with any other text is none, and no other text of
+//     (and the host gave no link for a delta key). The zone is the elements after the title (the `h1`'s following siblings, up
+//     to the first level-2 heading; with no `h1`, the document's start): each `p`, and a blockquote's first `p`, except the
+//     meta line. In the first such paragraph that has one, the item field's label is found anywhere: a bold `**Tracker:**`
+//     (the colon inside the bold text or right after it) or a plain `Tracker:` at the start of a line. A header is several
+//     lines in one paragraph (soft line breaks), so the keys listed are those of the text from the label to the end of THAT
+//     line, which a newline, a `<br>` or the next bold label ends. Content before the `h1` is not a header, and no other text of
 //     the document is ever read.
 // The reader asks for the delta key first, then for the byline's keys unless the host gave a link for the delta key, then
 // for the header line's when neither gave one; a host cannot be told which, so the routes are listed together, in document
@@ -332,22 +335,89 @@ function bylineKeys(p: ElNode, field: RegExp, out: Spot[]): boolean {
 
 // ── the header-line route
 
-/** The header line's keys (editorial.ts's legacyHeader): see the header. */
-function headerKeys(rootKids: readonly ElNode[], field: RegExp, out: Spot[]): void {
-  for (const p of rootKids) {
-    if (p.name === 'h2') return;
-    const label = p.kids[0];
-    if (p.name !== 'p' || !isStrong(label)) continue;
-    const nodes = p.kids.slice(1);
-    let name = txt(label);
-    let rest = nodes.map(textOf).join('');
-    if (name.endsWith(':')) name = name.slice(0, -1).trim();
-    else if (/^\s*:/.test(rest)) rest = rest.replace(/^\s*:/, '');
-    else continue;
-    if (!field.test(name)) continue;
-    if (rest.match(itemKeyScan()) === null || rest.replace(itemKeyScan(), '').replace(/[\s,;]/g, '') !== '') continue;
-    keysIn(nodes, out);
-    return;
+/** One piece of a header paragraph: a run of a text node, a line break, or an element. */
+type Atom = { readonly k: 'run'; readonly node: TextNode; readonly s: number; readonly e: number } | { readonly k: 'nl' } | { readonly k: 'el'; readonly node: ElNode };
+
+/** A paragraph's pieces, its text nodes cut at their newlines and a `br` a line break (editorial.ts's atomsOf). */
+function atomsOf(p: ElNode): Atom[] {
+  const out: Atom[] = [];
+  for (const c of p.kids) {
+    if (c.k === 't') {
+      let s = 0;
+      for (;;) {
+        const nl = c.data.indexOf('\n', s);
+        const e = nl < 0 ? c.data.length : nl;
+        if (e > s) out.push({ k: 'run', node: c, s, e });
+        if (nl < 0) break;
+        out.push({ k: 'nl' });
+        s = nl + 1;
+      }
+    } else if (c.k === 'e') out.push(c.name === 'br' ? { k: 'nl' } : { k: 'el', node: c });
+  }
+  return out;
+}
+
+const runText = (a: Atom & { k: 'run' }): string => a.node.data.slice(a.s, a.e);
+
+/** A bold label at atom `i` (editorial.ts's boldLabel). */
+function boldLabel(atoms: readonly Atom[], i: number): { readonly name: string; readonly from: number; readonly at: number } | null {
+  const a = atoms[i];
+  if (a?.k !== 'el' || a.node.name !== 'strong') return null;
+  const t = txt(a.node);
+  if (t.endsWith(':')) return { name: t.slice(0, -1).trim(), from: i + 1, at: 0 };
+  const next = atoms[i + 1];
+  const colon = next?.k === 'run' ? /^\s*:/.exec(runText(next)) : null;
+  return colon === null || next?.k !== 'run' ? null : { name: t, from: i + 1, at: colon[0].length };
+}
+
+/** The nodes of the header line of one paragraph (editorial.ts's headerLine), text runs as text nodes of their own; null when it has none. */
+function headerLine(p: ElNode, field: RegExp): Node[] | null {
+  const atoms = atomsOf(p);
+  for (let i = 0; i < atoms.length; i += 1) {
+    const a = atoms[i];
+    let from = -1;
+    let at = 0;
+    let name = '';
+    if (a?.k === 'run' && (i === 0 || atoms[i - 1]?.k === 'nl')) {
+      const m = /^\s*([A-Za-z][A-Za-z0-9 _/-]{0,31}):/.exec(runText(a));
+      if (m !== null) {
+        name = (m[1] ?? '').trim();
+        from = i;
+        at = m[0].length;
+      }
+    } else {
+      const label = boldLabel(atoms, i);
+      if (label !== null) ({ name, from, at } = label);
+    }
+    if (from < 0 || !field.test(name)) continue;
+    const nodes: Node[] = [];
+    for (let j = from; j < atoms.length; j += 1) {
+      const b = atoms[j];
+      if (b === undefined || b.k === 'nl' || (j > from && boldLabel(atoms, j) !== null)) break;
+      if (b.k === 'el') nodes.push(b.node);
+      else {
+        const s = j === from ? b.s + at : b.s;
+        if (s < b.e) nodes.push({ k: 't', data: b.node.data.slice(s, b.e), at: b.node.at, off: b.node.off + s });
+      }
+    }
+    return nodes;
+  }
+  return null;
+}
+
+/** The header line's keys (editorial.ts's legacyHeader): see the header. `h1` is the title's container and element, or null. */
+function headerKeys(root: ElNode, h1: { readonly el: ElNode; readonly container: ElNode } | null, meta: ElNode | null, field: RegExp, out: Spot[]): void {
+  const siblings = (h1 === null ? root : h1.container).kids.filter(isEl);
+  for (let i = h1 === null ? 0 : siblings.indexOf(h1.el) + 1; i < siblings.length; i += 1) {
+    const n = siblings[i];
+    if (n === undefined || n.name === 'h2') return;
+    const p = n.name === 'blockquote' ? n.kids.filter(isEl).find((c) => c.name === 'p') : n.name === 'p' ? n : undefined;
+    if (p === undefined || p === meta) continue;
+    const nodes = headerLine(p, field);
+    if (nodes !== null) {
+      keysIn(nodes, out);
+      return;
+    }
   }
 }
 
@@ -383,13 +453,17 @@ export function collectItems(html: string, fields: readonly string[], headings: 
     const patterns = itemPatterns(fields, headings);
     const root = parse(html);
     const h1 = find(root, 'h1');
-    if (h1 === null) return [];
     const spots: Spot[] = [];
-    const siblings = h1.container.kids.filter(isEl);
-    const meta = metaParagraph(siblings, siblings.indexOf(h1.el));
-    const itemFact = meta !== null && bylineKeys(meta, patterns.field, spots);
-    if (!itemFact) headerKeys(root.kids.filter(isEl), patterns.field, spots);
-    const delta = deltaKey(root.kids.filter(isEl), patterns.heading);
+    // With no title there is no byline and no delta route (the reader builds them under the title); the header line is read from the start.
+    let meta: ElNode | null = null;
+    let itemFact = false;
+    if (h1 !== null) {
+      const siblings = h1.container.kids.filter(isEl);
+      meta = metaParagraph(siblings, siblings.indexOf(h1.el));
+      itemFact = meta !== null && bylineKeys(meta, patterns.field, spots);
+    }
+    if (!itemFact) headerKeys(root, h1, meta, patterns.field, spots);
+    const delta = h1 === null ? null : deltaKey(root.kids.filter(isEl), patterns.heading);
     if (delta !== null) spots.push(delta);
     spots.sort((a, b) => a.at - b.at || a.off - b.off);
     const out: string[] = [];
