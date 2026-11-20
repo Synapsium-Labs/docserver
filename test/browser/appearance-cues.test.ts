@@ -962,6 +962,35 @@ describeBrowsers((browser) => {
     }
   });
 
+  it('a drawer left open and then widened does not style the docked rail: a stale toc-open keeps 1.1.0\'s values', async () => {
+    const skin = { controlRow: '44px', sectionSize: '12px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'uppercase', sectionFamily: 'mono' };
+    const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
+      d.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        root.classList.add('toc-open'); // whatever the reader did on resize, the class stands here
+        const panel = root.querySelector('.doc-toc') as HTMLElement;
+        const tab = document.createElement('div');
+        tab.className = 'toc-tabs';
+        const b = document.createElement('button');
+        tab.append(b);
+        panel.append(tab);
+        const c = getComputedStyle(b);
+        return { row: getComputedStyle(root.querySelector('.toc-contents a') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, family: c.fontFamily };
+      }, rootSel);
+    const hosted = await open(browser, { appearance: { mode: 'dark', skin }, width: 1000 });
+    const plain = await open(browser, { appearance: { mode: 'dark' }, width: 1440 });
+    try {
+      await hosted.page.locator(`${rootSel} .toc-btn`).click();
+      await hosted.page.setViewportSize({ width: 1440, height: 1000 });
+      const baseline = await probe(plain);
+      expect(await probe(hosted)).toEqual(baseline);
+      expect(baseline.row).toBe('0px');
+    } finally {
+      await hosted.close();
+      await plain.close();
+    }
+  });
+
   it('popShadow replaces the shadow of quick jump, the keys sheet and the contents drawer, and the verdict\'s radii reach their boxes', async () => {
     const shadow = 'rgb(95, 105, 124) 0px 0px 0px 3px';
     const doc = await open(browser, { appearance: { mode: 'dark', skin: SKIN }, width: 1000 });
@@ -1016,7 +1045,8 @@ describeBrowsers((browser) => {
       }, rootSel);
       expect(got.family.startsWith('"Docreader Host Sans"'), got.family).toBe(true);
       expect(got.where.length).toBeGreaterThan(0);
-      expect(new Set(got.where)).toEqual(new Set(['(pointer: fine)']));
+      // the plain rule, and the drawer's own (a drawer is a narrow viewport's): both only under a fine pointer
+      expect(new Set(got.where)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
     } finally {
       await sans.close();
     }

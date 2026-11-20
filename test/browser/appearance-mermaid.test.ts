@@ -633,15 +633,14 @@ function measureDrawing(arg: MeasureArg): Measured {
     }
   }
 
-  // stick arrowheads: each path of a used marker is text-muted, at 3:1 on both grounds
-  for (const id of usedMarkers) {
-    if (!/-stick(Top|Bottom)ArrowHead$/.test(id)) continue;
-    for (const p of Array.from(document.getElementById(id)?.querySelectorAll('path') ?? [])) {
-      out.sticks.checked += 1;
-      const c = parse(cs(p).stroke);
-      if (c === null || hexOf(c) !== arg.textMuted) out.sticks.failures.push(`${id} path stroke=${cs(p).stroke}`);
-      else if (ratio(c, surface) < 3 || ratio(c, surface2) < 3) out.sticks.failures.push(`${id} path ${hexOf(c)} under 3:1`);
-    }
+  // stick arrowheads: each path of every stick marker the drawing holds (found by the marker's id, as Mermaid names them: not
+  // by the stylesheet's own selector) is text-muted, at 3:1 on both grounds, so a marker the rule misses is noticed
+  for (const p of Array.from(svg.querySelectorAll('marker[id$="-stickTopArrowHead"] path, marker[id$="-stickBottomArrowHead"] path'))) {
+    out.sticks.checked += 1;
+    const id = p.parentElement?.id ?? '';
+    const c = parse(cs(p).stroke);
+    if (c === null || hexOf(c) !== arg.textMuted) out.sticks.failures.push(`${id} path stroke=${cs(p).stroke}`);
+    else if (ratio(c, surface) < 3 || ratio(c, surface2) < 3) out.sticks.failures.push(`${id} path ${hexOf(c)} under 3:1`);
   }
   return out;
 }

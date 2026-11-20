@@ -240,4 +240,134 @@ describeBrowsers((browser: BrowserName) => {
       await doc.close();
     }
   }, 120_000);
+
+  /** Four flowcharts a long way apart, so only the one the reader is at is in view. */
+  const FAR = [
+    '# Far apart',
+    '',
+    ...[1, 2, 3, 4].flatMap((n) => [
+      ...Array.from({ length: 36 }, (_, i) => `Paragraph ${String(n)}.${String(i)}: some text to take up the height between the figures, long enough to wrap on a narrow page and so to fill it.\n`),
+      '```mermaid',
+      'flowchart LR',
+      `  F${String(n)} --> X${String(n)}`,
+      '```',
+      '',
+      `*Figure ${String(n)}. Figure ${String(n)}.*`,
+      '',
+    ]),
+  ].join('\n');
+
+  /** The page's load: the bundled Mermaid, whose `render` is held while `window.__hold` is set (released by `window.__release()`). */
+  const HOLDING_LOAD = `async () => {
+    const m = (await import(${JSON.stringify(MERMAID_PATH)})).default;
+    return { default: {
+      initialize: (c) => m.initialize(c),
+      parse: (t) => m.parse(t),
+      render: (...a) => window.__hold ? new Promise((res) => { window.__release = () => { window.__release = undefined; res(m.render(...a)); }; }) : m.render(...a),
+    } };
+  }`;
+
+  const boot = async (doc: Awaited<ReturnType<typeof openDoc>>, appearance: unknown): Promise<void> => {
+    await doc.page.evaluate(script);
+    await doc.page.evaluate(
+      `(async () => {
+        const root = document.querySelector('main[data-harness-root]');
+        await window.__dg.enhance(root, { mermaid: { load: ${HOLDING_LOAD} }, appearance: ${JSON.stringify(appearance)} });
+        while (root.getAttribute('data-docreader-diagrams') !== 'drawn') await new Promise((r) => setTimeout(r, 20));
+      })()`,
+    );
+  };
+  const op = (page: Page, a: unknown): Promise<void> =>
+    page.evaluate((v) => (window as unknown as { __dg: { setEnhancementAppearance(r: Element, a: unknown): void } }).__dg.setEnhancementAppearance(document.querySelector('main[data-harness-root]') as Element, v), a);
+
+  it('redraws nearest first in a real browser: the figure the reader is at first, then outward', async () => {
+    const doc = await openDoc(FAR, {}, { browser, csp: 'reader', enhance: false, mermaid: true, viewport: { width: 1200, height: 700 } });
+    try {
+      await boot(doc, { mode: DARK.mode, colour: DARK.colour });
+      await doc.page.evaluate(() => {
+        const w = window as unknown as { __order: number[] };
+        w.__order = [];
+        const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+        const figs = Array.from(root.querySelectorAll('figure.mermaid-figure'));
+        // A new drawing lands in a figure's own pre (a replacement's temporary pre is not the figure's).
+        new MutationObserver((records) => {
+          for (const r of records) for (const n of Array.from(r.addedNodes)) {
+            const pre = (n as Element).localName === 'svg' && r.target.nodeType === 1 ? (r.target as Element) : null;
+            if (pre !== null && pre.localName === 'pre' && !pre.hasAttribute('data-docreader-redraw')) w.__order.push(figs.indexOf(pre.parentElement as Element));
+          }
+        }).observe(root, { childList: true, subtree: true });
+        window.scrollTo(0, document.documentElement.scrollHeight);
+      });
+      // The reader is at the last figure; wait for the scroll to settle, and for the figures' drawings to be where they are.
+      await doc.page.waitForFunction(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2);
+      await op(doc.page, { mode: LIGHT.mode, colour: LIGHT.colour });
+      await doc.page.waitForFunction(() => (window as unknown as { __order: number[] }).__order.length >= 4);
+      await new Promise((r) => setTimeout(r, 500));
+      expect(await doc.page.evaluate(() => (window as unknown as { __order: number[] }).__order)).toEqual([3, 2, 1, 0]);
+    } finally {
+      await doc.close();
+    }
+  }, 180_000);
+
+  it('a redraw in flight is not seen: the temporary pre is hidden and nothing below it moves', async () => {
+    const doc = await openDoc(DOC, {}, { browser, csp: 'reader', enhance: false, mermaid: true });
+    try {
+      await boot(doc, { mode: DARK.mode, colour: DARK.colour });
+      const geometry = (): Promise<{ tops: number[]; temp: { visibility: string; position: string; pointer: string } | null }> =>
+        doc.page.evaluate(() => {
+          const figs = Array.from(document.querySelectorAll('main[data-harness-root] figure.mermaid-figure'));
+          const temp = document.querySelector('figure.mermaid-figure > pre[data-docreader-redraw]');
+          const cs = temp === null ? null : getComputedStyle(temp);
+          return { tops: figs.map((f) => f.getBoundingClientRect().top + window.scrollY), temp: cs === null ? null : { visibility: cs.visibility, position: cs.position, pointer: cs.pointerEvents } };
+        });
+      const before = await geometry();
+      await doc.page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = true));
+      await op(doc.page, { mode: LIGHT.mode, colour: LIGHT.colour });
+      await doc.page.waitForFunction(() => (window as unknown as { __release?: unknown }).__release !== undefined && document.querySelector('pre[data-docreader-redraw]') !== null);
+      const during = await geometry();
+      expect(during.temp).toEqual({ visibility: 'hidden', position: 'absolute', pointer: 'none' });
+      expect(during.tops).toEqual(before.tops);
+      await doc.page.evaluate(() => {
+        (window as unknown as { __hold: boolean; __release: () => void }).__hold = false;
+        (window as unknown as { __release: () => void }).__release();
+      });
+      await doc.page.waitForFunction(() => document.querySelector('pre[data-docreader-redraw]') === null);
+    } finally {
+      await doc.close();
+    }
+  }, 180_000);
+
+  it('keeps no replaced drawing alive: the live svg objects stay bounded across many changes', async () => {
+    const doc = await openDoc(DOC, {}, { browser, csp: 'reader', enhance: false, mermaid: true, viewport: { width: 1200, height: 700 } });
+    try {
+      await boot(doc, { mode: DARK.mode, colour: DARK.colour });
+      const cdp = await doc.page.context().newCDPSession(doc.page);
+      const count = async (): Promise<number> => {
+        await cdp.send('HeapProfiler.collectGarbage');
+        const proto = await cdp.send('Runtime.evaluate', { expression: 'SVGSVGElement.prototype' });
+        const objs = await cdp.send('Runtime.queryObjects', { prototypeObjectId: proto.result.objectId as string });
+        const n = await cdp.send('Runtime.callFunctionOn', { objectId: objs.objects.objectId as string, functionDeclaration: 'function(){return this.length}', returnByValue: true });
+        return n.result.value as number;
+      };
+      const ids = (): Promise<string[]> => doc.page.evaluate(() => Array.from(document.querySelectorAll('figure.mermaid-figure pre[data-docreader-chrome] > svg')).map((s) => s.id));
+      await doc.page.waitForFunction(() => document.querySelector('.dn-ring') !== null);
+      await new Promise((r) => setTimeout(r, 1000));
+      const before = await count();
+      for (let i = 0; i < 8; i += 1) {
+        const was = await ids();
+        await op(doc.page, i % 2 === 0 ? { mode: LIGHT.mode, colour: LIGHT.colour } : { mode: DARK.mode, colour: DARK.colour });
+        await doc.page.waitForFunction((old) => {
+          const now = Array.from(document.querySelectorAll('figure.mermaid-figure pre[data-docreader-chrome] > svg')).map((s) => s.id);
+          return now.length === old.length && now.slice(0, 2).every((x, j) => x !== old[j]);
+        }, was, { timeout: 60_000 });
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+      const after = await count();
+      // Each op replaces two drawings: kept ones would add about sixteen; a few objects of slack for what the page itself holds.
+      expect(after - before).toBeLessThanOrEqual(3);
+    } finally {
+      await doc.close();
+    }
+  }, 240_000);
 });

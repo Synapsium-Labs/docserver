@@ -49,10 +49,10 @@
     },
     {
       "path": "frame/enhance.js",
-      "sha256": "8fffb11e8c75e99cde82b85427c718dfe6b9912cd3264c03f1781374e8617bd3",
-      "bytes": 211267,
+      "sha256": "b7de9b6cf5c0f9350e5fabc9dd7d016b502058a8d7785a6c2e440a6988921965",
+      "bytes": 212104,
       "kind": "script",
-      "csp": "'sha256-j/+xHox16ZzegrhUJ8cY3+a5kSzTJkwD8XgTdOhhe9M='"
+      "csp": "'sha256-t96bbPXA+TUOX6vJ3X0Ba1AgWKjXeFpsLkQKaYiSGWU='"
     },
     {
       "path": "frame/guard.js",
@@ -63,8 +63,8 @@
     },
     {
       "path": "frame/reader.css",
-      "sha256": "be689c9f209d78ee8df35b212d43cd856f4e4a9a11aeffe880f3b4a6c83d9c88",
-      "bytes": 563730,
+      "sha256": "02721c564ff916cbaa74f0bd40737b9591976465d962f65cedd33e9f19aab597",
+      "bytes": 564090,
       "kind": "style"
     },
     {
@@ -82,8 +82,8 @@
     },
     {
       "path": "reader.css",
-      "sha256": "02e3e1f38d001320e8dc489ef351bcd79ca77f6426ac9b5cf560c722f0768c36",
-      "bytes": 150228,
+      "sha256": "5f726980e1d57a47bbde5c8bb6108a63bf7295c1cf1f9db4341204458d20da43",
+      "bytes": 150588,
       "kind": "style"
     }
   ]

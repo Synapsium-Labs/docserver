@@ -103,7 +103,7 @@
 // Registered in features.ts, whose header says where in the build order and why.
 import type { Appearance } from './appearance.js';
 import { isAuthorStyled, MERMAID_HOSTED_KINDS, mermaidThemeOf } from './appearance-mermaid.js';
-import { chrome } from './journal.js';
+import { chrome, createJournal, type JournalControl } from './journal.js';
 import type { MermaidSettings } from './options.js';
 import type { FigureEntry } from './registry.js';
 import type { FeatureContext } from './types.js';
@@ -301,6 +301,8 @@ interface Fig {
   started: boolean;
   /** The drawing asked for (the one in place unless a redraw failed) is in the host's colours. */
   hosted: boolean;
+  /** The journal of the drawing in place (its mark, role and label), undone when a redraw replaces it, so none of it is kept. */
+  scope: JournalControl | null;
   /** Of a covered kind and not author-styled (`undefined` until the host's colours first apply to it). */
   cover: boolean | undefined;
 }
@@ -347,6 +349,11 @@ function releaseTip(tip: Tip, ctx: FeatureContext, drawing: Element): void {
     tip.el.remove();
     return;
   }
+  closeTip(drawing);
+}
+
+/** Send the mouseout Mermaid closes its tooltip on to each node of `drawing` it shows the tooltip over (it marks it `hover`). */
+function closeTip(drawing: Element): void {
   for (const node of drawing.querySelectorAll('g.hover')) {
     const out = drawing.ownerDocument.createEvent('Event');
     out.initEvent('mouseout', false, false);
@@ -416,28 +423,31 @@ function drawable(ctx: FeatureContext): Fig[] {
         break;
       }
     }
-    if (source !== null) out.push({ entry, source, text: source.textContent ?? '', drawing: null, started: false, hosted: false, cover: undefined });
+    if (source !== null) out.push({ entry, source, text: source.textContent ?? '', drawing: null, started: false, hosted: false, cover: undefined, scope: null });
   }
   return out;
 }
 
 /** The configuration for one call: a new object each time, since Mermaid keeps what it is given. */
-function configOf(settings: MermaidSettings, fontFamily: string): Config {
+function configOf(settings: MermaidSettings, font: () => string): Config {
   const secure = [...secureKeys()];
   for (const k of settings.secure) if (!secure.includes(k)) secure.push(k);
-  return (paint) => ({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    suppressErrorRendering: true,
-    layout: 'dagre',
-    maxTextSize: settings.maxTextSize ?? MAX_TEXT_SIZE,
-    maxEdges: settings.maxEdges ?? MAX_EDGES,
-    secure: [...secure],
-    theme: 'base',
-    fontFamily,
-    themeVariables: { ...(paint === undefined ? THEME_VARIABLES : mermaidThemeOf(paint)), fontFamily },
-    dompurifyConfig: { FORBID_TAGS: [...LABEL_TAGS_REFUSED], FORBID_ATTR: [...LABEL_ATTRS_REFUSED] },
-  });
+  return (paint) => {
+    const fontFamily = font(); // read at each call: a mount hosted after it booted draws in the host's face
+    return {
+      startOnLoad: false,
+      securityLevel: 'strict',
+      suppressErrorRendering: true,
+      layout: 'dagre',
+      maxTextSize: settings.maxTextSize ?? MAX_TEXT_SIZE,
+      maxEdges: settings.maxEdges ?? MAX_EDGES,
+      secure: [...secure],
+      theme: 'base',
+      fontFamily,
+      themeVariables: { ...(paint === undefined ? THEME_VARIABLES : mermaidThemeOf(paint)), fontFamily },
+      dompurifyConfig: { FORBID_TAGS: [...LABEL_TAGS_REFUSED], FORBID_ATTR: [...LABEL_ATTRS_REFUSED] },
+    };
+  };
 }
 
 /** The root's `--sans` when it is a plain list of font families; FONT_FALLBACK otherwise. */
@@ -503,12 +513,12 @@ function labelOf(ctx: FeatureContext, f: Fig, svg: SVGSVGElement): string {
 
 /** Mark a figure drawn: its class, the drawing's role and name, and the figure's width. */
 function markDrawn(ctx: FeatureContext, f: Fig, svg: SVGSVGElement): void {
-  const { journal } = ctx;
-  journal.toggleClass(f.entry.figure, 'drawn', true);
+  ctx.journal.toggleClass(f.entry.figure, 'drawn', true);
+  const journal = f.scope?.journal ?? ctx.journal; // the drawing's own, undone with it
   journal.setAttribute(svg, 'role', 'img');
   journal.setAttribute(svg, 'aria-label', labelOf(ctx, f, svg));
   const w = naturalWidth(svg);
-  if (w !== null) journal.setStyle(f.entry.figure, '--fig-w', `${String(Math.ceil(w + PLATE))}px`);
+  if (w !== null) ctx.journal.setStyle(f.entry.figure, '--fig-w', `${String(Math.ceil(w + PLATE))}px`);
 }
 
 /** Leave a figure to its fallback: its class, and the note with its source before the source. */
@@ -553,10 +563,33 @@ function place(ctx: FeatureContext, drawing: HTMLElement, out: unknown): boolean
   return true;
 }
 
-/** Put the mark of a drawing in the host's colours on the svg `pre` holds. */
-function markFigure(ctx: FeatureContext, pre: HTMLElement): void {
-  const svg = drawnSvg(pre);
-  if (svg !== null) ctx.operate(() => ctx.journal.setAttribute(svg, 'data-docreader-hosted-figure', ''));
+/**
+ * A drawing was placed in `target` (a redraw's in `temp`, whose drawing then replaces the figure's): it takes a journal
+ * of its own, the replaced drawing's is undone and dropped so none of it is kept, and the drawing takes its mark when
+ * it is in the host's colours. For a redraw, where the replaced drawing's reader was is kept too: Mermaid's tooltip over
+ * it is closed, a definition card opened from it is closed, and the index of the definition node that had focus is left
+ * on the svg for the tools to focus the node at that place (diagram-tools.ts).
+ */
+function adopt(ctx: FeatureContext, f: Fig, target: HTMLElement, temp: HTMLElement | null, marked: boolean): void {
+  ctx.operate(() => {
+    let at = -1;
+    if (temp !== null) {
+      const nodes = Array.from(target.querySelectorAll('.dnode'));
+      const active = target.ownerDocument.activeElement;
+      at = active === null ? -1 : nodes.findIndex((n) => n.contains(active));
+      if (nodes.some((n) => n.getAttribute('aria-expanded') === 'true')) ctx.overlays.close('card');
+      closeTip(target);
+      target.replaceChildren(...Array.from(temp.childNodes));
+    }
+    const first = f.scope === null;
+    f.scope?.undoAll();
+    const { journal } = (f.scope = createJournal(ctx.live, (fn) => { ctx.operate(fn); }));
+    if (first) ctx.journal.defer(() => { f.scope?.undoAll(); });
+    const svg = drawnSvg(target);
+    if (svg === null) return;
+    if (marked) journal.setAttribute(svg, 'data-docreader-hosted-figure', '');
+    if (at >= 0) journal.setAttribute(svg, 'data-docreader-focus', String(at));
+  });
 }
 
 /** Whether the bundled Mermaid's `parse` names `text`'s kind as one drawn in the host's colours (a failure, or no id, is no). */
@@ -592,13 +625,14 @@ async function call(ctx: FeatureContext, api: MermaidApi, config: Config, f: Fig
   // A redraw is made in a pre of its own, laid out but unseen as a first drawing is, and its svg then replaces the figure's
   // own drawing in that pre (Mermaid empties the container it is given, so the drawing in view would go at once).
   const home = again ? f.drawing : null;
+  const tmp = createJournal(ctx.live, (fn) => { ctx.operate(fn); });
   // Marked as run() marks a node it draws, before it reads the node's text.
   const drawing = chrome(doc, 'pre', { className: 'mermaid', text: f.text, attrs: again ? { 'data-processed': 'true', 'data-docreader-redraw': '' } : { 'data-processed': 'true' } });
   let had: Element | null = null;
   let rendering: unknown;
   try {
     rendering = ctx.operate(() => {
-      ctx.journal.insert(drawing, f.entry.figure, home === null ? besideSource(f, true) : home.nextSibling);
+      (home === null ? ctx.journal : tmp.journal).insert(drawing, f.entry.figure, home === null ? besideSource(f, true) : home.nextSibling);
       had = tooltipIn(doc);
       api.initialize(config(paint));
       if (!ctx.live()) return undefined; // initialize destroyed the instance: its drawing is never asked for
@@ -607,7 +641,7 @@ async function call(ctx: FeatureContext, api: MermaidApi, config: Config, f: Fig
   } catch {
     // A throw of the module's: a first drawing's pre stays (the drawing is what the module left, checked by the caller).
     if (home === null) return drawing;
-    drawing.remove();
+    tmp.undoAll();
     return home;
   }
   if (rendering === undefined) return null;
@@ -619,15 +653,13 @@ async function call(ctx: FeatureContext, api: MermaidApi, config: Config, f: Fig
     // is checked by the caller.
   }
   if (home === null) {
-    if (placed && paint !== undefined) markFigure(ctx, drawing);
+    if (placed) adopt(ctx, f, drawing, null, paint !== undefined);
     noteTip(ctx, doc, had, drawing);
     return drawing;
   }
-  if (placed) {
-    home.replaceChildren(...Array.from(drawing.childNodes));
-    if (paint !== undefined) markFigure(ctx, home);
-  } else f.hosted = was; // the drawing in place is the old one
-  drawing.remove();
+  if (placed) adopt(ctx, f, home, drawing, paint !== undefined);
+  else f.hosted = was; // the drawing in place is the old one
+  tmp.undoAll();
   return home;
 }
 
@@ -659,7 +691,7 @@ function follow(ctx: FeatureContext, api: () => MermaidApi | null, config: Confi
       const h = ctx.env.viewport().h;
       const todo = figs
         .filter((f) => f.started && (a.colour === undefined ? f.hosted : f.cover !== false))
-        .map((f, i) => ({ f, d: distance(f.source, h), i }))
+        .map((f, i) => ({ f, d: distance(f.drawing ?? f.source, h), i }))
         .sort((x, y) => x.d - y.d || x.i - y.i);
       void (async () => {
         for (const { f } of todo) {
@@ -712,7 +744,7 @@ function load(ctx: FeatureContext, config: Config): Promise<unknown> {
  */
 function onRequest(ctx: FeatureContext, settings: MermaidSettings, figs: readonly Fig[]): void {
   ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'on-request');
-  const config = configOf(settings, fontOf(ctx));
+  const config = configOf(settings, () => fontOf(ctx));
   let module: Promise<MermaidApi | null> | null = null;
   let loaded: MermaidApi | null = null;
   const api = (): Promise<MermaidApi | null> =>
@@ -776,7 +808,7 @@ export async function after(ctx: FeatureContext): Promise<void> {
     onRequest(ctx, settings, figs);
     return;
   }
-  const config = configOf(settings, fontOf(ctx));
+  const config = configOf(settings, () => fontOf(ctx));
   let api: MermaidApi | null;
   if (settings.draw === 'after-ready') {
     // Ledger C107: no gate while the module is awaited, so every source stays readable text; the gate and `drawing`

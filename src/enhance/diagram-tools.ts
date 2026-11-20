@@ -141,6 +141,19 @@ export function build(ctx: FeatureContext): void {
     if (source !== undefined && source.parentElement !== null) held.set(entry.figure, { entry, source, sourceParent: source.parentElement, text: source.textContent ?? '' });
   }
   const playbacks = new Map<SVGSVGElement, Playback>();
+  /**
+   * One journal for each drawing the tools serve (its marks, cues, buttons' listeners), undone when a redraw replaces the
+   * drawing, so nothing of a replaced drawing is kept: the root's journal holds every entry until teardown.
+   */
+  const scopes = new Map<SVGSVGElement, JournalControl>();
+  const scopeOf = (svg: SVGSVGElement): JournalControl => {
+    let scope = scopes.get(svg);
+    if (scope === undefined) {
+      scope = createJournal(ctx.live, (fn) => { ctx.operate(fn); });
+      scopes.set(svg, scope);
+    }
+    return scope;
+  };
   /** The drawing each figure's tools were built for: a redraw (an appearance change) replaces the svg, so they are built again. */
   const toolsFor = new WeakMap<HTMLElement, SVGSVGElement>();
   const cuePending = new Set<SVGSVGElement>();
@@ -168,6 +181,8 @@ export function build(ctx: FeatureContext): void {
   ctx.journal.defer(() => {
     for (const playback of playbacks.values()) cancelPlayback(playback);
     playbacks.clear();
+    for (const scope of scopes.values()) scope.undoAll();
+    scopes.clear();
     cueSchedule?.();
     cueObserver?.cancel();
     cuePending.clear();
@@ -498,6 +513,7 @@ export function build(ctx: FeatureContext): void {
   };
 
   const define = (svg: SVGSVGElement): void => {
+    const journal = scopeOf(svg).journal;
     type Candidate = { readonly group: SVGGElement; readonly named: { readonly term?: string; readonly ref?: string }; readonly whole: boolean };
     const candidates: Candidate[] = [];
     const candidateOf = (group: SVGGElement, whole: boolean): Candidate | null => {
@@ -517,16 +533,16 @@ export function build(ctx: FeatureContext): void {
     // Semantic controls do not depend on a visible SVG box; only cue paint waits for geometry.
     for (const { group, named } of candidates) {
       const label = labelOf(group);
-      ctx.journal.toggleClass(group, 'dnode', true);
-      ctx.journal.setAttribute(group, 'tabindex', '0');
-      ctx.journal.setAttribute(group, 'role', 'button');
-      ctx.journal.setAttribute(group, 'aria-label', `${label}: definition`);
-      ctx.journal.setAttribute(group, 'aria-haspopup', 'dialog');
-      ctx.journal.setAttribute(group, 'aria-expanded', 'false');
-      ctx.journal.setAttribute(group, 'data-ref', named.ref ?? null);
-      ctx.journal.setAttribute(group, 'data-term', named.term ?? null);
+      journal.toggleClass(group, 'dnode', true);
+      journal.setAttribute(group, 'tabindex', '0');
+      journal.setAttribute(group, 'role', 'button');
+      journal.setAttribute(group, 'aria-label', `${label}: definition`);
+      journal.setAttribute(group, 'aria-haspopup', 'dialog');
+      journal.setAttribute(group, 'aria-expanded', 'false');
+      journal.setAttribute(group, 'data-ref', named.ref ?? null);
+      journal.setAttribute(group, 'data-term', named.term ?? null);
     }
-    ctx.journal.setAttribute(svg, 'role', 'group');
+    journal.setAttribute(svg, 'role', 'group');
     cuePending.add(svg);
   };
 
@@ -594,6 +610,7 @@ export function build(ctx: FeatureContext): void {
     // All geometry reads, including shape transforms, finish before the first chrome write.
     for (const { svg, group, box, whole, corner } of measured) {
       if (!owned(svg, group) || group.querySelector(':scope > .dn-ring') !== null) continue;
+      const journal = scopeOf(svg).journal;
       const pad = whole ? 2 : 4;
       const ring = ctx.root.ownerDocument.createElementNS(SVG_NS, 'rect');
       ring.setAttribute('class', 'dn-ring');
@@ -607,16 +624,16 @@ export function build(ctx: FeatureContext): void {
       dot.setAttribute('cx', String(corner ? box.x + box.width - 1 : box.x + box.width / 2));
       dot.setAttribute('cy', String(corner ? box.y + 1 : box.y + Math.min(14, box.height / 4)));
       dot.setAttribute('r', '3.5');
-      ctx.journal.insert(ring, group, null);
-      ctx.journal.insert(dot, group, null);
+      journal.insert(ring, group, null);
+      journal.insert(dot, group, null);
       // 1.1.0's literals, but on a figure drawn in the host's colours: its focus, accent and bg (resolved, never a var()).
       const paint = svg.hasAttribute('data-docreader-hosted-figure') ? ctx.state.hosted?.colour : undefined;
-      ctx.journal.setStyle(ring, 'fill', 'none', true);
-      ctx.journal.setStyle(ring, 'stroke', paint?.focus ?? '#0b6b66', true);
-      ctx.journal.setStyle(ring, 'stroke-width', '1.5px', true);
-      ctx.journal.setStyle(dot, 'fill', paint?.accent ?? '#0b6b66', true);
-      ctx.journal.setStyle(dot, 'stroke', paint?.bg ?? '#ffffff', true);
-      ctx.journal.setStyle(dot, 'stroke-width', '1.5px', true);
+      journal.setStyle(ring, 'fill', 'none', true);
+      journal.setStyle(ring, 'stroke', paint?.focus ?? '#0b6b66', true);
+      journal.setStyle(ring, 'stroke-width', '1.5px', true);
+      journal.setStyle(dot, 'fill', paint?.accent ?? '#0b6b66', true);
+      journal.setStyle(dot, 'stroke', paint?.bg ?? '#ffffff', true);
+      journal.setStyle(dot, 'stroke-width', '1.5px', true);
     }
     if (!ctx.live()) return;
     for (const svg of [...cueUnresolved]) if (!owned(svg)) forgetCue(svg);
@@ -668,6 +685,8 @@ export function build(ctx: FeatureContext): void {
         const old = playbacks.get(bound);
         if (old !== undefined) { cancelPlayback(old); playbacks.delete(bound); }
         forgetCue(bound);
+        scopes.get(bound)?.undoAll();
+        scopes.delete(bound);
         for (const button of Array.from(tools.children)) if (!/^Cop/.test(button.textContent ?? '')) button.remove();
         ctx.journal.setAttribute(tools, 'data-diagram-tools', null);
       }
@@ -677,10 +696,17 @@ export function build(ctx: FeatureContext): void {
       const graph = graphOf(drawing);
       cueOwners.set(drawing, { figure: entry.figure, source, sourceParent, parent: drawing.parentElement as Element });
       define(drawing);
+      // A redraw that replaced the drawing a reader had focused a definition node of: focus the node at the same place.
+      const want = drawing.getAttribute('data-docreader-focus');
+      if (want !== null) {
+        drawing.removeAttribute('data-docreader-focus');
+        drawing.querySelectorAll<SVGElement>('.dnode')[Number(want)]?.focus({ preventScroll: true });
+      }
+      const journal = scopeOf(drawing).journal;
       scheduleCues();
       if (graph.nodes.size > 0 && graph.edges.length > 0) {
         const play = chrome(ctx.root.ownerDocument, 'button', { text: 'Play', attrs: { type: 'button', 'aria-label': 'Play this diagram step by step' } });
-        ctx.journal.listen(play, 'click', () => {
+        journal.listen(play, 'click', () => {
           const prior = playbacks.get(drawing);
           if (prior !== undefined) settlePlayback(drawing, prior);
           const scoped = (): JournalControl => createJournal(ctx.live, (fn) => { ctx.operate(fn); });
@@ -756,18 +782,18 @@ export function build(ctx: FeatureContext): void {
           step();
         });
         const animate = chrome(ctx.root.ownerDocument, 'button', { text: 'Animate edges', attrs: { type: 'button', 'aria-pressed': 'false' } });
-        ctx.journal.listen(animate, 'click', () => {
+        journal.listen(animate, 'click', () => {
           const on = !drawing.classList.contains('flowing');
-          ctx.journal.toggleClass(drawing, 'flowing', on);
-          ctx.journal.toggleClass(animate, 'on', on);
-          ctx.journal.setAttribute(animate, 'aria-pressed', String(on));
+          journal.toggleClass(drawing, 'flowing', on);
+          journal.toggleClass(animate, 'on', on);
+          journal.setAttribute(animate, 'aria-pressed', String(on));
         });
         tools.append(play, animate);
       }
       const full = chrome(ctx.root.ownerDocument, 'button', { text: 'Full screen', attrs: { type: 'button' } });
-      ctx.journal.listen(full, 'click', () => { makeOverlay(); open(drawing, `Figure ${entry.no}. ${entry.caption}`, full); });
+      journal.listen(full, 'click', () => { makeOverlay(); open(drawing, `Figure ${entry.no}. ${entry.caption}`, full); });
       tools.append(full);
-      ctx.journal.listen(drawing, 'dblclick', () => { makeOverlay(); open(drawing, `Figure ${entry.no}. ${entry.caption}`, full); });
+      journal.listen(drawing, 'dblclick', () => { makeOverlay(); open(drawing, `Figure ${entry.no}. ${entry.caption}`, full); });
     }
   };
 

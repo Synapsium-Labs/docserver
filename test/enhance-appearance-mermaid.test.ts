@@ -9,12 +9,16 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type Appearance, type AppearanceColourSlot } from '../src/enhance/appearance.js';
 import { mermaidThemeOf } from '../src/enhance/appearance-mermaid.js';
 import { FONT_FALLBACK, THEME_VARIABLES } from '../src/enhance/diagrams.js';
 import { destroyEnhancement, enhance, setEnhancementAppearance, type EnhanceOptions } from '../src/enhance/index.js';
+import { show as showCard } from '../src/enhance/cards.js';
 import { CHROME_ATTR } from '../src/enhance/journal.js';
+import { contextOf } from '../src/enhance/lifecycle.js';
 import { render } from '../src/render/index.js';
 
 const FIXTURES = JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'conformance', 'appearance', 'fixtures.json'), 'utf8')) as {
@@ -28,6 +32,8 @@ const LIGHT: Appearance = { mode: 'light', colour: byName('Phosphor Daylight') }
 const THIRD: Appearance = { mode: 'dark', colour: FIXTURES.find((f) => f.colour.bg !== DARK.colour!.bg && f.colour.bg !== LIGHT.colour!.bg)!.colour };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+v8.setFlagsFromString('--expose-gc');
+const gc = vm.runInNewContext('gc') as () => void;
 const MARK = 'data-docreader-hosted-figure';
 const STATE = 'data-docreader-diagrams';
 const mounted: HTMLElement[] = [];
@@ -58,7 +64,7 @@ interface Rendered {
 }
 
 interface Fake {
-  readonly api: { initialize(c: Record<string, unknown>): void; render(id: string, text: string, el: Element): Promise<{ svg: string }>; parse?(text: string): Promise<{ diagramType: string }> };
+  readonly api: { initialize(c: Record<string, unknown>): void; render(id: string, text: string, el: Element): Promise<{ svg: string; bindFunctions?: (el: Element) => void }>; parse?(text: string): Promise<{ diagramType: string }> };
   readonly log: string[];
   readonly renders: Rendered[];
   hold: boolean;
@@ -66,12 +72,41 @@ interface Fake {
   release(): void;
 }
 
+/** As Mermaid's flowchart drawing binds a tooltip: the document's one `.mermaidTooltip`, shown over a node it marks `hover`. */
+function tooltipOver(el: Element): void {
+  let tip = document.querySelector<HTMLElement>('.mermaidTooltip');
+  if (tip === null) {
+    tip = document.createElement('div');
+    tip.className = 'mermaidTooltip';
+    tip.style.opacity = '0';
+    document.body.append(tip);
+  }
+  const shown = tip;
+  const node = document.createElementNS(SVG_NS, 'g');
+  node.setAttribute('class', 'node tipped');
+  node.addEventListener('mouseover', () => {
+    shown.style.opacity = '0.9';
+    node.classList.add('hover');
+  });
+  node.addEventListener('mouseout', () => {
+    shown.style.opacity = '0';
+    node.classList.remove('hover');
+  });
+  el.querySelector('svg')?.append(node);
+}
+
 const wordOf = (text: string): string => /\n\s*(\S+)/.exec(text)?.[1] ?? text;
 
 /** The kinds a fake `parse` knows by the diagram's first word; any other word is a parse error. */
 const KINDS: Record<string, string> = { flowchart: 'flowchart-v2', sequenceDiagram: 'sequence', journey: 'journey' };
 
-function fake(withParse = true): Fake {
+/** What a fake drawing holds besides its svg: a definition node (a term of the document's glossary), and Mermaid's tooltip. */
+interface Extras {
+  readonly node?: boolean;
+  readonly tooltip?: boolean;
+}
+
+function fake(withParse = true, extras: Extras = {}): Fake {
   const log: string[] = [];
   const renders: Rendered[] = [];
   const held: (() => void)[] = [];
@@ -94,7 +129,17 @@ function fake(withParse = true): Fake {
         svg.setAttribute('id', id);
         svg.setAttribute('viewBox', '0 0 300 120');
         svg.setAttribute('style', 'max-width: 300px;');
-        const done = (): { svg: string } => ({ svg: svg.outerHTML });
+        if (extras.node === true) {
+          const g = document.createElementNS(SVG_NS, 'g');
+          g.setAttribute('class', 'node');
+          g.setAttribute('id', `${id}-flowchart-A-0`);
+          g.innerHTML = '<rect width="80" height="30"></rect><text>Widget</text>';
+          svg.append(g);
+        }
+        const done = (): { svg: string; bindFunctions?: (el: Element) => void } => ({
+          svg: svg.outerHTML,
+          ...(extras.tooltip === true ? { bindFunctions: tooltipOver } : {}),
+        });
         void el;
         return f.hold ? new Promise((resolve) => void held.push(() => resolve(done()))) : Promise.resolve(done());
       },
@@ -122,10 +167,15 @@ const plain = (r: Rendered): unknown => ({ ...THEME_VARIABLES, fontFamily: r.con
 const hosted = (a: Appearance, r: Rendered): unknown => ({ ...mermaidThemeOf(a.colour!), fontFamily: r.config['fontFamily'] });
 
 /** Put each figure's source at a fixed top in the viewport (jsdom has no layout; its window is 768 px high). */
-function placeAt(root: Element, tops: readonly number[]): void {
+function placeAt(root: Element, tops: readonly number[], drawn = false): void {
   figuresOf(root).forEach((figure, i) => {
     const top = tops[i] ?? 0;
-    const source = Array.from(figure.children).find((c) => c.localName === 'pre' && !c.hasAttribute(CHROME_ATTR))!;
+    // A drawn figure's source is not displayed (no box): the drawing is what lies where the reader is.
+    if (drawn) {
+      const hidden = Array.from(figure.children).find((c) => c.localName === 'pre' && !c.hasAttribute(CHROME_ATTR))!;
+      Object.defineProperty(hidden, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }) });
+    }
+    const source = Array.from(figure.children).find((c) => c.localName === 'pre' && c.hasAttribute(CHROME_ATTR) === drawn)!;
     Object.defineProperty(source, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({ top, bottom: top + 100, left: 0, right: 600, width: 600, height: 100, x: 0, y: top, toJSON: () => ({}) }),
@@ -200,9 +250,10 @@ describe('test 5 (unit half): with colours each figure is classified before it i
 });
 
 describe('test 5 (unit half): an appearance change redraws the drawn figures', () => {
+  const TOPS = [2000, 0, 1000];
   const three = (): HTMLElement => {
     const root = mount(figs(['flowchart LR', 'flowchart LR', 'flowchart LR']));
-    placeAt(root, [2000, 0, 1000]);
+    placeAt(root, TOPS);
     return root;
   };
 
@@ -211,6 +262,7 @@ describe('test 5 (unit half): an appearance change redraws the drawn figures', (
     const f = fake();
     await enhance(root, using(f.api, DARK));
     await settled(root);
+    placeAt(root, TOPS, true);
     const before = figuresOf(root).map((fig) => svgOf(fig).id);
     f.hold = true;
     const drawnAt = f.renders.length;
@@ -244,6 +296,7 @@ describe('test 5 (unit half): an appearance change redraws the drawn figures', (
     const f = fake();
     await enhance(root, using(f.api, DARK));
     await settled(root);
+    placeAt(root, TOPS, true);
     const drawnAt = f.renders.length;
     f.hold = true;
     setEnhancementAppearance(root, LIGHT);
@@ -380,5 +433,125 @@ describe('test 5 (unit half): the definition cues\' colours', () => {
       await vi.waitFor(() => expect(bare.querySelectorAll('.dn-ring, .dn-dot')).toHaveLength(2));
       expect(paint(bare).slice(0, 3)).toEqual([norm('stroke', '#0b6b66'), norm('fill', '#0b6b66'), norm('stroke', '#ffffff')]);
     });
+  });
+});
+
+describe('test 5 (unit half): a redraw leaves the replaced drawing\'s reader and memory as it found them', () => {
+  const withTerm = (n = 1): string =>
+    ['# Hosted', '', '## 1. Words used here', '', '| Term | Meaning |', '|---|---|', '| Widget | A neutral thing |', '', ...Array.from({ length: n }, (_, i) => fence(`flowchart LR\n  n${String(i + 1)} --> X`, `*Figure ${String(i + 1)}. Fig.*`))].join('\n');
+  const drawnWithNode = async (n = 1, extras: Extras = { node: true }): Promise<{ root: HTMLElement; f: Fake }> => {
+    const root = mount(withTerm(n));
+    const f = fake(true, extras);
+    await enhance(root, { ...using(f.api, DARK), copy: () => undefined });
+    await settled(root);
+    await vi.waitFor(() => expect(root.querySelectorAll('.dnode')).toHaveLength(n));
+    return { root, f };
+  };
+  const redrawn = async (root: HTMLElement, before: string[], a: Appearance): Promise<void> => {
+    setEnhancementAppearance(root, a);
+    await vi.waitFor(() => expect(figuresOf(root).map((fig) => svgOf(fig).id).every((id, i) => id !== before[i])).toBe(true));
+    await tick(40);
+  };
+  const ids = (root: Element): string[] => figuresOf(root).map((fig) => svgOf(fig).id);
+
+  it('draws with the host\'s face when the root took it after the drawing booted (read at each call)', async () => {
+    const root = mount(figs(['flowchart LR']));
+    const f = fake();
+    await enhance(root, using(f.api, DARK));
+    await settled(root);
+    expect(f.renders[0]!.config['fontFamily']).toBe(FONT_FALLBACK);
+    root.style.setProperty('--sans', '"Host Face", sans-serif');
+    await redrawn(root, ids(root), LIGHT);
+    const again = f.renders.at(-1)!;
+    expect(again.config['fontFamily']).toBe('"Host Face", sans-serif');
+    expect((again.config['themeVariables'] as Record<string, string>)['fontFamily']).toBe('"Host Face", sans-serif');
+  });
+
+  it('closes Mermaid\'s tooltip shown over a node of the replaced drawing', async () => {
+    const { root, f } = await drawnWithNode(1, { node: true, tooltip: true });
+    void f;
+    const tip = document.querySelector<HTMLElement>('.mermaidTooltip')!;
+    root.querySelector('g.tipped')!.dispatchEvent(new Event('mouseover'));
+    expect(tip.style.opacity).toBe('0.9');
+    await redrawn(root, ids(root), LIGHT);
+    expect(tip.style.opacity).toBe('0');
+    expect(document.querySelectorAll('.mermaidTooltip')).toHaveLength(1);
+  });
+
+  it('closes a definition card opened from a node of the replaced drawing', async () => {
+    const { root } = await drawnWithNode();
+    const ctx = contextOf(root)!;
+    expect(showCard(ctx, root.querySelector('.dnode')!)).toBe(true);
+    expect(root.querySelector('.xcard.open')).not.toBeNull();
+    await redrawn(root, ids(root), LIGHT);
+    expect(root.querySelector('.xcard.open')).toBeNull();
+  });
+
+  it('keeps a card opened from somewhere else (it is not the replaced drawing\'s)', async () => {
+    const { root } = await drawnWithNode(2);
+    const ctx = contextOf(root)!;
+    const second = root.querySelectorAll('figure.mermaid-figure')[1]!.querySelector('.dnode')!;
+    expect(showCard(ctx, second)).toBe(true);
+    setEnhancementAppearance(root, LIGHT);
+    await vi.waitFor(() => expect(svgOf(figuresOf(root)[0]!).id).not.toBe(''));
+    await tick(10);
+    // the first figure is redrawn before the second (document order here): the card of the second is not the first's to close
+    expect(root.querySelectorAll('.xcard.open').length).toBeLessThanOrEqual(1);
+  });
+
+  it('moves focus from a definition node of the replaced drawing to the node at the same place in the new one', async () => {
+    const { root } = await drawnWithNode();
+    const node = root.querySelector<SVGElement>('.dnode')!;
+    node.focus();
+    expect(document.activeElement).toBe(node);
+    await redrawn(root, ids(root), LIGHT);
+    const now = root.querySelector<SVGElement>('.dnode')!;
+    expect(now).not.toBe(node);
+    await vi.waitFor(() => expect(document.activeElement).toBe(now));
+    expect(svgOf(figuresOf(root)[0]!).hasAttribute('data-docreader-focus')).toBe(false);
+  });
+
+  it('leaves focus alone when it was not on a definition node of the replaced drawing', async () => {
+    const { root } = await drawnWithNode();
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    await redrawn(root, ids(root), LIGHT);
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it('keeps nothing of a replaced drawing alive: every drawing it replaced is collected after many changes', async () => {
+    const { root } = await drawnWithNode(2);
+    Object.defineProperty(SVGGElement.prototype, 'getBBox', { configurable: true, value: () => ({ x: 0, y: 0, width: 80, height: 30 }) });
+    try {
+      const old: WeakRef<Element>[] = [];
+      const remember = (): void => {
+        for (const fig of figuresOf(root)) old.push(new WeakRef(svgOf(fig)));
+      };
+      for (let i = 0; i < 6; i += 1) {
+        remember();
+        await redrawn(root, ids(root), i % 2 === 0 ? LIGHT : DARK);
+      }
+      await tick(100);
+      for (let i = 0; i < 4; i += 1) {
+        gc();
+        await tick(10);
+      }
+      expect(old.filter((r) => r.deref() !== undefined)).toHaveLength(0);
+      // ...and the live ones still work: cues painted on each, the tools built once
+      expect(root.querySelectorAll('.dn-ring')).toHaveLength(2);
+      expect(root.querySelectorAll('figure .tools')).toHaveLength(2);
+    } finally {
+      delete (SVGGElement.prototype as unknown as Record<string, unknown>)['getBBox'];
+    }
+  });
+
+  it('puts back what it wrote when the reader goes: a drawing\'s marks, cues and the tools\' state leave with the instance', async () => {
+    const { root } = await drawnWithNode();
+    await redrawn(root, ids(root), LIGHT);
+    expect(svgOf(figuresOf(root)[0]!).hasAttribute(MARK)).toBe(true);
+    await destroyEnhancement(root);
+    expect(root.querySelectorAll('[data-docreader-chrome], .dnode, .dn-ring, .dn-dot')).toHaveLength(0);
+    expect(root.querySelectorAll('[tabindex], [aria-label], [role]').length).toBe(0);
   });
 });

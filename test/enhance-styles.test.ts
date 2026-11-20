@@ -194,6 +194,10 @@ function startsWithScope(selector: string): boolean {
  */
 const SCOPE_EXCEPTION = 'html[data-docreader-hosted] > body > .mermaidTooltip';
 
+/** The exception's declarations, exactly: the tooltip's three colours from the three properties the frame writes on its html. */
+const EXCEPTION_DECLARATIONS = ['background: var(--dr-tip-bg) !important', 'color: var(--dr-tip-fg) !important', 'border-color: var(--dr-tip-edge) !important'];
+const declarationsOf = (body: string): string[] => body.split(';').map((d) => d.trim().replace(/\s+/g, ' ')).filter((d) => d !== '');
+
 /** Every reason a sheet escapes its scope or its asset rules, as readable lines; empty when it does not. */
 function scopeProblems(css: string, fontsDir: string): string[] {
   const problems: string[] = [];
@@ -216,6 +220,9 @@ function scopeProblems(css: string, fontsDir: string): string[] {
     // A style rule. Keyframe steps (from, to, 50%) live inside an @keyframes block, which is not walked.
     if (node.selectors.length === 0) problems.push('a style rule with no selector');
     for (const s of node.selectors) {
+      if (s === SCOPE_EXCEPTION && (node.selectors.length !== 1 || declarationsOf(node.body).join('|') !== EXCEPTION_DECLARATIONS.join('|'))) {
+        problems.push(`the exception rule holds more or less than the tooltip's three colours: ${node.selectors.join(', ')} { ${node.body.trim()} }`);
+      }
       if (!startsWithScope(s) && s !== SCOPE_EXCEPTION) problems.push(`unscoped selector: ${s}${node.within.length > 0 ? `  (inside ${node.within.join(' > ')})` : ''}`);
       if (/#[A-Za-z_-]/.test(s.replace(/\[[^\]]*\]/g, '').replace(/"[^"]*"/g, ''))) problems.push(`id selector: ${s}`);
     }
@@ -288,9 +295,15 @@ describe('reader stylesheet: scope', () => {
 
   it('allows exactly one selector outside the root: the Mermaid tooltip while the frame is hosted, and nothing near it', () => {
     const base = `${SCOPE} p { x: y }\n`;
-    expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { x: y }`, fontsDir)).toEqual([]);
+    const exception = `${SCOPE_EXCEPTION} { ${EXCEPTION_DECLARATIONS.join('; ')}; }`;
+    expect(scopeProblems(`${base}${exception}`, fontsDir)).toEqual([]);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { x: y }`, fontsDir)).toHaveLength(1);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { ${EXCEPTION_DECLARATIONS.join('; ')}; display: none }`, fontsDir)).toHaveLength(1);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { background: var(--dr-tip-bg) !important; color: var(--dr-tip-bg) !important; border-color: var(--dr-tip-edge) !important }`, fontsDir)).toHaveLength(1);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION}, ${SCOPE} i { ${EXCEPTION_DECLARATIONS.join('; ')} }`, fontsDir)).toHaveLength(1);
     expect(scopeProblems(`${base}html > body > .mermaidTooltip { x: y }`, fontsDir)).toHaveLength(1);
-    expect(scopeProblems(`${base}html[data-docreader-hosted] > body > .mermaidTooltip, body { x: y }`, fontsDir)).toEqual(['unscoped selector: body']);
+    expect(scopeProblems(`${base}${SCOPE_EXCEPTION} { x: y }`, fontsDir)).toHaveLength(1);
+    expect(scopeProblems(`${base}html[data-docreader-hosted] > body > .mermaidTooltip, body { x: y }`, fontsDir)).toHaveLength(2);
     expect(scopeProblems(`${base}html[data-docreader-hosted] > body > div { x: y }`, fontsDir)).toHaveLength(1);
   });
 
@@ -343,7 +356,9 @@ describe('reader stylesheet: what the host page may not change', () => {
   });
 
   it('reads no custom property it does not declare, so none inherits in from the host page', () => {
-    const read = new Set([...stripComments(css).matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1] ?? ''));
+    // The one rule outside the root reads the three properties the frame writes on its html element, which no rule here
+    // declares: the scope check above holds its declarations to exactly those.
+    const read = new Set(rules.filter((r) => !r.selectors.includes(SCOPE_EXCEPTION)).flatMap((r) => [...r.body.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1] ?? '')));
     const declared = new Set(rules.flatMap((r) => [...r.body.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1] ?? '')));
     expect([...read].filter((v) => !declared.has(v)).sort()).toEqual([]);
   });

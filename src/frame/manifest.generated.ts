@@ -6,7 +6,7 @@
 export const FRAME_MANIFEST = {
   guard: { path: "frame/guard.js", sha256: "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d", bytes: 3643, chars: 3643, csp: "'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0='", layout: null },
   bootstrap: { path: "frame/bootstrap.js", sha256: "bfb497ab4efc3a91499bcc2d8977e5fa05fad4b4586c01539aca57c41a4b8f87", bytes: 31161, chars: 31161, csp: "'sha256-v7SXq078OpFJm8wtiXfl+gX61LRYbAFTmspXxBpLj4c='", layout: null },
-  enhance: { path: "frame/enhance.js", sha256: "8fffb11e8c75e99cde82b85427c718dfe6b9912cd3264c03f1781374e8617bd3", bytes: 211267, chars: 211248, csp: "'sha256-j/+xHox16ZzegrhUJ8cY3+a5kSzTJkwD8XgTdOhhe9M='", layout: "default" },
-  css: { path: "frame/reader.css", sha256: "be689c9f209d78ee8df35b212d43cd856f4e4a9a11aeffe880f3b4a6c83d9c88", bytes: 563730, chars: 561462, csp: null, layout: null },
+  enhance: { path: "frame/enhance.js", sha256: "b7de9b6cf5c0f9350e5fabc9dd7d016b502058a8d7785a6c2e440a6988921965", bytes: 212104, chars: 212085, csp: "'sha256-t96bbPXA+TUOX6vJ3X0Ba1AgWKjXeFpsLkQKaYiSGWU='", layout: "default" },
+  css: { path: "frame/reader.css", sha256: "02721c564ff916cbaa74f0bd40737b9591976465d962f65cedd33e9f19aab597", bytes: 564090, chars: 561822, csp: null, layout: null },
   mermaid: { path: "mermaid/mermaid.frame.js", sha256: "7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3", bytes: 3747084, chars: 3746940, csp: "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='", layout: null },
 } as const;
