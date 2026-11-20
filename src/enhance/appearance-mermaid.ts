@@ -92,9 +92,10 @@ export function isAuthorStyled(text: string): boolean {
   }
   const body = lines.slice(from).join('\n');
   return (
-    // A statement starts the text or follows a line break or a `;`, after any white space, and its head ends at white
+    // A statement starts the text or follows a line break or a `;`, after any white space but a line break (so the scan
+    // stays linear on a run of blank lines), and its head ends at white
     // space, a `;` or the text's end (a test, not a split: only csp-rules.ts splits on a semicolon, test/frame-csp.test.ts).
-    /(?:^|[\n;])\s*(?:classDef|style|linkStyle|rect|box|todayMarker)(?:\s|;|$)/i.test(body) ||
+    /(?:^|[\n;])[^\S\n]*(?:classDef|style|linkStyle|rect|box|todayMarker)(?:\s|;|$)/i.test(body) ||
     /(?:^|[^<])<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(body)
   );
 }

@@ -1037,6 +1037,11 @@ describe('the appearance contract: FrameOptions.appearance and FrameAssets.fonts
       'fewer than four bytes': Buffer.from('wOF').toString('base64'),
       'one byte over the cap': face(131073),
       'far over the cap': face(262144),
+      // atob refuses each of these, so the frame could not decode them (review of Task 3, finding 2).
+      'a length of one more than whole quanta': 'd09GMgAAA',
+      'one padding after two characters': 'd09GMg=',
+      'two paddings after three characters': 'd09GMgAAA==',
+      'the signature cut short': 'd09GM',
     };
     for (const [why, b64] of Object.entries(bad)) {
       for (const role of ['sans', 'mono'] as const) {

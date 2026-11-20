@@ -368,8 +368,11 @@ function pairsOf(b: Budget, v: unknown, what: string): [string, unknown][] {
 const sextet = (c: string): number => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(c);
 
 /** True for a face the frame may load: the base64 alphabet, at most the cap in characters and in decoded bytes, and the woff2 signature `wOF2`. */
+/** Base64 as `atob` reads it: whole quanta, then an optional final quantum of two or three characters with its padding. */
+const STRICT_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?$/;
+
 function goodFace(b64: string): boolean {
-  if (b64.length > SEED_LIMITS.fontFaceMaxChars || !BASE64_FACE.test(b64)) return false;
+  if (b64.length > SEED_LIMITS.fontFaceMaxChars || b64.length < 6 || !BASE64_FACE.test(b64) || !STRICT_BASE64.test(b64)) return false;
   const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
   if (Math.floor(((b64.length - pad) * 3) / 4) > SEED_LIMITS.fontFaceMaxBytes) return false;
   const [a, b, c, d, e, f] = Array.from({ length: 6 }, (_, i) => sextet(b64.charAt(i)));
@@ -462,6 +465,7 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const mermaidOptions = mermaidOf(b, o.mermaid);
   // The two optional fields of the appearance contract: the host's verdict, and the faces that pass.
   const assetsRaw: unknown = o.assets;
+  // The faces are seeded whenever a host gives them; the frame loads them, and its stylesheet uses them only while hosted.
   const fonts = typeof assetsRaw === 'object' && assetsRaw !== null ? fontsOf((assetsRaw as FrameAssets).fonts) : undefined;
   const appearance = o.appearance === undefined ? undefined : (parseAppearance(o.appearance).appearance as SeedAppearance);
   const fields: Seed = {

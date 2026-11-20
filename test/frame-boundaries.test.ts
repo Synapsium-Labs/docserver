@@ -194,6 +194,14 @@ describe('the first parent: the record is judged against it, never guessed', () 
     expect(r.status, `git cannot resolve ${BASE}: fetch the base (CI fetches full history), or set DOCSERVER_BOUNDARY_BASE`).toBe(0);
   });
 
+  it(`the base \`${BASE}\` is a proper ancestor of HEAD (a base equal to HEAD, or off its history, would judge the record against itself or a stranger)`, () => {
+    const base = git(['rev-parse', '--verify', '--quiet', `${BASE}^{commit}`]).stdout.trim();
+    const head = git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).stdout.trim();
+    expect(base).not.toBe('');
+    expect(base, 'the base is HEAD itself').not.toBe(head);
+    expect(git(['merge-base', '--is-ancestor', base, head]).status, `${BASE} is not an ancestor of HEAD`).toBe(0);
+  });
+
   const parentHas = (): boolean => git(['cat-file', '-e', `${BASE}:${RECORD}`]).status === 0;
   const show = (file: string): string => {
     const r = git(['show', `${BASE}:${file}`]);
@@ -219,10 +227,14 @@ describe('the first parent: the record is judged against it, never guessed', () 
     expect(record[0]?.frameAccepts).toEqual(['prefs', 'changes.result', 'mermaid', 'command']);
   });
 
-  it('with a record at the first parent: every entry there is unchanged here, in place (its JSON text), and nothing is dropped', () => {
+  it('with a record at the first parent: its bytes are unchanged here, in place, and nothing is dropped (an append only adds after them)', () => {
     if (!parentHas()) return;
-    const parent = JSON.parse(show(RECORD)) as Entry[];
+    const parentText = show(RECORD);
+    const parent = JSON.parse(parentText) as Entry[];
     expect(record.length).toBeGreaterThanOrEqual(parent.length);
+    // Byte-equal: the parent's file less its closing bracket (and the line break before it) is a prefix of this one.
+    const head = parentText.replace(/\s*\]\s*$/, '');
+    expect(readFileSync(new URL(`../${RECORD}`, import.meta.url), 'utf8').startsWith(head), 'the parent\'s entries, byte for byte').toBe(true);
     parent.forEach((e, i) => expect(JSON.stringify(record[i]), `entry ${String(i + 1)}`).toBe(JSON.stringify(e)));
   });
 });

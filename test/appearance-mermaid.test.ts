@@ -292,4 +292,14 @@ describe('isAuthorStyled', () => {
     ['gitGraph', 'gitGraph\n  commit\n  branch dev\n  commit\n  checkout main\n  merge dev'],
   ];
   it.each(plain)('is false: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(false));
+
+  // Linear on a run of blank lines (review of Task 3, finding 1): a body of Mermaid's 50 000-character cap of line breaks,
+  // and twice that, each judged well inside the time a quadratic scan took (1.3 s and 4.9 s, measured).
+  it('stays linear on a run of line breaks', () => {
+    for (const n of [50_000, 100_000]) {
+      const t0 = performance.now();
+      expect(isAuthorStyled(`flowchart LR${'\n'.repeat(n)}A`)).toBe(false);
+      expect(performance.now() - t0, String(n)).toBeLessThan(200);
+    }
+  });
 });
