@@ -147,11 +147,15 @@ describe('package.json: identity', () => {
     expect(pkg.license).toBe('MIT');
   });
 
-  it('declares its modules free of side effects, but not its stylesheets', () => {
+  it('declares its modules free of side effects, but not its stylesheets or the module that freezes the appearance contract', () => {
     // A bundler drops a bare import of a file the package calls side-effect free, so with `false` webpack would
     // drop `import '@synapsium-labs/docserver/assets/reader.css'` and ship no stylesheet. No module of the
     // package has a side effect on import (test/enhance-walls.test.ts and the render purity tests hold that).
-    expect(pkg.sideEffects).toEqual(['*.css']);
+    // The one module with a side effect: ./frame's appearance re-export freezes the contract's lists in place (their
+    // home, src/enhance/appearance.ts, may make no call at its top level), so a bundler must keep its body.
+    expect(pkg.sideEffects).toEqual(['*.css', './dist/frame/appearance.js']);
+    // That module's source is the one that freezes (a moved freeze would leave the entry naming nothing that needs it).
+    expect(readText('src/frame/appearance.ts')).toMatch(/^Object\.freeze\(/m);
   });
 
   it('engines.node is >=22', () => {
