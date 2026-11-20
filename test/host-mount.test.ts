@@ -20,7 +20,7 @@ import vm from 'node:vm';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildFrame } from '../scripts/build-frame.mjs';
 import { frameCsp } from '../src/frame/csp.js';
-import type { FrameAssets, RenderInput } from '../src/frame/document.js';
+import { frameDocument, type FrameAssets, type RenderInput } from '../src/frame/document.js';
 import { MERMAID_GATE_DEFAULTS } from '../src/frame/gate.js';
 import { SEED_HTML_MAX_CHARS } from '../src/frame/seed.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES } from '../src/frame-runtime/inbound.js';
@@ -2645,14 +2645,51 @@ describe('docserver parity T4: the items adapter resolves the document\'s item v
     }
   });
 
-  it('an answer the frame refuses makes the mount a fallback, invalid-input, with no iframe', () => {
-    const before = iframes();
-    for (const bad of [[{ value: 'AB-12', href: 'http://tracker.example/AB-12' }], [{ value: 'AB-12', href: 'javascript:alert(1)' }], 'AB-12', [{ value: 'AB-12' }], Array.from({ length: 51 }, (_, i) => link(`K-${String(i)}`))]) {
+  it('an answer the frame would refuse is no links: one warning, no items seeded, and the document still mounts (S2)', () => {
+    const getter = { value: 'AB-12' };
+    let called = false;
+    Object.defineProperty(getter, 'href', { enumerable: true, get: () => ((called = true), 'https://tracker.example/AB-12') });
+    const refusedAnswers: [string, unknown][] = [
+      ['http:', [{ value: 'AB-12', href: 'http://tracker.example/AB-12' }]],
+      ['javascript:', [{ value: 'AB-12', href: 'javascript:alert(1)' }]],
+      ['not a list', 'AB-12'],
+      ['a missing href', [{ value: 'AB-12' }]],
+      ['an extra key', [{ ...link('AB-12'), extra: 1 }]],
+      ['a long value', [{ value: 'V'.repeat(101), href: 'https://tracker.example/x' }]],
+      ['51 links', Array.from({ length: 51 }, (_, i) => link(`K-${String(i)}`))],
+      ['a getter', [getter]],
+      ['a class', [new (class { value = 'AB-12'; href = 'https://tracker.example/AB-12'; })()]],
+      ['a hole', [, link('AB-12')]],
+    ];
+    for (const [name, bad] of refusedAnswers) {
+      warn.mockClear();
       const seen: Seen = { events: [] };
+      const before = iframes();
       mountDocFrame(container, { document: withItems(), adapters: adaptersFor(seen, { items: () => bad }) });
-      expect(seen.events.filter(([n]) => n === 'fallback').map(([, v]) => v), JSON.stringify(bad).slice(0, 40)).toEqual(['invalid-input']);
+      expect(seen.events.filter(([n]) => n === 'fallback'), name).toEqual([]);
+      expect(iframes(), name).toBe(before + 1);
+      const frames = container.querySelectorAll('iframe');
+      expect(Object.hasOwn(seedOf((frames[frames.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? ''), 'items'), name).toBe(false);
+      const ours = warn.mock.calls.filter((c: unknown[]) => String(c[0]).includes('the items adapter answered links the frame refuses'));
+      expect(ours, name).toHaveLength(1);
+      expect(String(ours[0]?.[1]), name).toMatch(/^items/);
+      expect(JSON.stringify(ours[0]), name).not.toContain('tracker.example');
     }
-    expect(iframes()).toBe(before);
+    expect(called).toBe(false); // a getter of the answer is never called
+  });
+
+  it('frameDocument itself still refuses the same items as invalid-input (a direct caller\'s programming error)', () => {
+    const doc = withItems();
+    const options = { csp: frameCsp(), nonce: 'a'.repeat(32), assets };
+    for (const bad of [[{ value: 'AB-12', href: 'http://tracker.example/AB-12' }], 'AB-12', Array.from({ length: 51 }, (_, i) => link(`K-${String(i)}`))]) {
+      expect(() => frameDocument(doc, { ...options, items: bad as never })).toThrow(expect.objectContaining({ code: 'invalid-input' }));
+    }
+  });
+
+  it('a good answer is warned about nowhere, and an empty one is none', () => {
+    const m = mountItems((v: readonly string[]) => v.map(link));
+    expect(warn.mock.calls.filter((c: unknown[]) => String(c[0]).includes('items adapter'))).toEqual([]);
+    expect(m.fallbacks()).toEqual([]);
   });
 
   it('is asked again at each update, with the new document\'s items, and seeds that mount', () => {

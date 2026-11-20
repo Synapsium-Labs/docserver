@@ -106,6 +106,53 @@ describe('meta.items: the delta route', () => {
   });
 });
 
+describe('meta.items: the header-line route (a paragraph that stands alone as an item field\'s label and its keys)', () => {
+  const header = (line: string, rest = ''): string => `# T\n\n${line}\n\n## S\n\nBody.\n${rest}`;
+
+  it('lists the keys of `**Field:** AB-90`, with the colon inside the bold text or right after it, and of several keys', () => {
+    expect(items(header('**Tracker:** AB-90'))).toEqual(['AB-90']);
+    expect(items(header('**Tracker**: AB-90'))).toEqual(['AB-90']);
+    expect(items(header('**ticket:** AB-90, CD-7; `EF-3`  AB-90'))).toEqual(['AB-90', 'CD-7', 'EF-3']);
+  });
+
+  it('is read before or after the meta line, and wherever it stands before the first level-2 heading', () => {
+    expect(items('**Tracker:** AB-90\n\n# T\n\n## S\n')).toEqual(['AB-90']);
+    expect(items('# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n**Tracker:** AB-90\n\n## S\n')).toEqual(['AB-90']);
+    expect(items('# T\n\n**Tracker:** AB-90\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n## S\n')).toEqual(['AB-90']);
+  });
+
+  it('is used only when the byline has no item fact: the byline keeps its precedence, and a delta key still lists', () => {
+    expect(items('# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: AB-1\n\n**Tracker:** AB-90\n\n## S\n')).toEqual(['AB-1']);
+    // An item fact with no key still is the item fact.
+    expect(items('# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: none yet\n\n**Tracker:** AB-90\n\n## S\n')).toEqual([]);
+    expect(items(`# T\n\n**Tracker:** AB-90\n${delta('Delta', '')}item: CD-2\n\`\`\`\n`)).toEqual(['AB-90', 'CD-2']);
+  });
+
+  it('is no header line when the paragraph has other text, is not a root child, is past the first level-2 heading or has no key', () => {
+    expect(items(header('**Tracker:** AB-90 is the one'))).toEqual([]);
+    expect(items(header('**Tracker:** see AB-90'))).toEqual([]);
+    // With a middle dot it is the meta line, and its first fact is the byline's item fact (CD-7 is another fact): the byline route's.
+    expect(items(header('**Tracker:** AB-90 \u00b7 CD-7'))).toEqual(['AB-90']);
+    expect(items(header('**Tracker:** AB-90, \u00b7 note'))).toEqual(['AB-90']);
+    expect(items(header('**Tracker:** none'))).toEqual([]);
+    expect(items(header('**Tracker:**'))).toEqual([]);
+    expect(items(header('Tracker: AB-90'))).toEqual([]);
+    expect(items(header('**Tracker** AB-90'))).toEqual([]);
+    expect(items(header('**Owner:** AB-90'))).toEqual([]);
+    expect(items(header('Text **Tracker:** AB-90'))).toEqual([]);
+    expect(items(header('> **Tracker:** AB-90'))).toEqual([]);
+    expect(items(header('- **Tracker:** AB-90'))).toEqual([]);
+    expect(items('# T\n\n## S\n\n**Tracker:** AB-90\n')).toEqual([]);
+    expect(items('**Tracker:** AB-90\n\n## S\n')).toEqual([]);
+  });
+
+  it('is off without the item fields (P4: the vocabulary gates it), and never scans the body', () => {
+    expect(items(header('**Tracker:** AB-90'), {})).toEqual([]);
+    expect(items(header('**Tracker:** AB-90'), { itemHeadings: ['Delta'] })).toEqual([]);
+    expect(items(header('**Tracker:** AB-90', '\n**Tracker:** CD-7\n'))).toEqual(['AB-90']);
+  });
+});
+
 describe('meta.items: both routes, order and bounds', () => {
   it('lists the byline keys and the delta key in document order, each once', () => {
     const md = `${byline('Tracker: AB-1 and CD-2')}${delta('Delta', '')}item: CD-2\n\`\`\`\n\n## More\n\n\`\`\`\nitem: EF-3\n\`\`\`\n`;
@@ -269,6 +316,20 @@ const FIXTURES: Record<string, string> = {
   'both routes, the same key': `${byline('Tracker: AB-1')}${delta('Delta', '')}item: AB-1\n\`\`\`\n`,
   'the body names keys': `${byline('Tracker: AB-1')}\nThe body names ZZ-9 and \`ZZ-8\`.\n\n## ZZ-5 heading\n\n- Tracker: ZZ-4\n`,
   'sixteen keys': byline(`Tracker: ${Array.from({ length: 16 }, (_, i) => `AB-${String(i + 1)}`).join(' ')}`),
+  'header line': '# T\n\n**Tracker:** AB-90\n\n## S\n\nBody.\n',
+  'header line, colon outside': '# T\n\n**Tracker**: AB-90\n\n## S\n',
+  'header line with several keys and code': '# T\n\n**Ticket:** AB-90, `CD-7`; EF-3\n\n## S\n',
+  'header line before the title': '**Tracker:** AB-90\n\n# T\n\n## S\n',
+  'header line after the meta line': '# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n**Tracker:** AB-90\n\n## S\n',
+  'header line before the meta line': '# T\n\n**Tracker:** AB-90\n\n**Spec** \u00b7 2026-10-12 \u00b7 Status: Draft\n\n## S\n',
+  'header line with a byline fact': '# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: AB-1\n\n**Tracker:** AB-90\n\n## S\n',
+  'header line with an empty byline fact': '# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: none yet\n\n**Tracker:** AB-90\n\n## S\n',
+  'header line with a delta': `# T\n\n**Tracker:** AB-90\n${delta('Delta', '')}item: CD-2\n\`\`\`\n`,
+  'header line with other text': '# T\n\n**Tracker:** AB-90 is the one\n\n## S\n',
+  'header line, not an item field': '# T\n\n**Owner:** AB-90\n\n## S\n',
+  'header line in a quote and a list': '# T\n\n> **Tracker:** AB-90\n\n- **Tracker:** CD-7\n\n## S\n',
+  'header line past the first section': '# T\n\n## S\n\n**Tracker:** AB-90\n',
+  'header line without a title': '**Tracker:** AB-90\n\n## S\n',
   'a long key': byline(`Tracker: AB-${'1'.repeat(150)} CD-2`),
 };
 

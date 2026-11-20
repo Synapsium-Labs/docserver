@@ -2,17 +2,22 @@
 // would ask its host `itemLink` for, read from the html render() made, so a host can resolve them before it mounts the frame.
 // Pure: it reads the html as text, with a small tree of its own, never a DOM.
 //
-// The reader (src/enhance/editorial.ts) asks `itemLink` for a key by two routes, and this file reads exactly those, over
+// The reader (src/enhance/editorial.ts) asks `itemLink` for a key by three routes, and this file reads exactly those, over
 // the same words (the vocabulary's `itemFields` and `itemHeadings`) and the same grammars:
 //   - the byline route: the meta paragraph under the document's first level-1 heading (its first child a `strong`, a " · "
 //     in its text, not ending on a colon) is split at its " · " separators into facts; the first fact labelled with an item
 //     field ("Tracker: AB-12") gives every key in its text (outside a link) and every `code` element whose text is a key;
 //   - the delta route: the first level-2 section, a child of the root, whose heading is an item heading and whose first code
 //     block opens (its first line that is not blank) with `item: <key>`; a section whose first code block names none passes
-//     to the next one.
-// The reader asks for the delta key first, and for the byline's keys only when the host gave no link for it; a host cannot be
-// told which, so both routes are listed, in document order (the byline's keys, then the delta's key, as the document has
-// them). The reader asks for at most 16 distinct keys and writes at most 64 links; the list holds up to 50 (a host that
+//     to the next one;
+//   - the header-line route, for a document whose header predates the meta line, used only when the byline has no item fact
+//     (and the host gave no link for a delta key): a paragraph that is a child of the root before its first level-2 heading
+//     and stands alone as `**Tracker:** AB-90`, the bold text an item field, then a colon, then keys with only white space,
+//     commas and semicolons between them. Its keys are listed; a paragraph with any other text is none, and no other text of
+//     the document is ever read.
+// The reader asks for the delta key first, then for the byline's keys unless the host gave a link for the delta key, then
+// for the header line's when neither gave one; a host cannot be told which, so the routes are listed together, in document
+// order (the keys as the document has them). The reader asks for at most 16 distinct keys and writes at most 64 links; the list holds up to 50 (a host that
 // resolves more than the reader draws loses nothing). A document that names none, or a render with no `reader`, answers [].
 //
 // Regexes here are copies of src/enhance/vocab.ts's (the grammar is the format's, the words are the host's, matched as
@@ -288,8 +293,11 @@ function keysIn(nodes: readonly Node[], out: Spot[]): void {
   for (const n of nodes) walk(n);
 }
 
-/** The byline's item fact, and the keys in it (editorial.ts's buildByline, to the point where it names its item nodes). */
-function bylineKeys(p: ElNode, field: RegExp, out: Spot[]): void {
+/**
+ * The byline's item fact, and the keys in it (editorial.ts's buildByline, to the point where it names its item nodes);
+ * true when the byline has an item fact, whether or not it holds a key.
+ */
+function bylineKeys(p: ElNode, field: RegExp, out: Spot[]): boolean {
   const segs = segments(p);
   const first = (segs[0] ?? []).filter((n) => !isBlank(n));
   const lone = first[0];
@@ -316,8 +324,30 @@ function bylineKeys(p: ElNode, field: RegExp, out: Spot[]): void {
     if (dt !== '') labels.add(dt);
     if (field.test(dt)) {
       keysIn(moved, out);
-      return; // the first fact labelled with an item field is the item fact
+      return true; // the first fact labelled with an item field is the item fact
     }
+  }
+  return false;
+}
+
+// ── the header-line route
+
+/** The header line's keys (editorial.ts's legacyHeader): see the header. */
+function headerKeys(rootKids: readonly ElNode[], field: RegExp, out: Spot[]): void {
+  for (const p of rootKids) {
+    if (p.name === 'h2') return;
+    const label = p.kids[0];
+    if (p.name !== 'p' || !isStrong(label)) continue;
+    const nodes = p.kids.slice(1);
+    let name = txt(label);
+    let rest = nodes.map(textOf).join('');
+    if (name.endsWith(':')) name = name.slice(0, -1).trim();
+    else if (/^\s*:/.test(rest)) rest = rest.replace(/^\s*:/, '');
+    else continue;
+    if (!field.test(name)) continue;
+    if (rest.match(itemKeyScan()) === null || rest.replace(itemKeyScan(), '').replace(/[\s,;]/g, '') !== '') continue;
+    keysIn(nodes, out);
+    return;
   }
 }
 
@@ -357,7 +387,8 @@ export function collectItems(html: string, fields: readonly string[], headings: 
     const spots: Spot[] = [];
     const siblings = h1.container.kids.filter(isEl);
     const meta = metaParagraph(siblings, siblings.indexOf(h1.el));
-    if (meta !== null) bylineKeys(meta, patterns.field, spots);
+    const itemFact = meta !== null && bylineKeys(meta, patterns.field, spots);
+    if (!itemFact) headerKeys(root.kids.filter(isEl), patterns.field, spots);
     const delta = deltaKey(root.kids.filter(isEl), patterns.heading);
     if (delta !== null) spots.push(delta);
     spots.sort((a, b) => a.at - b.at || a.off - b.off);

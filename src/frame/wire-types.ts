@@ -101,7 +101,11 @@ export interface VocabularyOptions {
   readonly plan?: { readonly task?: readonly string[]; readonly step?: readonly string[]; readonly who?: readonly string[] };
   /** Words that name the reader, in an owner line, an owner cell or a step's owner. Default: you. */
   readonly addressees?: readonly string[];
-  /** Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`. Default: none. */
+  /**
+   * Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`; also the bold label of a
+   * header line that stands alone before the first level-2 heading, when the byline has no such fact ("**Tracker:** AB-90").
+   * Default: none.
+   */
   readonly itemFields?: readonly string[];
   /**
    * Level-2 headings, after an optional section number, whose section's first code block names an item key on an

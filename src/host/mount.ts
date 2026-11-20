@@ -60,7 +60,7 @@ import { frameCsp } from '../frame/csp.js';
 import { parseAppearance, type Appearance } from '../enhance/appearance.js';
 import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
 import { isFragmentId } from '../frame/fragment.js';
-import { ITEM_LIMITS, type ItemLink } from '../frame/items.js';
+import { ITEM_LIMITS, itemsWhy, type ItemLink } from '../frame/items.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
 import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent, type PlaceKind } from '../frame/protocol.js';
@@ -143,8 +143,9 @@ export interface HostAdapters {
    * synchronously, with the document's item values (at most 50, each 1 to 100 code units; not called when there are none), and
    * answers the links: at most 50 `{ value, href }`, `href` an absolute `https:` URL. The frame draws a link for a value the
    * reader asks for that is listed, exactly, and leaves any other as text; a click comes to `onLink` as every link does. A
-   * throw is logged and means no links; an answer that is not a list of such links makes the mount a fallback
-   * (`invalid-input`), as any value the frame refuses does. The library carries no tracker: the host knows its own.
+   * throw is logged and means no links, and so is an answer that is not a list of such links (logged once, naming the
+   * entry and field and never the value): no `items` are seeded, the items stay text and the document still mounts.
+   * `frameDocument` itself refuses such an `items` as `invalid-input`. The library carries no tracker: the host knows its own.
    */
   items?(values: readonly string[]): readonly ItemLink[] | undefined;
   /** ./host never touches the clipboard: the host writes the text, after showing what `hidden` lists. */
@@ -474,6 +475,33 @@ function itemValues(d: unknown): readonly string[] {
   }
 }
 
+/**
+ * The links the `items` adapter answered, copied as plain data and judged in full (src/frame/items.ts), or why not. The answer is
+ * untrusted: a getter is never called, and a value is never repeated in the reason. `undefined` and an empty list are no links.
+ */
+function itemLinksOf(answer: unknown): { readonly links: readonly ItemLink[] | undefined } | { readonly why: string } {
+  if (answer === undefined) return { links: undefined };
+  const data = (o: object, k: string): unknown => {
+    const d = Object.getOwnPropertyDescriptor(o, k);
+    return d !== undefined && 'value' in d ? (d.value as unknown) : undefined;
+  };
+  try {
+    if (!Array.isArray(answer)) return { why: 'items must be a list' };
+    if (answer.length > ITEM_LIMITS.max) return { why: `items has more than ${String(ITEM_LIMITS.max)} entries` };
+    const copy: unknown[] = [];
+    for (let i = 0; i < answer.length; i += 1) {
+      const e = data(answer, String(i));
+      const names = isPlain(e) ? Object.getOwnPropertyNames(e) : [];
+      copy.push(isPlain(e) && names.length === 2 && names.includes('value') && names.includes('href') ? { value: data(e, 'value'), href: data(e, 'href') } : null);
+    }
+    const why = itemsWhy(copy);
+    if (why !== null) return { why };
+    return { links: copy.length === 0 ? undefined : (copy as ItemLink[]) };
+  } catch {
+    return { why: 'items could not be read' };
+  }
+}
+
 /** Mounts the sealed reader frame for `o.document` into `el` (Reference §11). */
 export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInput; readonly adapters: HostAdapters }): DocFrame {
   const win = windowOf(el);
@@ -590,7 +618,11 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const gated = scanned === undefined ? null : mermaidGate(scanned as Parameters<typeof mermaidGate>[0], c.gate);
       late = c.draw === 'after-ready' && gated !== null && gated.inline;
       const values = c.callbacks.items === undefined ? [] : itemValues(d);
-      const links: unknown = values.length === 0 ? undefined : call('items', Object.freeze([...values]));
+      // The resolver's answer is judged here: one it cannot use is no links (one warning), as a throwing resolver is, and the
+      // document still mounts (frameDocument itself refuses a bad `items`, a direct caller's programming error).
+      const answered = itemLinksOf(values.length === 0 ? undefined : call('items', Object.freeze([...values])));
+      if ('why' in answered) console.warn('pinax-lib host: the items adapter answered links the frame refuses, so none are seeded:', answered.why);
+      const links = 'links' in answered ? answered.links : undefined;
       const frameOptions: FrameOptions = {
         csp: policy,
         nonce,

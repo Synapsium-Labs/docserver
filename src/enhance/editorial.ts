@@ -11,7 +11,7 @@
 // headings, the callout kinds' words and the front-matter keys that name the document's kind.
 //
 // The item link (the reference layout's section 2; docserver L2, Task 8): an item key the document names (`AB-12`)
-// becomes a link to what the host's `itemLink(key)` answers, by two routes, and only when the host gave `itemLink`:
+// becomes a link to what the host's `itemLink(key)` answers, by three routes, and only when the host gave `itemLink`:
 //   - the delta route: the first level-2 section (a child of the root) whose heading is one of
 //     `vocabulary.itemHeadings` and whose first code block names a key, by its first line that is not blank being
 //     `item: <key>`; a section whose first code block names none passes to the next such section, as the reference's
@@ -21,7 +21,13 @@
 //     the first item field, if any), before the wide facts;
 //   - the byline route, without a delta key (or when the host gives no link for it): in the first fact labelled with
 //     an item field, every key in its text (split off its text node and wrapped, never re-typed) and every code
-//     element whose text is a key (wrapped whole). An author's own link is left as the author wrote it.
+//     element whose text is a key (wrapped whole). An author's own link is left as the author wrote it;
+//   - the header-line route (a document whose header predates the meta line), the third, used only when neither of the
+//     two gave a link and the byline has no item fact: a paragraph that is a child of the root, before its first level-2
+//     heading, that stands alone as a label and its keys, `**Tracker:** AB-90` (the bold text is an item field, then a
+//     colon, then keys with nothing between them but white space, commas and semicolons). Its keys are linked where
+//     they stand, as the byline route links them. A paragraph with any other text (a sentence that names a key, or the
+//     meta line itself) is no header line, and nothing outside such a paragraph is ever scanned for keys.
 // The host is asked once per key, for at most ITEM_LINKS.keys keys in a document; a key past them stays text. At most
 // ITEM_LINKS.links links are written in a document (one key named many times is many links), the first in document
 // order; a key past them stays text. The host's answer is used only when it is a string of 1 to ITEM_LINKS.href code
@@ -42,7 +48,7 @@
 // ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
 // (render() parses it, and the host passes it as info.frontList). The item link leaves an author's own link alone
 // (the reference re-pointed one that was not https), keeps a key's code element in the link (the reference replaced
-// it with the bare key), has no third route for a header line older than the meta line, writes at most
+// it with the bare key), writes at most
 // ITEM_LINKS.links links (the reference linked every occurrence), and takes the neutral class `item-link` (the
 // reference's named one tracker; no rule of the stylesheet reads either).
 //
@@ -206,6 +212,32 @@ function deltaKey(root: HTMLElement, vocab: Vocab): string | null {
       if (key !== undefined && vocab.itemKey.test(key)) return key;
       break; // the section's first code block is its delta
     }
+  }
+  return null;
+}
+
+/**
+ * The header-line route's paragraph: the first child of the root before its first level-2 heading that stands alone as an
+ * item field's label and its keys (see the header). Its first child is a `strong` whose text is an item field, with its
+ * colon inside (`**Tracker:**`) or right after it (`**Tracker**:`); what follows is the keys with only white space, commas
+ * and semicolons between them, and at least one key. Answers the paragraph and the nodes after its label; null when there
+ * is none. Read before any node moves.
+ */
+function legacyHeader(root: HTMLElement, vocab: Vocab): { readonly el: Element; readonly nodes: readonly Node[] } | null {
+  for (const p of Array.from(root.children)) {
+    if (p.localName === 'h2') return null;
+    const label = p.firstChild;
+    if (p.localName !== 'p' || !isStrong(label)) continue;
+    const nodes = Array.from(p.childNodes).slice(1);
+    let name = txt(label);
+    let rest = nodes.map((n) => n.textContent ?? '').join('');
+    if (name.endsWith(':')) name = name.slice(0, -1).trim();
+    else if (/^\s*:/.test(rest)) rest = rest.replace(/^\s*:/, '');
+    else continue;
+    if (!vocab.itemField.test(name)) continue;
+    const keys = rest.match(vocab.itemKeyScan());
+    if (keys === null || rest.replace(vocab.itemKeyScan(), '').replace(/[\s,;]/g, '') !== '') continue;
+    return { el: p, nodes };
   }
   return null;
 }
@@ -488,11 +520,17 @@ export function buildEditorial(ctx: FeatureContext): void {
       if (!ctx.live()) return;
       if (href !== null) delta = { key, href };
     }
+    const header = links === null ? null : legacyHeader(root, ctx.vocab); // read before any node moves
     const { el: byline, kinds, meta, item } = buildByline(ctx, h1, minutes, delta, links);
     // The byline route: the keys of the item fact's own nodes (call-outs, then writes). With a delta there are none:
     // the item fact shows the delta's link, and its own nodes stay in the hidden meta line.
     if (links !== null && item !== null && !linkKeys(ctx, item, links)) return;
     links?.route(byline);
+    // The header-line route: only when no delta link and no item fact in the byline gave the document its key.
+    if (links !== null && header !== null && delta === null && item === null) {
+      if (!linkKeys(ctx, header.nodes, links)) return;
+      links.route(header.el as HTMLElement);
+    }
     for (const f of front ?? []) if (!f.list && ctx.vocab.kindKey.test(f.key)) kinds.push(f.vals.join(', '));
     if (kinds.length > 0) {
       journal.insert(chrome(doc, 'div', { className: 'eyebrow' }, kinds.map((k) => chrome(doc, 'span', { text: k }))), parent, h1);

@@ -65,7 +65,11 @@ export interface ReaderVocabulary {
   readonly plan?: { readonly task?: readonly string[]; readonly step?: readonly string[]; readonly who?: readonly string[] };
   /** Words that name the reader, in an owner line, an owner cell or a step's owner. Default: you. */
   readonly addressees?: readonly string[];
-  /** Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`. Default: none. */
+  /**
+   * Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`; also the bold label of a
+   * header line that stands alone before the first level-2 heading, when the byline has no such fact ("**Tracker:** AB-90").
+   * Default: none.
+   */
   readonly itemFields?: readonly string[];
   /**
    * Level-2 headings, after an optional section number, whose section's first code block names an item key on an
@@ -139,8 +143,9 @@ export interface RenderMeta {
   /**
    * The distinct item values the reader would ask its host `itemLink` for, in document order, at most 50, each at most 100
    * code units (a longer one is left out, not cut). Read only where the reader reads them (RenderOptions.reader): the byline
-   * fact labelled with an item field, and the first section headed with an item heading whose first code block opens on an
-   * `item:` line. Empty without `reader`. Plain text, not escaped HTML.
+   * fact labelled with an item field, the first section headed with an item heading whose first code block opens on an
+   * `item:` line, and, when the byline has no item fact, a header line (a paragraph before the first level-2 heading that
+   * stands alone as an item field's bold label, a colon and keys: `**Tracker:** AB-90`). Empty without `reader`. Plain text, not escaped HTML.
    */
   items: readonly string[];
 }

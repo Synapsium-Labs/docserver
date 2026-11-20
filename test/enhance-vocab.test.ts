@@ -1164,3 +1164,58 @@ describe('README: the two options of Task 8', () => {
     expect(row('vocabulary')).toContain(`at most ${String(LIMITS.words)} words, each 1 to ${String(LIMITS.word)} code units with no white space at either end`);
   });
 });
+
+describe('the item link, by the header-line route: a paragraph standing alone as an item field\'s label and its keys', () => {
+  const hrefs = (root: Element): string[] => Array.from(root.querySelectorAll('a.item-link')).map((a) => a.getAttribute('href') ?? '');
+
+  it('links the keys where they stand, with a click listener on the paragraph, and leaves the label as it was', async () => {
+    const root = mount('# Example spec\n\n**Tracker:** AB-90, `CD-7`\n\n## Scope\n\nBody.\n');
+    const itemLink = vi.fn(LINK);
+    const onLink = vi.fn();
+    await enhance(root, { itemLink, onLink, vocabulary: { itemFields: ['Tracker'] } });
+    expect(itemLink.mock.calls).toEqual([['AB-90'], ['CD-7']]);
+    const p = Array.from(root.children).find((c) => c.localName === 'p') as HTMLElement;
+    expect(hrefs(p)).toEqual([LINK('AB-90'), LINK('CD-7')]);
+    expect(text(p)).toBe('Tracker: AB-90 ↗, CD-7 ↗');
+    (p.querySelector('a.item-link') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    expect(onLink.mock.calls).toEqual([[LINK('AB-90'), { newTab: true }]]);
+  });
+
+  it('is the third route: no byline item fact and no delta link, and only for a paragraph that stands alone', async () => {
+    const itemLink = vi.fn(LINK);
+    const withFact = mount('# T\n\n**Spec** · 2026-10-12 · Tracker: AB-1\n\n**Tracker:** AB-90\n\n## S\n');
+    await enhance(withFact, { itemLink, vocabulary: { itemFields: ['Tracker'] } });
+    expect(itemLink.mock.calls).toEqual([['AB-1']]);
+    expect(hrefs(withFact)).toEqual([LINK('AB-1')]);
+    itemLink.mockClear();
+    const other = mount('# T\n\n**Tracker:** AB-90 is the one\n\nSee **Tracker:** CD-7\n\n## S\n\n**Tracker:** EF-3\n');
+    await enhance(other, { itemLink, vocabulary: { itemFields: ['Tracker'] } });
+    expect(itemLink.mock.calls).toEqual([]);
+    expect(hrefs(other)).toEqual([]);
+    const off = mount('# T\n\n**Tracker:** AB-90\n\n## S\n');
+    await enhance(off, { itemLink });
+    expect(itemLink.mock.calls).toEqual([]);
+    expect(hrefs(off)).toEqual([]);
+  });
+
+  it('is not used once the delta key has a link, and is when it has none', async () => {
+    const md = '# T\n\n**Tracker:** AB-90\n\n## Delta\n\n```\nitem: CD-2\n```\n';
+    const resolved = mount(md);
+    const asked: string[] = [];
+    await enhance(resolved, { itemLink: (k: string) => (asked.push(k), LINK(k)), vocabulary: { itemFields: ['Tracker'], itemHeadings: ['Delta'] } });
+    expect(asked).toEqual(['CD-2']);
+    const none = mount(md);
+    const askedNone: string[] = [];
+    await enhance(none, { itemLink: (k: string) => (askedNone.push(k), null), vocabulary: { itemFields: ['Tracker'], itemHeadings: ['Delta'] } });
+    expect(askedNone).toEqual(['CD-2', 'AB-90']);
+  });
+
+  it('destroy puts the paragraph back as the author wrote it', async () => {
+    const root = mount('# T\n\n**Tracker:** AB-90\n\n## S\n');
+    const before = root.innerHTML;
+    await enhance(root, { itemLink: LINK, vocabulary: { itemFields: ['Tracker'] } });
+    expect(root.querySelector('a.item-link')).not.toBeNull();
+    await destroyEnhancement(root);
+    expect(root.innerHTML).toBe(before);
+  });
+});
