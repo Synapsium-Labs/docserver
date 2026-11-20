@@ -232,3 +232,55 @@ Review 2906 found three families the scan missed (ccrc D-8826 ruled that the sca
  }
 ]
 ```
+
+## Second review F1
+
+The scan's directive exclusion is now Mermaid 12.1.0's own `directiveRegex`, copied exactly (`%%{`, white space, a word with or without a `:`, a value up to `}%%`); a match Mermaid does not close with `}%%` stays in the scan, and a closed match is removed to the empty string as Mermaid removes it. The sixteen probes of the review are cases (twelve drew styled and scanned plain before; the new cases are red against the previous scan: 13 failed of the first batch). Rows measured on `src/enhance/appearance-mermaid.ts` (original bytes saved, sha256 checked after each restore), tests run `test/appearance-mermaid.test.ts`.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| A2R1 | a directive is only what Mermaid 12.1.0 removes (its grammar, not any `%%{` to the next `}%%`) | `withoutDirectives` back to `body.replace(/%%\{[^]*?\}%%/g, ' ')` | `test/appearance-mermaid.test.ts` | red (16 failed | 142 passed (158)) |
+| A2R2 | a directive never closed keeps what follows in the scan | the replacement removes every match, closed or not | `test/appearance-mermaid.test.ts` | red (1 failed | 157 passed (158)) |
+| A2R3 | a directive is removed to the empty string, as Mermaid removes it | the replacement is a space for a closed match | `test/appearance-mermaid.test.ts` | red (1 failed | 157 passed (158)) |
+| A2R4 | the init directives leave the scan (test 5 directive fixtures) | `withoutDirectives` returns the body unchanged | `test/appearance-mermaid.test.ts` | red (5 failed | 153 passed (158)) |
+| A2R5 | `%%{` needs white space and a word after it | the grammar's `(\w+)` after `%%{\s*` made `(\w*)` (a bare `%%{"` starts a directive) | `test/appearance-mermaid.test.ts` | red (13 failed | 145 passed (158)) |
+
+```json
+[
+ {
+  "row": "A2R1",
+  "guard": "a directive is only what Mermaid 12.1.0 removes (its grammar, not any `%%{` to the next `}%%`)",
+  "edit": "`withoutDirectives` back to `body.replace(/%%\\{[^]*?\\}%%/g, ' ')`",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (16 failed | 142 passed (158))"
+ },
+ {
+  "row": "A2R2",
+  "guard": "a directive never closed keeps what follows in the scan",
+  "edit": "the replacement removes every match, closed or not",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 157 passed (158))"
+ },
+ {
+  "row": "A2R3",
+  "guard": "a directive is removed to the empty string, as Mermaid removes it",
+  "edit": "the replacement is a space for a closed match",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 157 passed (158))"
+ },
+ {
+  "row": "A2R4",
+  "guard": "the init directives leave the scan (test 5 directive fixtures)",
+  "edit": "`withoutDirectives` returns the body unchanged",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (5 failed | 153 passed (158))"
+ },
+ {
+  "row": "A2R5",
+  "guard": "`%%{` needs white space and a word after it",
+  "edit": "the grammar's `(\\w+)` after `%%{\\s*` made `(\\w*)` (a bare `%%{\"` starts a directive)",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (13 failed | 145 passed (158))"
+ }
+]
+```

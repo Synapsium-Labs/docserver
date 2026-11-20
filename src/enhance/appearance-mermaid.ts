@@ -82,17 +82,21 @@ export function mermaidThemeOf(c: Colours): Readonly<Record<string, string>> {
   return o;
 }
 
-/** The text without its `%%{ … }%%` init directives (a document's directive cannot colour a hosted figure, so what it holds is no style). */
+/**
+ * Mermaid 12.1.0's own directive grammar (its `directiveRegex`, copied exactly): `%%{`, white space, then a word (with or
+ * without a `:`), then a value up to `}%%`. A `%%{` that is not followed by white space and a word (a quoted label's
+ * `"%%{"`) starts nothing, and what follows it stays in the scan.
+ */
+const DIRECTIVE = /%{2}{\s*(?:(\w+)\s*:|(\w+))\s*(?:(\w+)|((?:(?!}%{2}).|\r?\n)*))?\s*(?:}%{2})?/gi;
+
+/**
+ * The text without the init directives Mermaid itself removes before it reads a figure (a document's directive cannot
+ * colour a hosted figure, so what it holds is no style). Only a match that Mermaid closes with `}%%` is removed, and
+ * removed as Mermaid removes it (to the empty string); a directive never closed keeps what follows in the scan, which
+ * errs toward author-styled.
+ */
 function withoutDirectives(body: string): string {
-  let out = '';
-  let at = 0;
-  for (;;) {
-    const open = body.indexOf('%%{', at);
-    const close = open < 0 ? -1 : body.indexOf('}%%', open + 3);
-    if (close < 0) return out + body.slice(at); // no directive, or one never closed: what follows stays in the scan
-    out += body.slice(at, open) + ' ';
-    at = close + 3;
-  }
+  return body.replace(DIRECTIVE, (m) => (m.endsWith('}%%') ? '' : m));
 }
 
 /** Whether a figure's text styles itself, so it keeps 1.1.0's drawing (section 10, "Author-styled"). */

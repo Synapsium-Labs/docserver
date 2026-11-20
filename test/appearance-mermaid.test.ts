@@ -284,6 +284,26 @@ describe('isAuthorStyled', () => {
     ['semicolon then a head with no space', 'flowchart LR\nA-->B;style A fill:red'],
     ['style after a closed directive', '%%{init: {"theme": "dark"}}%%\nflowchart LR\nstyle A fill:red'],
     ['a directive never closed keeps what follows in the scan', '%%{init: {"theme": "dark"}\nflowchart LR\nstyle A fill:red'],
+    // Second review F1 (ruled by ccrc D-8826): only what Mermaid 12.1.0 itself removes as a directive leaves the scan. A `%%{`
+    // in one quoted label and a `}%%` in a later one start no directive in Mermaid (no white space and word after `%%{`),
+    // so what lies between them is drawn, and is scanned. Each of the sixteen probes of the review draws styled.
+    ['directive probe, flowchart style', 'flowchart TD\n A["%%{"] --> B\n style A fill:#ff0000\n C["}%%"]'],
+    ['directive probe, flowchart classDef and class', 'flowchart TD\n A["%%{"] --> B\n classDef c fill:#ff0000\n class A c\n C["}%%"]'],
+    ['directive probe, flowchart linkStyle', 'flowchart TD\n A["%%{"] --> B\n linkStyle 0 stroke:#ff0000\n C["}%%"]'],
+    ['directive probe, flowchart edge labels', 'flowchart TD\n A -->|"%%{"| B\n style A fill:#ff0000\n C -->|"}%%"| D'],
+    ['directive probe, state style', 'stateDiagram-v2\n state "%%{" as S1\n style S1 fill:#ff0000\n state "}%%" as S2'],
+    ['directive probe, state classDef', 'stateDiagram-v2\n state "%%{" as S1\n classDef c fill:#ff0000\n class S1 c\n state "}%%" as S2'],
+    ['directive probe, class style', 'classDiagram\n class A["%%{"]\n style A fill:#ff0000\n class B["}%%"]'],
+    ['directive probe, class member labels', 'classDiagram\n class A\n A : +"%%{"\n style A fill:#ff0000\n A : +"}%%"'],
+    ['directive probe, sequence participant labels', 'sequenceDiagram\n participant A as "%%{"\n rect rgb(255,0,0)\n A->>A: x\n end\n participant B as "}%%"'],
+    ['directive probe, sequence message text', 'sequenceDiagram\n A->>A: "%%{"\n rect rgb(255,0,0)\n A->>A: x\n end\n B->>B: "}%%"'],
+    ['directive probe, gantt', 'gantt\n title "%%{"\n todayMarker stroke-width:5px,stroke:#ff0000\n section }%%'],
+    ['directive probe, er relation labels', 'erDiagram\n A ||--o{ B : "%%{"\n style A fill:#ff0000\n A ||--o{ C : "}%%"'],
+    ['directive probe, an opener with a space and no word', 'flowchart TD\n A["%%{ "] --> B\n style A fill:#ff0000\n C["}%%"]'],
+    ['directive probe, a closer alone', 'flowchart TD\n style A fill:#ff0000\n C["}%%"]'],
+    ['a directive Mermaid ends at its second word keeps the rest', '%%{ init x style }%%\nflowchart LR\nA-->B'],
+    ['a directive removed between the halves of a head is drawn joined', 'flowchart LR\nA-->B\nst%%{x}%%yle A fill:red'],
+    ['a directive after the diagram opener holds a head outside it', 'flowchart LR\n%%{init: {}}%%\nstyle A fill:red'],
   ];
   it.each(styled)('is true: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(true));
 
@@ -321,6 +341,12 @@ describe('isAuthorStyled', () => {
     ['pie', 'pie title Pets\n  "Dogs" : 386\n  "Cats" : 85'],
     ['er', 'erDiagram\n  CUSTOMER ||--o{ ORDER : places'],
     ['gitGraph', 'gitGraph\n  commit\n  branch dev\n  commit\n  checkout main\n  merge dev'],
+    // Second review F1 and F12: directives Mermaid removes, and the annotation in the kinds that own it.
+    ['a directive with a word and no colon', '%%{wrap}%%\nflowchart LR\nA-->B'],
+    ['a directive across lines', '%%{init: {\n  "theme": "dark",\n  "themeCSS": ".node rect { fill: red; }"\n}}%%\nflowchart LR\nA-->B'],
+    ['two directives', '%%{init: {"theme": "dark"}}%%\n%%{init: {"themeCSS": "style classDef"}}%%\nflowchart LR\nA-->B'],
+    ['a directive after the opener', 'flowchart LR\n%%{init: {"themeCSS": ".x rect {}"}}%%\nA-->B'],
+    ['a directive with a space and no colon', '%%{ init {"themeCSS": "style"} }%%\nflowchart LR\nA-->B'],
   ];
   it.each(plain)('is false: %s', (_n, text) => expect(isAuthorStyled(text)).toBe(false));
 
