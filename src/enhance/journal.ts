@@ -26,6 +26,8 @@ export const CHROME_ATTR = 'data-docreader-chrome';
 /** The style properties setStyle writes without `important` (LD11's closed list). */
 export const STYLE_PROPS = [
   '--thead-h', '--fig-w', '--bar-h', 'left', 'top', 'right', 'width', 'max-height', 'transform', 'opacity', 'stroke-dasharray', 'stroke-dashoffset',
+  // Mermaid's tooltip colours, on the document element of the root's own document (state.ts applyAppearance, the one such reach).
+  '--dr-tip-bg', '--dr-tip-fg', '--dr-tip-edge',
 ] as const;
 
 /** The style properties setStyle writes only with `important`: a definition dot's and ring's paint. */

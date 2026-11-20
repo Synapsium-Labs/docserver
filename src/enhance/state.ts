@@ -405,6 +405,9 @@ export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Pref
   journal.toggleClass(root, 'lens-product', prefs.lens === 'product');
 }
 
+/** Mermaid's tooltip colours on the document element: the verdict's slot, and the custom property the stylesheet reads. */
+const TIP_PROPERTY = [['surface', '--dr-tip-bg'], ['text', '--dr-tip-fg'], ['border', '--dr-tip-edge']] as const;
+
 /**
  * Put a host's appearance on the root (the appearance contract; the verdict is parseAppearance's): `data-docreader-hosted`,
  * `data-docreader-colours` while the verdict has a colour group, `data-docreader-skin` (its skin slots, space-separated;
@@ -412,6 +415,14 @@ export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Pref
  * out but `prev` (the verdict before this one, if any) had written it: only what the reader wrote is removed, so a host's own
  * inline value on the root survives (a verdict with no colour group removes the colours the last one wrote). The mode is the theme pref's, which applyPrefs puts on the
  * root. Startup and every op take this one journaled path.
+ *
+ * The one reach outside the root is Mermaid's tooltip, which the library places in `body`, out of reach of every rule and
+ * custom property scoped to the root (the design's section 10, "Mermaid's tooltip"). While the verdict has a colour group
+ * the document element of the root's own document carries `data-docreader-hosted` and the three properties `--dr-tip-bg`,
+ * `--dr-tip-fg` and `--dr-tip-edge` (the verdict's `surface`, `text` and `border`), and has neither without one. They are
+ * written through the journal like everything else, so a verdict the reader did not apply writes nothing and teardown puts
+ * the document element back as it found it. A root that is itself the document element needs no mark: the tooltip is
+ * inside it.
  */
 export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearance, prev: Appearance | null = null): void {
   const skin = APPEARANCE_SLOTS.skin.filter((s) => a.skin?.[s] !== undefined);
@@ -427,5 +438,12 @@ export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearan
   for (const s of APPEARANCE_SLOTS.skin) {
     const v = a.skin?.[s];
     if (v !== undefined || prev?.skin?.[s] !== undefined) journal.setStyle(root, SLOT_PROPERTY.skin[s], v ?? null);
+  }
+  const html = root.ownerDocument.documentElement;
+  if (html === root) return;
+  journal.setAttribute(html, 'data-docreader-hosted', a.colour === undefined ? null : '');
+  for (const [slot, property] of TIP_PROPERTY) {
+    const v = a.colour?.[slot];
+    if (v !== undefined || prev?.colour?.[slot] !== undefined) journal.setStyle(html, property, v ?? null);
   }
 }

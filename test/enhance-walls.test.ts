@@ -18,10 +18,11 @@
 //    holds the document is refused, and so is `ctx.env.defaultView`. The clock (`Date.now`, `Date()`, `new Date()`
 //    with no argument) only in env.ts: elsewhere `Date` is named only as `new Date(value)`, as `Date.<member>` other
 //    than `now`, or as a type, so it cannot be passed on (`const D = Date`) or read by a key (`Date['now']`). An
-//    element's inline style (`.style`) only in journal.ts, whose setStyle is the one style write (LD11), and the
+//    element's inline style (`.style`) only in journal.ts, whose setStyle is the one style write (LD11) and which
+//    writes the document element's tooltip properties too (state.ts names that element, once), and the
 //    other ways to style a page (`attributeStyleMap`, `styleSheets`, `adoptedStyleSheets`, `insertRule`) nowhere.
 //    A name is seen as a member (`.x`), as a string key (`['x']`) and as a destructured property (`const { x } = o`,
-//    `{ x: y }`). Each of env.ts and journal.ts uses each such name exactly as often as ALLOWED_SITES says, so the
+//    `{ x: y }`). Each of env.ts, journal.ts and state.ts uses each such name exactly as often as ALLOWED_SITES says, so the
 //    exception cannot widen unseen.
 // 4. The only globals a source names are the language's own (Object, Promise, Map, Date, ...): a TypeScript program
 //    over src/enhance with the DOM library resolves every free identifier, and one that the DOM library declares
@@ -120,6 +121,9 @@ const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> 
   },
   // cloneSvg reads CSSOM only on its detached SVG clone; no feature gains a style escape hatch.
   'src/enhance/journal.ts': { '.style': 2 },
+  // The one reach outside the root (review 2906 F10): applyAppearance marks the document element of the root's own
+  // document for Mermaid's tooltip, which sits in `body`. It names the element once and writes it through the journal.
+  'src/enhance/state.ts': { documentElement: 1 },
 };
 
 /** Attribute names never written: inline handlers (any `on...`), what loads a URL or a frame, and style. */
@@ -435,11 +439,24 @@ describe('enhance walls: CSP, purity and id lookups', () => {
   });
 
   it('each allowed site is used exactly as allowed, so an exception cannot widen unseen', () => {
-    expect(Object.keys(ALLOWED_SITES).sort()).toEqual(['src/enhance/env.ts', 'src/enhance/journal.ts']);
+    expect(Object.keys(ALLOWED_SITES).sort()).toEqual(['src/enhance/env.ts', 'src/enhance/journal.ts', 'src/enhance/state.ts']);
     for (const [file, allowed] of Object.entries(ALLOWED_SITES)) {
       const found = violations(path.join(ROOT, file), readFileSync(path.join(ROOT, file), 'utf8'));
       for (const [key, count] of Object.entries(allowed)) expect(found.filter((v) => what(v) === key), `${file} ${key}`).toHaveLength(count);
     }
+  });
+
+  it('the reach to the document element is one named site, in state.ts, and its writes are the journal\'s: a planted second reach or a direct style write goes red (review 2906 F10)', () => {
+    const left = (file: string, snippet: string): string[] => {
+      const name = path.join(ROOT, file);
+      const text = `${readFileSync(name, 'utf8')}\n${snippet}\n`;
+      return afterAllowed(file, violations(name, text)).map(what);
+    };
+    expect(left('src/enhance/state.ts', '')).toEqual([]);
+    expect(left('src/enhance/state.ts', 'export const p1 = (r: HTMLElement): unknown => r.ownerDocument.documentElement;')).toEqual(['documentElement']);
+    expect(left('src/enhance/state.ts', "export const p2 = (r: HTMLElement): void => r.ownerDocument.documentElement.style.setProperty('--dr-tip-bg', 'red');").sort()).toEqual(['.style', 'documentElement']);
+    expect(left('src/enhance/settings.ts', 'export const p3 = (r: HTMLElement): unknown => r.ownerDocument.documentElement;')).toEqual(['documentElement']);
+    expect(left('src/enhance/state.ts', "export const p4 = (h: HTMLElement): void => { h['style'].setProperty('--dr-tip-bg', 'red'); };")).toEqual(['[\'style\']']);
   });
 
   it('the scan sees the window, its timers, observers, fonts and sizes, the clock and inline style, and lets env through', () => {

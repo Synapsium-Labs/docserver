@@ -475,7 +475,7 @@ describe('the journal: the slot properties are a closed list derived from SLOT_P
 
   it('a property that is no slot property, or not with the right priority, is refused', () => {
     const { el, setStyle } = styled();
-    for (const name of ['--evil', '--dr-evil', '--bg2', 'color', '--dr-tip-bg', '--syn-evil']) expect(() => setStyle(el, name as never, '#112233'), name).toThrow(/refuses the property/);
+    for (const name of ['--evil', '--dr-evil', '--bg2', 'color', '--dr-tip', '--dr-tip-bg2', '--syn-evil']) expect(() => setStyle(el, name as never, '#112233'), name).toThrow(/refuses the property/);
     expect(() => setStyle(el, '--bg' as never, '#112233', true)).toThrow(/important/);
   });
 
@@ -760,21 +760,51 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     expect(tip()).toEqual(['', '', '']);
   });
 
-  it('the mark follows the reader: a reader call that throws leaves the html element as it was', async () => {
-    vi.doMock('../src/enhance/index.js', async (original) => ({
-      ...(await original<typeof import('../src/enhance/index.js')>()),
-      setEnhancementAppearance: () => {
-        throw new Error('the reader refused');
-      },
-    }));
-    try {
-      const api = await register();
-      expect(() => api.setEnhancementAppearance(mount(), dark())).toThrow('the reader refused');
-      expect(html.hasAttribute('data-docreader-hosted')).toBe(false);
-      expect(tip()).toEqual(['', '', '']);
-    } finally {
-      vi.doUnmock('../src/enhance/index.js');
-    }
+  it('the mark follows the reader (review 2906 F11): an op on a root the reader does not hold leaves html unmarked', async () => {
+    const api = await register();
+    const never = mount();
+    api.setEnhancementAppearance(never, dark());
+    expect(html.hasAttribute('data-docreader-hosted')).toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+    // a root that was enhanced and is gone is no longer held either
+    const gone = mount();
+    await api.enhance(gone, {});
+    await (api as unknown as { destroyEnhancement(root: HTMLElement): Promise<void> }).destroyEnhancement(gone);
+    api.setEnhancementAppearance(gone, dark());
+    expect(html.hasAttribute('data-docreader-hosted')).toBe(false);
+    expect(tip()).toEqual(['', '', '']);
+  });
+
+  it('the entry hands the reader\'s own functions over: it wraps none of them and so touches no element itself (review 2906 F10)', async () => {
+    const api = await register();
+    const reader = await import('../src/enhance/index.js'); // the registry register() left: the entry's own copy
+    expect(api['setEnhancementAppearance']).toBe(reader.setEnhancementAppearance);
+    expect(api['enhance']).toBe(reader.enhance);
+    expect(api['destroyEnhancement']).toBe(reader.destroyEnhancement);
+  });
+
+  it('the mark is the reader\'s journaled write: a host\'s own value on html comes back at teardown, and the reader\'s do not outlast it (review 2906 F10)', async () => {
+    const api = await register();
+    html.setAttribute('data-docreader-hosted', 'host');
+    html.style.setProperty('--dr-tip-bg', 'red');
+    const root = mount();
+    await api.enhance(root, { appearance: dark() });
+    expect(html.getAttribute('data-docreader-hosted')).toBe('');
+    expect(tip()).toEqual([PHOSPHOR.colour.surface, PHOSPHOR.colour.text, PHOSPHOR.colour.border]);
+    await (api as unknown as { destroyEnhancement(root: HTMLElement): Promise<void> }).destroyEnhancement(root);
+    expect(html.getAttribute('data-docreader-hosted')).toBe('host');
+    expect(tip()).toEqual(['red', '', '']);
+  });
+
+  it('a root that is the document element needs no mark, and loses none of its own (review 2906 F10)', async () => {
+    const api = await register();
+    const parsed = new DOMParser().parseFromString(`<!doctype html><html><body>${render(DOC).html}</body></html>`, 'text/html');
+    const top = parsed.documentElement;
+    await api.enhance(top, { appearance: { mode: 'dark' } });
+    expect(top.hasAttribute('data-docreader-hosted'), 'its own hosted attribute').toBe(true);
+    expect(top.hasAttribute('data-docreader-colours')).toBe(false);
+    expect(top.getAttribute('style') ?? '').not.toContain('--dr-tip');
+    await (api as unknown as { destroyEnhancement(root: HTMLElement): Promise<void> }).destroyEnhancement(top);
   });
 
   it('destroying the reader clears the mark and the three tooltip properties', async () => {

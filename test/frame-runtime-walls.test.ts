@@ -23,6 +23,9 @@
 // 7. The host faces (appearance contract, Task 5): host-fonts.ts is the one module that decodes and loads a font from a
 //    string, so its three platform sinks are guarded sites like `open`: `atob` (the decode), `FontFace` (the constructor)
 //    and `.fonts` of a document (the set a face is added to and dropped from), each exactly once and nowhere else.
+// 8. No element's inline style (review 2906 F10): `style` and `attributeStyleMap`, as a member, a string key or a destructured
+//    property, appear nowhere in src/frame-runtime, with no allowed site. The frame's `html` element is marked by the
+//    reader's journal (src/enhance/state.ts), not by this runtime.
 // Every allowed site has a planted control: one more use at that site goes red, and so does each forbidden name.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -49,6 +52,9 @@ const FORBIDDEN: readonly string[] = [
   'localStorage', 'sessionStorage', 'indexedDB', 'caches', 'cookie',
   'getElementById', 'eval',
 ];
+
+/** Members the frame runtime never uses, by `.name`, a string key or a destructured property: an element's inline style. */
+const STYLE_MEMBERS: readonly string[] = ['style', 'attributeStyleMap'];
 
 /** Names never a global reference, and never a member of the global or of a document. */
 const PAGE_NAMES: readonly string[] = ['location', 'history', 'top'];
@@ -190,6 +196,7 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
     }
     if (ts.isPropertyAccessExpression(node)) {
       const name = node.name.text;
+      if (STYLE_MEMBERS.includes(name)) at(node.name, `.${name}`);
       if (name === 'open') site('.open');
       if (name === 'onmessage') site('.onmessage');
       if (name === 'fonts' && isPageReceiver(node.expression, checker)) site('.fonts of a document');
@@ -198,7 +205,7 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
     if (ts.isElementAccessExpression(node)) {
       const key = node.argumentExpression;
       if (ts.isStringLiteralLike(key)) {
-        if (banned.has(key.text)) at(key, `['${key.text}']`);
+        if (banned.has(key.text) || STYLE_MEMBERS.includes(key.text)) at(key, `['${key.text}']`);
         if (key.text === 'open') site('.open');
         if (key.text === 'postMessage') site('postMessage');
         if (PAGE_NAMES.includes(key.text) && isPageReceiver(node.expression, checker)) at(key, `['${key.text}'] of the page`);
@@ -207,7 +214,7 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
     if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
       const key = node.propertyName ?? node.name;
       const text = ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
-      if (text !== null && (banned.has(text) || PAGE_NAMES.includes(text) || text === 'open')) at(key, `{ ${text} }`);
+      if (text !== null && (banned.has(text) || STYLE_MEMBERS.includes(text) || PAGE_NAMES.includes(text) || text === 'open')) at(key, `{ ${text} }`);
       else if (ts.isComputedPropertyName(key) && builtString(key.expression)) at(key, '{ [<member built at run time>] }');
     }
     if ((ts.isMethodDeclaration(node) || ts.isPropertyAssignment(node)) && !inType(node)) {
@@ -390,6 +397,23 @@ describe('L3.M19: the frame runtime sources', () => {
     it(`a planted extra use in ${file} goes red: ${what}: ${snippet.replace(/^export const \w+ = /, '')}`, () => {
       expect(plant(file, snippet)).toContain(what);
     });
+  }
+
+  // No inline style from this runtime, whichever way it is reached (header, 8): the entry, which once wrote the html element's
+  // tooltip properties itself, included.
+  for (const [snippet, what] of [
+    ["export const s1 = (h: HTMLElement): void => h.style.setProperty('--dr-tip-bg', 'red');", '.style'],
+    ["export const s2 = (h: HTMLElement): void => { h.style.removeProperty('--dr-tip-bg'); };", '.style'],
+    ["export const s3 = (h: HTMLElement): unknown => h['style'];", "['style']"],
+    ['export const s4 = (h: HTMLElement): unknown => { const { style } = h; return style; };', '{ style }'],
+    ["export const s5 = (h: HTMLElement): void => { h.attributeStyleMap.set('color', 'red'); };", '.attributeStyleMap'],
+    ["export const s6 = (): void => { document.documentElement.style.setProperty('--dr-tip-fg', 'red'); };", '.style'],
+  ] as const) {
+    for (const file of ['enhance-entry.ts', 'adapters.ts']) {
+      it(`a planted style write in ${file} goes red: ${snippet.replace(/^export const \w+ = /, '').slice(0, 70)}`, () => {
+        expect(plant(file, snippet).join('\n')).toContain(what);
+      });
+    }
   }
 
   for (const [snippet, what] of [

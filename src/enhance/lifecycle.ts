@@ -703,7 +703,8 @@ export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): v
  * mount is hosted for good (an op on a mount that had none makes it hosted). The value goes through parseAppearance, slot
  * by slot, the colour group all or nothing; one that is not a plain object changes nothing, as does a root that is not
  * enhanced. Never throws. A call made while `enhance` is still starting is kept (the newest wins) and applied as soon as
- * the reader state exists.
+ * the reader state exists. What a verdict puts on the page it puts through applyAppearance, the root's journal, and only
+ * once the reader holds it: a root the reader does not hold leaves the root and the document element as they were.
  */
 export function setEnhancementAppearance(root: HTMLElement, value: unknown): void {
   if (!isElement(root)) return;

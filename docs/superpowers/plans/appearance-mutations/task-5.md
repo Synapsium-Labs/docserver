@@ -191,3 +191,89 @@ The pre-decode guard of `src/frame-runtime/host-fonts.ts` is now `Math.ceil(CAP 
   }
 ]
 ```
+
+## Review 2906 F10 and F11
+
+The html mark moved behind the reader's journal (state.ts applyAppearance); the entry no longer touches `html`.
+
+Departure from Task 5's file list, for the plan's "Departures and readings" (that file is edited by other fixes at the same time, so the bullet is kept here): **The `html` mark is the reader's, written through its journal (review 2906 F10 and F11).** Task 5's file list had `enhance-entry.ts` set the `html` element's `data-docreader-hosted` and the three tooltip properties before handing a value to the reader. They are written instead by `applyAppearance` on the root's own document element through `journal.setAttribute` and `journal.setStyle` (the three names join `STYLE_PROPS`), so a value the reader did not apply writes nothing and teardown puts the element back; the entry hands the reader's functions over as they are. The reader's walls allow that one reach (`documentElement`, once, in `state.ts`) and the frame runtime's walls refuse any `.style`. A reader enhancing a page in place now marks that page's `html` element too, as the frame's reader always did.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F10-journal | the tooltip properties on html are written through the journal | state.ts writes them with html.style.setProperty / removeProperty | test/enhance-walls.test.ts, test/enhance-appearance.test.ts | red: the `.style` wall (outside journal.ts), the named-site row, and the journaled-teardown and destroy rows (a host's own value not restored, the property left behind) |
+| F10-attr | the html mark attribute is written through the journal | state.ts writes it with html.setAttribute / removeAttribute | test/enhance-appearance.test.ts | red: the journaled-teardown row (the host's own value is not put back) and the destroy row |
+| F10-site | the reach to the document element is one named site, counted | ALLOWED_SITES state.ts documentElement 1 -> 2 | test/enhance-walls.test.ts | red: the exact-count row and the planted second reach |
+| F10-props | the journal's closed list holds exactly the three tooltip names | `--dr-tip-edge` removed from STYLE_PROPS | test/enhance-appearance.test.ts, test/enhance-seams.test.ts | red: setStyle refuses the property, so every colour verdict throws (32 rows), and the list row |
+| F10-root | a root that is the document element writes no mark of its own | `if (html === root) return;` removed | test/enhance-appearance.test.ts | red: the document-element-root row (a colourless verdict removes the root's own hosted attribute) |
+| F10-frame-wall | the frame runtime writes no inline style | enhance-entry.ts wraps setEnhancementAppearance and writes document.documentElement.style.setProperty | test/frame-runtime-walls.test.ts | red: the sources row names `.style` (and the planted controls for enhance-entry.ts and adapters.ts, in each shape, are red by construction) |
+| F11-entry | the entry marks nothing before or without the reader | enhance-entry.ts wraps setEnhancementAppearance and sets the html attribute before the call | test/enhance-appearance.test.ts | red: the unknown-root row and the hands-over-as-they-are row |
+| F11-unknown | an op on a root the reader does not hold leaves html unmarked | lifecycle.ts setEnhancementAppearance sets the html attribute when findByRoot finds nothing | test/enhance-appearance.test.ts | red: the unknown-root row |
+
+```json
+[
+ {
+  "row": "F10-journal",
+  "guard": "the tooltip properties on html are written through the journal",
+  "edit": "state.ts writes them with html.style.setProperty / removeProperty",
+  "tests": "test/enhance-walls.test.ts, test/enhance-appearance.test.ts",
+  "result": "red",
+  "file": "src/enhance/state.ts"
+ },
+ {
+  "row": "F10-attr",
+  "guard": "the html mark attribute is written through the journal",
+  "edit": "state.ts writes it with html.setAttribute / removeAttribute",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "red",
+  "file": "src/enhance/state.ts"
+ },
+ {
+  "row": "F10-site",
+  "guard": "the reach to the document element is one named site, counted",
+  "edit": "ALLOWED_SITES state.ts documentElement 1 -> 2",
+  "tests": "test/enhance-walls.test.ts",
+  "result": "red",
+  "file": "test/enhance-walls.test.ts"
+ },
+ {
+  "row": "F10-props",
+  "guard": "the journal's closed list holds exactly the three tooltip names",
+  "edit": "`--dr-tip-edge` removed from STYLE_PROPS",
+  "tests": "test/enhance-appearance.test.ts, test/enhance-seams.test.ts",
+  "result": "red",
+  "file": "src/enhance/journal.ts"
+ },
+ {
+  "row": "F10-root",
+  "guard": "a root that is the document element writes no mark of its own",
+  "edit": "`if (html === root) return;` removed",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "red",
+  "file": "src/enhance/state.ts"
+ },
+ {
+  "row": "F10-frame-wall",
+  "guard": "the frame runtime writes no inline style",
+  "edit": "enhance-entry.ts wraps setEnhancementAppearance and writes document.documentElement.style.setProperty",
+  "tests": "test/frame-runtime-walls.test.ts",
+  "result": "red",
+  "file": "src/frame-runtime/enhance-entry.ts"
+ },
+ {
+  "row": "F11-entry",
+  "guard": "the entry marks nothing before or without the reader",
+  "edit": "enhance-entry.ts wraps setEnhancementAppearance and sets the html attribute before the call",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "red",
+  "file": "src/frame-runtime/enhance-entry.ts"
+ },
+ {
+  "row": "F11-unknown",
+  "guard": "an op on a root the reader does not hold leaves html unmarked",
+  "edit": "lifecycle.ts setEnhancementAppearance sets the html attribute when findByRoot finds nothing",
+  "tests": "test/enhance-appearance.test.ts",
+  "result": "red",
+  "file": "src/enhance/lifecycle.ts"
+ }
+]
+```

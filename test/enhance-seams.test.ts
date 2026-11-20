@@ -695,6 +695,7 @@ describe('journal.setStyle (LD11): the only style write, through the CSSOM', () 
   it('the closed list is the plan\'s, and fill, stroke and stroke-width go only with important', () => {
     expect([...STYLE_PROPS]).toEqual([
       '--thead-h', '--fig-w', '--bar-h', 'left', 'top', 'right', 'width', 'max-height', 'transform', 'opacity', 'stroke-dasharray', 'stroke-dashoffset',
+      '--dr-tip-bg', '--dr-tip-fg', '--dr-tip-edge',
     ]);
     expect([...IMPORTANT_STYLE_PROPS]).toEqual(['fill', 'stroke', 'stroke-width']);
   });
