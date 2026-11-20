@@ -575,6 +575,8 @@ describe('L3.M7 each code at its boundary', () => {
     // small fields a mount writes at their own values: lang, prefs, the initial hash, the bridge flags, Mermaid's limits).
     const oldCap = oldDefaultCap();
     const atOld = withoutLength - (ASSET_CHARS_NOW - ASSET_CHARS_1_1_0);
+    // The figures the programme's results quote, printed so a run shows them (ASSET_CHARS_NOW is the assets' lengths in this checkout).
+    console.log(`old-cap figures: at-cap srcdoc length ${String(withoutLength)}; at 1.1.0's asset lengths ${String(atOld)}; 1.1.0's old cap ${String(oldCap)}; derived MAX_SRCDOC_CHARS_DEFAULT ${String(MAX_SRCDOC_CHARS_DEFAULT)}; assets now ${String(ASSET_CHARS_NOW)}`);
     expect(atOld).toBeLessThanOrEqual(oldCap);
     expect(oldCap - atOld).toBeLessThan(oldCap / 1000);
     const faceAtCap = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
@@ -582,6 +584,7 @@ describe('L3.M7 each code at its boundary', () => {
     const maximal = JSON.parse(MAXIMAL_APPEARANCE_TEXT().replace(/\\u003c/g, '<')) as unknown;
     const both: Partial<FrameOptions> = { appearance: maximal, assets: { ...withMermaid(), fonts: { sans: faceAtCap, mono: faceAtCap } } as FrameAssets };
     const bothLength = lengthOf(both);
+    console.log(`old-cap figures: with both faces and the largest appearance ${String(bothLength)}`);
     expect(bothLength).toBeLessThanOrEqual(MAX_SRCDOC_CHARS_DEFAULT);
     // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: nothing else of the srcdoc moves.
     const fields = `,"appearance":`.length + MAXIMAL_APPEARANCE_TEXT().length + `,"fonts":{"sans":"","mono":""}`.length + 2 * faceAtCap.length;

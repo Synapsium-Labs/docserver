@@ -247,8 +247,10 @@ describeBrowsers((browser) => {
     async () => {
       // ccrc D-8824. The document is test/frame-old-cap.ts's (html at SEED_HTML_MAX_CHARS, 512 images at the 5 MiB budget, the
       // title, front list, commits and the features' word lists at their caps); what the library page's mount cannot carry is the
-      // snapshot (a store of 8 values of 64 KiB, about 3 million characters) and the 64 Mermaid secure keys, which this row leaves out.
-      // Mermaid's asset is inlined (the scan admits it), as the old cap counts it.
+      // snapshot (a store of 8 values of 64 KiB, about 3 million characters) and the 64 Mermaid secure keys, which this row leaves out:
+      // it is NOT a full mount at the cap, and its figures are lower than the cap's by those two. The features are the old-cap
+      // document's, with `chrome.settings` on as the frame's own features have it (the old-cap builder switches it off, which leaves
+      // no Aa menu for the `aa` read below). Mermaid's asset is inlined (the scan admits it), as the old cap counts it.
       const { input: doc, options } = oldCapDocument();
       const face = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
       const host = await openLibHost(await browserFor(browser));
@@ -259,7 +261,7 @@ describeBrowsers((browser) => {
           document: { ...doc, scan },
           assets: { ...assets, mermaid: built.mermaid, fonts: { sans: face, mono: face } } as FrameAssets,
           watchdogMs: 120_000,
-          features: options.features,
+          features: { ...options.features, chrome: { ...options.features.chrome, settings: true } },
           appearance: LARGEST,
         });
         const sent = performance.now() - t0;
