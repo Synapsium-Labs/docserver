@@ -466,3 +466,15 @@ The coordinator's ruling has no exception for "a root that IS the document eleme
  }
 ]
 ```
+
+## Third review F6
+
+The restore of the html element's tooltip properties keeps the host's own priority. The row is the report's, verbatim, in the `second review F8` describe. Measured on `src/enhance/journal.ts`, restored from a saved copy and checked against the committed file.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F8l | a host's own important value is put back important | `else style.setProperty(name, value, priority);` made `else style.setProperty(name, value);` | `test/enhance-appearance.test.ts` | red: 1 failed \| 88 passed (89), the new row |
+
+```json
+[{"row":"F8l","guard":"a host's own important value is put back important","edit":"setProperty(name, value, priority) made setProperty(name, value)","tests":"test/enhance-appearance.test.ts","result":"red: 1 failed | 88 passed (89)"}]
+```

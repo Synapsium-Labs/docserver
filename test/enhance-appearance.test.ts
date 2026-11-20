@@ -858,6 +858,8 @@ describe('second review F8: several hosted roots in one document share the html 
     html.removeAttribute('style');
   });
 
+  it('a host\'s own important value is put back important', () => { html.style.setProperty('--dr-tip-bg', 'red', 'important'); const { journal, undoAll } = createJournal(() => true, (fn) => fn()); journal.setDocumentTip(html, ['blue', 'green', 'black']); expect(tip()[0]).toBe('blue'); expect(undoAll()).toEqual([]); expect(html.style.getPropertyValue('--dr-tip-bg')).toBe('red'); expect(html.style.getPropertyPriority('--dr-tip-bg')).toBe('important'); });
+
   it('two roots with different colours: html is marked and the tooltip follows the later one; destroying the first keeps both; destroying the last restores what was there', async () => {
     html.setAttribute('data-docreader-hosted', 'host');
     html.style.setProperty('--dr-tip-bg', 'red');
