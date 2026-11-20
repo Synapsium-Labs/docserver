@@ -7,8 +7,8 @@
 // (figures.ts's entries, each `figure.mermaid-figure` with render()'s `pre.mermaid`):
 //   1. the root takes the gate, `data-docreader-mermaid`, and the state `data-docreader-diagrams="drawing"`, at once,
 //      before any drawing succeeds (C43): the stylesheet then shows each source as a transparent placeholder;
-//   2. the host's load() is called, once, and its module awaited while the reader's faces load (env.fonts, at most
-//      FONT_WAIT_MS: Mermaid measures its labels with them). As soon as the module is here, before that wait ends, it
+//   2. the host's load() is called, once, and its module awaited while the reader's faces and a host's faces load
+//      (env.fonts, at most FONT_WAIT_MS: Mermaid measures its labels with them). As soon as the module is here, before that wait ends, it
 //      is given the configuration once, through its queue: stock Mermaid listens for the window's load event and,
 //      while its start-on-load is on (its default), draws every `.mermaid` of the document then, with its own defaults
 //      and into the document's own `pre`; the package's file has it off already;

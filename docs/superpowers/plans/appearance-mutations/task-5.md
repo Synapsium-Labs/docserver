@@ -277,3 +277,69 @@ Departure from Task 5's file list, for the plan's "Departures and readings" (tha
  }
 ]
 ```
+
+## Review 2906 F8
+
+env.fonts, the reader's one font wait (relayout's 'fonts' trigger and the Mermaid pre-draw wait use it), also waits, within its own bound, for the host faces (`Docreader Host Sans` and `Docreader Host Mono`) the font set holds. The frame runtime adds them to the set before the reader starts, so the reader learns of them from the set and needs no flag.
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F8-wait | the reader's font wait also waits for the host faces | env.fonts answers true as soon as the library faces are in (`else finish(true)`, no host-face wait) | test/enhance-host-faces.test.ts; test/browser/host-face-wait.test.ts (Chromium) | red: five unit rows (the wait, both faces, a failing face, the bound, and the relayout row where the 'fonts' run came with the host face still loading and measured on the fallback) and the Chromium row (the 'fonts' run came while the held host face was loading) |
+| F8-catch | a host face that fails does not hold the wait | `face.loaded.catch(() => undefined)` becomes `face.loaded` (a rejection propagates) | test/enhance-host-faces.test.ts | red: the failing-face row and the settled-faces row |
+| F8-family | only a host family is waited for | the family test replaced by `true` (every face of the set is waited for) | test/enhance-host-faces.test.ts | red: the row with a face of another family |
+| F8-quotes | a family reported with its quotes is read | the quote strip removed from `face.family` | test/enhance-host-faces.test.ts | red: the quoted-families row |
+| F8-mono | both host families are waited for | 'Docreader Host Mono' removed from HOST_FAMILIES | test/enhance-host-faces.test.ts | red: the two-faces row and the failing-face row |
+| F8-walk | a set that cannot be walked does not break the wait | the try/catch around the walk removed | test/enhance-host-faces.test.ts | red: the row with a set with no forEach and one whose forEach throws |
+
+```json
+[
+ {
+  "row": "F8-wait",
+  "guard": "the reader's font wait also waits for the host faces",
+  "edit": "env.fonts answers true as soon as the library faces are in (`else finish(true)`, no host-face wait)",
+  "tests": "test/enhance-host-faces.test.ts; test/browser/host-face-wait.test.ts (Chromium)",
+  "result": "red",
+  "file": "src/enhance/env.ts"
+ },
+ {
+  "row": "F8-catch",
+  "guard": "a host face that fails does not hold the wait",
+  "edit": "`face.loaded.catch(() => undefined)` becomes `face.loaded` (a rejection propagates)",
+  "tests": "test/enhance-host-faces.test.ts",
+  "result": "red",
+  "file": "src/enhance/env.ts"
+ },
+ {
+  "row": "F8-family",
+  "guard": "only a host family is waited for",
+  "edit": "the family test replaced by `true` (every face of the set is waited for)",
+  "tests": "test/enhance-host-faces.test.ts",
+  "result": "red",
+  "file": "src/enhance/env.ts"
+ },
+ {
+  "row": "F8-quotes",
+  "guard": "a family reported with its quotes is read",
+  "edit": "the quote strip removed from `face.family`",
+  "tests": "test/enhance-host-faces.test.ts",
+  "result": "red",
+  "file": "src/enhance/env.ts"
+ },
+ {
+  "row": "F8-mono",
+  "guard": "both host families are waited for",
+  "edit": "'Docreader Host Mono' removed from HOST_FAMILIES",
+  "tests": "test/enhance-host-faces.test.ts",
+  "result": "red",
+  "file": "src/enhance/env.ts"
+ },
+ {
+  "row": "F8-walk",
+  "guard": "a set that cannot be walked does not break the wait",
+  "edit": "the try/catch around the walk removed",
+  "tests": "test/enhance-host-faces.test.ts",
+  "result": "red",
+  "file": "src/enhance/env.ts"
+ }
+]
+```
