@@ -5,6 +5,7 @@
 export { mountDocFrame } from './mount.js';
 export type { DocFrame, FallbackReason, HostAdapters, ToolCommand } from './mount.js';
 export type { PlaceKind } from '../frame/protocol.js';
+export type { ItemLink } from '../frame/items.js';
 export type { Appearance } from '../enhance/appearance.js';
 export type { HostLink } from './links.js';
 export type { HiddenChar } from './copy.js';

@@ -775,11 +775,14 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     expect(tip()).toEqual(['', '', '']);
   });
 
-  it('the entry hands the reader\'s own functions over: it wraps none of them and so touches no element itself (review 2906 F10)', async () => {
+  it('the entry hands the reader\'s own functions over, but `enhance` (wrapped for the item link\'s href only) and so touches no element itself (review 2906 F10)', async () => {
     const api = await register();
     const reader = await import('../src/enhance/index.js'); // the registry register() left: the entry's own copy
     expect(api['setEnhancementAppearance']).toBe(reader.setEnhancementAppearance);
-    expect(api['enhance']).toBe(reader.enhance);
+    // `enhance` is the one wrapped member (docserver parity T4): it hands the item link's href to the reader's own check and passes every
+    // other option through, and it touches no element (the item-link rows of test/enhance-frame-wire.test.ts).
+    expect(api['enhance']).toBeTypeOf('function');
+    expect(api['enhance']).not.toBe(reader.setEnhancementAppearance);
     expect(api['destroyEnhancement']).toBe(reader.destroyEnhancement);
   });
 

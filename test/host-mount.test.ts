@@ -2567,3 +2567,116 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
     });
   });
 });
+
+describe('docserver parity T4: the items adapter resolves the document\'s item values into seeded links', () => {
+  const READER = { itemFields: ['Tracker'], itemHeadings: ['Delta'] };
+  const DOC = '# Title\n\n**Spec** · 2026-10-12 · Tracker: AB-12 and CD-7\n\n## Delta\n\n```\nitem: EF-3\n```\n';
+  /** A document rendered with a reader vocabulary, so its meta lists the items. */
+  const withItems = (md = DOC, reader: object = READER): RenderInput => {
+    const r = render(md, { reader });
+    if (r.outcome !== 'rendered') throw new Error('did not render');
+    return { result: { outcome: r.outcome, html: r.html, meta: { title: r.meta.title, frontList: r.meta.frontList, items: r.meta.items } } };
+  };
+  const link = (k: string): { value: string; href: string } => ({ value: k, href: `https://tracker.example/${k}` });
+  const seedItems = (m: Mounted): unknown => seedOf(m.iframe.getAttribute('srcdoc') ?? '')['items'];
+  const mountItems = (items: unknown, doc: RenderInput = withItems()): Mounted => mount(PLAIN, { items }, doc);
+
+  it('is called with the item values the document\'s meta lists, and what it answers is seeded', () => {
+    const asked: unknown[] = [];
+    const m = mountItems((values: readonly string[]) => {
+      asked.push(values);
+      return values.map(link);
+    });
+    expect(asked).toEqual([['AB-12', 'CD-7', 'EF-3']]);
+    expect(Object.isFrozen(asked[0])).toBe(true);
+    expect(seedItems(m)).toEqual([link('AB-12'), link('CD-7'), link('EF-3')]);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('is called with this adapters object as its receiver', () => {
+    let self: unknown;
+    const adapters = {
+      assets,
+      watchdogMs: 5000,
+      onFallback: () => undefined,
+      items(this: unknown) {
+        self = this;
+        return [];
+      },
+    };
+    mountDocFrame(container, { document: withItems(), adapters: adapters as unknown as HostAdapters });
+    expect(self === adapters).toBe(true);
+  });
+
+  it('is not called, and seeds nothing, for a document whose meta lists no item (or has no `items` at all)', () => {
+    const items = vi.fn(() => [link('AB-12')]);
+    for (const doc of [withItems(DOC, {}), input(PLAIN), withItems('# T\n\nNo items.\n')]) {
+      const m = mountItems(items, doc);
+      expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+    }
+    expect(items).not.toHaveBeenCalled();
+  });
+
+  it('reads the meta\'s items as data: only strings of 1 to 100 code units, at most 50, never a getter', () => {
+    const asked: unknown[] = [];
+    const doc = withItems();
+    const meta = { title: 'T', frontList: null, items: ['AB-1', 7, '', 'x'.repeat(101), 'x'.repeat(100), ...Array.from({ length: 60 }, (_, i) => `K-${String(i)}`)] };
+    mountItems((v: readonly string[]) => (asked.push(v), []), { result: { ...doc.result, meta } } as unknown as RenderInput);
+    const got = asked[0] as string[];
+    expect(got.slice(0, 3)).toEqual(['AB-1', 'x'.repeat(100), 'K-0']);
+    expect(got).toHaveLength(50);
+    const trap = { result: { ...doc.result, meta: { title: 'T', frontList: null, get items() { throw new Error('no'); } } } };
+    const items = vi.fn(() => []);
+    expect(() => mountItems(items, trap as unknown as RenderInput)).not.toThrow();
+    expect(items).not.toHaveBeenCalled();
+  });
+
+  it('a throw is logged and means no links: the frame mounts, with no items key', () => {
+    const m = mountItems(() => {
+      throw new Error('tracker down');
+    });
+    expect(m.fallbacks()).toEqual([]);
+    expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    // An answer of undefined, or of an empty list, is no links either.
+    for (const none of [undefined, []]) {
+      const n = mountItems(() => none);
+      expect(Object.hasOwn(seedOf(n.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+    }
+  });
+
+  it('an answer the frame refuses makes the mount a fallback, invalid-input, with no iframe', () => {
+    const before = iframes();
+    for (const bad of [[{ value: 'AB-12', href: 'http://tracker.example/AB-12' }], [{ value: 'AB-12', href: 'javascript:alert(1)' }], 'AB-12', [{ value: 'AB-12' }], Array.from({ length: 51 }, (_, i) => link(`K-${String(i)}`))]) {
+      const seen: Seen = { events: [] };
+      mountDocFrame(container, { document: withItems(), adapters: adaptersFor(seen, { items: () => bad }) });
+      expect(seen.events.filter(([n]) => n === 'fallback').map(([, v]) => v), JSON.stringify(bad).slice(0, 40)).toEqual(['invalid-input']);
+    }
+    expect(iframes()).toBe(before);
+  });
+
+  it('is asked again at each update, with the new document\'s items, and seeds that mount', () => {
+    const asked: unknown[] = [];
+    const items = (v: readonly string[]): unknown => (asked.push(v), v.map(link));
+    const m = mountItems(items);
+    m.frame.update(withItems('# Two\n\n**Spec** · 2026-10-12 · Tracker: ZZ-9\n'));
+    expect(asked).toEqual([['AB-12', 'CD-7', 'EF-3'], ['ZZ-9']]);
+    const last = container.querySelectorAll('iframe');
+    expect(seedOf((last[last.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? '')['items']).toEqual([link('ZZ-9')]);
+  });
+
+  it('must be a function when given (a TypeError before any iframe exists), and is an adapter key', () => {
+    const create = vi.spyOn(document, 'createElement');
+    try {
+      expect(() => mountDocFrame(container, { document: withItems(), adapters: adaptersFor({ events: [] }, { items: [link('AB-12')] }) })).toThrow(TypeError);
+      expect(create.mock.calls.filter(([t]) => t === 'iframe')).toEqual([]);
+    } finally {
+      create.mockRestore();
+    }
+  });
+
+  it('a host with no items adapter seeds no items, and the seed is the one 1.1 wrote', () => {
+    const m = mount(PLAIN, {}, withItems());
+    expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+  });
+});

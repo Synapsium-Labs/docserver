@@ -41,6 +41,7 @@ import { CSP_MAX_CHARS } from './csp-rules.js';
 import { MERMAID_LIMIT_CEILINGS } from './gate.js';
 import { FRAME_MANIFEST } from './manifest.generated.js';
 import { isFragmentId } from './fragment.js';
+import { ITEM_LIMITS, itemsWhy, type ItemLink } from './items.js';
 import { FRAME_PREF_VALUES, type BridgeStoreKey } from './protocol.js';
 import {
   BASE64_FACE,
@@ -59,6 +60,7 @@ import {
   type Seed,
   type SeedAppearance,
   type SeedFonts,
+  type SeedItem,
   type SeedMermaid,
 } from './seed.js';
 import { hex, sha256Text } from './sha256.js';
@@ -83,7 +85,8 @@ export interface RenderInput {
     readonly outcome: RenderOutcome;
     /** render().html verbatim; at most SEED_HTML_MAX_CHARS as the seed carries it (too-large). */
     readonly html: string;
-    readonly meta: { readonly title: string | null; readonly frontList: readonly FrontEntry[] | null };
+    /** `items` is render()'s `meta.items`: the item values the document names, which ./host hands its `items` adapter. Not seeded. */
+    readonly meta: { readonly title: string | null; readonly frontList: readonly FrontEntry[] | null; readonly items?: readonly string[] };
   };
   /** sha, commits[].sha, commits[].parents and only are full 40- or 64-hex (stricter than enhance's 7 to 40). */
   readonly version?: {
@@ -181,6 +184,13 @@ export interface FrameOptions {
     readonly places?: boolean;
     readonly printFigures?: boolean;
   };
+  /**
+   * The resolved item links (parity Task 4): at most 50 `{ value, href }`, `value` 1 to 100 code units (an item value of
+   * render()'s `meta.items`) and `href` an absolute `https:` URL of at most 4096 code units. The reader draws a link for a
+   * value it asks for that is listed here, exactly, and leaves any other as text; a click goes the way every link goes
+   * (`navigate`, the host decides). Anything else is refused as invalid-input. Absent or empty: no `items` key in the seed.
+   */
+  readonly items?: readonly ItemLink[];
   /** Default MAX_SRCDOC_CHARS_DEFAULT; a host may only lower it. */
   readonly maxSrcdocChars?: number;
 }
@@ -273,6 +283,7 @@ function hostValuesMax(): number {
     rec([...K.flags.map(() => 1), rec(K.chrome.map(() => 1)), vocabulary]), // features
     rec([1, 1, list(L.secureKeys, 1), 1]), // mermaid
     rec(BRIDGE_KEYS.map(() => 1)),
+    list(ITEM_LIMITS.max, rec([1, 1])), // items
   ]);
 }
 
@@ -409,6 +420,15 @@ export function fontsOf(f: unknown): SeedFonts | undefined {
   return Object.keys(out).length === 0 ? undefined : (out as SeedFonts);
 }
 
+/** The resolved item links, copied as plain data and judged in full (src/frame/items.ts); undefined when there are none to seed. */
+function itemsOf(b: Budget, v: unknown): SeedItem[] | undefined {
+  if (v === undefined) return undefined;
+  const copy = dataOf(b, v, 'items', 1);
+  const why = itemsWhy(copy);
+  if (why !== null) invalid(why);
+  return (copy as SeedItem[]).length === 0 ? undefined : (copy as SeedItem[]);
+}
+
 /** Mermaid's settings, copied and completed with `secure: []` and `draw: 'auto'`; above a ceiling is refused. */
 function mermaidOf(b: Budget, m: unknown): SeedMermaid | null {
   if (m === undefined || m === null) return null;
@@ -473,6 +493,7 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const assetsRaw: unknown = o.assets;
   // The faces are seeded whenever a host gives them; the frame loads them, and its stylesheet uses them only while hosted.
   const fonts = typeof assetsRaw === 'object' && assetsRaw !== null ? fontsOf((assetsRaw as FrameAssets).fonts) : undefined;
+  const items = itemsOf(b, o.items);
   const appearance = o.appearance === undefined ? undefined : (parseAppearance(o.appearance).appearance as SeedAppearance);
   const fields: Seed = {
     s: 1,
@@ -496,6 +517,7 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
     bridge: bridgeOf(b, o.bridge),
     ...(appearance === undefined ? {} : { appearance }),
     ...(fonts === undefined ? {} : { fonts }),
+    ...(items === undefined ? {} : { items }),
   };
   // Every field but the html (judged above, by its own cap) through the bootstrap's own validator.
   const check = validateSeed(fields);

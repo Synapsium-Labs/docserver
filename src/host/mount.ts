@@ -60,6 +60,7 @@ import { frameCsp } from '../frame/csp.js';
 import { parseAppearance, type Appearance } from '../enhance/appearance.js';
 import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
 import { isFragmentId } from '../frame/fragment.js';
+import { ITEM_LIMITS, type ItemLink } from '../frame/items.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
 import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent, type PlaceKind } from '../frame/protocol.js';
@@ -136,6 +137,16 @@ export interface HostAdapters {
    * text and the sizes and never decodes: the host decodes.
    */
   onPrintFigure?(f: { readonly i: number; readonly n: number; readonly png: string }): void;
+  /**
+   * Resolves the item values a document names into links (parity Task 4). `render()`'s `meta.items` lists them (give render the
+   * `reader` option that names the item fields and headings); at each mount this is called, in the host's own code and
+   * synchronously, with the document's item values (at most 50, each 1 to 100 code units; not called when there are none), and
+   * answers the links: at most 50 `{ value, href }`, `href` an absolute `https:` URL. The frame draws a link for a value the
+   * reader asks for that is listed, exactly, and leaves any other as text; a click comes to `onLink` as every link does. A
+   * throw is logged and means no links; an answer that is not a list of such links makes the mount a fallback
+   * (`invalid-input`), as any value the frame refuses does. The library carries no tracker: the host knows its own.
+   */
+  items?(values: readonly string[]): readonly ItemLink[] | undefined;
   /** ./host never touches the clipboard: the host writes the text, after showing what `hidden` lists. */
   copy?(text: string, check: { readonly hidden: readonly HiddenChar[] }): void;
   changes?(sha: string): Promise<{ ranges: readonly (readonly [number, number])[]; removedAfter?: readonly number[] } | null>;
@@ -201,11 +212,11 @@ export type ToolCommand = (typeof TOOL_COMMANDS)[number];
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
   'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
-  'onPlace', 'onPrintFigure',
+  'onPlace', 'onPrintFigure', 'items',
 ]);
 
 /** The callbacks, each a function when given. */
-const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'onPlace', 'onPrintFigure'] as const);
+const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'onPlace', 'onPrintFigure', 'items'] as const);
 type CallbackName = (typeof CALLBACKS)[number];
 
 const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request', 'after-ready']);
@@ -446,6 +457,23 @@ function windowOf(el: unknown): HostWindow {
   return win as HostWindow;
 }
 
+/** The item values a document names, as `render()` listed them: the strings of `meta.items` of 1 to 100 code units, at most 50; read through own data only, never throwing. */
+function itemValues(d: unknown): readonly string[] {
+  try {
+    const meta: unknown = isPlain(d) ? Object.getOwnPropertyDescriptor(Object.getOwnPropertyDescriptor(d, 'result')?.value as object, 'meta')?.value : undefined;
+    const list: unknown = isPlain(meta) ? Object.getOwnPropertyDescriptor(meta, 'items')?.value : undefined;
+    if (!Array.isArray(list)) return [];
+    const out: string[] = [];
+    for (let i = 0; i < list.length && out.length < ITEM_LIMITS.max; i += 1) {
+      const v: unknown = Object.getOwnPropertyDescriptor(list, String(i))?.value;
+      if (typeof v === 'string' && v.length >= 1 && v.length <= ITEM_LIMITS.valueMax) out.push(v);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** Mounts the sealed reader frame for `o.document` into `el` (Reference §11). */
 export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInput; readonly adapters: HostAdapters }): DocFrame {
   const win = windowOf(el);
@@ -561,6 +589,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const scanned: unknown = isPlain(d) ? (d as { scan?: { mermaid?: unknown } }).scan?.mermaid : undefined;
       const gated = scanned === undefined ? null : mermaidGate(scanned as Parameters<typeof mermaidGate>[0], c.gate);
       late = c.draw === 'after-ready' && gated !== null && gated.inline;
+      const values = c.callbacks.items === undefined ? [] : itemValues(d);
+      const links: unknown = values.length === 0 ? undefined : call('items', Object.freeze([...values]));
       const frameOptions: FrameOptions = {
         csp: policy,
         nonce,
@@ -570,6 +600,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         ...(c.store === null ? {} : { snapshot: c.store.snapshot() }),
         mermaid: gated !== null && gated.inline ? { maxTextSize: gated.maxTextSize, draw: c.draw } : null,
         ...(c.features === undefined ? {} : { features: c.features as FrameFeatures }),
+        ...(links === undefined ? {} : { items: links as NonNullable<FrameOptions['items']> }),
         bridge: {
           links: c.callbacks.onLink !== undefined,
           hash: c.callbacks.onHash !== undefined,

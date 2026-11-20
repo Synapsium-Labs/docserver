@@ -21,6 +21,7 @@ import { DOC_BYTES, goldenDocuments, htmlCap, seedRatios } from '../scripts/meas
 import { loadCorpus } from '../src/conformance/index.js';
 import { APPEARANCE_SLOTS, parseAppearance } from '../src/enhance/appearance.js';
 import { LIMITS as ENHANCE_LIMITS, normalizeOptions } from '../src/enhance/options.js';
+import { ITEM_LIMITS } from '../src/frame/items.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, FRAME_PREF_VALUES, PREF_KEYS } from '../src/frame/protocol.js';
 import {
   BRIDGE_KEYS,
@@ -97,6 +98,7 @@ function full(): Seed {
     features: { rules: true, folds: false, keyboard: true, chrome: { bar: false }, vocabulary: { ids: false, qualifiers: ['annex'] } },
     mermaid: { maxTextSize: 16384, maxEdges: 500, secure: ['themeCSS'], draw: 'on-request' },
     bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true, places: false, printFigures: false },
+    items: [{ value: 'AB-12', href: 'https://tracker.example/AB-12' }],
   };
 }
 
@@ -185,9 +187,9 @@ describe('L3.M4 validateSeed: the shape', () => {
     for (const s of [base(), full()]) expect(validateSeed(s)).toEqual({ ok: true, seed: s });
   });
 
-  it("SEED_KEYS is schema 1's fourteen keys and the two optional ones the appearance contract adds", () => {
-    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
-    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'fonts']);
+  it("SEED_KEYS is schema 1's fourteen keys and the three optional ones the appearance contract and the parity additions add", () => {
+    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'items', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
+    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'fonts', 'items']);
     expect(Object.keys(base()).sort()).toEqual(SEED_KEYS.filter((k) => !OPTIONAL_SEED_KEYS.includes(k)));
     expect(Object.isFrozen(SEED_KEYS) && Object.isFrozen(OPTIONAL_SEED_KEYS)).toBe(true);
   });
@@ -901,6 +903,8 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false },
       appearance: maximalAppearance() as SeedAppearance,
       fonts: { sans: 'A'.repeat(SEED_LIMITS.fontFaceMaxChars), mono: `${'A'.repeat(SEED_LIMITS.fontFaceMaxChars - 1)}=` },
+      // 50 links, each a value of 100 and an href of 4096 code units of the character that escapes longest (the outer check lets them in).
+      items: Array.from({ length: 50 }, () => ({ value: lt(100), href: lt(BRIDGE_LIMITS.hrefMaxChars) })),
     };
   }
 
@@ -918,17 +922,21 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
 
   it("the two fields' share of SEED_FIELDS_MAX_CHARS is both faces at their cap, the appearance's longest text and their keys: 2 x 174764 + the appearance + the key overhead", () => {
     const s = maximalSeed();
-    const { appearance, fonts, ...rest } = s;
+    const { appearance, fonts, items, ...rest } = s;
     expect(appearance).toBeDefined();
     expect(fonts).toBeDefined();
+    expect(items).toBeDefined();
     const padding = 4 * (SEED_LIMITS.images - 1);
     const urls = s.images.reduce((n, [, u]) => n + u.length, 0);
     const old = serializeSeed(rest as Seed).length - urls + padding;
     const appearanceText = JSON.stringify(appearance).replace(/</g, '\\u003c').length;
     // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: each member's comma and key, and the fonts object's own punctuation.
     const overhead = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length;
-    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead);
-    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead);
+    // The items (parity Task 4) are the third optional field: `,"items":` and their text.
+    const itemsText = JSON.stringify(items).replace(/</g, '\\u003c').length;
+    const itemsOverhead = `,"items":`.length;
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead + itemsText + itemsOverhead);
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead + itemsText + itemsOverhead);
   });
 
   it("each string field's worst case is six characters per code point: no character escapes longer", () => {
@@ -936,6 +944,71 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
     for (let c = 0; c <= 0xffff; c += 1) worst = Math.max(worst, escapedHtmlLength(String.fromCharCode(c)));
     expect(worst).toBe(6);
     expect(escapedHtmlLength('\u{1F600}')).toBe(2);
+  });
+});
+
+describe('the seed carries items (docserver parity, Task 4): the outer shape only', () => {
+  const link = (i = 0): { value: string; href: string } => ({ value: `AB-${String(i)}`, href: `https://tracker.example/AB-${String(i)}` });
+  const links = (n: number): { value: string; href: string }[] => Array.from({ length: n }, (_, i) => link(i));
+  const refused = (items: unknown): void => expect(validateSeed(loose({ items })), JSON.stringify(items)?.slice(0, 80)).toEqual({ ok: false, nonce: NONCE, why: 'items' });
+
+  it('is optional: absent passes, a list passes, an empty list passes, and the seed with it is the seed text without it plus the key', () => {
+    expect(why(base())).toBe('ok');
+    expect(why(loose({ items: [] }))).toBe('ok');
+    expect(why(loose({ items: links(1) }))).toBe('ok');
+    expect(serializeSeed({ ...base(), items: links(2) }).length).toBeGreaterThan(serializeSeed(base()).length);
+  });
+
+  it('holds at most 50 links: 49 and 50 pass, 51 is refused naming items', () => {
+    expect(why(loose({ items: links(49) }))).toBe('ok');
+    expect(why(loose({ items: links(50) }))).toBe('ok');
+    refused(links(51));
+  });
+
+  it('holds a value of 1 to 100 code units: 1 and 100 pass, 0 and 101 are refused', () => {
+    for (const n of [1, 99, 100]) expect(why(loose({ items: [{ value: 'V'.repeat(n), href: 'https://x.example/' }] })), String(n)).toBe('ok');
+    for (const n of [0, 101]) refused([{ value: 'V'.repeat(n), href: 'https://x.example/' }]);
+  });
+
+  it('holds an href of 1 to hrefMaxChars code units: 1 and 4096 pass, 0 and 4097 are refused', () => {
+    expect(BRIDGE_LIMITS.hrefMaxChars).toBe(4096);
+    for (const n of [1, 4095, 4096]) expect(why(loose({ items: [{ value: 'AB-1', href: 'h'.repeat(n) }] })), String(n)).toBe('ok');
+    for (const n of [0, 4097]) refused([{ value: 'AB-1', href: 'h'.repeat(n) }]);
+  });
+
+  it('is a list of plain objects with exactly value and href, both strings', () => {
+    refused('AB-1');
+    refused({ 0: link() });
+    refused(null);
+    refused([null]);
+    refused(['AB-1']);
+    refused([['AB-1', 'https://x.example/']]);
+    refused([{ value: 'AB-1' }]);
+    refused([{ href: 'https://x.example/' }]);
+    refused([{ ...link(), extra: 'x' }]);
+    refused([{ value: 1, href: 'https://x.example/' }]);
+    refused([{ value: 'AB-1', href: 7 }]);
+    refused([{ value: 'AB-1', href: null }]);
+    refused([link(), 3]);
+    // A non-plain object is refused earlier, by the hostile-value walk, at any depth.
+    expect(validateSeed(loose({ items: [Object.assign(Object.create({ value: 'AB-1', href: 'https://x.example/' }) as object, {})] }))).toEqual({ ok: false, nonce: NONCE, why: 'proto' });
+    expect(why(loose({ items: [Object.assign(Object.create(null) as object, link())] }))).toBe('ok');
+  });
+
+  it('judges no href grammar: the host side does (an http: href passes the bootstrap\'s check)', () => {
+    expect(why(loose({ items: [{ value: 'AB-1', href: 'http://x.example/' }] }))).toBe('ok');
+    expect(why(loose({ items: [{ value: 'AB-1', href: 'javascript:void(0)' }] }))).toBe('ok');
+  });
+
+  it("the caps written out in the bundled check are ITEM_LIMITS', and the href's is the bridge's", () => {
+    expect(ITEM_LIMITS).toEqual({ max: 50, valueMax: 100, hrefMax: BRIDGE_LIMITS.hrefMaxChars });
+  });
+
+  it('SEED_FIELDS_MAX_CHARS counts the field at its cap: the maximal seed with items is longer than without by exactly the field, and the formula equals it', () => {
+    const at = Array.from({ length: 50 }, () => ({ value: '<'.repeat(100), href: '<'.repeat(4096) }));
+    const text = JSON.stringify(at).replace(/</g, '\\u003c');
+    expect(text.length).toBe(2 + 50 * (`{"value":"","href":""}`.length + 6 * 100 + 6 * 4096) + 49);
+    expect(serializeSeed({ ...base(), items: at }).length - serializeSeed(base()).length).toBe(`,"items":`.length + text.length);
   });
 });
 

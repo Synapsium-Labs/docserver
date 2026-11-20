@@ -60,7 +60,7 @@ describe('./render: signatures (ruling C2)', () => {
 
   it('render(markdown, options?) returns a RenderResult', () => {
     expectTypeOf(render).toEqualTypeOf<(markdown: string, o?: RenderOptions) => RenderResult>();
-    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs' | 'highlight'>();
+    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs' | 'highlight' | 'reader'>();
     expectTypeOf<RenderOptions['highlight']>().toEqualTypeOf<boolean | undefined>();
   });
 
@@ -71,15 +71,16 @@ describe('./render: signatures (ruling C2)', () => {
     expectTypeOf<RenderResult['meta']>().toEqualTypeOf<RenderMeta>();
   });
 
-  it('RenderMeta holds front, frontList, title, headings, figures, tables and mermaidKinds', () => {
+  it('RenderMeta holds front, frontList, title, headings, figures, tables, mermaidKinds and items', () => {
     expectTypeOf<keyof RenderMeta>().toEqualTypeOf<
-      'front' | 'frontList' | 'title' | 'headings' | 'figures' | 'tables' | 'mermaidKinds'
+      'front' | 'frontList' | 'title' | 'headings' | 'figures' | 'tables' | 'mermaidKinds' | 'items'
     >();
     expectTypeOf<RenderMeta['front']>().toEqualTypeOf<Readonly<Record<string, string | readonly string[]>> | null>();
     expectTypeOf<RenderMeta['frontList']>().toEqualTypeOf<readonly FrontEntry[] | null>();
     expectTypeOf<RenderMeta['title']>().toEqualTypeOf<string | null>();
     expectTypeOf<RenderMeta['headings']>().toEqualTypeOf<readonly Heading[]>();
     expectTypeOf<RenderMeta['mermaidKinds']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<RenderMeta['items']>().toEqualTypeOf<readonly string[]>();
     expectTypeOf<Heading>().toEqualTypeOf<{ level: 1 | 2 | 3 | 4 | 5 | 6; id: string; text: string }>();
     expectTypeOf<FrontEntry>().toEqualTypeOf<{ key: string; list: boolean; vals: string[] }>();
   });

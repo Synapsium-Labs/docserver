@@ -15,13 +15,15 @@
 // 5. Any exception gives outcome 'failed' and the reference renderer's fallback block, its source escaped
 //    the way the reference escaped it (Python's html.escape). It is never raw HTML, and it is cut to
 //    `maxHtmlBytes` too, so no outcome returns more html than the bound.
-// 6. `meta` is collected from what the rules recorded in the env (meta.ts).
+// 6. `meta` is collected from what the rules recorded in the env (meta.ts), and its `items` from the finished html
+//    (items.ts), only when RenderOptions.reader names item fields or headings.
 // scanRefs (scan.ts) shares this module's engine, its byte gate's option check and its BOM strip, so the
 // two read the same text with the same rules.
 import type { MarkdownIt, Token } from 'markdown-it';
 import { createEngine } from './engine.js';
 import { createEnv, type RenderEnv } from './env.js';
 import { pyEscape } from './escape.js';
+import { collectItems, readerItemWords } from './items.js';
 import { collectMeta } from './meta.js';
 import { utf8Length } from './pyText.js';
 import { DEFAULT_MAX_BYTES, type RenderMeta, type RenderOptions, type RenderResult } from './types.js';
@@ -35,6 +37,7 @@ export const EMPTY_META: RenderMeta = Object.freeze({
   figures: 0,
   tables: 0,
   mermaidKinds: Object.freeze([]),
+  items: Object.freeze([]),
 });
 
 /** The reference renderer's failure block, before the escaped source and its closing tag. */
@@ -144,7 +147,7 @@ function renderBounded(engine: MarkdownIt, tokens: Token[], env: RenderEnv, limi
 
 /**
  * render() with an explicit engine. Internal: tests inject a faulty engine here to reach the fallback.
- * Throws RangeError for an invalid `maxBytes` or `maxHtmlBytes`, TypeError for a `highlight` that is not a boolean;
+ * Throws RangeError for an invalid `maxBytes` or `maxHtmlBytes`, TypeError for a `highlight` that is not a boolean or a `reader` that is not a vocabulary;
  * never throws for any input text.
  */
 export function renderWith(markdown: string, o: RenderOptions | undefined, engine: MarkdownIt): RenderResult {
@@ -152,6 +155,7 @@ export function renderWith(markdown: string, o: RenderOptions | undefined, engin
   const maxHtmlBytes = checkLimit('render', 'maxHtmlBytes', o?.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES);
   const highlight: unknown = o?.highlight === undefined ? true : o.highlight;
   if (typeof highlight !== 'boolean') throw new TypeError(`render: highlight must be a boolean, got ${typeof highlight}`);
+  const words = readerItemWords(o?.reader);
   const bytes = utf8Length(markdown, maxBytes);
   if (bytes > maxBytes) return { html: '', outcome: 'over-limit', bytes, meta: EMPTY_META };
   const src = stripBom(markdown);
@@ -162,13 +166,13 @@ export function renderWith(markdown: string, o: RenderOptions | undefined, engin
     if (html === undefined) {
       return { html: fallbackHtml(src, maxHtmlBytes), outcome: 'output-over-limit', bytes, meta: EMPTY_META };
     }
-    return { html, outcome: 'rendered', bytes, meta: collectMeta(env) };
+    return { html, outcome: 'rendered', bytes, meta: collectMeta(env, collectItems(html, words.fields, words.headings)) };
   } catch {
     return { html: fallbackHtml(src, maxHtmlBytes), outcome: 'failed', bytes, meta: EMPTY_META };
   }
 }
 
-/** Render Markdown to HTML and meta. Pure and deterministic; see RenderOptions for the four options. */
+/** Render Markdown to HTML and meta. Pure and deterministic; see RenderOptions for the five options. */
 export function render(markdown: string, o?: RenderOptions): RenderResult {
   return renderWith(markdown, o, ENGINE);
 }

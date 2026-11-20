@@ -1200,8 +1200,10 @@ describe('the appearance contract: the derived srcdoc cap rises by both fields a
   it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters (the two bridge members of the parity wire among them)', () => {
     const faces = 2 * 174764;
     expect(faces).toBe(349528);
-    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`, and the parity wire's two bridge members (the cap counts a switch as `false`).
-    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length + `,"places":false`.length + `,"printFigures":false`.length;
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`, the parity wire's two bridge members (the cap counts a switch as `false`),
+    // and the items (Task 4): `,"items":` and 50 links of a 100-unit value and a 4096-unit href, each character of the six `\u003c` writes.
+    const items = JSON.stringify(Array.from({ length: 50 }, () => ({ value: '<'.repeat(100), href: '<'.repeat(4096) }))).replace(/</g, '\\u003c');
+    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length + `,"places":false`.length + `,"printFigures":false`.length + `,"items":`.length + items.length;
     const rise = faces + MAXIMAL_APPEARANCE_TEXT().length + keys;
     expect(SEED_FIELDS_MAX_CHARS - SEED_FIELDS_MAX_CHARS_1_1_0).toBe(rise);
     const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
@@ -1437,5 +1439,96 @@ describe('L3.M8 Mermaid in the skeleton (the prototype\'s P7)', () => {
     expect(mermaidText).not.toContain('org.eclipse.elk');
     expect(mermaidText).not.toMatch(/\(void 0\)\(/);
     expect(frameCsp()).toContain(FRAME_MANIFEST.mermaid.csp);
+  });
+});
+
+describe('the resolved item links (docserver parity, Task 4): FrameOptions.items, an optional seed field judged in full here', () => {
+  const link = (i = 1): { value: string; href: string } => ({ value: `AB-${String(i)}`, href: `https://tracker.example/AB-${String(i)}` });
+  const links = (n: number): { value: string; href: string }[] => Array.from({ length: n }, (_, i) => link(i + 1));
+  const bad = (items: unknown): string => refusal(() => frame(plain(), { items: items as NonNullable<FrameOptions['items']> }));
+
+  it('seeds the links as given, in order, and with none the srcdoc is the one without the option, byte for byte', () => {
+    const out = frame(plain(), { items: [link(2), link(1)] });
+    expect(seedOf(out)['items']).toEqual([link(2), link(1)]);
+    const without = frame(plain());
+    expect(Object.hasOwn(seedOf(without), 'items')).toBe(false);
+    for (const none of [undefined, []]) expect(frame(plain(), { items: none as NonNullable<FrameOptions['items']> }), String(none)).toBe(without);
+  });
+
+  it('takes at most 50 links: 50 are seeded, 51 are refused invalid-input (P4b at the seed)', () => {
+    expect(seedOf(frame(plain(), { items: links(50) }))['items']).toHaveLength(50);
+    expect(bad(links(51))).toBe('invalid-input');
+    expect(bad(links(600))).toBe('invalid-input');
+  });
+
+  it('takes a value of 1 to 100 code units: 1 and 100 are seeded, 0 and 101 are refused', () => {
+    for (const n of [1, 100]) expect(refusal(() => frame(plain(), { items: [{ value: 'V'.repeat(n), href: 'https://x.example/' }] })), String(n)).toBe('no refusal');
+    for (const n of [0, 101]) expect(bad([{ value: 'V'.repeat(n), href: 'https://x.example/' }]), String(n)).toBe('invalid-input');
+  });
+
+  it('takes an absolute https: URL of at most 4096 code units: `https:` passes; `http:`, other schemes, relative and malformed hrefs are refused (P4c at the seed)', () => {
+    const host = 'https://tracker.example/';
+    for (const href of [host, 'https://tracker.example', `${host}a?b=c#d`, 'HTTPS://tracker.example/x', `${host}${'p'.repeat(4096 - host.length)}`]) {
+      expect(refusal(() => frame(plain(), { items: [{ value: 'AB-1', href }] })), href.slice(0, 40)).toBe('no refusal');
+    }
+    const refused = [
+      'http://tracker.example/AB-1',
+      'javascript:alert(1)',
+      'data:text/html,x',
+      'ftp://tracker.example/',
+      '//tracker.example/AB-1',
+      '/AB-1',
+      'AB-1',
+      '',
+      'https:',
+      'https://',
+      'https:///path',
+      'https://user@tracker.example/',
+      'https://user:pw@tracker.example/',
+      'https://tracker.example/ x',
+      'https://tracker.example/ x',
+      'https://tracker.example/﻿x',
+      'https://tracker.example/\u0000',
+      'https://tracker.example/\u007f',
+      'https://tracker.example/\u0085',
+      'https://tracker.example/\\x',
+      'https://tracker.example\\x',
+      ' https://tracker.example/',
+      'https://tracker.example/\n',
+      `${host}${'p'.repeat(4097 - host.length)}`,
+    ];
+    for (const href of refused) expect(bad([{ value: 'AB-1', href }]), JSON.stringify(href).slice(0, 50)).toBe('invalid-input');
+  });
+
+  it('takes plain data only: a list of plain { value, href } objects; a getter, a class, extra or missing keys, a non-string are refused', () => {
+    expect(bad('AB-1')).toBe('invalid-input');
+    expect(bad({ 0: link() })).toBe('invalid-input');
+    expect(bad(null)).toBe('invalid-input');
+    expect(bad([null])).toBe('invalid-input');
+    expect(bad([['AB-1', 'https://x.example/']])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1' }])).toBe('invalid-input');
+    expect(bad([{ ...link(), extra: 'x' }])).toBe('invalid-input');
+    expect(bad([{ value: 1, href: 'https://x.example/' }])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1', href: undefined }])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1', get href() { return 'https://x.example/'; } }])).toBe('invalid-input');
+    class Link { value = 'AB-1'; href = 'https://x.example/'; }
+    expect(bad([new Link()])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1', href: 'https://x.example/', ['__proto__']: 1 }])).toBe('invalid-input');
+    // A value is data the seed carries, never markup: it is escaped like every field.
+    const hostile = frame(plain(), { items: [{ value: '</script><script>x()</script>', href: 'https://x.example/?a=<b>&c' }] });
+    expect(hostile).not.toContain('</script><script>x()');
+    expect(seedOf(hostile)['items']).toEqual([{ value: '</script><script>x()</script>', href: 'https://x.example/?a=<b>&c' }]);
+  });
+
+  it('copies the list once: a later change by the host reaches no seed, and the host\'s own list is not changed', () => {
+    const own = [link()];
+    const out = frame(plain(), { items: own });
+    own[0] = { value: 'ZZ-9', href: 'https://elsewhere.example/' };
+    expect(seedOf(out)['items']).toEqual([link()]);
+  });
+
+  it('the seed with items is judged by the bootstrap\'s own validator, whose outer check it passes', () => {
+    const check = validateSeed({ ...seedOf(frame(plain(), { items: links(50) })) });
+    expect(check.ok).toBe(true);
   });
 });

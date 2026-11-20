@@ -16,12 +16,18 @@ import { createAdapters } from '../src/frame-runtime/adapters.js';
 import type { Outbox, QueuedOp } from '../src/frame-runtime/outbox.js';
 import { FRAME_PREF_VALUES, type FramePrefValues, type PlaceKind } from '../src/frame/protocol.js';
 import type * as Wire from '../src/frame/wire-types.js';
+import type { ReaderVocabulary } from '../src/render/types.js';
 
 describe("src/frame/wire-types.ts: exactly L2's shapes, with no DOM (finding C1)", () => {
   it('CommitEntry, ChromeOptions and VocabularyOptions equal src/enhance/types.ts', () => {
     expectTypeOf<Wire.CommitEntry>().toEqualTypeOf<CommitEntry>();
     expectTypeOf<Wire.ChromeOptions>().toEqualTypeOf<ChromeOptions>();
     expectTypeOf<Wire.VocabularyOptions>().toEqualTypeOf<VocabularyOptions>();
+  });
+
+  it("render()'s ReaderVocabulary is the same vocabulary: one shape for the screen's reader and the render that lists its items (docserver parity T4, B7)", () => {
+    expectTypeOf<ReaderVocabulary>().toEqualTypeOf<VocabularyOptions>();
+    expectTypeOf<ReaderVocabulary>().toEqualTypeOf<Wire.VocabularyOptions>();
   });
 
   it("the prefs the bridge carries are L2's theme, width and font", () => {
@@ -233,5 +239,100 @@ describe('the place wire: the reader reports its figure overlay (docserver parit
       root.querySelector('.keys.open')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       expect(onPlace).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('the item link of the frame: seeded hrefs, drawn by the reader (docserver parity T4)', () => {
+  type Api = { enhance: (root: HTMLElement, options?: object) => Promise<void> };
+  const mounted: HTMLElement[] = [];
+
+  async function frameApi(): Promise<Api> {
+    const script = document.createElement('script');
+    const seen: unknown[] = [];
+    script.addEventListener('docserver:register', (e) => void seen.push((e as CustomEvent).detail));
+    Object.defineProperty(document, 'currentScript', { configurable: true, get: () => script });
+    try {
+      vi.resetModules();
+      await import('../src/frame-runtime/enhance-entry.js');
+    } finally {
+      Reflect.deleteProperty(document, 'currentScript');
+    }
+    return (seen[0] as { api: Api }).api;
+  }
+
+  const SEED_BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false } as const;
+  const adaptersOf = (items?: readonly { value: string; href: string }[]): ReturnType<typeof createAdapters> =>
+    createAdapters({ send: () => undefined } as unknown as Outbox, { snapshot: [], bridge: SEED_BRIDGE, ...(items === undefined ? {} : { items }) });
+
+  const DOC = '<h1 id="t">Title</h1><p><strong>Spec</strong> \u00b7 2026-10-12 \u00b7 Tracker: AB-12 and CD-7 and AB-123</p><h2 id="s">Scope</h2><p>Body.</p>';
+  function mount(): HTMLElement {
+    const root = document.createElement('main');
+    root.innerHTML = DOC;
+    document.body.append(root);
+    mounted.push(root);
+    return root;
+  }
+  afterEach(async () => {
+    for (const root of mounted.splice(0)) await destroyEnhancement(root).catch(() => undefined);
+    document.body.replaceChildren();
+  });
+  const linksOf = (root: Element): string[] => Array.from(root.querySelectorAll('a.item-link')).map((a) => `${a.textContent ?? ''}|${a.getAttribute('href') ?? ''}`);
+
+  it('the adapter answers the seeded href of the value asked for, exactly, else null (P4d: never a prefix, a case or a trim)', () => {
+    const a = adaptersOf([{ value: 'AB-12', href: 'https://t.example/AB-12' }, { value: 'CD-7', href: 'https://t.example/CD-7' }]);
+    const ask = a.itemOption.itemLink;
+    expect(ask).toBeTypeOf('function');
+    expect(ask?.('AB-12')).toBe('https://t.example/AB-12');
+    expect(ask?.('CD-7')).toBe('https://t.example/CD-7');
+    for (const k of ['AB-1', 'AB-123', 'AB-12 ', ' AB-12', 'ab-12', 'AB', '', 'EF-1', 'CD-7x']) expect(ask?.(k), JSON.stringify(k)).toBeNull();
+  });
+
+  it('with no items the adapter has no itemLink: the option is an empty object, spread to nothing', () => {
+    expect(adaptersOf().itemOption).toEqual({});
+    expect(Object.keys(adaptersOf().itemOption)).toEqual([]);
+    expect(Object.keys(adaptersOf([]).itemOption)).toEqual(['itemLink']);
+  });
+
+  it('draws a seeded item as the reader\'s item-link and leaves an unseeded one as text; the click goes to onLink as a new tab', async () => {
+    const api = await frameApi();
+    const root = mount();
+    const onLink = vi.fn();
+    await api.enhance(root, {
+      vocabulary: { itemFields: ['Tracker'] },
+      onLink,
+      ...adaptersOf([{ value: 'AB-12', href: 'https://t.example/AB-12' }]).itemOption,
+    });
+    expect(linksOf(root)).toEqual(['AB-12 \u2197|https://t.example/AB-12']);
+    const a = root.querySelector('a.item-link') as HTMLAnchorElement;
+    expect(a.target).toBe('_blank');
+    // CD-7 and AB-123 are in the same fact and stay text.
+    expect(root.querySelector('.byline')?.textContent).toContain('CD-7');
+    expect(root.querySelector('.byline')?.textContent).toContain('AB-123');
+    a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    expect(onLink.mock.calls).toEqual([['https://t.example/AB-12', { newTab: true }]]);
+  });
+
+  it('draws only an absolute https: href: http:, javascript:, data:, relative and spaced hrefs are no link, and the value stays text (the reader\'s own check, P4c)', async () => {
+    const api = await frameApi();
+    for (const href of ['http://t.example/AB-12', 'javascript:alert(1)', 'data:text/html,x', '/AB-12', 'AB-12', '//t.example/AB-12', 'https://t.example/a b', 'https://u@t.example/', 'https:', '']) {
+      const root = mount();
+      await api.enhance(root, { vocabulary: { itemFields: ['Tracker'] }, ...adaptersOf([{ value: 'AB-12', href }]).itemOption });
+      expect(linksOf(root), JSON.stringify(href)).toEqual([]);
+      expect(root.querySelector('.byline')?.textContent).toContain('AB-12');
+    }
+    const root = mount();
+    await api.enhance(root, { vocabulary: { itemFields: ['Tracker'] }, ...adaptersOf([{ value: 'AB-12', href: 'https://t.example/AB-12' }]).itemOption });
+    expect(linksOf(root)).toEqual(['AB-12 \u2197|https://t.example/AB-12']);
+  });
+
+  it('with no itemLink the reader draws no item link, and the frame\'s enhance passes every other option as it is', async () => {
+    const api = await frameApi();
+    const root = mount();
+    await api.enhance(root, { vocabulary: { itemFields: ['Tracker'] } });
+    expect(linksOf(root)).toEqual([]);
+    expect(root.querySelector('.item-link')).toBeNull();
+    const other = mount();
+    await api.enhance(other, undefined);
+    expect(other.hasAttribute('data-docreader-root')).toBe(true);
   });
 });

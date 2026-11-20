@@ -42,17 +42,17 @@
     },
     {
       "path": "frame/bootstrap.js",
-      "sha256": "9dda7f13850957aa1e3736b5c6172fd98bfbcd3d25eaec8e405cad1eeec5d9f6",
-      "bytes": 32546,
+      "sha256": "c13d5207e320019df4a151dbb06ccf2be2b201a87242338c937d8d7828d41cd2",
+      "bytes": 32745,
       "kind": "script",
-      "csp": "'sha256-ndp/E4UJV6oeNza1xhcv2Yv7zT0l6uyOQFytHu7F2fY='"
+      "csp": "'sha256-wT1SB+MgAZ30oVHbsGzPK+KyAahyQjOMk32NeCjUHNI='"
     },
     {
       "path": "frame/enhance.js",
-      "sha256": "cee332b34426f354e13d0b960ae8d0c8afe1e45bbfa6c6e344b827e351a87903",
-      "bytes": 214902,
+      "sha256": "e041bf2d933bbf779114ab64245d5530bcea2bef1bff274469890f7290bf4ff9",
+      "bytes": 215274,
       "kind": "script",
-      "csp": "'sha256-zuMys0Qm81ThPQuWCujQyK/h5Fu/psbjRLgn41GoeQM='"
+      "csp": "'sha256-4EG/LZM7v3eRFKtkJF1VMLzqK+8b/ydEaYkPcpC/T/k='"
     },
     {
       "path": "frame/guard.js",

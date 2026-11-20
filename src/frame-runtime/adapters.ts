@@ -15,6 +15,8 @@
 //             shows a failed copy
 //   changes   only a full sha (40 or 64 lower-case hex): anything shorter resolves null locally; else the outbox's slot
 //   openVersion  version: null keys omitted, full shas only (a short one sends nothing); {} back to the latest
+//   itemLink     only with the seed's `items`: the href of the item whose value is exactly the key asked, else null (parity Task 4); the
+//                reader draws it only when it is an absolute https: URL (enhance-entry.ts)
 //   onProgress   progress: the share (0 to 1) as a string of thousandths, rounded and clamped to 0..1000; a value that is
 //                not a finite number sends nothing (batch 1.1, C108)
 //
@@ -104,15 +106,22 @@ export interface FrameAdapters {
   readonly onProgress?: (share: number) => void;
   /** Only when the seed's bridge asks for places (its default is false): the figure overlay opened or closed. */
   readonly onPlace?: (kind: PlaceKind) => void;
+  /**
+   * enhance's `itemLink` option, as an object to spread (so the bootstrap's one line serves it): `{ itemLink }` only when the
+   * seed carries `items` (parity Task 4), which answers the seeded href of the item whose value is exactly `key`, else null (the
+   * item stays text); `{}` otherwise.
+   */
+  readonly itemOption: { readonly itemLink?: (key: string) => string | null };
   /** The guard's `docserver:link`: the same sink as onLink, dropped when links are off. */
   link(href: string): void;
 }
 
 /** The adapters for one frame over its outbox and seed (see the header). */
-export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'bridge'>): FrameAdapters {
+export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'bridge' | 'items'>): FrameAdapters {
   const snapshot: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const [k, v] of seed.snapshot) snapshot[fromBridgeKey(k)] = v;
   const b = seed.bridge;
+  const { items } = seed;
   const navigate = (href: string): void => {
     if (b.links && sendableHref(href)) outbox.send({ t: 'navigate', href });
   };
@@ -179,6 +188,7 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
           },
         }
       : {}),
+    itemOption: items === undefined ? {} : { itemLink: (key: string): string | null => items.find((i) => i.value === key)?.href ?? null },
     link: navigate,
   };
 }

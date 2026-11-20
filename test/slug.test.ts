@@ -208,6 +208,7 @@ describe('render: heading ids, meta.headings and meta.title', () => {
       figures: 0,
       tables: 0,
       mermaidKinds: [],
+      items: [],
     });
     expect(render('- # in list\n\n> ## in quote\n').meta.headings).toEqual([
       { level: 1, id: 'in-list', text: 'in list' },

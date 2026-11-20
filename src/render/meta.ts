@@ -8,8 +8,8 @@ import type { RenderEnv } from './env.js';
 import { frontRecord } from './frontMatter.js';
 import type { RenderMeta } from './types.js';
 
-/** The meta of one rendered document. Call it after the env's render has finished. */
-export function collectMeta(env: RenderEnv): RenderMeta {
+/** The meta of one rendered document, with its item values (items.ts). Call it after the env's render has finished. */
+export function collectMeta(env: RenderEnv, items: readonly string[]): RenderMeta {
   const headings = env.headings;
   const frontList = env.frontList ?? null;
   return {
@@ -20,5 +20,6 @@ export function collectMeta(env: RenderEnv): RenderMeta {
     figures: env.figures,
     tables: env.tables,
     mermaidKinds: env.mermaidKinds,
+    items,
   };
 }
