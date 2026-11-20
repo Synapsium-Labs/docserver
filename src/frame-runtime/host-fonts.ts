@@ -17,13 +17,15 @@
 const FAMILY = { sans: 'Docreader Host Sans', mono: 'Docreader Host Mono' } as const;
 /** The cap on one face, in decoded bytes. */
 const CAP = 131072;
+/** The cap on one face, in characters: base64 of the byte cap with its padding, the contract's face cap (the seed's `fontFaceMaxChars`, held equal by a test). */
+const CAP_CHARS = Math.ceil(CAP / 3) * 4;
 /** A base64 alphabet string (the standard one, with its padding). */
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 /** One role's face: the bytes when every check passes, else null. */
 function decode(text: unknown): Uint8Array<ArrayBuffer> | null {
-  // A cap on the text first (4 characters per 3 bytes), so a long string is never decoded.
-  if (typeof text !== 'string' || text.length > CAP * 1.4 || !BASE64.test(text)) return null;
+  // A cap on the text first, the contract's own (4 characters per 3 bytes, padded), so a long string is never decoded.
+  if (typeof text !== 'string' || text.length > CAP_CHARS || !BASE64.test(text)) return null;
   const raw = atob(text);
   if (raw.length > CAP || raw.slice(0, 4) !== 'wOF2') return null;
   const bytes = new Uint8Array(raw.length);

@@ -23,6 +23,17 @@ Rows A5i to A5n were added in the fix round (test file at 73 rows): A5i queued a
 
 A5g rewrites both `catch` blocks of `loadHostFonts` to rethrow; the rows that red it are the atob-refused strings (the case the Task 3 review named), a bad face leaving the other role loading, and the never-throws row.
 
+
+## Review 2906 F9
+
+The pre-decode guard of `src/frame-runtime/host-fonts.ts` is now `Math.ceil(CAP / 3) * 4`, 174 764 characters, the contract's face cap in characters (the seed's `fontFaceMaxChars`; the test reads that constant and asserts the length). It was `CAP * 1.4` (183 500), which no test pinned: the one over-cap case, a face of 131 073 bytes, is 174 764 characters and is stopped by the post-decode byte check. No string just over the cap decodes to a face the byte check would pass, so the guard's effect is cost, and the test spies on `atob`. The rows were measured on the file in place (original bytes saved, sha256 `9d62ad47...a77ca` checked after each restore).
+
+| Row | Guard | File | Edit | Tests run | Result |
+|---|---|---|---|---|---|
+| A5o | the pre-decode guard is the contract's face cap in characters | `src/frame-runtime/host-fonts.ts` | `text.length > CAP_CHARS` back to `text.length > CAP * 1.4` (183 500) | `test/enhance-appearance.test.ts` | red (1 failed, 75 passed of 76) |
+| A5p | the guard's boundary is exact (a string at the cap reaches the decoder, one character more does not) | `src/frame-runtime/host-fonts.ts` | `text.length > CAP_CHARS` to `text.length >= CAP_CHARS` | `test/enhance-appearance.test.ts` | red (2 failed, 74 passed of 76) |
+| A5q | a string over the cap is never decoded | `src/frame-runtime/host-fonts.ts` | the length test removed (`text.length > CAP_CHARS || ` dropped) | `test/enhance-appearance.test.ts` | red (1 failed, 75 passed of 76) |
+
 ```json
 [
   {
@@ -150,6 +161,33 @@ A5g rewrites both `catch` blocks of `loadHostFonts` to rethrow; the rows that re
     "result": "red",
     "file": "src/frame-runtime/enhance-entry.ts",
     "summary": "1 failed | 72 passed (73)"
+  },
+  {
+    "row": "A5o",
+    "guard": "the pre-decode guard is the contract's face cap in characters",
+    "edit": "text.length > CAP_CHARS back to text.length > CAP * 1.4 (183 500)",
+    "tests": "test/enhance-appearance.test.ts",
+    "result": "red",
+    "file": "src/frame-runtime/host-fonts.ts",
+    "summary": "1 failed, 75 passed of 76"
+  },
+  {
+    "row": "A5p",
+    "guard": "the guard's boundary is exact (a string at the cap reaches the decoder, one character more does not)",
+    "edit": "text.length > CAP_CHARS to text.length >= CAP_CHARS",
+    "tests": "test/enhance-appearance.test.ts",
+    "result": "red",
+    "file": "src/frame-runtime/host-fonts.ts",
+    "summary": "2 failed, 74 passed of 76"
+  },
+  {
+    "row": "A5q",
+    "guard": "a string over the cap is never decoded",
+    "edit": "the length test removed (text.length > CAP_CHARS ||  dropped)",
+    "tests": "test/enhance-appearance.test.ts",
+    "result": "red",
+    "file": "src/frame-runtime/host-fonts.ts",
+    "summary": "1 failed, 75 passed of 76"
   }
 ]
 ```

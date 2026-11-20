@@ -14,6 +14,7 @@ import { createJournal } from '../src/enhance/journal.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import { EVENT_NAMES } from '../src/enhance/registry.js';
 import type { ReaderStorage } from '../src/enhance/types.js';
+import { SEED_LIMITS } from '../src/frame/seed.js';
 import { loadHostFonts } from '../src/frame-runtime/host-fonts.js';
 import { render } from '../src/render/index.js';
 
@@ -626,6 +627,23 @@ describe('test 7: the host faces (a fake FontFace)', () => {
   it('exactly the cap (131 072 bytes) is accepted', async () => {
     await loadHostFonts({ sans: b64(woff2(131072)) });
     expect(faces).toHaveLength(1);
+  });
+
+  // Review 2906 F9: the pre-decode guard is the contract's face cap in characters (SEED_LIMITS.fontFaceMaxChars), not a looser
+  // bound. No string just over it decodes to a face the byte check would pass, so the guard's effect is its cost: the decoder
+  // is not run on it. A string at the cap reaches the decoder (and the byte check drops it); one character more does not.
+  it("a string over the contract's face cap in characters is never decoded; one at the cap is", async () => {
+    const atobSpy = vi.spyOn(globalThis, 'atob');
+    const cap = SEED_LIMITS.fontFaceMaxChars;
+    expect(cap).toBe(174764);
+    for (const over of [cap + 1, cap + 4, 183_500, 183_501, 400_000]) {
+      await expect(loadHostFonts({ sans: 'A'.repeat(over) })).resolves.toBeUndefined();
+      expect(atobSpy, `${String(over)} characters`).not.toHaveBeenCalled();
+    }
+    await expect(loadHostFonts({ sans: 'A'.repeat(cap) })).resolves.toBeUndefined(); // 131 073 bytes, no signature: dropped after the decode
+    expect(atobSpy).toHaveBeenCalledTimes(1);
+    expect(faces).toEqual([]);
+    expect(added).toEqual([]);
   });
 
   it('a face whose load rejects is dropped from the document font set, and the call still resolves', async () => {
