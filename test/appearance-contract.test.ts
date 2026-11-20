@@ -620,6 +620,14 @@ describe('the contract at the ./frame boundary is frozen', () => {
     expect(f.APPEARANCE_PAIRS.filter((p) => !Object.isFrozen(p))).toEqual([]);
   });
 
+  it('MERMAID_HOSTED_KINDS is frozen, and a write through it throws', () => {
+    const k = frame.MERMAID_HOSTED_KINDS as unknown as string[];
+    expect(Object.isFrozen(k)).toBe(true);
+    expect(() => { k[0] = 'x'; }).toThrow(TypeError);
+    expect(() => k.push('x')).toThrow(TypeError);
+    expect(k[0]).toBe('flowchart-v2');
+  });
+
   it('writing through the ./frame import throws in strict mode, and changes nothing', () => {
     const slots = f.APPEARANCE_SLOTS;
     expect(() => { slots.colour[0] = 'x'; }).toThrow(TypeError);

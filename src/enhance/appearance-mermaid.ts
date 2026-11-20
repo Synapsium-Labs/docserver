@@ -74,10 +74,10 @@ export function mermaidThemeOf(c: Colours): Readonly<Record<string, string>> {
   const s = seriesOf(c);
   const nth = (i: number): string => s[i % s.length] as string;
   for (let i = 0; i < 12; i++) put('pie' + (i + 1), nth(i));
-  // A highlighted commit's inner square: `surface2` on the commit's series colour (4.57:1 or better, measured).
+  // gitInv<n> paints a highlighted commit's outer square (the inner one reads primaryColor): the series, as git<n>.
   for (let i = 0; i < 8; i++) {
     put('git' + i, nth(i));
-    put('gitInv' + i, c.surface2.toLowerCase());
+    put('gitInv' + i, nth(i));
   }
   return o;
 }
@@ -93,6 +93,6 @@ export function isAuthorStyled(text: string): boolean {
   const body = lines.slice(from).join('\n');
   return (
     body.split(/[\n;]/).some((s) => /^(?:classDef|style|linkStyle|rect|box|todayMarker)(?:\s|$)/i.test(s.replace(/^\s+/, ''))) ||
-    /(?:^|[^<])<\/?(?!br(?![a-z]))[a-z]/i.test(body)
+    /(?:^|[^<])<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(body)
   );
 }

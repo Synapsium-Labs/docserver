@@ -13,6 +13,18 @@ Each row mutated `src/enhance/appearance-mermaid.ts` in place (original bytes sa
 | A2g | `<<` is not an element | drop the not-after-`<` guard | `test/appearance-mermaid.test.ts` | red (2 failed | 83 passed (85)) |
 | A2h | todayMarker head | remove `todayMarker` from the heads | `test/appearance-mermaid.test.ts` | red (2 failed | 83 passed (85)) |
 | A2i | dropShadow fixed key | leave `dropShadow` out | `test/appearance-mermaid.test.ts` | red (2 failed | 83 passed (85)) |
+| A2j | gitInv follows the series | gitInv<n> set to surface2 again | `test/appearance-mermaid.test.ts` | red (13 failed | 78 passed (91)) |
+| A2k | MERMAID_HOSTED_KINDS frozen at ./frame | remove the `Object.freeze(MERMAID_HOSTED_KINDS)` line | `test/appearance-contract.test.ts` | red (1 failed | 129 passed (130)) |
+| A2l | lone CR splits statements | split lines at `\n` only | `test/appearance-mermaid.test.ts` | red (1 failed | 90 passed (91)) |
+| A2m | br exclusion matches only the element br | br guard back to `(?![a-z])` | `test/appearance-mermaid.test.ts` | red (3 failed | 88 passed (91)) |
+
+A2j to A2m were measured in the fix round (A2k edits one line of `src/frame/appearance.ts` and restores it, sha256 checked).
+
+## Choices
+
+- The derivation table's rows list 124 keys (96 plus 28 series keys); the spec's prose says 110 measured keys. The test asserts the rows as written.
+- `gitInv<n>` follows the series, as `git<n>`: Mermaid 12.1.0's `.commit-highlight<n>` (the outer square) reads it; the inner square reads `primaryColor` (`surface2`).
+- The `br` exclusion matches only the element `br` (`br` then white space, `/`, `>` or the end).
 
 ```json
 [
@@ -78,6 +90,34 @@ Each row mutated `src/enhance/appearance-mermaid.ts` in place (original bytes sa
   "edit": "leave `dropShadow` out",
   "tests": "test/appearance-mermaid.test.ts",
   "result": "red (2 failed | 83 passed (85))"
+ },
+ {
+  "row": "A2j",
+  "guard": "gitInv follows the series",
+  "edit": "gitInv<n> set to surface2 again",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (13 failed | 78 passed (91))"
+ },
+ {
+  "row": "A2k",
+  "guard": "MERMAID_HOSTED_KINDS frozen at ./frame",
+  "edit": "remove the `Object.freeze(MERMAID_HOSTED_KINDS)` line",
+  "tests": "test/appearance-contract.test.ts",
+  "result": "red (1 failed | 129 passed (130))"
+ },
+ {
+  "row": "A2l",
+  "guard": "lone CR splits statements",
+  "edit": "split lines at `\\n` only",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (1 failed | 90 passed (91))"
+ },
+ {
+  "row": "A2m",
+  "guard": "br exclusion matches only the element br",
+  "edit": "br guard back to `(?![a-z])`",
+  "tests": "test/appearance-mermaid.test.ts",
+  "result": "red (3 failed | 88 passed (91))"
  }
 ]
 ```

@@ -3,11 +3,8 @@
 // Judged on values only. The derivation table is typed here once from the design, independently of the module's own copy.
 //
 // Decisions recorded here:
-// - `gitInv0` to `gitInv7`. Mermaid 12.1.0's `base` theme computes `gitInv<n>` as `invert(git<n>)` when the key is
-//   unset, and the gitGraph stylesheet paints `.commit-highlight<n>` (a highlighted commit's inner square, stroke and
-//   fill) with it. An inverse of a series colour is not a theme colour and can be anything (a mid grey for a mid
-//   colour), so each is set to `surface2`, which the design's "Marks no key reaches" and "Crossings" paragraphs measure
-//   at 4.57:1 or better on a commit's series colour in all twelve palettes ("the highlight's inner square ... in `surface2`").
+// - `gitInv0` to `gitInv7` follow the series, as git<n> does (the table's last row). In Mermaid 12.1.0 `.commit-highlight<n>`
+//   (a highlighted commit's OUTER square) reads `gitInv<n>`; the inner square reads `primaryColor`, already `surface2`.
 // - The design's text says the table holds 110 keys; its rows list 124 (96 plus the 28 series keys), and this test
 //   asserts the rows as written. Output = table keys, 1.1.0's `THEME_VARIABLES` keys but `fontFamily`, and the three
 //   fixed keys (`fontSize` is both a fixed key and a 1.1.0 key, counted once).
@@ -137,7 +134,7 @@ describe('mermaidThemeOf', () => {
         let want: string;
         if (slot === 'the series') {
           const n = Number(/\d+$/.exec(k)![0]);
-          want = k.startsWith('pie') ? s[(n - 1) % s.length]! : k.startsWith('gitInv') ? c.surface2.toLowerCase() : s[n % s.length]!;
+          want = k.startsWith('pie') ? s[(n - 1) % s.length]! : s[n % s.length]!;
         } else if (slot.includes(' at 4% over ')) {
           const [fg, , , , bg] = slot.split(' ');
           want = tint(4, c[fg as AppearanceColourSlot].toLowerCase(), c[bg as AppearanceColourSlot].toLowerCase());
@@ -214,6 +211,13 @@ describe('seriesOf', () => {
     }
   });
 
+  it('gitInv<n> equals git<n> for n in 0 to 7', () => {
+    for (const f of FIXTURES) {
+      const o = mermaidThemeOf(f.colour);
+      for (let n = 0; n < 8; n++) expect(o['gitInv' + n], f.name).toBe(o['git' + n]);
+    }
+  });
+
   it('with no equal pair the series has twelve values and pie12 is text', () => {
     const c = { ...PHOSPHOR, ok: '#123456' };
     expect(seriesOf(c)).toHaveLength(12);
@@ -251,6 +255,10 @@ describe('isAuthorStyled', () => {
     ['element after an annotation', 'classDiagram\n<<interface>> A\nA : <b>x</b>'],
     ['element after one angle', 'flowchart LR\nA["x <b>y"]-->B'],
     ['element after a space-less arrow', 'sequenceDiagram\nA->>B:<i>x'],
+    ['br1 is an element', 'flowchart LR\nA["x<br1>"]-->B'],
+    ['br-x is an element', 'flowchart LR\nA["x<br-x>"]-->B'],
+    ['closing br1 is an element', 'flowchart LR\nA["x</br1>"]-->B'],
+    ['lone carriage return', 'flowchart LR\rstyle A fill:red'],
     ['br-like element brx', 'flowchart LR\nA["x<brx>"]-->B'],
     ['unterminated front matter does not hide it', '---\ntitle: x\nflowchart LR\nstyle A fill:red'],
     ['element in the body after front matter', '---\ntitle: x\n---\nflowchart LR\nA["<b>x</b>"]-->B'],
@@ -268,6 +276,7 @@ describe('isAuthorStyled', () => {
     ['click line', 'flowchart LR\nA-->B\nclick A "https://example.org" "tip"'],
     ['br', 'flowchart LR\nA["x<br>y"]-->B'],
     ['br self-closed', 'flowchart LR\nA["x<br/>y<br />z"]-->B'],
+    ['br at the end of the text', 'flowchart LR\nA-->B["x<br'],
     ['BR upper-case and a closing tag', 'flowchart LR\nA["x<BR>y</br>z"]-->B'],
     ['heads as a prefix of a longer word', 'flowchart LR\nstyles A\nboxed B\nrectangle C\nclassDefs D'],
     ['head inside a statement', 'flowchart LR\nA["style x"]-->B'],
