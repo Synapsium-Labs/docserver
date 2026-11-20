@@ -32,11 +32,13 @@
 //    is checked.
 //  - The forced `:hover` and `:focus-visible` states run on Chromium only: they use the DevTools protocol's
 //    CSS.forcePseudoState, which WebKit has no equivalent of here.
-//  - Layout cases that draw Mermaid (options hold `mermaid`) are left out of the sweeps, for cost: they load the
-//    Mermaid bundle per page. The drawn figure's chrome is covered by the one document with a static drawing.
-//  - (b) and (c) read every document under two appearances (a dark and a light one) at rest and with text selected, and the
-//    representative documents (REPRESENTATIVE) in every state under all twelve; the full sweep of every state over every
-//    document is (a)'s, which does not depend on a fixture.
+//  - Layout cases that draw Mermaid (options hold `mermaid`) are in (a), and left out of the (b) and (c) sweeps, for cost:
+//    they load the Mermaid bundle per page, and the text inside a drawing is test 5's. The drawn figure's chrome is covered
+//    by the one document with a static drawing.
+//  - (b) and (c) read every document, but those that draw Mermaid, in every state under two appearances (a dark and a light
+//    one), and the representative documents (REPRESENTATIVE) in every state under all twelve (ccrc D-8827: the ruling widened
+//    both from a sweep at rest and with text selected, once the full sweep's added time was measured: 83 s for the two
+//    rows on Chromium, 249 s a CI leg at the 2x WebKit factor, under the 5 minutes the ruling allowed).
 //  - The changes menu needs a `changes` callback: the harness page turns a `changes` option given as data into one
 //    (page/bootstrap.ts), and one synthetic document uses it.
 //  - Opacity above an element is read as shown or not shown (a product of zero is skipped); a partial opacity is not
@@ -79,6 +81,8 @@ interface Doc {
   readonly viewport: { readonly width: number; readonly height: number } | undefined;
   readonly csp: 'strict' | 'reader' | undefined;
   readonly html: ((html: string) => string) | undefined;
+  /** A layout case whose options hold `mermaid`: its page loads the Mermaid bundle and draws (row (a) reads it; (b) and (c) sweeps leave it out). */
+  readonly mermaid?: true;
 }
 
 /** A static drawing, as the viewer tests inject one: the figure's tools, its overlay and a pressable tool need an SVG. */
@@ -89,9 +93,15 @@ function allDocs(): Doc[] {
   const corpus: Doc[] = corpusDocuments()
     .filter((d) => render(d.markdown).outcome === 'rendered')
     .map((d) => ({ id: `corpus/${d.id}`, markdown: d.markdown, options: {}, viewport: undefined, csp: undefined, html: undefined }));
-  const layout: Doc[] = loadLayoutCases()
-    .filter((c) => !Object.hasOwn(c.options, 'mermaid'))
-    .map((c) => ({ id: `layout/${c.id}`, markdown: c.markdown, options: c.options, viewport: c.viewport, csp: c.csp, html: undefined }));
+  const layout: Doc[] = loadLayoutCases().map((c) => ({
+    id: `layout/${c.id}`,
+    markdown: c.markdown,
+    options: c.options,
+    viewport: c.viewport,
+    csp: c.csp,
+    html: undefined,
+    ...(Object.hasOwn(c.options, 'mermaid') ? { mermaid: true as const } : {}),
+  }));
   const since = layout.find((d) => d.id === 'layout/since/menu') as Doc;
   // The changes menu needs a `changes` callback; the harness page turns a `changes` given as data into one (page/bootstrap.ts).
   const menu: Doc = { ...since, id: 'synthetic/changes-menu', options: { ...since.options, changes: { changed: [[1, 1]] } } };
@@ -718,7 +728,10 @@ describe('the pairs (b): the library gate, on every fixture', () => {
 
 // ───────── (a) rows ─────────
 
-const DOCS = allDocs();
+/** Every document, the layout cases that draw Mermaid included: row (a)'s (ccrc D-8827's widening of it). */
+const DOCS_A = allDocs();
+/** The documents the (b) and (c) sweeps read: those that draw no Mermaid, for cost (they load the Mermaid bundle per page). */
+const DOCS = DOCS_A.filter((d) => d.mermaid !== true);
 /** The documents read under print media: one of prose and tables, one of code, one of changed marks, one with a figure. */
 /** The representative documents read in the dark modes: those with highlighted code, chrome, marks, cards, tables and the dots. */
 const DARKENED: readonly string[] = [
@@ -757,7 +770,7 @@ describeBrowsers((browser) => {
   }, 120_000);
 
   describe('(a) no appearance: the computed styles equal 1.1.0\'s', () => {
-    for (const doc of DOCS) {
+    for (const doc of DOCS_A) {
       it.concurrent(doc.id, async () => {
         const out = await compareDoc(doc, browser, v110());
         if (out.length > 0) throw new Error(`computed styles moved from ${TAG}:\n${out.join('\n')}`);
@@ -1013,9 +1026,8 @@ describeBrowsers((browser) => {
     if (FILE !== undefined && FILE !== '') writeFileSync(FILE, `\n== ${label} (${browser}) ==\n${text}\n`, { flag: 'a' });
   };
 
-  /** The documents of a row: the representative ones in every state, under all twelve fixtures; every document at rest, under two. */
+  /** The documents of a row: the representative ones in every state, under all twelve fixtures; every document (Mermaid's layout cases apart) in every state, under two. */
   const SWEEP = ['Phosphor & Ink', 'Phosphor Daylight'];
-  const AT_REST = ['rest', 'selection'];
 
   describe('(c) closed grounds: every text element is on one of section 5\'s grounds, in a colour it admits', () => {
     it('the representative documents all exist', () => {
@@ -1038,8 +1050,8 @@ describeBrowsers((browser) => {
       }, 1_200_000);
     }
     for (const f of FIXTURES.filter((x) => SWEEP.includes(x.name))) {
-      it.concurrent(`${f.name}: every document, at rest and with text selected`, async () => {
-        fail(f, await collect(f, DOCS, AT_REST), 'every document, at rest and selected');
+      it.concurrent(`${f.name}: every document, every state`, async () => {
+        fail(f, await collect(f, DOCS), 'every document, every state');
       }, 1_200_000);
     }
   });
@@ -1059,8 +1071,8 @@ describeBrowsers((browser) => {
       }, 1_200_000);
     }
     for (const f of FIXTURES.filter((x) => SWEEP.includes(x.name))) {
-      it(`${f.name}: every document, at rest and with text selected`, async () => {
-        fail(f, await collect(f, DOCS, AT_REST), 'every document, at rest and selected');
+      it(`${f.name}: every document, every state`, async () => {
+        fail(f, await collect(f, DOCS), 'every document, every state');
       }, 1_200_000);
     }
   });
