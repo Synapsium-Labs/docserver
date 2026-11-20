@@ -1902,10 +1902,63 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     const live = { ...assets, fonts: { sans: GOOD } } as Record<string, unknown>;
     const m = mount(PLAIN, { assets: live });
     live['fonts'] = 'x';
-    (assets as unknown as Record<string, unknown>)['fonts'] = undefined;
+    // The shared `assets` carries no `fonts` of its own for the rows that spread it after this one.
+    delete (assets as unknown as Record<string, unknown>)['fonts'];
     m.frame.update(input(PLAIN));
     expect(m.fallbacks()).toEqual([]);
     expect(seedOf(lastSrcdoc())['fonts']).toEqual({ sans: GOOD });
+  });
+
+  // Second review F6: `fonts` is read and checked at mount when the host gives it then; a host that gave none keeps a live
+  // object, and each later mount reads it again, so a `fonts` it adds meets the same check, with the same TypeError,
+  // thrown by update() before anything is torn down.
+  it('F6: a malformed fonts added after a mount without one is a TypeError at update(), before teardown, never a fallback', () => {
+    for (const fonts of [null, 'x', [], { serif: GOOD }, { sans: 5 }, { mono: {} }, Object.defineProperty({}, 'sans', { get: () => GOOD, enumerable: true })]) {
+      const live = { ...assets } as Record<string, unknown>;
+      const m = mount(PLAIN, { assets: live });
+      const before = iframes();
+      live['fonts'] = fonts;
+      expect(() => m.frame.update(input(PLAIN)), JSON.stringify(fonts)).toThrow(TypeError);
+      // Nothing was torn down and nothing fell back: the old mount stays, and a later good update() works.
+      expect(iframes()).toBe(before);
+      expect(m.fallbacks()).toEqual([]);
+      delete live['fonts'];
+      m.frame.update(input(PLAIN));
+      expect(m.fallbacks()).toEqual([]);
+      expect(iframes()).toBe(before);
+      m.frame.destroy();
+    }
+  });
+
+  it('F6: a getter added on assets.fonts after mount is a TypeError at update() and is never called', () => {
+    const live = { ...assets } as Record<string, unknown>;
+    const m = mount(PLAIN, { assets: live });
+    const get = vi.fn(() => ({ sans: GOOD }));
+    Object.defineProperty(live, 'fonts', { get, enumerable: true, configurable: true });
+    expect(() => m.frame.update(input(PLAIN))).toThrow(TypeError);
+    expect(get).not.toHaveBeenCalled();
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('F6: good fonts added after a mount without any are seeded by update()', () => {
+    const live = { ...assets } as Record<string, unknown>;
+    const m = mount(PLAIN, { assets: live });
+    expect(Object.keys(seedOf(m.iframe.getAttribute('srcdoc') ?? ''))).not.toContain('fonts');
+    live['fonts'] = { sans: GOOD };
+    m.frame.update(input(PLAIN));
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedOf(lastSrcdoc())['fonts']).toEqual({ sans: GOOD });
+  });
+
+  it('F6: an own fonts holding undefined at mount is none: a later bad one is a TypeError at update(), a later good one is seeded', () => {
+    const live = { ...assets, fonts: undefined } as Record<string, unknown>;
+    const m = mount(PLAIN, { assets: live });
+    live['fonts'] = 'x';
+    expect(() => m.frame.update(input(PLAIN))).toThrow(TypeError);
+    live['fonts'] = { mono: GOOD };
+    m.frame.update(input(PLAIN));
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedOf(lastSrcdoc())['fonts']).toEqual({ mono: GOOD });
   });
 
   // Review 2906 F3: only `fonts` is read at mount; every other asset stays live, as in 1.1.0 (a host that passes no new key

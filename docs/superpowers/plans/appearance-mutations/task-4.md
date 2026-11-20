@@ -52,3 +52,21 @@ Follow-up to F3: the facade over `Object.create(assets)` is replaced. A host tha
   {"row":"F3b","guard":"a host with no fonts is handed on itself","edit":"facade always handed on","tests":"test/host-mount.test.ts #private row","result":"red"}
 ]
 ```
+
+## Second review F6
+
+The ruling: `assets` stays live. `fonts` is read and checked at mount when the host gives it then; a host that gave none keeps a live object, each later mount reads it again, and a malformed `fonts` met at `update()` is the same kind of outcome as at mount: a `TypeError` thrown by `update()` before anything is torn down (the current mount stays, no fallback). Measured in `test/host-mount.test.ts` with the rows named `F6` plus the existing `mutating assets.fonts after mount` row (run with `-t`); the in-memory frame build stood in for the committed manifest, which is stale until the generated files are rebuilt. Red first: before the change two `F6` rows failed (a malformed `fonts` fell through frameDocument as a fallback or was ignored, a getter on `fonts` was called by frameDocument).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| F6a | A host that gave no `fonts` at mount has its live `assets` read again by `update()`, before teardown | the re-read in `update()` removed | `test/host-mount.test.ts` (`F6` rows) | red (3 failed) |
+| F6b | A host that gave `fonts` at mount has it fixed for the DocFrame's life | the re-read in `update()` made unconditional | `test/host-mount.test.ts` (`mutating assets.fonts after mount` row) | red (1 failed) |
+| F6c | An own `fonts` holding `undefined` is none, so the live object is read again | `given` true for any own `fonts` | `test/host-mount.test.ts` (`F6` rows) | red (1 failed) |
+
+```json
+[
+  {"row":"F6a","guard":"update() reads the live assets again when no fonts was given at mount","edit":"re-read removed","tests":"test/host-mount.test.ts F6 rows","result":"red"},
+  {"row":"F6b","guard":"fonts given at mount is fixed","edit":"re-read unconditional","tests":"test/host-mount.test.ts mutating-fonts row","result":"red"},
+  {"row":"F6c","guard":"own fonts undefined is none","edit":"given for any own fonts","tests":"test/host-mount.test.ts F6 rows","result":"red"}
+]
+```

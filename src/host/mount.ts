@@ -200,18 +200,22 @@ const isPlain = (v: unknown): v is object => {
 };
 
 /**
- * What every mount hands frameDocument as `assets`. Only `fonts` is read at mount (the review 2906 F3 ruling): every other
- * asset is read live by frameDocument by plain property access, as in 1.1.0 (inherited ones, a later `assets.mermaid` and a
- * throwing Proxy trap included). A host that gives no `fonts` is handed on as it is, so it behaves exactly as in 1.1.0, a
- * class whose getters read a #private field included. A host that gives `fonts` (an own data property: a getter on it, or a
- * malformed shape, is a TypeError at mount time, never a fallback, and `fonts` is read once, so a later change to it does
- * not reach update()) or has one only by inheritance (absent) gets a Proxy over an empty target that answers `fonts` with
- * the checked faces and forwards every other read to the host with the host as the receiver, so its getters see it as
- * `this`. The target is empty so that a frozen host's own `fonts` can never break a Proxy invariant. A value that is not an
- * object is passed through for frameDocument to refuse.
+ * What a mount hands frameDocument as `assets`, and whether `fonts` was read for good. Only `fonts` is read here (the review
+ * 2906 F3 ruling); every other asset is read live by frameDocument by plain property access, as in 1.1.0 (inherited ones, a
+ * later `assets.mermaid` and a throwing Proxy trap included). A host that gives no `fonts` is handed on as it is, so it
+ * behaves exactly as in 1.1.0, a class whose getters read a #private field included. A host that gives `fonts` (an own data
+ * property: a getter on it, or a malformed shape, is a TypeError, never a fallback) or has one only by inheritance (absent)
+ * gets a Proxy over an empty target that answers `fonts` with the checked faces and forwards every other read to the host
+ * with the host as the receiver, so its getters see it as `this`. The target is empty so that a frozen host's own `fonts`
+ * can never break a Proxy invariant. A value that is not an object is passed through for frameDocument to refuse.
+ *
+ * `given` is true when the host gave an own `fonts` now (one that holds undefined is none): it was read and checked once, here, at mount, and a later change to
+ * it reaches no update(). When it is false the host's object stays live, and update() calls this again on it before it
+ * tears anything down, so a `fonts` the host adds later meets the same check, with the same TypeError, thrown by update()
+ * with the old mount left as it was.
  */
-function assetsOf(assets: unknown): unknown {
-  if (typeof assets !== 'object' || assets === null) return assets;
+function assetsOf(assets: unknown): { readonly value: unknown; readonly given: boolean } {
+  if (typeof assets !== 'object' || assets === null) return { value: assets, given: false };
   let d: PropertyDescriptor | undefined;
   let inherited = false;
   try {
@@ -219,9 +223,9 @@ function assetsOf(assets: unknown): unknown {
     inherited = d === undefined && 'fonts' in assets;
   } catch {
     // A Proxy whose trap throws: nothing is read here; frameDocument reads it and the throw becomes a fallback, as in 1.1.0.
-    return assets;
+    return { value: assets, given: false };
   }
-  if (d === undefined && !inherited) return assets;
+  if (d === undefined && !inherited) return { value: assets, given: false };
   let faces: ReturnType<typeof fontsOf>;
   if (d !== undefined) {
     if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
@@ -233,7 +237,7 @@ function assetsOf(assets: unknown): unknown {
     }
   }
   const host = assets;
-  return new Proxy({}, { get: (_t, key) => (key === 'fonts' ? faces : Reflect.get(host, key, host)) });
+  return { value: new Proxy({}, { get: (_t, key) => (key === 'fonts' ? faces : Reflect.get(host, key, host)) }), given: d !== undefined && d.value !== undefined };
 }
 
 /** The own data properties of `v` as a record: an unknown key or a getter (unread) is a TypeError; undefined is absent. */
@@ -267,7 +271,12 @@ function prefsOf(p: unknown, where: string): Partial<FramePrefs> {
 /** The checked adapters (step 1). */
 interface Checked {
   readonly raw: object;
+  /** The adapters' own `assets`, as given: the live object a later update() reads again when no `fonts` was given at mount. */
+  readonly rawAssets: unknown;
+  /** What the first mount hands frameDocument (see assetsOf). */
   readonly assets: unknown;
+  /** True when an own `fonts` was read at mount: it is then fixed for the DocFrame's life. */
+  readonly fontsGiven: boolean;
   readonly watchdogMs: number;
   readonly store: HostStore | null;
   readonly prefs: Partial<FramePrefs>;
@@ -326,7 +335,7 @@ function check(adapters: unknown): Checked {
     appearance = parseAppearance(a['appearance']).appearance;
   }
   // A malformed `fonts` is a host's programming error: it throws here, at mount time, and never as a fallback.
-  const assets = assetsOf(a['assets']);
+  const checkedAssets = assetsOf(a['assets']);
   let store: HostStore | null = null;
   const s = a['store'];
   if (s !== undefined) {
@@ -339,7 +348,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('docserver host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('docserver host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, assets, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
+  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -413,6 +422,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   let seedPrefs: Partial<FramePrefs> = { ...c.prefs };
   /** The verdict every mount seeds: the adapters', then each setAppearance on top (the latest). */
   let seedAppearance: Appearance | undefined = c.appearance;
+  /** What every mount hands frameDocument as `assets`: the first mount's, and an update()'s when it read the live object again. */
+  let assets: unknown = c.assets;
   let destroyed = false;
   /** Tears the current mount down without a fallback (update, destroy); null when nothing is mounted. */
   let teardown: (() => void) | null = null;
@@ -499,7 +510,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const frameOptions: FrameOptions = {
         csp: policy,
         nonce,
-        assets: c.assets as FrameAssets,
+        assets: assets as FrameAssets,
         prefs: seedPrefs,
         ...(seedAppearance === undefined ? {} : { appearance: seedAppearance }),
         ...(c.store === null ? {} : { snapshot: c.store.snapshot() }),
@@ -768,6 +779,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   return {
     update(d) {
       if (destroyed) return;
+      // A host that gave no `fonts` at mount keeps a live `assets`: read it again first, so that a malformed `fonts` it has
+      // added since is a TypeError from here, the same kind as at mount, with the current mount left as it is.
+      if (!c.fontsGiven) assets = assetsOf(c.rawAssets).value;
       teardown?.();
       teardown = null;
       sendPrefs = () => undefined;
