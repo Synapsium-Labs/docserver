@@ -266,12 +266,12 @@ Measured from the committed `src/frame/manifest.generated.ts` after the last ass
 |---|---|---|---|
 | guard | 3 643 | 3 643 | 0 |
 | bootstrap | 30 153 | 31 161 | +1 008 |
-| enhance (the default layout) | 198 215 | 212 085 | +13 870 |
-| stylesheet | 549 069 | 561 822 | +12 753 |
+| enhance (the default layout) | 198 215 | 212 653 | +14 438 |
+| stylesheet | 549 069 | 561 940 | +12 871 |
 | Mermaid | 3 746 940 | 3 746 940 | 0 |
-| **total, and frame** | **4 528 020** | **4 555 651** | **+27 631** |
+| **total, and frame** | **4 528 020** | **4 556 337** | **+28 317** |
 
-X1's share is 32 768 on both totals, so 5 137 are left. The bootstrap stays under its 32 KiB budget (31 161 bytes). The appearance seed's longest text is 1 455 characters, under §9's 4 096, and `SEED_FIELDS_MAX_CHARS` rose by 351 027: the two faces' 349 528, the appearance's 1 455 and 44 of key punctuation.
+X1's share is 32 768 on both totals, so 4 451 are left (measured after review 2906's fix round). The bootstrap stays under its 32 KiB budget (31 161 bytes). The appearance seed's longest text is 1 455 characters, under §9's 4 096, and `SEED_FIELDS_MAX_CHARS` rose by 351 027: the two faces' 349 528, the appearance's 1 455 and 44 of key punctuation.
 
 ### Departures and readings
 
