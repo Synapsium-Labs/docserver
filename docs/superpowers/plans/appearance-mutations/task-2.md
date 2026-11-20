@@ -336,3 +336,15 @@ The `<<name>>` strip applies only when the first diagram keyword (after front ma
  }
 ]
 ```
+
+## Third review F1
+
+The `<<name>>` spare, in class and state diagrams, applies only where an annotation stands: at a line's start, or after `class <name>` or `state <name>`. Measured on `src/enhance/appearance-mermaid.ts`, restored from a saved copy and its sha256 checked (`71f893ae012ac44b...`). Red first: the five rows below failed against the previous line (5 failed | 169 passed (174)), and passed after it (174 passed).
+
+| Row | Guard | Edit | Tests run | Result |
+|---|---|---|---|---|
+| A2R11 | `<<name>>` spared only where an annotation stands | the previous line restored: `body.replace(/<<[a-z][\w-]*>>/gi, ' ')` | `test/appearance-mermaid.test.ts` | red: 5 failed \| 169 passed (174), the five class and state `<<mark>>` rows |
+
+```json
+[{"row":"A2R11","guard":"<<name>> spared only where an annotation stands","edit":"the previous line restored","tests":"test/appearance-mermaid.test.ts","result":"red: 5 failed | 169 passed (174)"}]
+```

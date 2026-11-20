@@ -227,6 +227,13 @@ describe('seriesOf', () => {
 
 describe('isAuthorStyled', () => {
   const styled: [string, string][] = [
+    // A <<name>> in a class or state diagram's label, note or description is drawn as an element by Mermaid 12.1.0, so it is
+    // author-styled; only a <<name>> where an annotation stands is spared (the third review's F1).
+    ['class label <<mark>>', 'classDiagram\n class A["<<mark>>x"]'],
+    ['class note <<mark>>', 'classDiagram\n class A\n note for A "<<mark>>x"'],
+    ['state label <<mark>>', 'stateDiagram-v2\n state "<<mark>>x" as S1\n [*] --> S1'],
+    ['state note <<mark>>', 'stateDiagram-v2\n [*] --> A\n note right of A: <<mark>>x'],
+    ['state description <<mark>>', 'stateDiagram-v2\n [*] --> A\n A: <<mark>>desc'],
     ['classDef', 'flowchart LR\n  A-->B\n  classDef hot fill:#D4EDDA\n'],
     ['style', 'flowchart LR\nA-->B\nstyle A fill:#D4EDDA'],
     ['linkStyle', 'flowchart LR\nA-->B\nlinkStyle 0 stroke:#ff0000'],

@@ -128,6 +128,6 @@ export function isAuthorStyled(text: string): boolean {
     // An element: `<` or `</` and a letter other than a `<br>`. The `<<name>>` annotation is spared only in the kinds whose
     // annotation it is (a class or a state diagram); anywhere else a second `<` before a letter starts a tag in the HTML
     // tokenizer, so `A["<<mark>>x"]`, `<<font color=red>` and `<<mark>` are styled.
-    /<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(annotatesWithAngles(body) ? body.replace(/<<[a-z][\w-]*>>/gi, ' ') : body)
+    /<\/?(?!br(?=[\s/>]|$))[a-z]/i.test(annotatesWithAngles(body) ? body.replace(/^([ \t]*(?:(?:state|class)[ \t]+[^\s<]+[ \t]+)?)<<[a-z][\w-]*>>/gim, '$1') : body)
   );
 }
