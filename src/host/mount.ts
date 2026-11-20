@@ -137,7 +137,8 @@ export interface DocFrame {
   /**
    * Posts the `appearance` op once ready, else queues it (the latest wins); seeds every later remount. An `a` that is not a
    * plain object throws a TypeError, whatever the state; any plain object is taken through parseAppearance (its verdict is
-   * what is posted and seeded), so a bad slot never throws. After destroy() or a fallback it does nothing.
+   * what is posted and seeded), so a bad slot never throws. After a fallback it posts nothing, and its verdict seeds a later
+   * update(); after destroy() it does nothing.
    */
   setAppearance(a: Appearance): void;
   /**
@@ -188,10 +189,42 @@ const FALLBACK_OF: Readonly<Record<FrameErrorCode, FallbackReason>> = Object.fre
 const INTERNAL: readonly FrameErrorCode[] = Object.freeze(['nonce', 'csp'] as const);
 
 const isPlain = (v: unknown): v is object => {
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
-  const p: unknown = Object.getPrototypeOf(v);
-  return p === Object.prototype || p === null;
+  try {
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
+    const p: unknown = Object.getPrototypeOf(v);
+    return p === Object.prototype || p === null;
+  } catch {
+    // A Proxy whose trap throws is not a plain object; its own throw never escapes.
+    return false;
+  }
 };
+
+/**
+ * The checked copy of the host's `assets`, which every mount hands frameDocument (never the live object): a fresh object of
+ * the own properties (descriptors copied, so a getter is never called here), with `fonts` replaced by the checked faces
+ * (or left out). `fonts` is read as an own data property of any object `assets` (a getter on it, or a malformed shape, is a
+ * TypeError at mount time, never a fallback; an inherited one is absent). A value that is not an object is passed through.
+ */
+function assetsOf(assets: unknown): unknown {
+  if (typeof assets !== 'object' || assets === null) return assets;
+  const copy: Record<string | symbol, unknown> = {};
+  let faces: ReturnType<typeof fontsOf>;
+  try {
+    for (const k of Reflect.ownKeys(assets)) {
+      const d = Object.getOwnPropertyDescriptor(assets, k);
+      if (d === undefined) continue;
+      if (k === 'fonts') {
+        if (!('value' in d)) throw new TypeError('docserver host: assets.fonts must be a plain value, not a getter');
+        faces = fontsOf(d.value);
+      } else Object.defineProperty(copy, k, d);
+    }
+  } catch (e) {
+    if (e instanceof TypeError) throw e;
+    throw new TypeError('docserver host: assets could not be read');
+  }
+  if (faces !== undefined) copy['fonts'] = faces;
+  return copy;
+}
 
 /** The own data properties of `v` as a record: an unknown key or a getter (unread) is a TypeError; undefined is absent. */
 function ownData(v: unknown, where: string, allowed: readonly string[]): Record<string, unknown> {
@@ -283,7 +316,7 @@ function check(adapters: unknown): Checked {
     appearance = parseAppearance(a['appearance']).appearance;
   }
   // A malformed `fonts` is a host's programming error: it throws here, at mount time, and never as a fallback.
-  if (isPlain(a['assets'])) fontsOf(Object.getOwnPropertyDescriptor(a['assets'], 'fonts')?.value);
+  const assets = assetsOf(a['assets']);
   let store: HostStore | null = null;
   const s = a['store'];
   if (s !== undefined) {
@@ -296,7 +329,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('docserver host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('docserver host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, assets: a['assets'], watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
+  return { raw: adapters as object, assets, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -631,15 +664,16 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         deliver: effect,
       });
       for (let i = 0; i < early; i += 1) limiter.refuse();
-      call('onReady');
-      if (live && pending !== null) {
+      // The queued values go first, so a setPrefs or setAppearance made inside the host's onReady is posted after them and wins.
+      if (pending !== null) {
         post({ t: 'prefs', ...pending });
         pending = null;
       }
-      if (live && pendingAppearance !== null) {
+      if (pendingAppearance !== null) {
         post({ t: 'appearance', v: 1, appearance: pendingAppearance });
         pendingAppearance = null;
       }
+      call('onReady');
       deliver();
     };
 

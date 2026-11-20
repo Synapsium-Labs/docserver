@@ -1741,7 +1741,7 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
   };
 
   it('an unknown adapter key still throws, and appearance is accepted and seeded as its verdict', () => {
-    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { skin: {} }) })).toThrow(TypeError);
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, ({ skin: {} } as never)) })).toThrow(TypeError);
     const m = mount(PLAIN, { appearance: DARK });
     expect(m.fallbacks()).toEqual([]);
     expect(seedAppearance(m.iframe.getAttribute('srcdoc') ?? '')).toEqual({ mode: 'dark' });
@@ -1878,6 +1878,88 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     }
     expect(seen.events).toEqual([]);
     expect(iframes()).toBe(0);
+  });
+
+  it('a getter on assets.fonts throws TypeError and is never called', () => {
+    const get = vi.fn(() => ({ sans: GOOD }));
+    const assetsWith = Object.defineProperty({ ...assets }, 'fonts', { get, enumerable: true });
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { assets: assetsWith }) })).toThrow(TypeError);
+    expect(get).not.toHaveBeenCalled();
+    expect(iframes()).toBe(0);
+  });
+
+  it('a non-plain assets: an own malformed fonts throws, an inherited one is absent and does not fall back', () => {
+    class Holder {}
+    const bad = Object.assign(new Holder(), assets, { fonts: 'x' });
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { assets: bad }) })).toThrow(TypeError);
+    const inherited = Object.assign(Object.create({ fonts: 'x' }) as object, assets);
+    const m = mount(PLAIN, { assets: inherited });
+    expect(m.fallbacks()).toEqual([]);
+    expect(Object.keys(seedOf(m.iframe.getAttribute('srcdoc') ?? ''))).not.toContain('fonts');
+  });
+
+  it('mutating assets.fonts after mount does not change a later update(): no fallback, the checked faces are seeded', () => {
+    const live = { ...assets, fonts: { sans: GOOD } } as Record<string, unknown>;
+    const m = mount(PLAIN, { assets: live });
+    live['fonts'] = 'x';
+    (assets as unknown as Record<string, unknown>)['fonts'] = undefined;
+    m.frame.update(input(PLAIN));
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedOf(lastSrcdoc())['fonts']).toEqual({ sans: GOOD });
+  });
+
+  it('setAppearance and setPrefs made inside onReady are posted after the values queued before ready, and win; the next update() seeds the new one', async () => {
+    let frame: DocFrame | undefined;
+    const m = mount(PLAIN, { onReady: () => {
+      frame?.setAppearance({ mode: 'light', label: 'NEW' });
+      frame?.setPrefs({ width: 'wide' });
+    } });
+    frame = m.frame;
+    await m.loaded();
+    m.frame.setAppearance({ mode: 'dark', label: 'OLD' });
+    m.frame.setPrefs({ width: 'standard' });
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m)).toEqual([
+      { t: 'prefs', width: 'standard' },
+      { t: 'appearance', v: 1, appearance: { mode: 'dark', label: 'OLD' } },
+      { t: 'appearance', v: 1, appearance: { mode: 'light', label: 'NEW' } },
+      { t: 'prefs', width: 'wide' },
+    ]);
+    m.frame.update(input(PLAIN));
+    expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'light', label: 'NEW' });
+  });
+
+  it('a Proxy whose own trap throws gives a TypeError, never its own throw (adapters.appearance and setAppearance)', () => {
+    const boom = (): never => {
+      throw new Error('trap');
+    };
+    const trapped = new Proxy({}, { getPrototypeOf: boom });
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { appearance: trapped }) })).toThrow(TypeError);
+    const m = mount();
+    expect(() => m.frame.setAppearance(trapped as never)).toThrow(TypeError);
+  });
+
+  it('a getter on adapters.appearance throws TypeError unread; a null-prototype appearance is accepted; a Proxy whose ownKeys throws seeds {mode:auto}', () => {
+    const get = vi.fn(() => ({ mode: 'dark' }));
+    const adapters = Object.defineProperty({ ...adaptersFor({ events: [] }) } as Record<string, unknown>, 'appearance', { get, enumerable: true });
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adapters as never })).toThrow(TypeError);
+    expect(get).not.toHaveBeenCalled();
+    const bare = Object.assign(Object.create(null) as object, { mode: 'dark' });
+    expect(seedAppearance(mount(PLAIN, { appearance: bare }).iframe.getAttribute('srcdoc') ?? '')).toEqual({ mode: 'dark' });
+    const boom = new Proxy({}, { ownKeys: () => { throw new Error('trap'); } });
+    const m = mount(PLAIN, { appearance: boom });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedAppearance(m.iframe.getAttribute('srcdoc') ?? '')).toEqual({ mode: 'auto' });
+  });
+
+  it('after a fallback setAppearance posts nothing but seeds a later update()', async () => {
+    const m = mount();
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: 'wrong' });
+    m.frame.setAppearance({ mode: 'dark' });
+    expect(frameBound(m)).toEqual([]);
+    m.frame.update(input(PLAIN));
+    expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'dark' });
   });
 
   it("test 9: the srcdoc's CSP meta and the iframe's csp attribute of a mount with an appearance and both faces equal those of the same mount without them", () => {

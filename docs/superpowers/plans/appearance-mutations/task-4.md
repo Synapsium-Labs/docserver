@@ -12,6 +12,9 @@ Each mutant was applied in place, `test/host-mount.test.ts` run through the flee
 | A4f | `adapters.appearance` that is not a plain object throws at step 1 | The plain-object check removed from `check()` | `test/host-mount.test.ts` | red (1 failed) |
 | A4g | A malformed `fonts` throws at step 1, not as a fallback | The `fontsOf` call removed from `check()` | `test/host-mount.test.ts` | red (1 failed) |
 | A4h | `setAppearance` of a non-plain value throws whatever the state | The plain-object check removed from `setAppearance` | `test/host-mount.test.ts` | red (1 failed) |
+| A4i | The queued values are flushed before the host's `onReady` runs | `call('onReady')` moved before the flush | `test/host-mount.test.ts` | red (1 failed) |
+| A4j | Every mount is built from the checked copy of `assets` | `frameDocument` handed the host's live `assets` | `test/host-mount.test.ts` | red (2 failed) |
+| A4k | A Proxy's own throw never escapes the plain-object check | the `try`/`catch` in `isPlain` removed | `test/host-mount.test.ts` | red (1 failed) |
 
 ```json
 [
@@ -22,6 +25,9 @@ Each mutant was applied in place, `test/host-mount.test.ts` run through the flee
   {"row":"A4e","guard":"a bad face is dropped","edit":"bad face throws","tests":"test/host-mount.test.ts","result":"red"},
   {"row":"A4f","guard":"adapters.appearance plain check","edit":"check removed","tests":"test/host-mount.test.ts","result":"red"},
   {"row":"A4g","guard":"fonts shape checked at step 1","edit":"fontsOf call removed","tests":"test/host-mount.test.ts","result":"red"},
-  {"row":"A4h","guard":"setAppearance plain check","edit":"check removed","tests":"test/host-mount.test.ts","result":"red"}
+  {"row":"A4h","guard":"setAppearance plain check","edit":"check removed","tests":"test/host-mount.test.ts","result":"red"},
+  {"row":"A4i","guard":"flush before onReady","edit":"onReady called first","tests":"test/host-mount.test.ts","result":"red"},
+  {"row":"A4j","guard":"checked copy of assets","edit":"live assets handed on","tests":"test/host-mount.test.ts","result":"red"},
+  {"row":"A4k","guard":"isPlain try/catch","edit":"catch removed","tests":"test/host-mount.test.ts","result":"red"}
 ]
 ```
