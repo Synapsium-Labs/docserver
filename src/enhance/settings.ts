@@ -1,5 +1,6 @@
 // The reading settings menu (the reference layout, section 22; Task 19): theme, typeface, width, lens, fold controls
 // and the colour key. It is root-local chrome and consumes the lifecycle's prefs seam, so host changes update its radios too.
+import { APPEARANCE_LABEL_DEFAULT, type Appearance } from './appearance.js';
 import { completeFoldJoins } from './attention.js';
 import { chrome } from './journal.js';
 import type { Prefs, FeatureContext } from './types.js';
@@ -55,7 +56,11 @@ export function build(ctx: FeatureContext): void {
     }
   };
 
+  /** The theme row, until a host's appearance (the seed's, or an op's) takes its place with `line`. */
+  let themeRow: HTMLElement | null = null;
+  const line = chrome(doc, 'p', { className: 'aa-hosted' });
   for (const name of Object.keys(choices) as (keyof Prefs)[]) {
+    if (name === 'theme' && ctx.state.hosted !== null) continue;
     const fieldset = chrome(doc, 'fieldset');
     fieldset.append(chrome(doc, 'legend', { text: labels[name] }));
     const segment = chrome(doc, 'div', { className: 'seg' });
@@ -82,7 +87,20 @@ export function build(ctx: FeatureContext): void {
     radios.set(name, inputs);
     fieldset.append(segment);
     menu.append(fieldset);
+    if (name === 'theme') themeRow = fieldset;
   }
+  // Hosted (the host owns the appearance): no theme row, one static line of plain text in its place: the host's label, else
+  // the default. Text content only, never markup; a paragraph, not a control.
+  const host = (a: Appearance | null): void => {
+    if (a === null) return;
+    line.textContent = a.label ?? APPEARANCE_LABEL_DEFAULT;
+    if (line.parentNode === null) menu.prepend(line);
+    (themeRow as HTMLElement | null)?.remove();
+    themeRow = null;
+    radios.delete('theme');
+  };
+  host(ctx.state.hosted);
+  ctx.events.on('appearance', host);
 
   const lensField = menu.lastElementChild;
   lensField?.append(chrome(doc, 'p', { className: 'aa-note', text: 'Product quiets code, file paths and technical tables. Decisions, rules and prose stay as they are.' }));

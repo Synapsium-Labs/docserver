@@ -43,10 +43,7 @@ export type Appearance = {
 export const APPEARANCE_LABEL_DEFAULT = "Appearance follows the app's settings";
 
 /** The custom property the reader writes each slot to: 1.1.0's own token where one exists, a new name otherwise. */
-export const SLOT_PROPERTY: {
-  readonly colour: Readonly<Record<AppearanceColourSlot, string>>;
-  readonly skin: Readonly<Record<AppearanceSkinSlot, string>>;
-} = {
+export const SLOT_PROPERTY = {
   colour: {
     bg: '--bg', surface: '--surface', surface2: '--surface2', text: '--text', 'text-muted': '--text-muted', 'text-faint': '--text-faint',
     border: '--border', rule: '--rule', accent: '--accent', 'accent-ink': '--accent-ink', focus: '--focus', ok: '--ok', wait: '--wait',
@@ -60,7 +57,13 @@ export const SLOT_PROPERTY: {
     popShadow: '--dr-pop-shadow', sectionFamily: '--dr-section-family', sectionSize: '--dr-section-size',
     sectionWeight: '--dr-section-weight', sectionTracking: '--dr-section-tracking', sectionCase: '--dr-section-case',
   },
+} as const satisfies {
+  readonly colour: Readonly<Record<AppearanceColourSlot, string>>;
+  readonly skin: Readonly<Record<AppearanceSkinSlot, string>>;
 };
+
+/** Every property name the reader writes for a slot: the closed list journal.setStyle accepts (its type). */
+export type SlotProperty = (typeof SLOT_PROPERTY.colour)[AppearanceColourSlot] | (typeof SLOT_PROPERTY.skin)[AppearanceSkinSlot];
 
 // ───────── the value grammars (§2, "The value grammars, exact") ─────────
 
@@ -237,6 +240,15 @@ export function parseAppearance(x: unknown): { appearance: Appearance; refused: 
     }
     return { appearance: { mode: out.mode }, refused: [{ key: '*', why: 'too-large' }] };
   }
+}
+
+/**
+ * What the reader makes of a host's value: its verdict, or null for a value that is not a plain object (the one case
+ * the contract ignores whole, section 7). Never throws.
+ */
+export function hostedVerdict(x: unknown): Appearance | null {
+  const r = parseAppearance(x);
+  return r.refused[0]?.key === '*' && r.refused[0].why === 'type' ? null : r.appearance;
 }
 
 // ───────── APPEARANCE_PAIRS (§5, "The contrast gate") ─────────

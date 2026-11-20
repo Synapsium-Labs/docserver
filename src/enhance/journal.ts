@@ -18,6 +18,8 @@
 // conditional like an attribute's: each property goes back to the value and priority it had, unless the host has
 // changed it since; an element that had no style attribute loses the empty one the CSSOM leaves.
 
+import { SLOT_PROPERTY, type SlotProperty } from './appearance.js';
+
 /** The attribute every element the library creates carries, so teardown and tests find chrome without classes. */
 export const CHROME_ATTR = 'data-docreader-chrome';
 
@@ -29,7 +31,14 @@ export const STYLE_PROPS = [
 /** The style properties setStyle writes only with `important`: a definition dot's and ring's paint. */
 export const IMPORTANT_STYLE_PROPS = ['fill', 'stroke', 'stroke-width'] as const;
 
-export type StyleProp = (typeof STYLE_PROPS)[number] | (typeof IMPORTANT_STYLE_PROPS)[number];
+/**
+ * The host appearance's properties (appearance.ts SLOT_PROPERTY: every colour slot's custom property and every skin
+ * slot's), the closed list of the third kind: written without `important`, so they are in the first list's company.
+ * Derived on use (a call at the top level is refused), so the list cannot drift from the contract.
+ */
+const slotProps = (): readonly string[] => [...Object.values(SLOT_PROPERTY.colour), ...Object.values(SLOT_PROPERTY.skin)];
+
+export type StyleProp = (typeof STYLE_PROPS)[number] | (typeof IMPORTANT_STYLE_PROPS)[number] | SlotProperty;
 
 /** The longest style value setStyle writes, in code units. */
 const STYLE_VALUE_MAX = 200;
@@ -83,7 +92,7 @@ export interface Journal {
   defer(fn: () => void): void;
   /**
    * Set (a string) or remove (null) one style property through the CSSOM: a name of STYLE_PROPS, or with `important`
-   * one of IMPORTANT_STYLE_PROPS; anything else, or a refused value, throws. Undo restores the property's value and
+   * one of IMPORTANT_STYLE_PROPS; a name of STYLE_PROPS or a host appearance slot's property (SLOT_PROPERTY) only without it; anything else, or a refused value, throws. Undo restores the property's value and
    * priority only while they are still what the library last wrote, and removes the style attribute the CSSOM leaves
    * when the element had none and nothing is left in it.
    */
@@ -406,8 +415,8 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
 
     setStyle(el, prop, value, important = false) {
       const name: string = prop;
-      const plain = (STYLE_PROPS as readonly string[]).includes(name);
       const loud = (IMPORTANT_STYLE_PROPS as readonly string[]).includes(name);
+      const plain = !loud && ((STYLE_PROPS as readonly string[]).includes(name) || slotProps().includes(name));
       if (!plain && !loud) throw new Error(`docreader: journal.setStyle refuses the property ${JSON.stringify(name)}`);
       if (loud !== important) throw new Error('docreader: journal.setStyle takes important only for fill, stroke and stroke-width, and those only with it');
       if (value !== null && (value.length > STYLE_VALUE_MAX || STYLE_VALUE_REFUSED.test(value))) {

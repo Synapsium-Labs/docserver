@@ -20,6 +20,9 @@
 //    assets/frame/enhance.js gets a binder scan for global (not member) references to the forbidden names only (L2's own
 //    walls cover its source); and none of the three carries a test marker (`__TEST`, `process.env`, `import.meta.vitest`,
 //    or a branch on a name that says test, a member read off the global included; only RegExp's `.test(...)` is exempt).
+// 7. The host faces (appearance contract, Task 5): host-fonts.ts is the one module that decodes and loads a font from a
+//    string, so its three platform sinks are guarded sites like `open`: `atob` (the decode), `FontFace` (the constructor)
+//    and `.fonts` of a document (the set a face is added to and dropped from), each exactly once and nowhere else.
 // Every allowed site has a planted control: one more use at that site goes red, and so does each forbidden name.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -64,6 +67,8 @@ const SOURCE_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> =
   'bootstrap.ts': { 'Function.prototype.toString': 1, '.open': 1, postMessage: 1, "'message'": 2, '.onmessage': 1, 'createElement(script)': 1 },
   'content.ts': { DOMParser: 1 },
   'outbox.ts': { 'open()': 1 },
+  // The host faces' three sinks (header, 7): the decode, the constructor and the document's font set, once each.
+  'host-fonts.ts': { atob: 1, FontFace: 1, '.fonts of a document': 1 },
 };
 
 /** The same sites in the built scripts: the bootstrap bundles content.ts and outbox.ts. */
@@ -180,12 +185,14 @@ function scanFile(sf: ts.SourceFile, checker: ts.TypeChecker): Scan {
       const fromPlatform = (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) || isGlobalRef(node, checker);
       if (t === 'DOMParser' && fromPlatform) site('DOMParser');
       if (t === 'postMessage' && fromPlatform) site('postMessage');
+      if ((t === 'atob' || t === 'FontFace') && fromPlatform) site(t);
       if ((PAGE_NAMES.includes(t) || t === 'open') && isGlobalRef(node, checker)) at(node, `global ${t}`);
     }
     if (ts.isPropertyAccessExpression(node)) {
       const name = node.name.text;
       if (name === 'open') site('.open');
       if (name === 'onmessage') site('.onmessage');
+      if (name === 'fonts' && isPageReceiver(node.expression, checker)) site('.fonts of a document');
       if (PAGE_NAMES.includes(name) && isPageReceiver(node.expression, checker)) at(node.name, `.${name} of the page`);
     }
     if (ts.isElementAccessExpression(node)) {
@@ -371,6 +378,14 @@ describe('L3.M19: the frame runtime sources', () => {
     ['styles.ts', "export const p15 = (d: Document): Element => d.createElement('script');", 'createElement(script) x1, allowed x0'],
     ['adapters.ts', 'export const p9 = (o: { postMessage(m: unknown): void }): void => o.postMessage(1);', 'postMessage x1, allowed x0'],
     ['adapters.ts', 'export const p10 = (o: { open(): void }): void => o.open();', '.open x1, allowed x0'],
+    // The host faces' sinks (header, 7): one more use at the site, or one anywhere else, is over the count.
+    ['host-fonts.ts', "export const p16 = (s: string): string => atob(s);", 'atob x2, allowed x1'],
+    ['host-fonts.ts', "export const p17 = (b: Uint8Array): FontFace => new FontFace('x', b);", 'FontFace x2, allowed x1'],
+    ['host-fonts.ts', 'export const p18 = (): FontFaceSet => document.fonts;', '.fonts of a document x2, allowed x1'],
+    ['adapters.ts', "export const p19 = (s: string): string => atob(s);", 'atob x1, allowed x0'],
+    ['adapters.ts', "export const p20 = (b: Uint8Array): FontFace => new FontFace('x', b);", 'FontFace x1, allowed x0'],
+    ['adapters.ts', 'export const p21 = (): FontFaceSet => document.fonts;', '.fonts of a document x1, allowed x0'],
+    ['enhance-entry.ts', "export const p22 = (s: string): string => atob(s);", 'atob x1, allowed x0'],
   ] as const) {
     it(`a planted extra use in ${file} goes red: ${what}: ${snippet.replace(/^export const \w+ = /, '')}`, () => {
       expect(plant(file, snippet)).toContain(what);

@@ -31,6 +31,7 @@
 // since replaced. A UI field written after startup, with the UI key never read during it, stays local: the stored
 // fields it cannot see are never overwritten. A host that shares one store between several enhance() calls passes
 // the same storage object to each; two objects are two queues.
+import { APPEARANCE_SLOTS, SLOT_PROPERTY, type Appearance } from './appearance.js';
 import type { Journal } from './journal.js';
 import { DEFAULT_NAMESPACE, isPrefValue, PREF_VALUES, prefNames, type FeatureOptions } from './options.js';
 import type { Prefs } from './types.js';
@@ -71,6 +72,14 @@ export interface ReaderState {
   readonly prefs: Readonly<Prefs>;
   /** Change prefs locally, then write the stored prefs behind. Returns whether the prefs in force changed. */
   setPrefs(change: Partial<Prefs>): boolean;
+  /** The host's appearance in force, or null while the mount is not hosted. Once set it is never null again (the host decided). */
+  readonly hosted: Appearance | null;
+  /**
+   * Host an appearance (a seed's, or an op's): the mount is hosted from now on, and its `theme` is the verdict's `mode`.
+   * While hosted the stored theme is ignored, a `theme` in setPrefs changes nothing, and the stored prefs are written without
+   * one. Writes nothing itself. Returns whether the theme in force changed.
+   */
+  host(a: Appearance): boolean;
   /**
    * A per-document value: the local one if set since startup, else the stored one parsed (read during startup
    * only), else undefined. Always undefined without a storageKey.
@@ -185,7 +194,7 @@ function isPlainRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /** The options the state reads: the storage, the per-document key, the explicit prefs (options.prefs) and the keys' namespace. */
-export type StateOptions = Pick<FeatureOptions, 'storage' | 'storageKey' | 'prefs' | 'namespace'>;
+export type StateOptions = Pick<FeatureOptions, 'storage' | 'storageKey' | 'prefs' | 'namespace'> & { readonly appearance?: Appearance | null };
 
 export interface StateArgs {
   /** The normalized options; options.prefs override stored values, and are not themselves written back. */
@@ -301,6 +310,9 @@ export function createReaderState(args: StateArgs): ReaderState {
     if (isPrefValue(name, v)) prefs = { ...prefs, [name]: v };
   }
   prefs = { ...prefs, ...explicit };
+  // Hosted (the host handed an appearance): its mode is the theme, whatever was stored or asked for explicitly.
+  let hosted = args.options.appearance ?? null;
+  if (hosted !== null) prefs = { ...prefs, theme: hosted.mode };
 
   const ui = shared(uiKey(ns));
   /** UI fields written after startup with the UI key never read: kept here, never written. */
@@ -314,11 +326,25 @@ export function createReaderState(args: StateArgs): ReaderState {
       return prefs;
     },
 
+    get hosted() {
+      return hosted;
+    },
+
+    host(a) {
+      const was = prefs.theme;
+      hosted = a;
+      prefs = { ...prefs, theme: a.mode };
+      return was !== a.mode;
+    },
+
     setPrefs(change) {
-      const next: Prefs = { ...prefs, ...change };
+      // While hosted, `theme` is the host's: not changed here, and left out of what is stored (a stored one is dropped).
+      const { theme: _theme, ...rest } = change;
+      const mine = hosted === null ? change : rest;
+      const next: Prefs = { ...prefs, ...mine };
       const changed = prefNames().some((name) => next[name] !== prefs[name]);
       prefs = next;
-      storedPrefs.update(change);
+      storedPrefs.update(hosted === null ? change : { ...rest, theme: undefined });
       return changed;
     },
 
@@ -377,4 +403,20 @@ export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Pref
   journal.setAttribute(root, 'data-width', prefs.width);
   journal.setAttribute(root, 'data-font', prefs.font);
   journal.toggleClass(root, 'lens-product', prefs.lens === 'product');
+}
+
+/**
+ * Put a host's appearance on the root (the appearance contract; the verdict is parseAppearance's): `data-docreader-hosted`,
+ * `data-docreader-colours` while the verdict has a colour group, `data-docreader-skin` (its skin slots, space-separated;
+ * absent with none) and each slot's custom property, written through the journal, or removed when the verdict leaves it
+ * out (a verdict with no colour group removes every colour). The mode is the theme pref's, which applyPrefs puts on the
+ * root. Startup and every op take this one journaled path.
+ */
+export function applyAppearance(journal: Journal, root: HTMLElement, a: Appearance): void {
+  const skin = APPEARANCE_SLOTS.skin.filter((s) => a.skin?.[s] !== undefined);
+  journal.setAttribute(root, 'data-docreader-hosted', '');
+  journal.setAttribute(root, 'data-docreader-colours', a.colour === undefined ? null : '');
+  journal.setAttribute(root, 'data-docreader-skin', skin.length === 0 ? null : skin.join(' '));
+  for (const s of APPEARANCE_SLOTS.colour) journal.setStyle(root, SLOT_PROPERTY.colour[s], a.colour?.[s] ?? null);
+  for (const s of APPEARANCE_SLOTS.skin) journal.setStyle(root, SLOT_PROPERTY.skin[s], a.skin?.[s] ?? null);
 }
