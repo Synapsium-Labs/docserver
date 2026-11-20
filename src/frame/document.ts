@@ -384,7 +384,7 @@ function goodFace(b64: string): boolean {
  * than `sans` and `mono` (a symbol too), a getter or a face that is not a string is a TypeError; a face that fails goodFace
  * is dropped. A property whose value is undefined is left out, as every host value is. Written in role order.
  */
-function fontsOf(f: unknown): SeedFonts | undefined {
+export function fontsOf(f: unknown): SeedFonts | undefined {
   if (f === undefined) return undefined;
   if (!isPlainObject(f)) throw new TypeError('frameDocument: assets.fonts must be a plain object');
   const faces: Record<string, unknown> = {};

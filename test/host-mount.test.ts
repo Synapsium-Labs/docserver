@@ -1726,3 +1726,170 @@ describe("B4 mermaidDraw 'after-ready': the build is fetched in parallel with th
     expect(await collected(many.made[3]), 'the current mount goes at destroy').toBe(true);
   });
 });
+
+describe('appearance contract, host half (spec §10 test 2): adapters.appearance, assets.fonts, DocFrame.setAppearance', () => {
+  const DARK = { mode: 'dark' } as const;
+  const COLOUR = { mode: 'dark', skin: { radius: '6px' }, label: 'Follows the app' };
+  /** A face that passes the checks: the base64 of 'wOF2' and four zero bytes. */
+  const GOOD = 'd09GMgAAAAA=';
+  const OTHER = 'd09GMgAAAAAAAAAA';
+  const appearanceOps = (m: Mounted): Record<string, unknown>[] => frameBound(m).filter((x): x is Record<string, unknown> => (x as { t?: unknown }).t === 'appearance');
+  const seedAppearance = (srcdoc: string): unknown => seedOf(srcdoc)['appearance'];
+  const lastSrcdoc = (): string => {
+    const all = container.querySelectorAll('iframe');
+    return (all[all.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? '';
+  };
+
+  it('an unknown adapter key still throws, and appearance is accepted and seeded as its verdict', () => {
+    expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { skin: {} }) })).toThrow(TypeError);
+    const m = mount(PLAIN, { appearance: DARK });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedAppearance(m.iframe.getAttribute('srcdoc') ?? '')).toEqual({ mode: 'dark' });
+  });
+
+  it('adapters.appearance that is not a plain object throws TypeError at step 1, before any iframe; a plain object with bad slots never throws', () => {
+    const create = vi.spyOn(document, 'createElement');
+    try {
+      for (const bad of [null, 'dark', 7, [], new Map(), Object.create({ mode: 'dark' }) as object, () => 1]) {
+        expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { appearance: bad }) }), String(bad)).toThrow(TypeError);
+      }
+      expect(create.mock.calls.filter(([t]) => t === 'iframe')).toEqual([]);
+    } finally {
+      create.mockRestore();
+    }
+    expect(iframes()).toBe(0);
+    const m = mount(PLAIN, { appearance: { mode: 'neon', colour: { bg: 'red' }, skin: { nope: '1px' }, extra: 1 } });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedAppearance(m.iframe.getAttribute('srcdoc') ?? '')).toEqual({ mode: 'auto' });
+  });
+
+  it('setAppearance before ready queues and posts nothing; after ready it posts exactly one op, with the keys t, v, appearance', async () => {
+    const m = mount();
+    await m.loaded();
+    m.frame.setAppearance(COLOUR as never);
+    expect(frameBound(m)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m)).toEqual([{ t: 'appearance', v: 1, appearance: COLOUR }]);
+    m.frame.setAppearance({ mode: 'light' });
+    const ops = appearanceOps(m);
+    expect(ops).toHaveLength(2);
+    expect(ops[1]).toEqual({ t: 'appearance', v: 1, appearance: { mode: 'light' } });
+    for (const op of ops) {
+      expect(Object.keys(op).sort()).toEqual(['appearance', 't', 'v']);
+      expect(Object.keys(op['appearance'] as object).every((k) => ['mode', 'colour', 'skin', 'label'].includes(k))).toBe(true);
+    }
+  });
+
+
+  it('latest wins before ready (valid ready): one op, the later value, after the queued prefs', async () => {
+    const m = mount();
+    await m.loaded();
+    m.frame.setAppearance({ mode: 'dark' });
+    m.frame.setPrefs({ width: 'wide' });
+    m.frame.setAppearance({ mode: 'light', label: 'x' });
+    expect(frameBound(m)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m)).toEqual([
+      { t: 'prefs', width: 'wide' },
+      { t: 'appearance', v: 1, appearance: { mode: 'light', label: 'x' } },
+    ]);
+  });
+
+  it('the verdict, not the raw value, is posted and seeded: an unknown key and a bad colour are gone', async () => {
+    const raw = { mode: 'dark', colour: { bg: 'red' }, skin: { radius: '6px', nope: '1px' }, label: 'L', extra: 1 };
+    const m = mount();
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    m.frame.setAppearance(raw as never);
+    const [op] = appearanceOps(m);
+    const value = (op as { appearance: Record<string, unknown> }).appearance;
+    expect(value).toEqual({ mode: 'dark', skin: { radius: '6px' }, label: 'L' });
+    expect(Object.keys(value)).not.toContain('extra');
+    expect(Object.keys(value)).not.toContain('colour');
+    m.frame.update(input(PLAIN));
+    expect(seedAppearance(lastSrcdoc())).toEqual(value);
+  });
+
+  it('setAppearance with a value that is not a plain object throws TypeError whatever the state', async () => {
+    const m = mount();
+    for (const bad of [null, 'dark', 1, [], Object.create({}) as object, new Map()]) expect(() => m.frame.setAppearance(bad as never)).toThrow(TypeError);
+    await m.loaded();
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(() => m.frame.setAppearance(null as never)).toThrow(TypeError);
+    expect(appearanceOps(m)).toEqual([]);
+    m.frame.destroy();
+    expect(() => m.frame.setAppearance(null as never)).toThrow(TypeError);
+    expect(() => m.frame.setAppearance(5 as never)).toThrow(TypeError);
+  });
+
+  it('update() seeds the latest appearance, from the adapters or from setAppearance, and a remount is its own mount', async () => {
+    const m = mount(PLAIN, { appearance: { mode: 'dark' } });
+    m.frame.update(input(PLAIN));
+    expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'dark' });
+    m.frame.setAppearance({ mode: 'light' });
+    m.frame.setAppearance({ mode: 'dark', label: 'second' });
+    m.frame.update(input(PLAIN));
+    expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'dark', label: 'second' });
+    const fresh = channels[channels.length - 1] as FakeChannel;
+    expect(fresh.port1.sent).toEqual([]);
+  });
+
+  it('a mount without any appearance seeds none and sets no key', () => {
+    const m = mount();
+    expect(Object.keys(seedOf(m.iframe.getAttribute('srcdoc') ?? ''))).not.toContain('appearance');
+    m.frame.setAppearance({ mode: 'dark' });
+    m.frame.update(input(PLAIN));
+    expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'dark' });
+  });
+
+  it('after destroy() and after a fallback setAppearance does nothing and never throws for a plain object', async () => {
+    const m = await ready();
+    m.frame.destroy();
+    expect(() => m.frame.setAppearance({ mode: 'dark' })).not.toThrow();
+    expect(appearanceOps(m)).toEqual([]);
+    const f = mount();
+    await f.loaded();
+    f.say({ t: 'ready', v: 1, nonce: 'wrong' });
+    expect(f.fallbacks()).toEqual(['nonce']);
+    expect(() => f.frame.setAppearance({ mode: 'dark' })).not.toThrow();
+    expect(frameBound(f)).toEqual([]);
+  });
+
+  it('a bad face is dropped and the srcdoc carries only the good one; the mount continues', () => {
+    const m = mount(PLAIN, { assets: { ...assets, fonts: { sans: 'not base64!', mono: GOOD } } });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedOf(m.iframe.getAttribute('srcdoc') ?? '')['fonts']).toEqual({ mono: GOOD });
+    const n = mount(PLAIN, { assets: { ...assets, fonts: { sans: 'AAAA' } } });
+    expect(n.fallbacks()).toEqual([]);
+    expect(Object.keys(seedOf(n.iframe.getAttribute('srcdoc') ?? ''))).not.toContain('fonts');
+  });
+
+  it('a malformed fonts throws TypeError at mount time, before any iframe, and is no fallback', () => {
+    const create = vi.spyOn(document, 'createElement');
+    const seen: Seen = { events: [] };
+    try {
+      const getter = Object.defineProperty({}, 'sans', { get: () => GOOD, enumerable: true });
+      for (const fonts of [null, 'x', [], { serif: GOOD }, { sans: 5 }, { mono: {} }, getter]) {
+        expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor(seen, { assets: { ...assets, fonts } }) }), JSON.stringify(fonts)).toThrow(TypeError);
+      }
+      expect(create.mock.calls.filter(([t]) => t === 'iframe')).toEqual([]);
+    } finally {
+      create.mockRestore();
+    }
+    expect(seen.events).toEqual([]);
+    expect(iframes()).toBe(0);
+  });
+
+  it("test 9: the srcdoc's CSP meta and the iframe's csp attribute of a mount with an appearance and both faces equal those of the same mount without them", () => {
+    const plain = mount();
+    const hosted = mount(PLAIN, { appearance: COLOUR, assets: { ...assets, fonts: { sans: GOOD, mono: OTHER } } });
+    const meta = (srcdoc: string): string => /^<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(srcdoc)?.[1] ?? '';
+    const plainDoc = plain.iframe.getAttribute('srcdoc') ?? '';
+    const hostedDoc = hosted.iframe.getAttribute('srcdoc') ?? '';
+    expect(seedOf(hostedDoc)['fonts']).toEqual({ sans: GOOD, mono: OTHER });
+    expect(meta(hostedDoc)).not.toBe('');
+    expect(meta(hostedDoc)).toBe(meta(plainDoc));
+    expect(hosted.iframe.getAttribute('csp')).toBe(plain.iframe.getAttribute('csp'));
+    expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp());
+  });
+});

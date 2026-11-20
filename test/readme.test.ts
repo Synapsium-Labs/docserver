@@ -262,7 +262,7 @@ describe('README: Hosting (./host)', () => {
     const s = section('Hosting');
     for (const name of [
       'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title', 'focus',
-      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid',
+      'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onReady', 'onFallback', 'loadMermaid', 'appearance', 'setAppearance', 'fonts',
     ]) expect(s, name).toContain(`\`${name}\``);
     for (const reason of ['timeout', 'nonce', 'error', 'protocol', 'refusals', 'navigated', 'assets', 'too-large', 'invalid-input']) {
       expect(s, reason).toContain(`\`'${reason}'\``);
