@@ -228,8 +228,29 @@ interface StyleRead {
   readonly hashes: readonly string[];
 }
 
-/** Wait two frames, so scroll-driven and observer-driven class changes have run before a read. */
+/**
+ * Wait until the reader's figures have settled, then two frames, so scroll-driven and observer-driven class changes have run
+ * before a read. A figure's definition cues (a ring and a dot per defined node) and its tools are added after it is drawn;
+ * WebKit read one page before its cues were painted (198 and 196 elements, the third round's CI), so the wait holds until no
+ * figure is drawing and the count of cues and tool buttons is the same on two consecutive frames, bounded at 5 s.
+ */
 async function settle(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const root = document.querySelector('[data-docreader-root]');
+        const st = root?.getAttribute('data-docreader-diagrams');
+        if (st === 'drawing' || st === 'waiting') return false;
+        const n = document.querySelectorAll('.dn-ring, .dn-dot, figure .tools button').length;
+        const w = window as unknown as { __stCues?: number };
+        const same = w.__stCues === n;
+        w.__stCues = n;
+        return same;
+      },
+      undefined,
+      { polling: 'raf', timeout: 5_000 },
+    )
+    .catch(() => undefined);
   await frames(page);
 }
 

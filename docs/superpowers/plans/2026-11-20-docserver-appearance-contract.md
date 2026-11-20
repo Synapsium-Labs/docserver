@@ -315,6 +315,7 @@ X1's share is 32 768 on both totals, so 2 786 are left (measured at the third re
 - F8: applied as written (635dbd1 and the pull request's description): the plan no longer held "1.5 MiB", so, as the coordinator ruled, the test header's "a 1.5 MiB document" reads "a document of about 1.4 MiB"; the description says "after each review's fix round".
 - F10: applied as written (fb7748b).
 - F11: applied as written (d938e27): row T4-limit red.
+- CI at ba95309 (test (22), WebKit) read one Mermaid case of test 4 (a) before its definition cues were painted (198 and 196 elements). By the coordinator's ruling, one test commit makes the read wait, bounded, until no figure is drawing and the count of cues and tool buttons holds over two frames; the comparison is unchanged, and row (a) passes on Chromium (140 rows).
 - F9: not applied, because F1 is applied; the coordinator's D-8826 text replaces it.
 - F12: no change, as ruled.
 
