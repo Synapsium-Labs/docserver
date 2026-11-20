@@ -367,10 +367,10 @@ function pairsOf(b: Budget, v: unknown, what: string): [string, unknown][] {
 /** A base64 character's six bits, or -1: the first six characters of a face are decoded to read its signature. */
 const sextet = (c: string): number => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.indexOf(c);
 
-/** True for a face the frame may load: the base64 alphabet, at most the cap in characters and in decoded bytes, and the woff2 signature `wOF2`. */
 /** Base64 as `atob` reads it: whole quanta, then an optional final quantum of two or three characters with its padding. */
 const STRICT_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?$/;
 
+/** True for a face the frame may load: the base64 alphabet, at most the cap in characters and in decoded bytes, and the woff2 signature `wOF2`. */
 function goodFace(b64: string): boolean {
   if (b64.length > SEED_LIMITS.fontFaceMaxChars || b64.length < 6 || !BASE64_FACE.test(b64) || !STRICT_BASE64.test(b64)) return false;
   const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
