@@ -1,0 +1,10 @@
+# The appearance contract's landing: notes for the ledger
+
+What the programme ledger should learn from this landing, for the coordinator to fold in. The plan is [`2026-11-20-docserver-appearance-contract.md`](../../plans/2026-11-20-docserver-appearance-contract.md); its Results hold the measurements.
+
+- **Scope.** The first consumer's appearance design, §10 in full, tests 1 to 10: the contract and its validator, the Mermaid derivation, the `appearance` op and `FRAME_ACCEPTS`, the seed's `appearance` and `fonts`, `HostAdapters.appearance`, `FrameAssets.fonts` and `DocFrame.setAppearance`, the reader's hosted state and Aa line, the stylesheet on the slots, meaning without colour, Mermaid while hosted, and test 8's two tables at their genesis landing. X2's additions are not here. The package version is unchanged.
+- **Size.** This contract's row is 4 555 651 characters on both totals, 27 631 over 1.1.0's 4 528 020, within its 32 768 share. The shares table holds `x1` (32 768 and 32 768) and `x2` (1 166 336 and 72 704).
+- **One ruling.** The cherry-pick disc is `text-muted` and its marks `bg` (the first consumer's D-8816; the plan's Results).
+- **Choices recorded in the plan's Results:** the stick-arrowhead selector, `popShadow`'s 148, the table's 124 keys, test 7's Node row at the cap, unknown colour keys, freezing at `./frame`, the redraw's hidden `pre`, faces seeded with or without an appearance, and the changelog's `## Unreleased` entry.
+- **Waiting on the operator.** The landing commit's message must carry the pull request's description, which holds the `Size-Design: x1` line: today the repository's merge commit message is the title only, so the main-line run of test 8 reds after this landing until that setting changes (a merge commit with the title and description, or a squash with the same; rebase landings off).
+- **For the release.** The changelog's `## Unreleased` entry names every moved asset hash; a host that serves the frame re-pins its page policy to the release.

@@ -256,4 +256,49 @@ flowchart LR
 
 ## Results
 
-Filled in as tasks land: measured sizes, mutation counts, commands and any departures, each with its reason.
+Run 2026-11-20, one wave on one branch. Each task was an implementer subagent (Sonnet), then a held-out review of its commit (Opus), then one fix round; the review findings and their fixes are the "review" commits. Mutation rows are in `appearance-mutations/task-<n>.md`; every guard row is red except the equivalent mutants each file names with its reason.
+
+### Size (test 8's x1 row)
+
+Measured from the committed `src/frame/manifest.generated.ts` after the last asset change, against 1.1.0's 4 528 020 characters:
+
+| Entry | 1.1.0 | This landing | Growth |
+|---|---|---|---|
+| guard | 3 643 | 3 643 | 0 |
+| bootstrap | 30 153 | 31 161 | +1 008 |
+| enhance (the default layout) | 198 215 | 212 085 | +13 870 |
+| stylesheet | 549 069 | 561 822 | +12 753 |
+| Mermaid | 3 746 940 | 3 746 940 | 0 |
+| **total, and frame** | **4 528 020** | **4 555 651** | **+27 631** |
+
+X1's share is 32 768 on both totals, so 5 137 are left. The bootstrap stays under its 32 KiB budget (31 161 bytes). The appearance seed's longest text is 1 455 characters, under §9's 4 096, and `SEED_FIELDS_MAX_CHARS` rose by 351 027: the two faces' 349 528, the appearance's 1 455 and 44 of key punctuation.
+
+### Departures and readings
+
+- **The cherry-pick disc (ccrc D-8816, the coordinator's ruling of 2026-11-20).** Mermaid 12.1.0 draws a cherry-pick commit as a disc with no series class (so unstyled, default black) and two dots and two stems in inline white. §10's "painted `bg`, which meets 4.5:1 on its commit's series colour" cannot hold: there is no series colour, and a rule on `.commit-cherry-pick` paints disc and marks alike. While hosted the disc is `text-muted` and its dots and stems `bg`, targeted apart by element and attribute. Measured over the twelve fixture appearances: the marks on the disc at worst 6.14:1 (Catppuccin Latte), the disc on `surface` 6.74:1 (Solarized Light) and on `surface2` 5.54:1 (Catppuccin Mocha). Rows A7k (the disc rule dropped) and A7l (the disc rule widened to the marks) are red.
+- **The stick arrowheads** are painted through `marker path[stroke="black"]`, not the spec's `marker[id$="-stickTopArrowHead"] path` and its twin: the full-screen copy remaps every id, so an id-suffix rule would miss the copy. Only Mermaid's stick markers carry that literal among the covered kinds' markers; test 5 finds the paths by marker id, so a rule that missed one would red.
+- **`popShadow`'s longest accepted value is 148 characters,** not §2's 154: 154 is the grammar's maximum before ranges, and the seed cap is derived from the longest value the validator accepts. A unit row builds it and checks that `parseAppearance` accepts it.
+- **The derivation table lists 124 keys** (96 plus the 28 series keys) where §10's prose counts the 110 keys measured as drawn; the test asserts the rows as written. `gitInv0` to `gitInv7` follow the series: they paint a highlight commit's outer square, and the inner square is `surface2` through `primaryColor`.
+- **Test 7's old-cap row** is a Node row: `frameDocument` frames a document at 1.1.0's default cap with both faces at 131 072 decoded bytes and the largest accepted appearance, within `MAX_SRCDOC_CHARS_DEFAULT`, its growth exactly the two fields' seed text. A browser mount of that 70-million-character srcdoc does not fit the shared test slice; the browser row mounts a 1.5 MiB document with both faces and the largest appearance.
+- **Unknown keys in `colour`** are refused and named, and the group stands when its 33 slots are valid: an unknown key is not a refused colour slot.
+- **The lists are frozen at the `./frame` boundary** (`src/frame/appearance.ts`), because the reader's walls allow no call at a module's top level.
+- **A redraw renders into a hidden temporary `pre`** and swaps the drawing in, because Mermaid empties the container it draws into; a failed redraw leaves the old drawing.
+- **Faces are seeded whenever a host gives them,** and used only while hosted. A face loads with `display: swap`, and with a `100 900` weight range when its WOFF2 directory holds an `fvar` table.
+- **The changelog** gains an `## Unreleased` entry above 1.1.0, which `test/package.test.ts` now reads for the hash bullets; the version is the release's.
+- **Not fixed, recorded:** the port parser can throw on a Proxy whose traps throw, which a structured clone cannot deliver; a Mermaid `parse` that never settles stalls the drawing queue while colours apply; focus on a figure tool button is not carried across a redraw (focus on a node is).
+
+### Unmeasured here
+
+- WebKit: every browser row ran on Chromium locally (the pinned 1243 build is served from the box's cached 1248); WebKit runs in CI only (C69).
+- Two rows fail locally on that Chromium build, and fail the same way with the parent commit's reader sources (`layout-corpus` `diagrams/html-label` and `frame-mermaid` L3.B15, a `script-src-attr` report on a hostile label); CI's pinned browser is the authority.
+- `test/frame-document.test.ts` and `test/frame-build.test.ts` were run by parts: the shared 6 GB test slice killed whole-file runs while other sessions held it.
+
+### Commands
+
+```text
+~/.local/bin/ccrc test -- ./node_modules/.bin/vitest run --maxWorkers=2 <files>          per task, Verify lists
+PLAYWRIGHT_BROWSERS_PATH=<scratch> DOCREADER_BROWSERS=chromium ... test/browser/<file>  browser rows
+DOCSERVER_BOUNDARY_BASE=origin/main ... test/frame-boundaries.test.ts                    test 9, local
+DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x1' ... test/size-contract.test.ts
+npm run build:frame; node scripts/build-frame.mjs --check                               after every asset change
+```
