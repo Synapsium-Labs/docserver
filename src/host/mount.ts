@@ -55,7 +55,7 @@
 //
 // Import-inert: no module-level state. Each mount keeps its state in its own closure; two mounts share no port, nonce
 // or timer. The DOM is touched only inside mountDocFrame and the DocFrame it returns, through the element's own window.
-import { pngBytesOfBase64, isAnchorToken } from '../frame/anchor.js';
+import { isAnchorToken } from '../frame/anchor.js';
 import { frameCsp } from '../frame/csp.js';
 import { parseAppearance, type Appearance } from '../enhance/appearance.js';
 import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
@@ -609,6 +609,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     let limiter: Limiter | null = null;
     /** The open print run of this mount (B5); null when none is open. */
     let run: { n: number | null; readonly seen: Set<number>; bytes: number } | null = null;
+    /** What the figure in hand decodes to, as the parser read it: set before the limiter, read by its one effect. */
+    let figureBytes = 0;
     let pending: Partial<FramePrefs> | null = null;
     let pendingAppearance: Appearance | null = null;
     let answer: Build | null = null;
@@ -728,7 +730,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           if (run !== null) {
             run.n = n;
             run.seen.add(i);
-            run.bytes += pngBytesOfBase64(msg.png) ?? 0;
+            run.bytes += figureBytes;
             if (i === n - 1) run = null;
           }
           call('onPrintFigure', { i, n, png: msg.png });
@@ -789,6 +791,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         refused();
         return;
       }
+      figureBytes = parsed.bytes ?? 0;
       const admitted = (limiter as Limiter).admit(parsed.msg);
       if (!admitted.ok && admitted.closes) fail('refusals');
     };

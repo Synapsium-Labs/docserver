@@ -50,7 +50,13 @@ export type BridgeRefusal =
   | 'nonce'
   | 'protocol';
 
-export type ParsedBridgeMessage = { readonly ok: true; readonly msg: FrameToParent } | { readonly ok: false; readonly reason: BridgeRefusal };
+/**
+ * The verdict on one message. An accepted `print-figure` also carries `bytes`, what its text decodes to (read once, from the
+ * text's length and padding), so the caller keeps the run's total without scanning the text again.
+ */
+export type ParsedBridgeMessage =
+  | { readonly ok: true; readonly msg: FrameToParent; readonly bytes?: number }
+  | { readonly ok: false; readonly reason: BridgeRefusal };
 
 type FrameOp = FrameToParent['t'];
 
@@ -244,7 +250,8 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
     }
     case 'print-figure': {
       // In this order, each failure a refusal and nothing decoded before the last: an open run (B5); the index and the
-      // count, inside the grammar and the run; the PNG's size from its text, within its own cap; the run's total.
+      // count, inside the grammar and the run; the text's length against the longest a figure's cap allows (so the scan
+      // below is bounded) and the text not empty; the PNG's size from its text, within its own cap; the run's total.
       const run = ctx.run;
       if (run === null) return refuse('unknown-op');
       const iText = str('i');
@@ -256,11 +263,14 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       if (run.n !== null && n !== run.n) return refuse('type');
       if (run.seen.has(i)) return refuse('type');
       const png = str('png');
+      // The longest base64 text a figure of at most printFigurePngMaxBytes can have: four characters per started group of three bytes.
+      if (png.length > 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3)) return refuse('oversize');
+      if (png.length === 0) return refuse('type');
       const bytes = pngBytesOfBase64(png);
       if (bytes === null) return refuse('type');
       if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');
       if (run.bytes + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes) return refuse('oversize');
-      return { ok: true, msg: { t: 'print-figure', i: iText, n: nText, png } };
+      return { ok: true, msg: { t: 'print-figure', i: iText, n: nText, png }, bytes };
     }
     case 'progress': {
       // The share in thousandths, a string inside PROGRESS_SOURCE; a string outside it is refused as `type` (no new reason, batch 1.1).

@@ -429,7 +429,10 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context'], giv
       if (i >= n || n > BRIDGE_LIMITS.printFiguresMax) return refuse('type');
       if (run.n !== null && run.n !== n) return refuse('type');
       if (run.seen.includes(i)) return refuse('type');
-      const bytes = pngBytesOfBase64(msg['png'] as string);
+      const text = msg['png'] as string;
+      if (text.length > 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3)) return refuse('oversize');
+      if (text === '') return refuse('type');
+      const bytes = pngBytesOfBase64(text);
       if (bytes === null) return refuse('type');
       if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');
       return run.bytes + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes ? refuse('oversize') : ACCEPT;
