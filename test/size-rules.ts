@@ -172,9 +172,10 @@ export function judge(base: State, head: State, text: string): string[] {
 
   // The layouts: each at most the default enhance bundle's characters, at the head.
   const layouts = layoutSizes(head.manifest);
-  const defaults = layouts['default'];
+  const bundle = head.manifest['enhance'];
+  const defaults = bundle?.layout === 'default' ? bundle.chars : undefined;
   if (defaults === undefined) v.push('layouts: the manifest marks no default layout');
-  else for (const [name, size] of Object.entries(layouts)) if (size > defaults) v.push(`layouts: ${name} is ${String(size)} characters, over the default's ${String(defaults)}`);
+  else for (const [name, size] of Object.entries(layouts)) if (size > defaults) v.push(`layouts: ${name} is ${String(size)} characters, over the default enhance bundle's ${String(defaults)}`);
 
   if (head.shares === null || head.growth === null) {
     v.push('the judged commit lacks the shares table or the growth table');
@@ -192,6 +193,10 @@ export function judge(base: State, head: State, text: string): string[] {
     else {
       if (!sameRow(g[0] as Row, { design: 'baseline', ...before })) v.push("genesis: the baseline row is not the first parent's manifest total");
       if (!sameRow(g[1] as Row, { design: 'x1', ...now })) v.push('genesis: its own row is not the recomputation at the judged commit');
+      // With no shares table at the first parent, this landing's growth is judged against the share rows it adds itself.
+      const own = GENESIS_SHARES[0] as Row;
+      const grew = growthOf(g, 'x1');
+      if (grew.total > own.total || grew.frame > own.frame) v.push(`genesis: x1 grew ${String(grew.total)} total and ${String(grew.frame)} frame, over its own share of ${String(own.total)} and ${String(own.frame)}`);
     }
     const s = head.shares.rows;
     if (s.length !== 2) v.push(`genesis: the shares table holds ${String(s.length)} rows, exactly two`);
@@ -258,6 +263,7 @@ export function judge(base: State, head: State, text: string): string[] {
       }
       if (right.total !== now.total || right.frame !== now.frame) v.push('correction: the second row is not the recomputation at the judged commit');
       if (wrong.design === right.design) v.push('correction: both rows name the same design');
+      for (const d of [wrong.design, right.design]) if (d !== 'rebaseline' && RESERVED_WORDS.includes(d)) v.push(`correction: a row names ${d}, a reserved word; only a design or rebaseline may be named`);
       need(wrong.design);
       if (need(right.design)) within(right.design);
     }

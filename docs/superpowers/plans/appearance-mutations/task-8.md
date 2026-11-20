@@ -1,6 +1,6 @@
 # Task 8 mutation rows (size by contract)
 
-Each row edits `test/size-rules.ts` in place (the original saved and its sha256 `47b33209fb8c60fa11fdfe9bd5e6fc7b5b161f29f7fea2db79d7d673cb06da16` checked after the run), runs `test/size-rules.test.ts` through the fleet wrapper, and restores. A8a to A8h are the plan's rows; A8i to A8x are further guards of the same module.
+Each row edits `test/size-rules.ts` in place (the original saved and its sha256 `f17c1f54e271393196a6c8a760d16616b84a4d8725b8a8a00bd7263f763ba8e4 (after the fix round; A8a to A8x were measured on the first version, the guards unchanged)` checked after the run), runs `test/size-rules.test.ts` through the fleet wrapper, and restores. A8a to A8h are the plan's rows; A8i to A8x are further guards of the same module.
 
 | Row | Guard | Edit | Tests run | Result |
 |---|---|---|---|---|
@@ -28,6 +28,10 @@ Each row edits `test/size-rules.ts` in place (the original saved and its sha256 
 | A8v | genesis: exactly two growth rows | `if (g.length !== 2) v.push(`genesis:  ->  if (g.length < 2) v.push(`genesis:` | test/size-rules.test.ts | red |
 | A8w | a correction names two designs | `if (wrong.design === right.design) v.push(  ->  if (false) v.push(` | test/size-rules.test.ts | red |
 | A8x | the table parse refuses a non-canonical row | `if (rowText(row) !== body) throw  ->  if (false) throw` | test/size-rules.test.ts | red |
+| A8y | genesis: x1 judged against the shares the landing adds | `if (grew.total > own.total \|\| grew.frame > own.frame) v.push(  ->  if (false) v.push(` | test/size-rules.test.ts | red |
+| A8z | a correction names a design or rebaseline only | `if (d !== 'rebaseline' && RESERVED_WORDS.includes(d)) v.push(  ->  if (false) v.push(` | test/size-rules.test.ts | red |
+| A8aa | a layout is compared with the enhance entry's chars | `const defaults = bundle?.layout === 'default' ? bundle.chars : undefined;  ->  const defaults = bundle?.layout === 'default' ? layouts['default'] : undefined;` | test/size-rules.test.ts | red |
+| A8ab | genesis total share held on its own total only (frame side) | `grew.total > own.total \|\| grew.frame > own.frame  ->  grew.total > own.total` | test/size-rules.test.ts | equivalent mutant: in the genesis landing the baseline row has frame equal to total and the head's frame never exceeds its total, so the frame growth never exceeds the total growth and the frame side of the check cannot fire alone |
 
 ```json
 [
@@ -198,6 +202,34 @@ Each row edits `test/size-rules.ts` in place (the original saved and its sha256 
   "edit": "if (rowText(row) !== body) throw  ->  if (false) throw",
   "tests": "test/size-rules.test.ts",
   "result": "red"
+ },
+ {
+  "row": "A8y",
+  "guard": "genesis: x1 judged against the shares the landing adds",
+  "edit": "if (grew.total > own.total || grew.frame > own.frame) v.push(  ->  if (false) v.push(",
+  "tests": "test/size-rules.test.ts",
+  "result": "red"
+ },
+ {
+  "row": "A8z",
+  "guard": "a correction names a design or rebaseline only",
+  "edit": "if (d !== 'rebaseline' && RESERVED_WORDS.includes(d)) v.push(  ->  if (false) v.push(",
+  "tests": "test/size-rules.test.ts",
+  "result": "red"
+ },
+ {
+  "row": "A8aa",
+  "guard": "a layout is compared with the enhance entry's chars",
+  "edit": "const defaults = bundle?.layout === 'default' ? bundle.chars : undefined;  ->  const defaults = bundle?.layout === 'default' ? layouts['default'] : undefined;",
+  "tests": "test/size-rules.test.ts",
+  "result": "red"
+ },
+ {
+  "row": "A8ab",
+  "guard": "genesis total share held on its own total only (frame side)",
+  "edit": "grew.total > own.total || grew.frame > own.frame  ->  grew.total > own.total",
+  "tests": "test/size-rules.test.ts",
+  "result": "equivalent mutant: in the genesis landing the baseline row has frame equal to total and the head's frame never exceeds its total, so the frame growth never exceeds the total growth and the frame side of the check cannot fire alone"
  }
 ]
 ```

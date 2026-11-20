@@ -196,6 +196,12 @@ describe('correcting a row', () => {
     has(judge(base, state(SHARES, [...(base.growth as { rows: Row[] }).rows, row('x1', 1240)], man({ css: A('c', 130) })), said('correction')), 'correction: 1 growth rows');
     has(judge(base, pair(row('x2', 1200), row('x2', 1240)), said('correction')), 'both rows name the same design');
   });
+  it('a row named by another reserved word reds: none, shares, correction, baseline', () => {
+    for (const w of ['none', 'shares', 'correction', 'baseline']) {
+      has(judge(base, pair(row(w, 1200), row('x1', 1240)), said('correction')), `a row names ${w}, a reserved word`);
+      has(judge(base, pair(row('x2', 1200), row(w, 1240)), said('correction')), `a row names ${w}, a reserved word`);
+    }
+  });
   it('either side may be rebaseline; a side that is a design needs a share row at the first parent', () => {
     expect(judge(base, pair(row('x2', 1200), row('rebaseline', 1240)), said('correction'))).toEqual([]);
     has(judge(base, pair(row('x9', 1200), row('x1', 1240)), said('correction')), '"x9", which has no share row');
@@ -242,7 +248,12 @@ describe('layouts', () => {
     expect(run(100)).toEqual([]);
     expect(sizesOf(lay(100))).toEqual({ total: 1300, frame: 1200 });
   });
-  it('a layout larger than the default reds', () => has(run(101), 'layouts: wide is 101 characters, over the default\'s 100'));
+  it('a layout larger than the default reds', () => has(run(101), 'layouts: wide is 101 characters, over the default enhance bundle\'s 100'));
+  it("each layout is compared with the enhance entry's chars, not the default layout's sum (the default layout may hold more assets)", () => {
+    const m = man({ css: A('c', 90), extra: A('x', 50, 'default'), wide: A('w', 120, 'wide') });
+    const s = sizesOf(m);
+    has(judge(BASE, state(SHARES, [...GROWTH, row('rebaseline', s.total, s.frame)], m), said('rebaseline')), "layouts: wide is 120 characters, over the default enhance bundle's 100");
+  });
   it('a manifest with no default layout reds', () => has(judge(BASE, state(SHARES, GROWTH, man({ css: A('c', 90), enhance: A('b', 100) })), said('none')), 'marks no default layout'));
 });
 
@@ -265,6 +276,15 @@ describe('the genesis landing: a first parent with neither table', () => {
     has(judge(parent, state([GENESIS_SHARES[0] as Row], growth, headManifest), said('x1')), 'shares table holds 1 rows');
   });
   it('the shares are x1\'s and x2\'s figures', () => has(judge(parent, state([row('x1', 32768, 32768), row('x2', 1166336, 72705)], growth, headManifest), said('x1')), "x1's and x2's figures"));
+  it("this landing's own growth is judged against the share rows it adds itself (x1's 32768: at it clean, over it red)", () => {
+    const run = (extra: number): string[] => {
+      const m = man({ mermaid: A('d', 1000 + extra) }); // the parent is 1150, the head 1160 + extra
+      const z = sizesOf(m);
+      return judge(parent, state(GENESIS_SHARES, [row('baseline', 1150), row('x1', z.total, z.frame)], m), said('x1'));
+    };
+    expect(run(32758)).toEqual([]);
+    has(run(32759), 'genesis: x1 grew 32769');
+  });
   it('a head without the tables, or a parent with only one, reds', () => {
     has(judge(parent, state(null, growth, headManifest), said('x1')), 'lacks the shares table');
     has(judge(state(SHARES, null, parentManifest), good(), said('x1')), 'one of the two tables');

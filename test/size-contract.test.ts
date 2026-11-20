@@ -8,7 +8,7 @@
 // a build and never the working tree, so what it judges is what is committed. The rules themselves are pure functions in
 // test/size-rules.ts, driven row by row with synthetic states in test/size-rules.test.ts.
 //
-//   DOCSERVER_SIZE_BASE=<ref>   the base (default `HEAD^1`). A branch that is not a merge commit has no `HEAD^1` that means its
+//   DOCSERVER_SIZE_BASE=<ref>   the base (default `${DOCSERVER_SIZE_HEAD}^1`, that is `HEAD^1`). A branch that is not a merge commit has no `HEAD^1` that means its
 //                               base, so a local run names it: DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x1'.
 //                               A base that cannot be resolved, or that is not a proper ancestor of the judged commit, fails; it
 //                               is never skipped.
@@ -34,8 +34,8 @@ function git(args: readonly string[]): { status: number | null; stdout: string; 
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-const BASE = process.env['DOCSERVER_SIZE_BASE'] ?? 'HEAD^1';
 const HEAD = process.env['DOCSERVER_SIZE_HEAD'] ?? 'HEAD';
+const BASE = process.env['DOCSERVER_SIZE_BASE'] ?? `${HEAD}^1`;
 const resolve = (ref: string): string => git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).stdout.trim();
 
 /** A file at a commit, or null when the commit does not hold it. */
