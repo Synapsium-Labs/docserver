@@ -292,6 +292,16 @@ describeBrowsers((browser) => {
         const waiting = doc.page.locator(`${rootSel}[data-docreader-layout="${layout}"] .callout.waiting`);
         expect(await waiting.count()).toBe(1);
         expect(await waiting.textContent()).toContain('Waiting on you');
+        // A pending reveal must enter and finish before its painted cue is measured.
+        await waiting.evaluate((e) => e.scrollIntoView({ block: 'center', inline: 'nearest' }));
+        await expect.poll(() => waiting.evaluate((e) => {
+          const style = getComputedStyle(e);
+          const opacity = style.opacity;
+          const transform = style.transform;
+          return (!e.classList.contains('reveal') || e.classList.contains('in'))
+            && opacity === '1' && transform === 'none'
+            && e.getAnimations().every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
+        }), { timeout: 15_000 }).toBe(true);
         const runs = await runsThrough(doc.page, waiting, HUE.mark);
         expect(widths(runs), JSON.stringify(runs)).toEqual([3]);
       } finally {

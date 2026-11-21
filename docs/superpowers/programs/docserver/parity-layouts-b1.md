@@ -68,6 +68,27 @@ Classic uses 146,912 characters and Editorial 167,270, respectively 78,797 and 5
 - The measured growth row passed all five size-contract checks against landing A. The conformance ratchet kept all 47 verdicts and 18 hostile layout cases, with no golden or existing layout snapshot moves. Type checking and frame build reproduction passed after the review fix.
 - Final isolated Chromium checks passed: frame items 3 (no setup error), selected sealed frame boot 3, corpus read-back 172, hosted appearances 24 across Classic and Editorial, and non-colour cues 38. WebKit remains a CI check.
 
+## Task 14 CI fix round: waiting-callout cue
+
+At `9f4bee4`, [both CI jobs](https://github.com/Synapsium-Labs/docserver/actions/runs/44945053429) failed only the two new WebKit waiting-callout pixel assertions; each job reported 7,693 passed and five skipped. The rule and the exact expected pixel result were both 3 px.
+
+| CI job | Classic measured → rounded | Editorial measured → rounded |
+|---|---:|---:|
+| Node 22 | 2.582 → 2.5 px | 1.126 → 1 px |
+| Node 24 | 1.268 → 1.5 px | no detectable run |
+
+The sampler scrolled the callout into view and captured it after two animation frames, without waiting for the 550 ms reveal to finish. In a controlled Chromium probe the real border computed to 3 px throughout. At opacity 0.185 the sampler found no run; at opacity 0.683 it measured 2.036 px; at opacity 1 with no transform it measured exactly 3 px in both layouts. That reproduces the early-sampling mechanism, not the exact WebKit timing: local WebKit could not launch because host libraries were missing.
+
+Only the two alternate-layout assertions now scroll the callout into view and wait for any pending reveal to enter, the callout's own animations to settle, and computed opacity 1 with no transform. The test still measures painted pixels with the original sampler and exact `[3]` assertion. No cue rule or production reveal changed.
+
+| Chromium probe | Classic | Editorial |
+|---|---|---|
+| Five-second reveal, omit the settle wait | No run; red at `[3]` | No run; red at `[3]` |
+| Settled reveal, narrow the border to 2 px | 2 px; red at `[3]` | 2 px; red at `[3]` |
+| Unchanged border with settle wait | 3 px; green | 3 px; green |
+
+With the wait restored, both cases also passed with the five-second reveal. Both temporary mutations were removed. The unchanged Chromium file selection passed all 38 tests; WebKit still needs CI verification.
+
 ## Process notes
 
 - Task 0 and Task 9 each had an edit applied through a script instead of a file-editing tool. Task 9's split cleanup repeated this on mechanical deletions in ten files before switching to the file tools. The changes were checked in the diffs. A Task 9 commit message was corrected before pushing. The pack test's allowlist and count had not been checked in the first infrastructure pass; the review fix corrected them and ran the test.
