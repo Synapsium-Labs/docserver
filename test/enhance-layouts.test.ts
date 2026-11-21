@@ -4,7 +4,8 @@
 // build time. Here the lifecycle runs in jsdom with each list in turn (the module the lifecycle imports is mocked to hand out the
 // layout's `features()`), so the lists are proved without a build or a browser:
 //   - each list is frozen, made fresh by a call, and distinct: no two layouts, and none of them and the default, hold the same
-//     feature names in the same order, and every feature name of a layout is a name of the default list (shared modules only);
+//     feature names in the same order. Shared features are the very same functions and keep their relative order;
+//     a layout-specific feature names its layout instead of replacing a shared feature under the same name;
 //   - the layout mark comes first in every non-default list and is in no other, and the default list holds none;
 //   - a layout's root is marked `data-docreader-layout="<name>"` once it is enhanced, beside the shared `data-docreader-root`,
 //     and teardown (the journal's undo) takes the mark off again, the document as it was; the default layout's root is never
@@ -84,27 +85,31 @@ describe('the layouts\' feature lists', () => {
     expect(Object.keys(all).sort()).toEqual([...FRAME_LAYOUTS].sort());
   });
 
-  it('hold only features of the shared list (imported, never copied): every name is a name of the default list, or the layout mark, and builds with the very function the default list builds with', async () => {
+  it('reuse shared features by identity and give layout-specific features distinct names', async () => {
     const all = await lists();
     const shared = new Map(defaultFeatures().map((f) => [f.name, f]));
     for (const layout of OWN) {
-      for (const f of all[layout] ?? []) {
+      const features = all[layout] ?? [];
+      expect(new Set(features.map((f) => f.name)).size, `${layout}: feature names`).toBe(features.length);
+      for (const f of features) {
         if (f.name === 'layout-mark') continue;
         const s = shared.get(f.name);
-        expect(s, `${layout}: ${f.name} is not a shared feature`).toBeDefined();
-        expect(f.build, `${layout}: ${f.name} builds with its own function`).toBe(s?.build);
-        expect(f.after, `${layout}: ${f.name}'s second phase`).toBe(s?.after);
+        if (s === undefined) {
+          expect(f.name.startsWith(`${layout}-`), `${layout}: ${f.name}`).toBe(true);
+        } else {
+          expect(f.build, `${layout}: ${f.name} builds with its own function`).toBe(s.build);
+          expect(f.after, `${layout}: ${f.name}'s second phase`).toBe(s.after);
+        }
       }
     }
   });
 
-  it('keep the shared order: the features of a layout, less the mark, are a subsequence of the default list', async () => {
+  it('keep the shared order: shared features of a layout are a subsequence of the default list', async () => {
     const all = await lists();
     const order = defaultFeatures().map((f) => f.name);
     for (const layout of OWN) {
-      const names = (all[layout] ?? []).filter((f) => f.name !== 'layout-mark').map((f) => f.name);
-      const at = names.map((n) => order.indexOf(n));
-      expect(at.every((i) => i >= 0), layout).toBe(true);
+      const at = (all[layout] ?? []).map((f) => order.indexOf(f.name)).filter((i) => i >= 0);
+      expect(at.length, `${layout}: uses shared features`).toBeGreaterThan(0);
       expect([...at].sort((a, b) => a - b), layout).toEqual(at);
     }
   });
@@ -115,7 +120,7 @@ describe('the layouts\' feature lists', () => {
       const names = (all[layout] ?? []).map((f) => f.name);
       expect(names[0], layout).toBe('layout-mark');
       expect(names.filter((n) => n === 'layout-mark'), layout).toHaveLength(1);
-      expect(names[1], layout).toBe('editorial');
+      expect(['editorial', `${layout}-editorial`], layout).toContain(names[1]);
     }
     expect((all['default'] ?? []).map((f) => f.name)).not.toContain('layout-mark');
   });
@@ -154,10 +159,29 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
   for (const layout of OWN) {
     it(`${layout}: every rule is scoped under the root's two marks, with no literal colour, no font and no url`, () => {
       const text = css(layout);
-      // Strip the comments, then every rule's selector (what precedes a `{`) must start with the scope.
-      const rules = text.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map((r) => r.trim()).filter((r) => r !== '');
-      expect(rules.length).toBeGreaterThan(0);
-      for (const r of rules) expect(r.startsWith(`[data-docreader-root][data-docreader-layout="${layout}"]`), r).toBe(true);
+      // Use the parsed rule tree so the same scope check applies inside responsive and motion queries.
+      const style = document.createElement('style');
+      style.textContent = text;
+      document.head.append(style);
+      const scope = `[data-docreader-root][data-docreader-layout="${layout}"]`;
+      const check = (rules: CSSRuleList): void => {
+        expect(rules.length).toBeGreaterThan(0);
+        for (const rule of Array.from(rules)) {
+          if (rule.type === CSSRule.MEDIA_RULE) {
+            check((rule as CSSMediaRule).cssRules);
+          } else {
+            expect(rule.type, rule.cssText).toBe(CSSRule.STYLE_RULE);
+            const selector = (rule as CSSStyleRule).selectorText;
+            expect(selector.startsWith(scope), selector).toBe(true);
+          }
+        }
+      };
+      try {
+        if (style.sheet === null) throw new Error(`${layout}: the stylesheet did not parse`);
+        check(style.sheet.cssRules);
+      } finally {
+        style.remove();
+      }
       expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix)\s*\(/i);
       expect(text).not.toMatch(/url\(|@font-face|@import|<\/style/i);
       expect(text.includes('\r')).toBe(false);

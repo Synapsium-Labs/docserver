@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import type { Locator, Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type OpenedDoc } from './harness.js';
+import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenedDoc } from './harness.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const COLLISION = JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'appearance', 'collision.json'), 'utf8')) as {
@@ -203,7 +203,7 @@ async function colourAt(page: Page, target: Locator, dx: number): Promise<number
 
 // ───────── a page ─────────
 
-type How = { appearance?: unknown; width?: number; stylesheet?: string; marks?: boolean; inShort?: boolean };
+type How = { appearance?: unknown; width?: number; stylesheet?: string; marks?: boolean; inShort?: boolean; layout?: HarnessLayout };
 
 async function open(browser: BrowserName, how: How = {}): Promise<OpenedDoc> {
   const options: Record<string, unknown> = { folds: false, storageKey: 'cues' };
@@ -214,6 +214,7 @@ async function open(browser: BrowserName, how: How = {}): Promise<OpenedDoc> {
     browser,
     csp: 'reader',
     viewport: { width: how.width ?? 1440, height: 900 },
+    ...(how.layout === undefined ? {} : { layout: how.layout }),
     ...(how.stylesheet !== undefined ? { stylesheet: how.stylesheet } : MUTANT === undefined ? {} : { stylesheet: MUTANT }),
   });
 }
@@ -236,6 +237,13 @@ async function mark(page: Page): Promise<void> {
 }
 
 describeBrowsers((browser) => {
+  // Only register alternate layouts for cues their own features draw.
+  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>): void {
+    for (const layout of ['default', 'classic'] as const) {
+      it(layout === 'default' ? name : `${layout}: ${name}`, () => check(layout));
+    }
+  }
+
   it('a heading mark in the changed state reads "Changed since you read it"', async () => {
     const doc = await open(browser, { appearance: COLLISION, marks: true });
     try {
@@ -461,8 +469,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('quick jump\'s selected row has an inset 2px accent bar, and an unselected row has none', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  sharedCue('quick jump\'s selected row has an inset 2px accent bar, and an unselected row has none', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       await doc.page.keyboard.press('/');
       await doc.page.locator(`${rootSel} .jump.open li`).first().waitFor();
@@ -544,8 +552,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  sharedCue('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       const input = doc.page.locator(`${rootSel} .tbl-tools input`).first();
       await input.focus();
@@ -772,9 +780,9 @@ describeBrowsers((browser) => {
     });
   }
 
-  it('the chrome literals are slots: tool buttons surface and text, the pressed one accent and accent-ink, the full-screen overlay, and selected text', async () => {
+  sharedCue('the chrome literals are slots: tool buttons surface and text, the pressed one accent and accent-ink, the full-screen overlay, and selected text', async (layout) => {
     const c = PHOSPHOR.colour;
-    const doc = await open(browser, { appearance: PHOSPHOR });
+    const doc = await open(browser, { appearance: PHOSPHOR, layout });
     try {
       const got = await doc.page.evaluate((sel) => {
         const root = document.querySelector(sel) as HTMLElement;
