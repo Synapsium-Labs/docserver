@@ -41,7 +41,7 @@ import {
   type FrameAssetName,
 } from '../scripts/build-frame.mjs';
 import { commentTokenHazards } from '../scripts/comment-tokens.mjs';
-import { freeGlobalList, MAX_FREE_GLOBALS, scanFreeGlobals, scanScript } from '../scripts/free-globals.mjs';
+import { freeGlobalList, MAX_FREE_GLOBALS, sameGlobalNames, scanFreeGlobals, scanScript } from '../scripts/free-globals.mjs';
 import { frameCsp, frameDocument, FRAME_MANIFEST, type RenderInput } from '../src/frame/index.js';
 import { pinFreeGlobals, RESERVED_GLOBALS } from '../src/frame-runtime/pin.js';
 import { render } from '../src/render/index.js';
@@ -541,13 +541,77 @@ describe('L3.M17: the free-global list', () => {
     const b = built();
     const text = b.files.bootstrap.text;
     expect(text.split(JSON.stringify(b.freeGlobals.names))).toHaveLength(2);
-    expect(scanScript('bootstrap', text)).toEqual(b.freeGlobals.first.bootstrap);
-    expect(b.freeGlobals.second).toEqual(b.freeGlobals.first);
+    // The names it reads and writes, never the spelling of an alias, which the minifier may choose differently the second time.
+    const final = scanScript('bootstrap', text);
+    expect(final.reads).toEqual(b.freeGlobals.first.bootstrap.reads);
+    expect(final.writes).toEqual(b.freeGlobals.first.bootstrap.writes);
+    expect(sameGlobalNames(final, b.freeGlobals.first.bootstrap)).toBe(true);
+    for (const n of SCANNED) {
+      expect(b.freeGlobals.second[n].reads, n).toEqual(b.freeGlobals.first[n].reads);
+      expect(b.freeGlobals.second[n].writes, n).toEqual(b.freeGlobals.first[n].writes);
+    }
     // A read added after the list was made: the second scan differs, and the list no longer covers it.
     const p = problems(bundleOf(b, { bootstrap: `${text};lateProbe;\n` }));
     expect(p.some((m) => m.includes('second scan'))).toBe(true);
     const q = problems(bundleOf(b, { enhance: `${b.files.enhance.text};lateEnhanceProbe;\n` }));
     expect(q.some((m) => m.includes('lateEnhanceProbe'))).toBe(true);
+  });
+
+  it("the bootstrap's second scan is compared by the names read and written, never by an alias's spelling", () => {
+    // Helper level: the same code under another local name is the same free globals.
+    const a = scanScript('x', 'const a=window;a.foo;');
+    const c = scanScript('x', 'const b=window;b.foo;');
+    expect(a.aliases).not.toEqual(c.aliases);
+    expect(sameGlobalNames(a, c)).toBe(true);
+    expect(sameGlobalNames(a, scanScript('x', 'const a=window;a.bar;'))).toBe(false);
+    expect(sameGlobalNames(a, scanScript('x', 'const a=window;a.foo=1;'))).toBe(false);
+    // Build level, the final text: a bootstrap that binds one more alias of `window` (already read) gives a scan whose
+    // aliases differ from the first pass's and whose reads and writes do not; the check reports no free-globals problem.
+    const b = built();
+    const text = b.files.bootstrap.text;
+    const first = b.freeGlobals.first.bootstrap;
+    expect(first.reads).toContain('window');
+    const aliased = `${text};{const zzAliasSpelling=window;}\n`;
+    const scan = scanScript('bootstrap', aliased);
+    expect(scan.aliases).toContain('zzAliasSpelling');
+    expect(scan.aliases).not.toEqual(first.aliases);
+    expect(scan.reads).toEqual(first.reads);
+    expect(scan.writes).toEqual(first.writes);
+    const free = (bundle: Bundle): string[] => problems(bundle).filter((m) => m.startsWith('free-globals: '));
+    expect(free(bundleOf(b, { bootstrap: aliased }))).toEqual([]);
+    // Build level, the first pass's record: the minifier named an alias differently in the first build.
+    const renamed = { ...bundleOf(b), freeGlobals: { names: b.freeGlobals.names, first: { ...b.freeGlobals.first, bootstrap: { ...first, aliases: ['zzFirstPassSpelling'] } } } };
+    expect(free(renamed)).toEqual([]);
+  });
+
+  it("a read or a write that the first pass did not see is refused by the bootstrap's second-scan comparison, each part on its own", () => {
+    const b = built();
+    const text = b.files.bootstrap.text;
+    const first = b.freeGlobals.first.bootstrap;
+    const free = (bundle: Bundle): string[] => problems(bundle).filter((m) => m.startsWith('free-globals: '));
+    const second = "free-globals: the final bootstrap's second scan differs from its first";
+    // A write of an allowlisted name appended to the final text: the pinned list is unchanged (an allowlisted name is never
+    // listed, and `globalThis` is read by another script), so only the second scan can see it.
+    expect(b.freeGlobals.names).toContain('globalThis');
+    expect(b.freeGlobals.names).not.toContain('injected');
+    expect(free(bundleOf(b, { bootstrap: `${text};globalThis.injected = 1;\n` }))).toEqual([second]);
+    // The first pass's record with one more name read, then with one more written: the final text and the list are untouched.
+    const withFirst = (bootstrap: { readonly reads: readonly string[]; readonly writes: readonly string[]; readonly aliases: readonly string[] }) => ({
+      ...bundleOf(b),
+      freeGlobals: { names: b.freeGlobals.names, first: { ...b.freeGlobals.first, bootstrap } },
+    });
+    expect(free(withFirst({ ...first, reads: [...first.reads, 'zzFirstPassRead'] }))).toEqual([second]);
+    expect(free(withFirst({ ...first, writes: ['injected'] }))).toEqual([second]);
+  });
+
+  it("a bootstrap whose list leaves out a name the outputs read, or names one they do not, fails the build through the list comparison", () => {
+    const b = built();
+    const names = b.freeGlobals.names;
+    const free = (bundle: Bundle): string[] => problems(bundle).filter((m) => m.startsWith('free-globals: the bootstrap\'s list is not'));
+    const withNames = (list: readonly string[]): Bundle => ({ ...bundleOf(b), freeGlobals: { names: list, first: b.freeGlobals.first } });
+    const dropped = names[0] as string;
+    expect(free(withNames(names.slice(1)))).toEqual([`free-globals: the bootstrap's list is not the outputs' scan (unlisted: ${dropped}; not read: none)`]);
+    expect(free(withNames([...names, 'zzNotRead']))).toEqual(["free-globals: the bootstrap's list is not the outputs' scan (unlisted: none; not read: zzNotRead)"]);
   });
 
   it('a bootstrap that carries the list no times, or twice, fails the build through the embedding check alone (review E3)', () => {

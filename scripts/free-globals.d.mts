@@ -19,4 +19,6 @@ export declare const GLOBAL_NAMES: readonly string[];
 export declare const MAX_FREE_GLOBALS: number;
 export declare function scanScript(name: string, text: string): ScriptScan;
 export declare function scanFreeGlobals(texts: Readonly<Record<string, string>>): FreeGlobalScan;
+/** True when two scans of one script read the same names and write the same names; the aliases' spellings are ignored. */
+export declare function sameGlobalNames(a: ScriptScan, b: ScriptScan): boolean;
 export declare function freeGlobalList(scan: FreeGlobalScan, allowlist: readonly string[]): string[];

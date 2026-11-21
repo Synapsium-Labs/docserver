@@ -24,7 +24,8 @@
 // The checks, every one run on every build before anything is written (checkOutputs): the byte rules of
 // src/frame/bytes.ts (the functions frameDocument runs); the HTML-like comment rule on every script
 // (scripts/comment-tokens.mjs, TypeScript, build time only); the free-global scan again over the final outputs, which
-// must give the same list, and for the bootstrap the same scan as before it carried the list, with the list embedded
+// must give the same list, and for the bootstrap the same names read and written as before it carried the list (the
+// aliases' minified spellings can differ between the two builds and are not compared), with the list embedded
 // once; then the size budgets (ASSET_BUDGETS), each moved only by a named ruling. A failing build names every problem.
 //
 // Then the manifests: assets/assets.json lists every file under assets/ but itself (the tracked ones walked from disk,
@@ -50,7 +51,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { buildMermaid, buildMermaidFrame, FRAME_ENTRY, FREE_DEFINES } from './build-mermaid.mjs';
 import { commentTokenHazards } from './comment-tokens.mjs';
-import { freeGlobalList, scanFreeGlobals } from './free-globals.mjs';
+import { freeGlobalList, sameGlobalNames, scanFreeGlobals } from './free-globals.mjs';
 
 /** The free-global define set (plan Reference §5.5), defined once in scripts/build-mermaid.mjs. */
 export { FREE_DEFINES };
@@ -295,7 +296,8 @@ export function checkOutputs(bundle) {
     const hazards = name === 'css' ? cssHazards(text) : [...scriptHazards(text), ...commentTokenHazards(text).map((h) => `HTML comment token (${h})`)];
     for (const h of hazards) problems.push(`${where}: ${h}`);
   }
-  // The free globals: the final outputs scanned again must give the same list, and the bootstrap the same scan.
+  // The free globals: the final outputs scanned again must give the same list, and the bootstrap the same names read and
+  // written (never the aliases' spellings, which the minifier may choose differently the second time).
   let second = null;
   try {
     const scan = scanFreeGlobals(scanned(texts));
@@ -306,7 +308,7 @@ export function checkOutputs(bundle) {
       const extra = freeGlobals.names.filter((n) => !names.includes(n));
       problems.push(`free-globals: the bootstrap's list is not the outputs' scan (unlisted: ${missing.join(', ') || 'none'}; not read: ${extra.join(', ') || 'none'})`);
     }
-    if (!same(scan.scripts.bootstrap, freeGlobals.first.bootstrap)) {
+    if (!sameGlobalNames(scan.scripts.bootstrap, freeGlobals.first.bootstrap)) {
       problems.push("free-globals: the final bootstrap's second scan differs from its first");
     }
     if (texts.bootstrap.split(JSON.stringify(freeGlobals.names)).length !== 2) {

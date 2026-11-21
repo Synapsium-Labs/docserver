@@ -26,6 +26,10 @@
 // binder cannot prove is the global, such as a function parameter bound at its call site (fastdom's IIFE writes
 // `e.fastdom` through its parameter `e`). Those names are the anchor battery's (Task 8) and the allowlist's.
 //
+// A scan also lists the aliases it proved, by their built spelling, for the report. A spelling is the minifier's choice
+// and can differ between two builds of the same code, so two scans are compared by sameGlobalNames: the names read and the
+// names written, never the aliases.
+//
 // Dev tooling, never shipped; types in free-globals.d.mts.
 import ts from 'typescript';
 
@@ -334,6 +338,17 @@ export function scanFreeGlobals(texts) {
   }
   const order = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   return { scripts, reads: [...reads].sort(order), writes: [...writes].sort(order) };
+}
+
+/**
+ * True when two scans of one script name the same free globals: the same names read and the same names written. The
+ * aliases are left out on purpose. An alias is the minifier's spelling of a local variable the binder proved bound to
+ * the global, so the same code built twice (the bootstrap, once without the list and once with it) can spell it
+ * differently without reading or writing anything else; it never reaches the pinned list, so it is not part of what the
+ * two builds must agree on.
+ */
+export function sameGlobalNames(a, b) {
+  return JSON.stringify([a.reads, a.writes]) === JSON.stringify([b.reads, b.writes]);
 }
 
 /**
