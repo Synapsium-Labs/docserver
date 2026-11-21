@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task by task. Each task is an implementer subagent (tests first), then one held-out review over the task's diff, then one fix round. The plan is lean (C40): it holds no implementation code, only the contract each task must meet, its tests and its mutation rows.
 
-**Status:** written 2026-11-20 against `main` at `bee0fd1` (the appearance contract, then the rename to `@synapsium-labs/pinax-lib`). Two sequential landings, A and B (Design §3), as the coordinator ruled on 2026-11-20: landing A (Tasks 1 to 8, print mode included) is this run; landing B (Tasks 9 to 14, all four layouts in one landing) is a run of its own once A lands. The design is the first consumer's, approved by its operator on 2026-11-19; this plan decides only how the library builds it. A sentence of the design that cannot be built as written is a stop-and-ask, never a silent departure. The package version does not change here; the release and its signed tag are the operator's. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
+**Status:** landing A built; landing B is wave 35. Written 2026-11-20 against `main` at `bee0fd1` (the appearance contract, then the rename to `@synapsium-labs/pinax-lib`). Two sequential landings, A and B (Design §3), as the coordinator ruled on 2026-11-20: landing A (Tasks 1 to 8, print mode included) is this run; landing B (Tasks 9 to 14, all four layouts in one landing) is a run of its own once A lands. The design is the first consumer's, approved by its operator on 2026-11-19; this plan decides only how the library builds it. A sentence of the design that cannot be built as written is a stop-and-ask, never a silent departure. The package version does not change here; the release and its signed tag are the operator's. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
 
 **Goal:** Everything the first consumer's parity design asks of the library: four more layouts beside `default`, each on the appearance slots and its own frame policy; Back-to-close and Back-from-a-jump through places on the existing port; item links seeded by the host; drawn figures handed to the host for print; the In short "Headlines / Full" option and a seeded comparison base; and a print mode of `render` with its own stylesheet. A host that asks for none of it gets exactly today's behaviour.
 
@@ -51,12 +51,12 @@
 | B2 | Op values stay flat strings: `push` is the literal `'true'`, `i` and `n` decimal strings | The protocol's invariant, "every value a string except v" (`protocol.ts`); both parsers already read it | A host reading `push` as a boolean misses it; `bridge-cases.json` pins the spelling |
 | B3 | The anchor grammar moves to a pure `src/frame/anchor.ts`; nav keeps a twin held equal by a test | `./host`'s parser must check `from` with the library's own grammar (§4.7), and the reader may import only its siblings (walls rule 5), as with `COMMAND_OPS` | One equality test, as for `COMMAND_OPS` |
 | B4 | The bootstrap checks only shape for the new words (`id` by the fragment grammar it already holds, `from` a string of at most 4096 code units); the reader re-checks `from` in `goToHash` | The bootstrap has 1 607 bytes left of its 32 KiB budget; the reader already checks a `from` "like a stored position" | If the bootstrap still passes its budget, the wave stops and asks (R1) |
-| B5 | A run of print figures belongs to one `printFigures()` call: the host parser refuses a `print-figure` with no open run, an `n` that changes within a run, an `i` repeated or at or above `n`, and the 65th; the run ends at the next call or at unmount (a stale figure from a cancelled run costs at most one refusal) | The caps are per document print; a frame must not open its own runs | A host that never calls `printFigures()` refuses every `print-figure`, as a 1.1 host would never receive one |
+| B5 | A run of print figures belongs to one `printFigures()` call: the host parser refuses a `print-figure` with no open run, an `n` that changes within a run, an `i` repeated or at or above `n`, and the 65th; the run ends at the next call or at unmount (a stale figure from a cancelled run usually costs one refusal; a stale copy larger than the new one, near the 16 MiB total, can cost one more) | The caps are per document print; a frame must not open its own runs | A host that never calls `printFigures()` refuses every `print-figure`, as a 1.1 host would never receive one |
 | B6 | Print figures are drawn in a hidden offscreen container through the bundled Mermaid with `htmlLabels: false`, serialised, loaded as a `data:` image and drawn to a canvas | `img-src data:` is already in the frame policy; no `foreignObject`, so the canvas stays readable (§4.6) | A figure that taints or fails is skipped, and the host prints its source (§4.6) |
 | B7 | `RenderOptions.reader` carries the vocabulary print mode and item values need (`itemFields`, `itemHeadings`, status words, addressees, qualifiers, rule ids, `rules`) with the frame's defaults | The enhance step reads the same lists from `features`; print and screen must agree (§6), so both read one shape, and a test holds the two equal | Two option shapes for one vocabulary, held equal by a test |
 | B8 | The In short switch is a `features` flag, `inShort`, default false, its state kept in the reader's existing `ui` pref | §6: "an option"; a flag keeps a host that asks for nothing at 1.1's output; `ui` is already a bridge store key | None for the wire; a host sees the switch only when it asks |
 | B9 | The comparison base is an optional seed key, `changesBase`, a full sha, used only when `bridge.changes` is on | §5.6: the host records the base when the frame asks through `changes`, and seeds it back; the frame then asks `changes` for it at mount and shows it | A base the host cannot answer shows nothing, as an unanswered `changes` does today |
-| B10 | Print mode works on the token stream, before markdown-it renders, and emits its blocks as the render's own escaped elements | `render` is pure and has no DOM; a token transform keeps the raw-HTML allowlist untouched, because nothing from the document is parsed as HTML | A block the enhance step builds from the DOM is computed twice; the agreement test (Task 7) holds the two equal on the corpus |
+| B10 | Print mode parses `render`'s own escaped output into a small DOM-free tree, ports the screen's builders onto it in the reader's build order and writes it again, as `meta.items` reads the same output; the elements it emits are the render's own, escaped | `render` is pure and has no DOM; nothing from the document is parsed as HTML beyond `render`'s own allowlisted output, so a raw tag in the source stays text (test and row P7j) | A block the enhance step builds from the DOM is computed twice; the agreement test (Task 7) holds the two equal on the corpus |
 | B11 | Each layout's own stylesheet is its own frame asset, marked with its layout in the manifest; nothing a layout adds goes into `reader.css` | `reader.css` is an entry every frame inlines, so a layout's rules there would grow `frame` for every layout; a separate asset counts only in its layout's assets (test 8) | One more manifest entry per layout that has a stylesheet |
 | B12 | `checkFrameCsp(csp, required)` keeps accepting any hash this version ships; `frameCsp(layout)` emits only that layout's | A host's stored policy for one layout stays valid; `missing-hash` still catches a policy that lacks the chosen layout's hash | A policy naming another layout's hash is accepted, which inlines nothing more |
 
@@ -274,4 +274,114 @@ As Task 8, for landing B: one appended `x2` row; `frame` unchanged from A's row;
 
 ## Results
 
-Filled as each task lands: per task, the commits, the tests run and their counts, the mutation rows and their verdicts, the measured sizes, and every choice made while executing, with why.
+Run 2026-11-20 to 2026-11-21, landing A (Tasks 1 to 8; landing B, Tasks 9 to 14, is wave 35). Each task was an implementer subagent, then a held-out review of its commits, then fix rounds until the review was clean. Mutation rows are in `parity-mutations/task-<n>.md`; every guard row is red except the equivalent mutants each file names with its reason.
+
+### Per task
+
+| Task | Commits | Tests (counts at the task's end) | Mutation rows | Review |
+|---|---|---|---|---|
+| 1 The wire | 7e74a7e | frame-protocol 254, frame-seed 177, frame-runtime 91, frame-anchor 51, frame-boundaries 21, frame-document 239, host-parse 134, host-mount 129 and the rest of the verify list, all green; typecheck clean | P1a to P1h (8, all red), P1i added at Task 2 | Approved, 6 minors, carried into Task 2 |
+| 2 `./host` | 3a07b73, 87eae4a | host-mount 162, host-parse 210, host-limits 42, frame-protocol 312, readme 47; RED measured after the source (HEAD's parser restored: 99 failed) | P2a to P2j (10 red), P1i | Approved, 5 minors, folded in (87eae4a) |
+| 3 Places, `close-overlay`, `goto` | 6e02929 | enhance-frame-wire 16, enhance-nav 57, the four-file group 163, frame-build 45; Chromium `frame-places` | P3a to P3n (14, all red) | Approved, 4 minors |
+| 4 Item values and links | 40794ba, ce4d894, 316c1e8, f0bc750 | render-items 44 (later more), frame-seed 185, frame-document 246, host-mount 171, corpus; Chromium `frame-items` 3 | 26 rows at the first build and more through three review rounds (see the ledger), all red | Needs fixes twice (the header route, a vacuous assertion, the dropped precedence rows); clean after round 3 |
+| 7 Print mode | f22e185, 9160bb6, 26b5b61, a32b1ce | render-print 58, print-surface 14 to 21, print-agreement 62; pack, package, readme, purity, public-ready green | P7a to P7bc, every row red (three round-2 records superseded by round 3's measurements; the correct code reads 108 713 children against a bound of 300 000) | Needs fixes (pack, quadratic walk, vocabulary), then three rounds |
+| 5 In short, comparison base, bootstrap split | 1d52065, bf84d35, 492c5c5 | enhance-inshort 18 (20 at Task 8), frame-document 268, host-mount 176; Chromium `frame-inshort` 4, `frame-vocabulary` 2 | P5a to P5w (24, all red) | Approved, 7 minors, four fixed |
+| 6 Print figures in the frame | 1c52e5f, b1d0deb, ec1993b | enhance-print-figures 36, host-print-run 6, host-mount 186, host-parse 225, frame-outbox 32; Chromium `print-figures` 2 | 56 rows, 54 red and 2 equivalent mutants (P6l; B6b, killable on WebKit in CI only) | Needs fixes (the run's end; the 16 MiB total), then clean |
+| 8 Landing | 58e8e55 and this landing's commit | the verify list, the whole suite (below) | P8a, P8b, P8c | Final review is the coordinator's |
+
+Tasks 5 and 7 wrote feature code before tests and rely on their measured mutation rows for the red evidence, not on a separate red run; Task 2's red was measured after the source by restoring HEAD's parser. Local runs of the largest files were killed by the test slice's memory cap and rerun in isolation; `frame-document`'s 44 boundary cases are partly unmeasured locally, and CI arbitrates.
+
+### Size (test 8's x2 row)
+
+Measured from the committed `src/frame/manifest.generated.ts` at the final state, against the x1 row (4 558 002):
+
+| Entry | x1 | This landing | Growth |
+|---|---|---|---|
+| guard | 3 643 | 3 643 | 0 |
+| bootstrap | 31 161 | 32 740 | +1 579 |
+| enhance (the default layout) | 214 215 | 223 989 | +9 774 |
+| stylesheet | 562 043 | 562 299 | +256 |
+| Mermaid | 3 746 940 | 3 746 940 | 0 |
+| **total, and frame** | **4 558 002** | **4 569 611** | **+11 609** |
+
+With the default layout only, `frame` equals `total`: the row is `{"design":"x2","total":4569611,"frame":4569611}`. X2's shares are 1 166 336 on the total and 72 704 on the frame, so the landing uses 11 609 of 72 704 on both and 61 095 are left for landing B. (The running sum against the two shares is the same number, since no layout asset exists yet.)
+
+`test/size-contract.test.ts` was run with `DOCSERVER_SIZE_TEXT='Size-Design: x2'`, the judged commit pointed at a commit made from the landing's tree in a throwaway index (never a second worktree and never a repository copy), against `origin/main` and against the branch's tip before the landing: 5 of 5 passed each time. Two mutants of the row are red (`parity-mutations/task-8.md`: P8a the row names `x1`, P8b two `Size-Design:` lines). The commands:
+
+```text
+DOCSERVER_SIZE_HEAD=<tree-commit> DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x2' test/size-contract.test.ts
+DOCSERVER_SIZE_HEAD=<tree-commit> DOCSERVER_SIZE_BASE=<the tip before the landing> DOCSERVER_SIZE_TEXT='Size-Design: x2' test/size-contract.test.ts
+```
+
+On any commit whose message carries no `Size-Design:` line, and which does not append the row, the test is red by design; the landing's own message carries the line.
+
+**Print mode's size, beside test 8 and not in it:** `src/render/print/*.ts` is 11 files, 58 176 characters, with `src/render/reader.ts` (the whole-option check, 6 041 characters) shared with the item values; `assets/print.css` is 4 254 bytes (`2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`). Neither is a frame asset; the bootstrap and `frame` budgets do not count them.
+
+**Test 7's old-cap row at the new assets.** The document it builds has a fixed part of 110 026 723 characters; at this landing's assets (4 569 611) it is 114 596 334, over 1.1.0's default cap of 114 569 828 only because the assets and the seed's new keys grew, and `MAX_SRCDOC_CHARS_DEFAULT` is now 116 222 539 (it rose by the items, the comparison base, the two bridge switches and the flag at their caps, and by the assets). The row's assertions (at 1.1.0's asset lengths the document is within 1.1.0's cap; the derived cap equals its formula) are held in `test/frame-document.test.ts`. The browser old-cap row stays a release-gate item, as the appearance landing left it.
+
+### The bootstrap (budget 32 768 bytes)
+
+| Point | Bytes | Left |
+|---|---|---|
+| Base (the appearance landing) | 31 161 | 1 607 |
+| After Task 1 | 31 915 | 853 |
+| After Task 3 | 32 546 | 222 |
+| After Task 4 | 32 745 | 23 |
+| Task 5, (c) alone (one table of optional seed checks) | 32 721 | 47 |
+| Task 5, (c) and (b') (the vocabulary's words judged on the host side) | 32 260 | 508 |
+| After Task 5 | 32 345 | 423 |
+| Task 6, first build (over, never committed) | 32 789 | -21 |
+| Task 6, option (2), no `done` backpressure | 32 763 | 5 |
+| Task 6, option (3), a thin pass-through adapter (not buildable, below) | 32 624 | 144 |
+| Task 6, option (3'), thin and no timer-guess cancel (not buildable) | 32 581 | 187 |
+| Task 6, option (A) | 32 747 | 21 |
+| After Task 6 (the final) | 32 740 | 28 |
+| Task 8 | 32 740 | 28 (zero bytes added) |
+
+Why each choice. Task 4 left 23 bytes, and Task 5's two keys needed 33 more (32 801), so the coordinator ruled (c) and (b') on 2026-11-20: (c) writes the optional seed checks as one table from which `SEED_KEYS` and `OPTIONAL_SEED_KEYS` derive, with no change in behaviour; (b') moves the deep check of `features.vocabulary` out of the bundled `validateSeed` into a host-only check that `frameDocument` runs, with the same refusal text, and the reader's option check judges the words again, so a forged seed fails the render and the host falls back. Task 6 over-ran by 21 bytes. The coordinator ruled option (3) on 2026-11-20, and (3) could not be built: the build's free-globals comparison ties two minified aliases (`window` and `document`) and about 75 thin shapes flipped it; by the coordinator's ruling of 2026-11-21 (A) stands, the adapter keeping its range, type and size checks and the `done` backpressure and dropping only the integer test, which the host's parser's grammar judges alone (row H6g). The frame row is in Size above: 4 569 611 at the end.
+
+### Departures and readings
+
+- **The third item route (the coordinator's ruling of 2026-11-20).** The reference reader's header line (a strong label from `itemFields`, a colon, then keys, in a paragraph before the meta line) is a source of item values in the reference design, and parity requires the reader to link it. L2 had deliberately no third route; this reverses that, in `render`'s `meta.items` and in the reader's item link, on only when `itemFields` is given. The cost is a few hundred enhance characters and one more route to keep equal.
+- **ccrc D-8868, print follows the screen's outline gate.** The design's fixture (three tasks of two, three and four steps, 9 steps) cannot print a plan fact, because the screen draws one only for a plan with 20 or more steps (`OUTLINE_MIN_STEPS`). Print follows the screen's gate (one function, `planFactApplies`), and the fixture grows to tasks of 6, 7 and 8 steps (21), so its fact reads "3 tasks · 21 steps" and "2 yours". The 19, 20 and 21 step boundary is an agreement case, with a print-only gate-drop row (P7i). Every other plan mark follows its own screen gate.
+- **B10, amended to what was built.** Print mode parses render's own escaped output into a DOM-free tree (as `meta.items` does) and ports the screen's builders onto it, in the reader's build order; the plan's token-stream transform was not built (the coordinator's ruling of 2026-11-20). A raw tag in the source stays text (P7j).
+- **`img` keeps `src` in print** (the coordinator's ruling of 2026-11-20): the first consumer's allow-list admits a render image ref and resolves it through its image map, and the brief's attribute list had left it out by mistake. `conformance/print/vocabulary.json` lists its classes and declares two open families (`language-`, `hljs-`).
+- **The bootstrap split, (c) and (b')** (above), which moves a refusal from the bundle to the host without changing its text for a single fault; a seed with a bad vocabulary and an earlier bad field is now named by `features.vocabulary` only where the old order would have reached it (fixed in the minors round, P5v).
+- **Task 6's option (A) and why (3) could not build** (above): the free-globals comparison is sensitive to the minifier's alias tie.
+- **B5, revised at Task 6's review (the coordinator's ruling of 2026-11-20).** The host no longer ends a run at `i = n - 1`; a run ends only at the next `printFigures()` or at unmount. A stale figure of a cancelled run lands in the new run (same document, same figure, possibly the earlier colours) and usually costs one refusal, when the real copy of its index comes. The reader keeps the run's 16 MiB total and skips a figure that would pass it. A run token on the wire would be cleaner, and is beyond the design's ops.
+- **`meta.items` is always present** (an empty array), a new key of every `meta`; the conformance runner leaves an empty one out of the meta it compares, so no golden moves.
+- **The jump push** (the coordinator's ruling of 2026-11-20): the outbox's `trail()` kept only the latest hash within 100 ms, so a push followed by a move lost its history entry. It now keeps `push` and the first push's `from` (rows J6a to J6e).
+- **Reasons for parser refusals** (Task 2's choice): `unknown-op` for a `place` or `print-figure` the mount did not ask for or with no open run, `keys` for `push` and `from` without `places`, `type` for a grammar or run fault, `oversize` for the three byte caps; `conformance/bridge-cases.json` fixes them.
+- **Task 8's `baseLabel` minor** is defence in depth: the options check already refuses a commit sha under 7 characters and lower-cases it, so the new floor and the lower-casing cannot be reached through `enhance()` (row P8c, an equivalent mutant).
+
+### Known limits
+
+- (a) When a reprint interrupts a print run, one figure of the new run may be the earlier run's copy of the same figure, drawn in the earlier colours if the appearance changed in between; in a rare case near the 16 MiB total its size, larger than the new copy's, can cost a further refusal.
+- (b) Refusals never decay on a mount, so each interrupted reprint spends one of the sixteen refusals the frame may cause before the host closes it. A host that reprints more than about fifteen times in one mount, with a run always interrupted, loses the frame to a fallback.
+- The hash window: before `ready`, `queueEarly` still replaces an earlier `hash` of the pre-ready queue with the latest, push included; a jump is not asked for before ready, so it is not reachable today.
+
+### Open follow-ups (for the library's next wave)
+
+- The free-globals comparison is sensitive to which minified name an alias gets: Tasks 3 and 6 both met the `window` and `document` tie. An alias-insensitive comparison would end the search for code shapes.
+- A race the host causes (a stale figure after its own reprint) should not count as a frame refusal; a run token on the wire would give the host the means to tell.
+- The comparison-base recording rule is ambiguous on the wire: the frame sends `changes` for the last-visit measure and for day views too, so a host cannot tell, from the call alone, a comparison the reader chose.
+- Deferred minors not fixed in this landing: Headlines in a loose list shows the whole first paragraph (an edge, noted in the editorial header); `changesBase` is a plain string fixed per `DocFrame` (a function form is additive later); the agreement test of print runs only with the default vocabulary and rules on; print's `wrap` at the root renumbers the tail once per box, and `rules.ts` detaches inline nodes one at a time (both existed before the print work as costs of the builders they port).
+
+### Landing B's bootstrap estimate (no build)
+
+About 0 bytes if the layouts' state maps onto the existing `DOC_FIELDS` (`outline`, `folds`, `marks`) and `pref:ui`. Each new doc field name costs about 10 to 12 bytes in the bundled list, so two or three new fields (20 to 36 bytes) would be about the 28 left. The layout choice, `frameCsp(layout)` and the per-layout cap are host-side and cost no bootstrap bytes.
+
+### Process notes
+
+- **A tool-hook refusal at Task 7's first pass.** The test-gate hook of the session refused one call that chained an edit script, a typecheck piped to `tail` and a `for` loop of test runs ("this command starts a heavy test or typecheck outside the test wrapper"); nothing in it ran, and the implementer redid the edit as a script and each test as its own call. The constraints file since says one test command per call and that a refusal stops the task and is reported.
+- **A false claim.** That implementer's report said README and CHANGELOG were edited for print mode. The refused call was the one that wrote them, and the claim was not re-checked. The Task 7 review caught it (with the pack test red, the quadratic walk and the vocabulary), and the fix is 9160bb6. The standing rule since: a reported edit is checked against `git diff --stat <base>..<head>` before the report counts.
+- Several tasks wrote feature code before tests and relied on measured mutation rows (Tasks 5 and 7); the local runs killed by the test slice's memory cap were rerun in isolation, and the `frame-document` boundary cases are partly unmeasured locally.
+
+### Commands
+
+```text
+ccrc test -- ./node_modules/.bin/vitest run --maxWorkers=2 <one file>              per task, one file per call
+DOCREADER_BROWSERS=chromium ... test/browser/<file>                                 browser rows (WebKit is CI's)
+npm run build:frame; node scripts/build-frame.mjs --check                          after every asset change
+DOCSERVER_SIZE_HEAD=... DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x2' ... test/size-contract.test.ts
+```

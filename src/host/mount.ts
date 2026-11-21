@@ -45,7 +45,7 @@
 // (plan choice B5): the parser refuses a `print-figure` with no open run, and each figure is checked against the run's
 // count, its indexes and its byte totals before the adapter sees it; the run ends at the next
 // `printFigures()` call and with the mount (not at its last index: a stale figure of a cancelled run, whatever its index, lands in
-// the new run and costs at most one refusal when the real copy of that index comes). `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
+// the new run and usually costs one refusal when the real copy of that index comes; a stale copy larger than the new one, near the 16 MiB total, can cost one more). `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
 // after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
 //
 // Teardown: a fallback clears the timers, closes the port, removes the iframe and calls onFallback once; it never

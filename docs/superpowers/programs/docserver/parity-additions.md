@@ -1,0 +1,18 @@
+# X2's additions, landing A: notes for the ledger
+
+What the programme ledger should learn from this landing, for the coordinator to fold in. The plan is [`2026-11-20-docserver-parity-additions.md`](../../plans/2026-11-20-docserver-parity-additions.md); its Results hold the measurements.
+
+- **Scope.** Landing A of the first consumer's X2 design §6: the place and print-figure wire (`place`, `print-figure`, `hash`'s `push` and `from`, the `close-overlay`, `goto` and `print-figures` commands), `./host`'s `onPlace`, `onPrintFigure`, `items` and `changesBase` and `DocFrame`'s `closeOverlay()`, `goto()` and `printFigures()`, item values from `render` (`meta.items`, `RenderOptions.reader`) and item links through the seed, the "In short" Headlines / Full switch and the comparison base, print mode of `render` with `assets/print.css` and `conformance/print/`, and print figures in the frame. Landing B (the four layouts) is wave 35. The package version is unchanged.
+- **Size.** x2's first row is 4 569 611 characters on both totals, 11 609 over x1's 4 558 002, within x2's 72 704 on the frame; 61 095 are left for landing B. The bootstrap is 32 740 of 32 768 bytes (28 left); Task 8 added none. Print mode's code (58 176 characters) and `assets/print.css` (4 254 bytes) are beside test 8, not in it.
+- **Rulings.**
+  - The third item route: the reference reader's header line is read by `render`'s `meta.items` and the reader's item link, on when `itemFields` is given; it reverses L2's "no third route".
+  - ccrc D-8868: print follows the screen's outline gate (20 steps); the plan fixture has 21 steps (6, 7 and 8), and the 19, 20 and 21 boundary is a case.
+  - B10 amended: print parses render's own escaped output into a DOM-free tree, as `meta.items` does; `img` keeps `src`.
+  - The bootstrap split (2026-11-20): the optional seed checks are one table, and the vocabulary's words are judged on the host side and in the reader.
+  - Task 6's option (A) (2026-11-21): the print adapter drops only the integer test (32 747, then 32 740), because no thin shape passed the free-globals scan.
+  - B5 revised: a print run ends only at the next `printFigures()` or at unmount.
+- **Known limits.** (a) A reprint that interrupts a run may leave one figure as the earlier copy, in the earlier colours if the appearance changed, and in a rare case near the 16 MiB total that copy's size costs a further refusal. (b) Refusals never decay on a mount, so each interrupted reprint spends one of the sixteen.
+- **Open follow-ups (the library's next wave).** The free-globals comparison is sensitive to which minified alias a name gets. A host-caused race should not count as a frame refusal. The comparison-base recording rule is ambiguous on the wire (`changes` is also sent for the last-visit measure and for day views).
+- **Landing B's bootstrap.** About 0 bytes if the layouts' state maps onto `outline`, `folds`, `marks` and `pref:ui`; each new doc field name is about 10 to 12 bytes, so two or three would be about the 28 left.
+- **Waiting on the operator.** As for the appearance landing: the landing commit's message must carry the description's `Size-Design: x2` line, or the main-line run of test 8 reds.
+- **For the release.** The changelog's `## Unreleased` entry names the moved asset hashes, and a host that serves the frame re-pins its page policy to the release; the browser old-cap row stays a release-gate item.

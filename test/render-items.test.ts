@@ -4,6 +4,8 @@
 // bound; the equality with the reader (the same documents enhanced in jsdom with a spy `itemLink`); the patterns held to
 // the vocabulary's own; the option's checks. (The conformance comparator's rule for the new key is in test/corpus.test.ts:
 // this file runs in jsdom, where the corpus loader's file URLs do not.)
+// The equality with the reader compares sets (both sides sorted): the reader asks its host in its own order and for at most 16
+// keys, so a document with more than 16 distinct keys is out of that comparison's scope.
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

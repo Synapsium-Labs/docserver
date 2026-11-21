@@ -215,7 +215,7 @@ async function setup(n: number, extra: Partial<EnhanceOptions> = {}, flag = true
 const settled = (ms = 0): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 describe('the constants are the wire\'s', () => {
-  it('FIGURES_MAX, SIDE_MAX and PNG_MAX_BYTES equal BRIDGE_LIMITS', () => {
+  it('FIGURES_MAX, SIDE_MAX, PNG_MAX_BYTES and RUN_MAX_BYTES equal BRIDGE_LIMITS', () => {
     expect(FIGURES_MAX).toBe(BRIDGE_LIMITS.printFiguresMax);
     expect(SIDE_MAX).toBe(BRIDGE_LIMITS.printFigureSideMaxPx);
     expect(PNG_MAX_BYTES).toBe(BRIDGE_LIMITS.printFigurePngMaxBytes);
