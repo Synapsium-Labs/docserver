@@ -2,12 +2,10 @@
 // under it with the reading time, and the facts panel from the front matter. The meta line the byline is made from is not
 // hidden but left out, as paper has no hidden. The reader's item links are the host's and have no print: the byline's item
 // fact is a fact like any other.
+import { findSeparator } from '../separator.js';
 import type { PrintCtx } from './context.js';
 import { buildFacts, formatLong, noFacts } from './facts.js';
 import { addClass, append, detach, el, first, hasClass, insertAfter, insert, isEl, isText, named, nextEl, setAttr, attr, split, textOf, txt, type ElN, type N, type TextN } from './tree.js';
-
-/** A byline separator: a middle dot with white space on both sides. */
-const SEP = /\s+·\s+/;
 
 const isBlank = (n: N): boolean => n.k === 't' && n.data.trim() === '';
 const isStrong = (n: N | undefined): n is ElN => n !== undefined && isEl(n) && n.name === 'strong';
@@ -29,10 +27,10 @@ function segments(p: ElN): N[][] {
     if (!isText(child)) continue;
     let t: TextN = child;
     for (;;) {
-      const m = SEP.exec(t.data);
+      const m = findSeparator(t.data);
       if (m === null) break;
       const sep = m.index > 0 ? split(t, m.index) : t;
-      const rest = m[0].length < sep.data.length ? split(sep, m[0].length) : null;
+      const rest = m.length < sep.data.length ? split(sep, m.length) : null;
       seps.add(sep);
       if (rest === null) break;
       t = rest;

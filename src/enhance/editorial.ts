@@ -78,6 +78,7 @@
 import { CHROME_ATTR, chrome, siblingRun, type Journal } from './journal.js';
 import { documentMinutes, formatLong } from './reading.js';
 import { noFacts, type FactsSeam } from './registry.js';
+import { findSeparator } from './separator.js';
 import type { FeatureContext, FrontListEntry } from './types.js';
 import type { Vocab } from './vocab.js';
 
@@ -192,9 +193,6 @@ function shortSwitch(ctx: FeatureContext, box: HTMLElement, heading: Element): v
   choose(ctx.state.readUi(SHORT_VIEW) === 'headlines' ? 'headlines' : 'full', false);
 }
 
-/** A byline separator: a middle dot with white space on both sides. */
-const SEP = /\s+·\s+/;
-
 /** A section number at the start of a heading: "3. ", "A2. ", "4b. ". */
 const SEC_NO = /^([A-Z]?\d+[a-z]?)\.\s+/;
 
@@ -218,10 +216,10 @@ function segments(p: Element, journal: Journal): Node[][] {
     if (child.nodeType !== 3) continue;
     let t = child as Text;
     for (;;) {
-      const m = SEP.exec(t.data);
+      const m = findSeparator(t.data);
       if (m === null) break;
       const sep = m.index > 0 ? journal.split(t, m.index) : t;
-      const rest = m[0].length < sep.data.length ? journal.split(sep, m[0].length) : null;
+      const rest = m.length < sep.data.length ? journal.split(sep, m.length) : null;
       seps.add(sep);
       if (rest === null) break;
       t = rest;

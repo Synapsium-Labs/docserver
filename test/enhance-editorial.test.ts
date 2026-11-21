@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR, createJournal } from '../src/enhance/journal.js';
 import { render } from '../src/render/index.js';
+import { bylineWith, RUN_SIZES } from './long-space.js';
 
 const LONG = Array.from({ length: 700 }, (_, i) => `word${String(i)}`).join(' ');
 const NOTE = 'A note that runs on well past seventy characters, so that the byline sets it across the whole width.';
@@ -429,4 +430,23 @@ describe('the journal\'s move and split', () => {
     expect(() => control.journal.split(t, 3)).toThrow(/after a destroy/);
     expect(t.data).toBe('alpha beta');
   });
+});
+
+describe('a long run of white space in the byline (review 3081 F1)', () => {
+  it('costs the screen no more than the same run in a paragraph with no byline, up to 1 MiB: the separator is found by a scan', async () => {
+    // The control holds the very same run in the body, where no separator is looked for, so what else enhance does with a
+    // long text is in the baseline and only the byline's scan is measured.
+    const control = (n: number): string => `# T\n\n**Spec** · a b\n\n## Body\n\nText a${' '.repeat(n)}b\n`;
+    const run = async (md: string): Promise<number> => {
+      const root = mount(md);
+      const t = performance.now();
+      await enhance(root, infoOf(md));
+      return performance.now() - t;
+    };
+    for (const n of RUN_SIZES) {
+      const base = await run(control(n));
+      const ms = await run(bylineWith(n));
+      expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (the same run outside the byline ${base.toFixed(0)} ms)`).toBeLessThan(Math.max(600, 20 * base));
+    }
+  }, 120000);
 });

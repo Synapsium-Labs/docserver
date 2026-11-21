@@ -14,10 +14,14 @@ export interface ItemLink {
 export const ITEM_LIMITS = Object.freeze({ max: 50, valueMax: 100, hrefMax: 4096 } as const);
 
 /**
- * An absolute `https:` URL: the scheme, `//`, a host with no user information, white space, control character (C0, DEL or C1)
- * or backslash, then optionally a path, query and fragment with none of those either. The reader draws no other link.
+ * The characters no item href holds, matching what `./host`'s `classifyLink` refuses (test/host-links.test.ts holds the two
+ * equal over every code point): white space of any kind (`\s`, which takes U+2028, U+2029 and U+FEFF), the C0 controls, DEL and
+ * the C1 controls, the Arabic letter mark, the zero-width characters and directional marks U+200B to U+200F, the bidi controls
+ * U+202A to U+202E and U+2066 to U+2069, the word joiner U+2060, and the tag characters U+E0000 to U+E007F; and a backslash.
+ * This file imports nothing, so the table is a copy of `./host`'s hidden-character table (src/host/copy.ts).
  */
-const HTTPS_URL = /^https:\/\/[^\s\u0000-\u001f\u007f-\u009f\\/?#@]+(?:[/?#][^\s\u0000-\u001f\u007f-\u009f\\]*)?$/i;
+const HTTPS_URL =
+  /^https:\/\/[^\s\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\u{e0000}-\u{e007f}\\/?#@]+(?:[/?#][^\s\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\u{e0000}-\u{e007f}\\]*)?$/iu;
 
 /** True for an href a frame may draw: 1 to ITEM_LIMITS.hrefMax code units and an absolute `https:` URL. */
 export function isItemHref(href: unknown): href is string {

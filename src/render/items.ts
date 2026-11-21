@@ -28,6 +28,7 @@
 // not see stays unread: a key in the body, in a heading or in a table is no item.
 
 import { checkReader } from './reader.js';
+import { findSeparator } from './separator.js';
 import type { ReaderVocabulary } from './types.js';
 
 /** The most item values `meta.items` lists. */
@@ -203,9 +204,6 @@ const descendant = (n: ElNode, name: string): ElNode | null => find(n, name)?.el
 
 // ── the byline route
 
-/** A separator of the meta line: a middle dot with white space on both sides. */
-const SEP = /\s+·\s+/;
-
 /** The paragraph under the title that carries the byline (editorial.ts's metaParagraph), among the title's following siblings. */
 function metaParagraph(siblings: readonly ElNode[], after: number): ElNode | null {
   for (let i = after + 1; i < siblings.length; i += 1) {
@@ -230,15 +228,15 @@ function segments(p: ElNode): Node[][] {
     let rest = c.data;
     let base = 0;
     for (;;) {
-      const m = SEP.exec(rest);
+      const m = findSeparator(rest);
       if (m === null) {
         if (rest !== '') last().push({ k: 't', data: rest, at: c.at, off: base });
         break;
       }
       if (m.index > 0) last().push({ k: 't', data: rest.slice(0, m.index), at: c.at, off: base });
       segs.push([]);
-      rest = rest.slice(m.index + m[0].length);
-      base += m.index + m[0].length;
+      rest = rest.slice(m.index + m.length);
+      base += m.index + m.length;
     }
   }
   return segs;

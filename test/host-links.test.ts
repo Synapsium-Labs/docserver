@@ -4,6 +4,7 @@
 // units. A relative link loses its query; a fragment-only link is a fragment; an http, https or mailto link is external,
 // with its scheme and host named for the host's own sheet. `./host` never navigates: it only hands the link to onLink.
 import { describe, expect, it } from 'vitest';
+import { isItemHref } from '../src/frame/items.js';
 import { BRIDGE_LIMITS } from '../src/frame/protocol.js';
 import { classifyLink } from '../src/host/links.js';
 
@@ -157,6 +158,42 @@ describe('L3.H6 accepted: external links', () => {
   it('a mailto domain the URL parser refuses, or one that holds more than a host or reads as another host, is refused', () => {
     for (const href of ['mailto:a@', 'mailto:a@example.com/x', 'mailto:a@example.com:25', 'mailto:a@example.com#x', 'mailto:a@ex%61mple.com', 'mailto:a@exa%mple.com', 'mailto:a@b\u00fccher.example/x', 'mailto:a@exa<mple.com', 'mailto:a@exa|mple.com']) {
       expect(classifyLink(href), href).toBeNull();
+    }
+  });
+});
+
+describe('the frame\'s item-href grammar and the host\'s agree on characters (review 3081 F7)', () => {
+  // An item link is drawn only when the frame's isItemHref takes it, and its click is kept only when classifyLink takes it, so
+  // a character one refuses and the other admits draws a link whose click is dropped. The two files cannot import each other
+  // (src/frame/items.ts is import-free), so the grammars are held equal here, over every code point, in the three places an
+  // href carries free text: the path, the query and the fragment.
+  const places = (c: string): string[] => [`https://tracker.example/a${c}b`, `https://tracker.example/?a${c}b`, `https://tracker.example/#a${c}b`];
+
+  it('the bidi controls, directional marks and zero-width characters are refused by both', () => {
+    for (const code of [0x202e, 0x202a, 0x202b, 0x202c, 0x202d, 0x2066, 0x2067, 0x2068, 0x2069, 0x200e, 0x200f, 0x061c, 0x200b, 0x200c, 0x200d, 0x2060, 0xfeff, 0x2028, 0x2029, 0xe0041, 0xe007f]) {
+      for (const href of places(String.fromCodePoint(code))) {
+        expect(isItemHref(href), `${code.toString(16)} in ${href.length}`).toBe(false);
+        expect(classifyLink(href), code.toString(16)).toBeNull();
+      }
+    }
+    expect(isItemHref('https://tracker.example/AB-1\u202e')).toBe(false);
+  });
+
+  it('over every code point, in each place, isItemHref admits exactly what classifyLink admits', () => {
+    const differ: string[] = [];
+    for (let code = 0; code <= 0x10ffff; code += 1) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      for (const href of places(String.fromCodePoint(code))) {
+        if (isItemHref(href) !== (classifyLink(href) !== null)) differ.push(`${code.toString(16)}: ${href.slice(0, 22)}`);
+      }
+    }
+    expect(differ).toEqual([]);
+  }, 120000);
+
+  it('an ordinary absolute https URL, and a path in another script, are still admitted by both', () => {
+    for (const href of ['https://tracker.example/AB-1', 'https://tracker.example/browse/AB-1?x=1#top', 'https://tracker.example/\u0434\u043e\u043a', 'https://tracker.example/%E2%80%AE']) {
+      expect(isItemHref(href), href).toBe(true);
+      expect(classifyLink(href), href).not.toBeNull();
     }
   });
 });

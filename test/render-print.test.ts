@@ -14,6 +14,7 @@ import { PLAN_FACT_MIN_STEPS } from '../src/render/print/strip.js';
 import { printVocab } from '../src/render/print/vocab.js';
 import { checkReader } from '../src/render/reader.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
+import { boundMs, bylineWith, RUN_SIZES, timed } from './long-space.js';
 import { pinned } from './print-vocabulary.js';
 
 const ROOT = process.cwd();
@@ -355,5 +356,16 @@ describe('a rule paragraph of very many IDs costs work in proportion to its leng
     expect(q(d, 'p.rule > span.rule-head > code')).toHaveLength(K);
     expect(sq(q(d, 'p.rule > span.rule-head')[0]?.textContent)).not.toContain(',');
     expect(work.calls, `long splices (${String(work.moved)} children moved)`).toBeLessThan(50);
+  });
+});
+
+describe('a long run of white space in the byline (review 3081 F1)', () => {
+  it('costs print mode no more than a short gap, up to 1 MiB: the separator is found by a scan, not a backtracking pattern', () => {
+    const opts = { print: true, reader: { rules: true } } as const;
+    const plain = timed(() => render(bylineWith(1), opts));
+    for (const n of RUN_SIZES) {
+      const ms = timed(() => render(bylineWith(n), opts));
+      expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (short gap ${plain.toFixed(1)} ms)`).toBeLessThan(boundMs(plain));
+    }
   });
 });

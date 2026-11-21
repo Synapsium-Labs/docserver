@@ -8,10 +8,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { destroyEnhancement, enhance } from '../src/enhance/index.js';
+import { findSeparator as screenSeparator } from '../src/enhance/separator.js';
 import { WAIT_CLIP } from '../src/enhance/strip.js';
 import { clip } from '../src/enhance/text.js';
 import { render } from '../src/render/index.js';
 import { PLAN_FACT_MIN_STEPS } from '../src/render/print/strip.js';
+import { findSeparator } from '../src/render/separator.js';
 
 const ROOT = process.cwd();
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -169,5 +171,46 @@ describe('print mode agrees with the screen', () => {
     expect((short['steps'] as unknown[]).length).toBe(19);
     expect(await at(20)).toEqual({ screen: 1, print: 1 });
     expect(await at(21)).toEqual({ screen: 1, print: 1 });
+  });
+});
+
+describe('the byline separator scan (review 3081 F1)', () => {
+  const MARK = '// --- twin: byte-equal from here on\n';
+  const tail = (rel: string): string => {
+    const text = read(rel);
+    const at = text.indexOf(MARK);
+    expect(at, rel).toBeGreaterThan(0);
+    return text.slice(at + MARK.length);
+  };
+
+  it('the render and the reader keep twin copies, byte-equal from the marker line on', () => {
+    expect(tail('src/enhance/separator.ts')).toBe(tail('src/render/separator.ts'));
+  });
+
+  it('finds what the pattern it replaced finds: the same start and the same length, whole runs of white space included', () => {
+    const SEP = /\s+·\s+/;
+    // Every string of up to six of these (a dot, ASCII and Unicode white space, the zero-width space, which is no white space, a letter, a colon).
+    const alphabet = ['·', ' ', '\t', '\u00a0', '\u2028', '\ufeff', '\u200b', 'a', ':'];
+    let checked = 0;
+    const walk = (prefix: string, depth: number): void => {
+      const m = SEP.exec(prefix);
+      const want = m === null ? null : { index: m.index, length: m[0].length };
+      expect(findSeparator(prefix), JSON.stringify(prefix)).toEqual(want);
+      expect(screenSeparator(prefix), JSON.stringify(prefix)).toEqual(want);
+      checked += 1;
+      if (depth === 0) return;
+      for (const c of alphabet) walk(prefix + c, depth - 1);
+    };
+    walk('', 6);
+    expect(checked).toBe(Array.from({ length: 7 }, (_c, i) => 9 ** i).reduce((a, b) => a + b, 0));
+  });
+
+  it('reads white space as the pattern class does, over every UTF-16 code unit', () => {
+    const differ: string[] = [];
+    for (let c = 0; c < 0x10000; c += 1) {
+      const ch = String.fromCharCode(c);
+      if ((findSeparator(`a${ch}·${ch}b`) !== null) !== /\s/.test(ch)) differ.push(c.toString(16));
+    }
+    expect(differ).toEqual([]);
   });
 });

@@ -17,6 +17,7 @@ import { collectItems, ITEM_KEY_SOURCE, ITEM_LINE, ITEM_VALUE_MAX_CODE_UNITS, MA
 import { EMPTY_META } from '../src/render/render.js';
 import { render } from '../src/render/index.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
+import { boundMs, bylineWith, RUN_SIZES, timed } from './long-space.js';
 
 /** A vocabulary that names fields and headings, as a host's would. */
 const READER: ReaderVocabulary = {
@@ -449,6 +450,17 @@ describe('meta.items equals the keys the enhance step asks itemLink for', () => 
         const keys = await asked(md, reader);
         expect([name, [...render(md, { reader }).meta.items].sort()]).toEqual([name, [...keys].sort()]);
       }
+    }
+  });
+});
+
+describe('a long run of white space in the byline (review 3081 F1)', () => {
+  it('costs the item route no more than a short gap, up to 1 MiB: the separator is found by a scan, not a backtracking pattern', () => {
+    const opts = { reader: { itemFields: ['Tracker'] } };
+    const plain = timed(() => render(bylineWith(1), opts));
+    for (const n of RUN_SIZES) {
+      const ms = timed(() => render(bylineWith(n), opts));
+      expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (short gap ${plain.toFixed(1)} ms)`).toBeLessThan(boundMs(plain));
     }
   });
 });
