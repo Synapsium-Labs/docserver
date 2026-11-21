@@ -64,14 +64,25 @@ type FrameOp = FrameToParent['t'];
  * What the mount holds of one print run (plan choice B5): `n` is the run's figure count, set by its first accepted figure
  * (null before it); `seen` the indexes accepted; `bytes` what they decode to, together. `replaceable` is held only by a reopened
  * run (one `printFigures()` opened while the previous run was unfinished): each index it accepted once and may still replace
- * once, mapped to the bytes of the copy a replacement would drop; absent or empty, a repeated index is refused.
+ * once, mapped to the bytes of the copy a replacement would drop; absent or empty, a repeated index is refused. `handed` is
+ * what every figure the run accepted decoded to, replaced copies included (absent: none yet); the cap on it is
+ * PRINT_RUN_HANDED_MAX_BYTES.
  */
 export interface PrintRunView {
   readonly n: number | null;
   readonly seen: ReadonlySet<number>;
   readonly bytes: number;
   readonly replaceable?: ReadonlyMap<number, number>;
+  readonly handed?: number;
 }
+
+/**
+ * The most one run may hand to `onPrintFigure` in all, replaced copies counted: twice the run's live total. In an ordinary run
+ * the live total (16 MiB) already bounds it; in a reopened run each index may be replaced once, so the live cap alone would
+ * leave n figures of up to 1 MiB each, twice (about 80 MiB at n = 64). A run with a full earlier run's figures queued ahead of
+ * its own (16 MiB, then 16 MiB again, each index replaced once) is exactly this cap and passes whole.
+ */
+export const PRINT_RUN_HANDED_MAX_BYTES = 2 * BRIDGE_LIMITS.printFiguresTotalMaxBytes;
 
 /** The mount's state a verdict may depend on: `bridge.places` as seeded, and the open print run (null: none is open). */
 export interface ParseContext {
@@ -258,7 +269,7 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       // In this order, each failure a refusal and nothing decoded before the last: an open run (B5); the index and the
       // count, inside the grammar and the run; the text's length against the longest a figure's cap allows (so the scan
       // below is bounded) and the text not empty; the text starting as a PNG's does; the PNG's size from its text, within its own
-      // cap; the run's total.
+      // cap; the run's total; what the run has handed on in all, replaced copies included.
       const run = ctx.run;
       if (run === null) return refuse('unknown-op');
       const iText = str('i');
@@ -287,6 +298,7 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       if (bytes === null) return refuse('type');
       if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');
       if (run.bytes - replaced + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes) return refuse('oversize');
+      if ((run.handed ?? 0) + bytes > PRINT_RUN_HANDED_MAX_BYTES) return refuse('oversize');
       return { ok: true, msg: { t: 'print-figure', i: iText, n: nText, png }, bytes };
     }
     case 'progress': {

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { pngBytesOfBase64 } from '../src/frame/anchor.js';
 import { isFragmentId } from '../src/frame/fragment.js';
 import { BRIDGE_LIMITS, PLACE_KINDS } from '../src/frame/protocol.js';
-import { parseBridgeMessage, type ParseContext } from '../src/host/parse.js';
+import { parseBridgeMessage, PRINT_RUN_HANDED_MAX_BYTES, type ParseContext } from '../src/host/parse.js';
 
 const ROOT = new URL('../', import.meta.url);
 const readText = (rel: string): string => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -292,6 +292,22 @@ describe('docserver parity T2: a print-figure is judged against the open run, in
     expect(verdict(fig('1', '2', pngOf(1048576)), open(2, [0], cap - 1048575))).toEqual(max('oversize'));
     expect(verdict(fig('1', '2', PNG), open(2, [0], cap - 8))).toMatchObject({ ok: true });
     expect(verdict(fig('1', '2', PNG), open(2, [0], cap - 7))).toEqual(max('oversize'));
+  });
+
+  it('what a run has handed on in all, replaced copies included, may reach twice the run total and not one byte more; it is judged before the live total could, from the text (review 3088 F1)', () => {
+    const cap = BRIDGE_LIMITS.printFiguresTotalMaxBytes;
+    const ctx = (bytes: number, handed: number): ParseContext => ({ places: false, run: { n: 3, seen: new Set([0]), bytes, handed, replaceable: new Map([[0, 1048576]]) } });
+    // the live total is far from its cap, so only the cumulative one can refuse
+    expect(verdict(fig('1', '3', pngOf(1048576)), ctx(0, 2 * cap - 1048576))).toMatchObject({ ok: true });
+    expect(verdict(fig('1', '3', pngOf(1048576)), ctx(0, 2 * cap - 1048575))).toEqual(max('oversize'));
+    expect(verdict(fig('1', '3', PNG), ctx(0, 2 * cap - 8))).toMatchObject({ ok: true });
+    expect(verdict(fig('1', '3', PNG), ctx(0, 2 * cap - 7))).toEqual(max('oversize'));
+    // a replacement counts too: the replaced copy's bytes leave the live total and stay in what was handed
+    expect(verdict(fig('0', '3', pngOf(1048576)), ctx(1048576, 2 * cap - 1048575))).toEqual(max('oversize'));
+    expect(verdict(fig('0', '3', pngOf(1048576)), ctx(1048576, 2 * cap - 1048576))).toMatchObject({ ok: true });
+    // a run that says nothing of it (an ordinary run's view of the old shape) has handed nothing
+    expect(verdict(fig('1', '3', pngOf(1048576)), { places: false, run: { n: 3, seen: new Set([0]), bytes: 0 } })).toMatchObject({ ok: true });
+    expect(PRINT_RUN_HANDED_MAX_BYTES).toBe(2 * cap);
   });
 
   it("the text must be canonical base64: another alphabet, a bad length, padding inside, a wrong last character and a non-string are 'type'", () => {

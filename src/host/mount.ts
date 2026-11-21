@@ -48,7 +48,8 @@
 // when the host opens the next, and is accepted into it under its own index; so a run opened while the previous one was unfinished
 // (a reopened run itself, or fewer than n distinct indexes accepted) is a reopened run, in which the first repeat of an index
 // replaces the earlier copy (handed to `onPrintFigure` again, the run's total adjusted before the 16 MiB check, no refusal) and a
-// second repeat is refused; once a mount's run was reopened, every later run is too, and a run after a complete ordinary run is
+// second repeat is refused; the 16 MiB bounds the latest copy of each index, so a run hands on at most 2n figures and, replaced
+// copies counted, at most 2 x 16 MiB (a figure past that is refused before any decode, and counted); once a mount's run was reopened, every later run is too, and a run after a complete ordinary run is
 // ordinary. Two edges: if the new run skips an index it could not draw, the stale copy of it stays, as its own never arrives; and
 // near the 16 MiB total stale copies of later indexes still count until their replacements arrive, so when they are larger than
 // their replacements an earlier index's new copy can be refused as oversize and counted, the consumer keeping its earlier copy
@@ -149,10 +150,11 @@ export interface HostAdapters {
   onPlace?(kind: PlaceKind): void;
   /**
    * Giving it asks the frame for print figures after `DocFrame.printFigures()`: one call per figure, `i` of `n`, `png` the
-   * canonical base64 text of the image, at most 1 MiB decoded, and at most 16 MiB together for the run. ./host checks the
-   * text and the sizes and never decodes: the host decodes. After a `printFigures()` call that interrupts an unfinished run, an
-   * index may come twice (a figure the frame had already posted for the earlier run, then the new run's own): the latest
-   * copy of an index wins, so keep figures by index and let a later call replace an earlier one.
+   * canonical base64 text of the image, at most 1 MiB decoded, and the latest copy of each index at most 16 MiB together.
+   * ./host checks the text and the sizes and never decodes: the host decodes. After a `printFigures()` call that interrupts an
+   * unfinished run, an index may come twice (a figure the frame had already posted for the earlier run, then the new run's
+   * own): the latest copy of an index wins, so keep figures by index and let a later call replace an earlier one. A run hands
+   * on at most 2n figures and at most 2 x 16 MiB in all, replaced copies counted; a figure past either is refused and counted.
    */
   onPrintFigure?(f: { readonly i: number; readonly n: number; readonly png: string }): void;
   /**
@@ -699,8 +701,10 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     /**
      * The open print run of this mount (B5); null when none is open. `reopened` is set when `printFigures()` opened it while the
      * previous run was unfinished; `replaceable` then maps each index accepted once to its bytes, until a repeat replaces it.
+     * `bytes` is the live total (the latest copy of each index); `handed` what every accepted figure decoded to, replaced copies
+     * included, which the parser holds to twice the live cap.
      */
-    let run: { n: number | null; readonly seen: Set<number>; bytes: number; readonly reopened: boolean; readonly replaceable: Map<number, number> } | null = null;
+    let run: { n: number | null; readonly seen: Set<number>; bytes: number; handed: number; readonly reopened: boolean; readonly replaceable: Map<number, number> } | null = null;
     /** What the figure in hand decodes to, as the parser read it: set before the limiter, read by its one effect. */
     let figureBytes = 0;
     let pending: Partial<FramePrefs> | null = null;
@@ -830,6 +834,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
             } else if (run.reopened) run.replaceable.set(i, figureBytes);
             run.seen.add(i);
             run.bytes += figureBytes;
+            run.handed += figureBytes;
           }
           call('onPrintFigure', Object.freeze({ i, n, png: msg.png }));
           return;
@@ -942,7 +947,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       // still in the port's queue are then absorbed by this run (a first repeat replaces); only a run after a complete ordinary
       // run, or the first run of the mount, is ordinary.
       const unfinished = run !== null && (run.reopened || run.n === null || run.seen.size < run.n);
-      run = { n: null, seen: new Set<number>(), bytes: 0, reopened: unfinished, replaceable: new Map<number, number>() };
+      run = { n: null, seen: new Set<number>(), bytes: 0, handed: 0, reopened: unfinished, replaceable: new Map<number, number>() };
       post({ t: 'command', name: 'print-figures' });
     };
     teardown = () => {

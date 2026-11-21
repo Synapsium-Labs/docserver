@@ -2634,6 +2634,99 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
         expect(c.figures).toHaveLength(18);
       });
 
+      describe('what a reopened run hands on in all is capped at twice the run total (review 3088 F1)', () => {
+        const MiB = 1048576;
+        /** The same size as pngOf(bytes), a different text: a byte of its zeros set. */
+        const variant = (bytes: number): string => pngOf(bytes).replace(/^(.{100})A/, '$1B');
+        const paced = (over: Partial<Record<keyof HostAdapters, unknown>>): Mounted => {
+          const m = readyFake(over);
+          const say = m.say;
+          m.say = (data: unknown): void => {
+            say(data);
+            vi.advanceTimersByTime(63);
+          };
+          return m;
+        };
+        const handedBytes = (figures: readonly unknown[]): number => figures.reduce<number>((t, f) => t + ((f as { png: string }).png.length * 3) / 4 - ((f as { png: string }).png.match(/=*$/)?.[0].length ?? 0), 0);
+
+        it('the honest worst case: a full earlier run of 16 MiB queued at the host, then a full new run of 16 MiB, each index replaced once, passes whole with no refusal', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          expect(c.figures).toHaveLength(32);
+          expect(handedBytes(c.figures)).toBe(32 * MiB);
+          // the latest copy of every index is the new run's
+          const latest = new Map<number, string>();
+          for (const f of c.figures as { i: number; png: string }[]) latest.set(f.i, f.png);
+          expect([...latest.values()].every((png) => png === variant(MiB))).toBe(true);
+          expect(latest.size).toBe(16);
+          // no refusal was counted: sixteen more refusals are needed to close the frame, and fifteen leave it open
+          for (let k = 0; k < 15; k += 1) m.say(fig(0, 16));
+          expect(m.fallbacks()).toEqual([]);
+          m.say(fig(0, 16));
+          expect(m.fallbacks()).toEqual(['refusals']);
+          expect(c.figures).toHaveLength(32);
+        });
+
+        it('a hostile frame stops at the cap: 1 MiB figures each replaced at once, the figure that would pass twice the run total is refused and counted, never handed on', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          m.frame.printFigures();
+          let refusedAt = -1;
+          for (let i = 0; i < 48 && refusedAt < 0; i += 1) {
+            const before = c.figures.length;
+            m.say(fig(i, 64, pngOf(MiB)));
+            if (c.figures.length === before) refusedAt = i;
+            else m.say(fig(i, 64, PNG));
+          }
+          // 31 pairs hand on 31 MiB and 31 small copies; the next 1 MiB would make 32 MiB and 248 bytes
+          expect(refusedAt).toBe(31);
+          expect(handedBytes(c.figures)).toBe(31 * MiB + 31 * 8);
+          expect(handedBytes(c.figures)).toBeLessThanOrEqual(2 * 16 * MiB);
+          expect(m.fallbacks()).toEqual([]);
+          // it was counted: fourteen more refusals leave the frame open, the sixteenth in all closes it
+          for (let k = 0; k < 14; k += 1) m.say(fig(refusedAt, 64, pngOf(MiB)));
+          expect(m.fallbacks()).toEqual([]);
+          m.say(fig(refusedAt, 64, pngOf(MiB)));
+          expect(m.fallbacks()).toEqual(['refusals']);
+          expect(handedBytes(c.figures)).toBe(31 * MiB + 31 * 8);
+        });
+
+        it('exactly twice the run total passes, and one byte more is refused', async () => {
+          for (const extra of [0, 1]) {
+            const { c, over } = calls();
+            const m = paced(over);
+            m.frame.printFigures();
+            m.frame.printFigures();
+            // 31 pairs (1 MiB, then 8 bytes in its place) hand on 31 MiB and 248 bytes; the live total stays small, so only the cap on what was handed decides
+            for (let i = 0; i < 31; i += 1) {
+              m.say(fig(i, 64, pngOf(MiB)));
+              m.say(fig(i, 64, PNG));
+            }
+            expect(handedBytes(c.figures)).toBe(31 * MiB + 248);
+            const room = 2 * 16 * MiB - handedBytes(c.figures);
+            m.say(fig(31, 64, pngOf(room + extra)));
+            expect(c.figures, `room + ${extra}`).toHaveLength(extra === 0 ? 63 : 62);
+            expect(handedBytes(c.figures)).toBe(extra === 0 ? 2 * 16 * MiB : 31 * MiB + 248);
+          }
+        });
+
+        it('an ordinary run is unchanged: its live total of 16 MiB is the cap, and a repeat is refused', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 17, pngOf(MiB)));
+          expect(handedBytes(c.figures)).toBe(16 * MiB);
+          m.say(fig(16, 17, PNG));
+          m.say(fig(0, 17, PNG));
+          expect(c.figures).toHaveLength(16);
+        });
+      });
+
       it('a smaller replacement frees its bytes for the next figure', async () => {
         const { c, over } = calls();
         const m = readyFake(over);
