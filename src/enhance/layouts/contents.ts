@@ -1,10 +1,10 @@
-import { chrome } from '../../journal.js';
-import { queueFrameWork, type Cancel } from '../../env.js';
-import { headingText } from '../../headctl.js';
-import type { FeatureContext } from '../../types.js';
+import { chrome } from '../journal.js';
+import { queueFrameWork, type Cancel } from '../env.js';
+import { headingText } from '../headctl.js';
+import type { FeatureContext } from '../types.js';
 
-/** Classic's contents and narrow-screen drawer. */
-export function build(ctx: FeatureContext): void {
+/** The contents-only rail and narrow-screen drawer shared by Classic and Editorial. */
+export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'classic'): void {
   if (!ctx.info.isDocument || !ctx.options.chrome.rail) return;
   const { root, journal } = ctx;
   const doc = root.ownerDocument;
@@ -17,18 +17,20 @@ export function build(ctx: FeatureContext): void {
   const rail = chrome(doc, 'nav', { className: 'doc-toc', attrs: { id, 'aria-label': 'Contents' } }, [head, list]);
   const button = chrome(doc, 'button', { className: 'toc-btn', text: 'Contents', attrs: { type: 'button', 'aria-controls': id, 'aria-expanded': 'false' } });
   const scrim = chrome(doc, 'div', { className: 'toc-scrim', attrs: { hidden: '' } });
-  const chips = chrome(doc, 'nav', { className: 'chips', attrs: { 'aria-label': 'Sections' } });
   // Numbered headings retain their original label when the badge and separator become chrome.
   const link = (heading: HTMLElement): HTMLAnchorElement => chrome(doc, 'a', {
     text: heading.getAttribute('aria-label') ?? headingText(heading, (el) => el.hasAttribute('data-docreader-chrome')),
     attrs: { href: `#${heading.id}` },
   });
-  for (const heading of headings.filter((h) => h.localName === 'h2')) chips.append(link(heading));
-  const title = root.querySelector('h1');
-  if (title !== null && title.parentNode === root) {
-    const next = title.nextElementSibling;
-    const after = next?.localName === 'p' ? next : title;
-    journal.insert(chips, root, after.nextSibling);
+  if (mode === 'classic') {
+    const title = root.querySelector('h1');
+    if (title !== null && title.parentNode === root) {
+      const chips = chrome(doc, 'nav', { className: 'chips', attrs: { 'aria-label': 'Sections' } });
+      for (const heading of headings.filter((h) => h.localName === 'h2')) chips.append(link(heading));
+      const next = title.nextElementSibling;
+      const after = next?.localName === 'p' ? next : title;
+      journal.insert(chips, root, after.nextSibling);
+    }
   }
   const items = new Map<HTMLElement, { anchor: HTMLAnchorElement; top: HTMLLIElement }>();
   let top: HTMLLIElement | null = null;

@@ -10,9 +10,9 @@ import { build as buildScroll } from '../../scroll.js';
 import { buildStatusMarks } from '../../status.js';
 import { build as buildTables } from '../../tables.js';
 import { markFeature } from '../mark.js';
-import { build as buildContents } from './contents.js';
+import { build as buildContents } from '../contents.js';
 import { build as buildEditorial } from './editorial.js';
-import { build as buildReveal } from './reveal.js';
+import { build as buildReveal } from '../reveal.js';
 
 export function features(): readonly Feature[] {
   return Object.freeze([

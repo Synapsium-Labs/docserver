@@ -169,6 +169,19 @@ it('classic: the host opens Contents without a reader bar and Escape restores th
   expect(document.activeElement).toBe(host);
 });
 
+it('editorial: standing links count only top-level list items in each populated callout', async () => {
+  pick.layout = 'editorial';
+  const root = mount(`${DOC}\n## Where things stand\n\n### Agreed\n\n- First decision\n  - Child detail\n- Second decision\n\n### Waiting on you\n\n1. Confirm the date\n\n### Later\n\nNo list yet.\n`);
+  await enhance(root);
+  const counts = root.querySelector('nav[aria-label="Where things stand"]');
+  expect(counts?.nextElementSibling?.classList.contains('callout')).toBe(true);
+  expect(Array.from(counts?.querySelectorAll('a') ?? []).map((a) => [
+    a.querySelector('b')?.textContent, a.querySelector('span:not(.dot)')?.textContent, a.getAttribute('href'),
+  ])).toEqual([
+    ['2', 'Agreed', '#agreed'], ['1', 'Waiting on you', '#waiting-on-you'],
+  ]);
+});
+
 // Use the parsed rule tree so the same scope check applies inside responsive and motion queries.
 function checkScope(text: string, layout: string): void {
   const style = document.createElement('style');

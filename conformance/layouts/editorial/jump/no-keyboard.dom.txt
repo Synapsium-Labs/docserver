@@ -1,0 +1,33 @@
+button .jump-btn chrome aria-haspopup="dialog"
+  span .lbl chrome
+    "Jump to"
+h1
+  "Example guide"
+p
+  "A short guide with enough sections for t"…
+h2
+  "1. Getting started"
+p
+  "How to begin."
+h2
+  "2. Reading a page"
+p
+  "What each part of a page shows."
+h3
+  "Headings and numbers"
+p
+  "The numbers hang in the margin."
+h2
+  "3. Moving around"
+p
+  "The keys and the quick jump."
+h2
+  "4. Questions"
+p
+  "Two are still open."
+div .jump chrome
+  div .box chrome role="dialog" aria-label="Jump to" aria-modal="true"
+    input chrome role="combobox" aria-autocomplete="list" aria-controls="docreader.1.jump-list" aria-expanded="true" aria-label="Jump to"
+    div .jump-hint chrome
+      "Type to filter · ↑ ↓ to choose · Enter t"…
+    ul chrome role="listbox" aria-label="Matches"

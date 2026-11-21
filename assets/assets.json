@@ -49,18 +49,18 @@
     },
     {
       "path": "frame/enhance-classic.js",
-      "sha256": "e17b9e6d8c2c484645163c9fd299f0de4612726b8c7eb83f4a8fe642b16722db",
-      "bytes": 141666,
+      "sha256": "b3d4a8bfe9df3505a61bbf7f21db0edafb338e65540aca9779f3dd29da4624f2",
+      "bytes": 141830,
       "kind": "script",
-      "csp": "'sha256-4XuebYwsSEZFFjyf0pnw3kYScmuMfrg/So/mQrFnIts='",
+      "csp": "'sha256-s9Sov+nfNQWmG79/IdsO2vszjmVUCsqXefPdKdpGJPI='",
       "layout": "classic"
     },
     {
       "path": "frame/enhance-editorial.js",
-      "sha256": "be487d82751baff42417df6d962a839e9c9c13e77679c7c6150e2eb9b45c362c",
-      "bytes": 211106,
+      "sha256": "b38cf184e21eb512b38f29075902f29785a7f219e874311a4ae181f8e7153332",
+      "bytes": 162596,
       "kind": "script",
-      "csp": "'sha256-vkh9gnUbr/QkF99tliqDnpycE+d2ecfGFQ4uubRcNiw='",
+      "csp": "'sha256-s4zxhOIetRKzjykHWQLyl4Wn8hnodDEaSuGB+OcVMzI='",
       "layout": "editorial"
     },
     {
@@ -87,8 +87,8 @@
     },
     {
       "path": "frame/layout-editorial.css",
-      "sha256": "fdab0e538088c80bae7544f1fd9e3e41ecc5ba1773c5c901659f18d4c5db1594",
-      "bytes": 351,
+      "sha256": "4a45a2d4b62d0c19e6f66e9e5c6bc5f0e8cd90f9917878c1e1fda538991e0a92",
+      "bytes": 3648,
       "kind": "style",
       "layout": "editorial"
     },
@@ -107,8 +107,8 @@
     },
     {
       "path": "layouts/editorial.css",
-      "sha256": "fdab0e538088c80bae7544f1fd9e3e41ecc5ba1773c5c901659f18d4c5db1594",
-      "bytes": 351,
+      "sha256": "4a45a2d4b62d0c19e6f66e9e5c6bc5f0e8cd90f9917878c1e1fda538991e0a92",
+      "bytes": 3648,
       "kind": "style",
       "layout": "editorial"
     },

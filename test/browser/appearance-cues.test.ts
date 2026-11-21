@@ -238,8 +238,8 @@ async function mark(page: Page): Promise<void> {
 
 describeBrowsers((browser) => {
   // Only register alternate layouts for cues their own features draw.
-  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>): void {
-    for (const layout of ['default', 'classic'] as const) {
+  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial']): void {
+    for (const layout of layouts) {
       it(layout === 'default' ? name : `${layout}: ${name}`, () => check(layout));
     }
   }
@@ -285,18 +285,20 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('classic: a real waiting callout has a painted 3px cue even when the status colours collide', async () => {
-    const doc = await open(browser, { appearance: COLLISION, layout: 'classic' });
-    try {
-      const waiting = doc.page.locator(`${rootSel}[data-docreader-layout="classic"] .callout.waiting`);
-      expect(await waiting.count()).toBe(1);
-      expect(await waiting.textContent()).toContain('Waiting on you');
-      const runs = await runsThrough(doc.page, waiting, HUE.mark);
-      expect(widths(runs), JSON.stringify(runs)).toEqual([3]);
-    } finally {
-      await doc.close();
-    }
-  });
+  for (const layout of ['classic', 'editorial'] as const) {
+    it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
+      const doc = await open(browser, { appearance: COLLISION, layout });
+      try {
+        const waiting = doc.page.locator(`${rootSel}[data-docreader-layout="${layout}"] .callout.waiting`);
+        expect(await waiting.count()).toBe(1);
+        expect(await waiting.textContent()).toContain('Waiting on you');
+        const runs = await runsThrough(doc.page, waiting, HUE.mark);
+        expect(widths(runs), JSON.stringify(runs)).toEqual([3]);
+      } finally {
+        await doc.close();
+      }
+    });
+  }
 
   it('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async () => {
     const doc = await open(browser, { appearance: COLLISION, width: 390 });
@@ -544,8 +546,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the switch the reader draws has the same pressed button: at 600 with an inset bottom bar of 2px in accent, in Full and in Headlines, and the unpressed one neither', async () => {
-    const doc = await open(browser, { appearance: COLLISION, inShort: true });
+  sharedCue('the switch the reader draws has the same pressed button: at 600 with an inset bottom bar of 2px in accent, in Full and in Headlines, and the unpressed one neither', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, inShort: true, layout });
     try {
       const read = (): Promise<{ pressed: string; on: { weight: string; shadow: string }; off: { weight: string; shadow: string } }> =>
         doc.page.evaluate((sel) => {
@@ -563,7 +565,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'editorial']);
 
   sharedCue('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });

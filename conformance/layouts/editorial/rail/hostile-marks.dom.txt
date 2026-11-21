@@ -1,0 +1,31 @@
+nav .doc-toc chrome aria-label="Contents"
+  div .toc-head chrome
+    span .toc-title chrome
+      "Contents"
+    button chrome
+      "Collapse"
+  ul chrome
+    li .open chrome
+      a .active chrome aria-current="location"
+        "__proto__"
+    li chrome
+      a chrome
+        "constructor"
+    li chrome
+      a chrome
+        "3. Stable"
+h1
+  "Hostile marks"
+h2 aria-label="__proto__"
+  code
+    "__proto__"
+p
+  "A first prototype-shaped section."
+h2 aria-label="constructor"
+  "constructor"
+p
+  "A second prototype-shaped section."
+h2 aria-label="3. Stable"
+  "3. Stable"
+p
+  "A regular section keeps the document sha"…

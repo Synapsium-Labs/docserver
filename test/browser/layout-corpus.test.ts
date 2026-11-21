@@ -79,9 +79,9 @@ function cueState(): CueState | null {
 async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>, layout?: HarnessLayout): Promise<void> {
   const expected = CUE_SCOPES[c.id];
   if (expected === undefined) return;
-  if (layout === 'classic') {
-    // Classic draws and controls the same figures, but has no ID index or definition previews.
-    // Wait for its tool wiring before asserting the intentional absence; don't accept an undrawn source.
+  if (layout === 'classic' || layout === 'editorial') {
+    // Both alternate layouts draw and control figures but omit definition previews.
+    // Wait for tool wiring before asserting absence; don't accept an undrawn source.
     await doc.page.locator('figure.drawn svg').first().waitFor();
     await doc.page.locator('figure.drawn .tools[data-diagram-tools="true"]').getByRole('button', { name: 'Full screen' }).first().waitFor();
     expect(await doc.page.evaluate(cueState), c.id).toEqual({ targets: 0, boxes: [], rings: [], dots: [] });

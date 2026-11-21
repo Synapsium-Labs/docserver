@@ -1,0 +1,33 @@
+button .toc-btn chrome aria-controls="docreader.1.toc" aria-expanded="false"
+  "Contents"
+nav .doc-toc chrome aria-label="Contents"
+  div .toc-head chrome
+    span .toc-title chrome
+      "Contents"
+    button chrome
+      "Collapse"
+  ul chrome
+    li .open chrome
+      a .active chrome aria-current="location"
+        "1. Start"
+    li chrome
+      a chrome
+        "2. Middle"
+    li chrome
+      a chrome
+        "3. End"
+h1
+  "Drawer notes"
+h2 aria-label="1. Start"
+  "1. Start"
+p
+  "A short opening section."
+h2 aria-label="2. Middle"
+  "2. Middle"
+p
+  "A second section gives the rail more tha"…
+h2 aria-label="3. End"
+  "3. End"
+p
+  "A third section makes this a document."
+div .toc-scrim chrome hidden=""

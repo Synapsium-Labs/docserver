@@ -1237,30 +1237,36 @@ describeBrowsers((browser) => {
     }
   });
 
-  describe('(b) and (c): classic hosted appearance', () => {
-    // Between these cases: boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome.
-    const ids = [
-      'corpus/spec-template', 'layout/core/editorial', 'layout/rail/drawer', 'layout/jump/dialogs',
-      'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
-    ];
-    const docs = DOCS.filter((doc) => ids.includes(doc.id));
-    const required = ['rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer'];
-    const states = [...required, 'hover', 'focus-visible'];
+  for (const layout of ['classic', 'editorial'] as const) {
+    describe(`(b) and (c): ${layout} hosted appearance`, () => {
+      // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome.
+      const ids = [
+        'corpus/spec-template', 'layout/core/editorial', 'layout/rail/drawer', 'layout/jump/dialogs',
+        'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
+        ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
+      ];
+      const docs = DOCS.filter((doc) => ids.includes(doc.id));
+      const required = [
+        'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
+        ...(layout === 'editorial' ? ['short-headlines'] : []),
+      ];
+      const states = [...required, 'hover', 'focus-visible'];
 
-    for (const fixture of FIXTURES) {
-      it(`classic: ${fixture.name}`, async () => {
-        expect(docs.map((doc) => doc.id).sort()).toEqual([...ids].sort());
-        const got = await collect(fixture, docs, states, 'classic');
-        expect(got.notHosted).toEqual([]);
-        expect(got.stats.documents).toBe(docs.length);
-        const expected = browser === 'chromium' ? states : required;
-        expect(expected.filter((state) => (got.stats.states[state] ?? 0) === 0), 'required classic states not reached').toEqual([]);
-        const failures = [
-          ...(got.closed.size === 0 ? [] : [report(`${fixture.name}: classic text on a ground that is not closed`, got.closed)]),
-          ...(got.contrast.size === 0 ? [] : [report(`${fixture.name}: a classic pair is below its floor`, got.contrast)]),
-        ];
-        if (failures.length > 0) throw new Error(failures.join('\n'));
-      }, 180_000);
-    }
-  });
+      for (const fixture of FIXTURES) {
+        it(`${layout}: ${fixture.name}`, async () => {
+          expect(docs.map((doc) => doc.id).sort()).toEqual([...ids].sort());
+          const got = await collect(fixture, docs, states, layout);
+          expect(got.notHosted).toEqual([]);
+          expect(got.stats.documents).toBe(docs.length);
+          const expected = browser === 'chromium' ? states : required;
+          expect(expected.filter((state) => (got.stats.states[state] ?? 0) === 0), `required ${layout} states not reached`).toEqual([]);
+          const failures = [
+            ...(got.closed.size === 0 ? [] : [report(`${fixture.name}: ${layout} text on a ground that is not closed`, got.closed)]),
+            ...(got.contrast.size === 0 ? [] : [report(`${fixture.name}: an ${layout} pair is below its floor`, got.contrast)]),
+          ];
+          if (failures.length > 0) throw new Error(failures.join('\n'));
+        }, 180_000);
+      }
+    });
+  }
 });

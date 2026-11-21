@@ -1,0 +1,15 @@
+h1
+  "Reading settings"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-21Draft"
+h2
+  "In short"
+p
+  "The reading settings menu keeps its cont"…
+h2
+  "1. Preferences"
+p
+  "The menu offers a small set of choices f"…
