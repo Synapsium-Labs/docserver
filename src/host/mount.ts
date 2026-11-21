@@ -51,10 +51,12 @@
 // second repeat is refused; the 16 MiB bounds the latest copy of each index, and each index is replaced at most once, so a run hands
 // on at most 2n figures; a separate cap bounds what it hands on in all, replaced copies counted, at 2 x 16 MiB (a figure past
 // either cap is refused before any decode, and counted); once a mount's run was reopened, every later run is too, and a run after a complete ordinary run is
-// ordinary. Two edges: if the new run skips an index it could not draw, the stale copy of it stays, as its own never arrives; and
-// near the 16 MiB total stale copies of later indexes still count until their replacements arrive, so when they are larger than
-// their replacements an earlier index's new copy can be refused as oversize and counted, the consumer keeping its earlier copy
-// (several can be, and in an extreme skew enough to close the frame).
+// ordinary. The known limits (README, `printFigures()`): (a) if the new run skips an index it could not draw, the stale copy of it
+// stays; (b) a reprint costs refusals in two cases only: the oversize edge, near the 16 MiB total, when stale copies still counted are
+// larger than their replacements or belong to indexes the new run never replaces (several can be refused, the consumer keeping the
+// earlier copy, and in an extreme skew enough to close the frame); and three runs' figures in flight at once, where a third copy of an
+// index is refused (the run's own, so the consumer keeps a stale copy) and, with figure sizes that change between those runs, an honest
+// copy can be refused by the 2 x 16 MiB cap on what a run hands on.
 // `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
 // after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
 //

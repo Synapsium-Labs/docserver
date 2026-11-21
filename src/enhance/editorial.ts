@@ -540,12 +540,14 @@ function buildByline(ctx: FeatureContext, h1: Element, minutes: number, delta: D
   const metaP = metaParagraph(h1);
   if (metaP !== null) {
     // The paragraph is cut and gathered off the document, so no write touches a large connected parent (review 3088 F3, WebKit
-    // cycle 2: tens of thousands of inserts and moves in a live paragraph were quadratic in WebKit, in the build and in the undo).
+    // cycle 2; it did not make WebKit linear, and the cause there is not identified: the README's Safari limit).
     // Two journaled moves bracket the work: one takes it out of its parent into a fragment, one puts it back before the sibling
     // that followed it. Undo runs in reverse: the second move's undo takes it out again, the per-fact moves and the cut are undone
     // while it is off the document, and the first move's undo puts it back. Nothing in between calls the host, so nothing else
     // can touch the parent meanwhile (a custom element's connect or disconnect callback would still run during the moves, as the
-    // per-fact moves ran such callbacks before; neither occurs in the frame or on render()'s output); a throw in between leaves
+    // per-fact moves ran such callbacks before; neither occurs in the frame or on render()'s output). A live Range or Selection
+    // inside the paragraph collapses to its parent when it leaves, and a boundary just after it ends just before it on return; a
+    // MutationObserver on the parent sees the paragraph removed and added back. A throw in between leaves
     // the first move's undo to put it back. The paragraph's own place is a journal.move: if the host removes the node that
     // followed it while enhanced, destroy still puts the paragraph back after the node before it and reports a fault, and a
     // paragraph the host removed is put back where it was.

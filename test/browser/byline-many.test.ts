@@ -7,8 +7,8 @@
 // test/enhance-editorial.test.ts holds the same counts at 500.
 //
 // The number of text children is the engine's to decide, so it is measured in the page before enhance, never assumed to be
-// one: WebKit's parser cuts a long text into nodes of at most 65 536 code units (Blink's does not; this limit is read from
-// WebKit's source and has not been run, until CI confirms it), so the same 32 000-separator paragraph came out as five text
+// one: WebKit's parser cuts a long text into nodes of at most 65 536 code units (Blink's does not; CI confirms it: the
+// 10 000-separator case is 2 text nodes in WebKit on every run), so the same 32 000-separator paragraph came out as five text
 // nodes there and `createRange` was called five times (CI, review 3088 F3). The second case makes that shape on every
 // engine: the text is cut into five nodes at separators before enhance runs. The WebKit large case is sized over the limit
 // (10 000 separators, about 78 900 code units) and asserts at least two text nodes, which a red there would disprove.
@@ -16,9 +16,9 @@
 // The size is per engine, for a stated reason. Chromium runs 32 000 separators in about 0.6 s here (linear: 4 000 to 32 000
 // took 0.09 s to 0.58 s). CI's run of this case at 32 000 in WebKit took 53 695 ms on the Node 22 leg (it failed only on
 // the range count) while Chromium took 3 207 ms and 2 126 ms on the same runners; only the Node 24 leg reached the 120 s
-// timeout, so it was the same work at about twice the runner variance, not a hang. WebKit could not be run where this was
-// written, so its scaling is unmeasured and its case is 10 000, with a longer clock backstop. Each case prints one
-// `console.info` line (texts, build and undo ms) so the next CI log splits WebKit's time. The counts do not depend on size.
+// timeout, so it was the same work at about twice the runner variance, not a hang. WebKit's case is 10 000, with a longer
+// clock backstop; its CI times at 4 000 and 10 000 are the README's Safari limit. Each case prints one `console.info` line
+// (texts, build and undo ms). The counts do not depend on size.
 import { afterAll, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName } from './harness.js';
 
