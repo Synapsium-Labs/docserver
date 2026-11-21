@@ -60,9 +60,9 @@ export function build(ctx: FeatureContext): void {
     journal.setAttribute(rail, 'aria-modal', null);
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   };
-  const open = (): void => {
+  const open = (trigger: HTMLElement | null): void => {
     if (ctx.env.viewport().w >= 1240 || ctx.overlays.any()) return;
-    opener = doc.activeElement as HTMLElement | null;
+    opener = trigger;
     opened = true;
     journal.toggleClass(root, 'toc-open', true);
     journal.setAttribute(button, 'aria-expanded', 'true');
@@ -75,11 +75,11 @@ export function build(ctx: FeatureContext): void {
     }
     collapse.focus({ preventScroll: true });
   };
-  journal.listen(button, 'click', () => { if (opened) close(); else open(); });
+  journal.listen(button, 'click', () => { if (opened) close(); else open(button); });
   ctx.commands.register('contents', () => {
     if (opened) { close(); return true; }
     if (ctx.env.viewport().w >= 1240 || ctx.overlays.any()) return false;
-    open();
+    open(doc.activeElement as HTMLElement | null);
     return true;
   });
   journal.listen(scrim, 'click', close);

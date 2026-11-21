@@ -35,6 +35,23 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('restores focus to Contents even when pointer activation did not focus the button', async () => {
+    const doc = await openDoc(DOC, {}, { browser, layout: 'classic', viewport: { width: 412, height: 915 } });
+    try {
+      const { page } = doc;
+      const button = page.getByRole('button', { name: 'Contents' });
+      for (const dismiss of ['Escape', 'scrim']) {
+        await page.locator('.chips a').first().focus();
+        // HTMLElement.click does not move focus, as with pointer activation on browsers that do not focus buttons.
+        await button.evaluate((el) => (el as HTMLButtonElement).click());
+        expect(await page.getByRole('dialog', { name: 'Contents' }).count()).toBe(1);
+        if (dismiss === 'Escape') await page.keyboard.press('Escape');
+        else await page.locator('.toc-scrim').click({ position: { x: 400, y: 400 } });
+        expect(await button.evaluate((el) => el === document.activeElement), dismiss).toBe(true);
+      }
+    } finally { await doc.close(); }
+  });
+
   it('traps drawer focus and closes on widening', async () => {
     const doc = await openDoc(DOC, {}, { browser, layout: 'classic', viewport: { width: 412, height: 915 } });
     try {

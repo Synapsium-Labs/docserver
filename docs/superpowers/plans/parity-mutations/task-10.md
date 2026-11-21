@@ -17,6 +17,7 @@ Chromium was the only local browser. The test wrapper ran one file at a time. La
 | Lc-k | In a synthetic responsive rule, keep the first selector scoped and remove the scope from the second selector | The original prefix check accepts both selectors as a unit. The new guard accepts the control and rejects the unscoped second selector. The regression fails with the old check (1 failed, 11 passed); the restored per-selector check passed all 12 at that point. No shipped CSS changed for this probe. |
 | Lc-l | Ignore the retained accessible heading labels when building links | Two distinct numbered chips become `Repeat` and `Repeat`. The restored link builder retains both labels in the chips, drawer and docked rail. |
 | Lc-m | Make the scoped open-drawer skin and touch rules stop matching | The open drawer gets the docked title styles under the host skin, and the coarse-pointer link drops to 28.22px. Both rows pass with the stylesheet restored. |
+| Lc-n | Before the final fix, use the current focus instead of the button that activated the drawer | Activation without focus transfer returns focus to a section chip on Escape. Passing the triggering button restores focus after Escape and scrim dismissal; the host command still uses current focus. |
 
 The review-round label and stylesheet probes were restored to `0ee767284168a1586365b36a55ac9f6d40c6c4b9be9076fa2a2be814a8148f53` (`contents.ts`) and `67dae53095f20244422d56f4ad4bc6dc0b8111b528f8f350c7928601d8387132` (`classic.css`). The drawer keyboard-wrap test also failed in the review fix before the Tab handler was added, then passed with the handler; this red-first check is not counted as a separate mutation run.
 
@@ -39,6 +40,7 @@ The first four classic figure-corpus rows also went red before the test recogniz
   {"id":"Lc-j","file":"src/enhance/layouts/classic/contents.ts","tests":"test/browser/layout-classic.test.ts","rc":1,"failed":1,"passed":9,"skipped":10,"red":["the contents rail does not follow the active link"]},
   {"id":"Lc-k","file":"synthetic responsive rule","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":11,"red":["refuses a later unscoped selector in a comma-separated rule inside a media query"]},
   {"id":"Lc-l","file":"src/enhance/layouts/classic/contents.ts","tests":"test/browser/layout-classic.test.ts","rc":1,"failed":1,"skipped":35,"red":["preserves numbered accessible names in contents and chips"]},
-  {"id":"Lc-m","file":"assets/layouts/classic.css","tests":"test/browser/layout-classic.test.ts","rc":1,"failed":2,"skipped":34,"red":["applies hosted type and row slots to the drawer but not the docked rail","keeps coarse-pointer drawer controls at least 44px without skin slots"]}
+  {"id":"Lc-m","file":"assets/layouts/classic.css","tests":"test/browser/layout-classic.test.ts","rc":1,"failed":2,"skipped":34,"red":["applies hosted type and row slots to the drawer but not the docked rail","keeps coarse-pointer drawer controls at least 44px without skin slots"]},
+  {"id":"Lc-n","file":"src/enhance/layouts/classic/contents.ts","tests":"test/browser/layout-classic.test.ts","rc":1,"failed":1,"skipped":37,"red":["restores focus to Contents even when pointer activation did not focus the button"]}
 ]
 ```
