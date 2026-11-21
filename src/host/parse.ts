@@ -79,7 +79,7 @@ export interface PrintRunView {
 /**
  * The most one run may hand to `onPrintFigure` in all, replaced copies counted: twice the run's live total. In an ordinary run
  * the live total (16 MiB) already bounds it; in a reopened run each index may be replaced once, so the live cap alone would
- * leave n figures of up to 1 MiB each, twice (about 80 MiB at n = 64). A run with a full earlier run's figures queued ahead of
+ * leave up to n replaced copies of 1 MiB each on top of the 16 MiB live total, about 80 MiB at n = 64. A run with a full earlier run's figures queued ahead of
  * its own (16 MiB, then 16 MiB again, each index replaced once) is exactly this cap and passes whole.
  */
 export const PRINT_RUN_HANDED_MAX_BYTES = 2 * BRIDGE_LIMITS.printFiguresTotalMaxBytes;

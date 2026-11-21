@@ -470,7 +470,8 @@ describe('many separators in the byline (review 3088 F3)', () => {
   // separators as for 500 through the whole enhance, and the same again for 1 000 pieces of one text cut and joined by the
   // journal alone, below. jsdom itself is quadratic in a parent's children (one `move` per fact, a fragment insert, a range
   // deletion: 32 000 facts run out of memory, 8 000 pieces take ten seconds), so the unit cases stop at these sizes; the
-  // browser layout test of a byline (test/browser/layout-corpus.test.ts) holds 32 000 in Chromium, where the DOM is linear.
+  // browser case of a byline with 32 000 separators (test/browser/byline-many.test.ts) holds it in Chromium, where the DOM is
+  // linear (CI runs it in WebKit too; its WebKit time is unmeasured locally).
   const byline = (k: number): string => `# T\n\n**Spec** · ${Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
   const SPIED: readonly [string, object, string][] = [
     ['splitText', Text.prototype, 'splitText'],
@@ -610,6 +611,30 @@ describe('the journal\'s splitAll', () => {
     expect(Array.from(p.childNodes)).toEqual(before);
     expect(t.data).toBe(data);
     expect(p.outerHTML).toBe(html);
+  }, 120000);
+
+  it('the data of every text node cloned to cut 1 000 pieces stays under the text\'s own length plus a constant (never a copy of the whole text per piece)', () => {
+    const { control, t } = setup();
+    const k = 1000;
+    const data = 'abc'.repeat(k);
+    t.data = data;
+    const offsets = Array.from({ length: k - 1 }, (_, i) => 3 * (i + 1));
+    let cloned = 0;
+    const original = Node.prototype.cloneNode;
+    const spy = vi.spyOn(Node.prototype, 'cloneNode').mockImplementation(function (this: Node, deep?: boolean) {
+      const copy = original.call(this, deep);
+      if (copy.nodeType === 3) cloned += (copy as Text).data.length;
+      return copy;
+    });
+    try {
+      const pieces = control.journal.splitAll(t, offsets);
+      expect(pieces.length).toBe(k);
+      expect(pieces.map((n) => n.data).join('')).toBe(data);
+      expect(spy.mock.calls.length, 'one clone per piece, plus the blank copy').toBeGreaterThanOrEqual(k);
+      expect(cloned, `${String(cloned)} characters of text data cloned for a text of ${String(data.length)}`).toBeLessThan(data.length + 64);
+    } finally {
+      spy.mockRestore();
+    }
   }, 120000);
 
   it('no offsets is no change; bad offsets, a detached text and a dead instance throw', () => {

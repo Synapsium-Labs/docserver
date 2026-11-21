@@ -22,7 +22,9 @@ export const ITEM_LIMITS = Object.freeze({ max: 50, valueMax: 100, hrefMax: 4096
  * imports nothing, so the character table is a copy of `./host`'s hidden-character table (src/host/copy.ts). The equality is
  * of these refusals, in the host part, the path, the query and the fragment alike, and nothing more: the rest of the host
  * part's grammar (a bad percent escape, a forbidden host code point, say) is `classifyLink`'s alone, and its click is dropped
- * there. So a character or escape of those the frame refuses is refused by the host too, and what the frame admits in the path,
+ * there. Two differences in the host part are known and pinned by that test: a lone surrogate (the frame admits it, the host's
+ * URL parser refuses it) and `%255c` (the frame admits it; the host decodes the `%25` and refuses it); in the path, the query
+ * and the fragment both grammars admit each. So a character or escape of those the frame refuses is refused by the host too, and what the frame admits in the path,
  * the query and the fragment the host reads as an external https link; a host part the frame admits the host may still refuse.
  *
  * The scheme is spelled `[Hh][Tt][Tt][Pp][Ss]` and the pattern has no `i` flag: with `u` beside `i` the engine folds U+017F (long
