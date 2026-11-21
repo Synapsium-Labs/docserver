@@ -810,3 +810,123 @@ Measured the same way, in place, at the state of the round-1 commit (the files o
   }
 ]
 ```
+
+## Review round 2 (docserver parity T7)
+
+The probe counter is removed from `src/render/print/tree.ts`; the quadratic guard now spies on `Array.prototype.indexOf`, `lastIndexOf` and `findIndex` and holds print's added long-array searches under 50, with a time case (20 000 blocks print within 10 times the plain render's time plus 1.5 s). Row P7am of round 1 (the hint ignored, judged by the removed counter) is replaced: its edit is now P7bb, red through the time case, and P7am2 (nextEl through `indexOf`) and P7ax (idx through `indexOf`) are red through the spy. Measured the same way, in place. The sha256 of each file as restored: `src/render/print/tree.ts` `e36d64aca536f85cea2082789846ae3517df6816cfc3e0901dbb3f9cdc93f33e`, `test/print-vocabulary.ts` `17804aaafd497441094fce40ee26bd0df497434bc8a40b71d4a95eebcca9f216`.
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| P7am2 | print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex) | nextEl finds its node with p.kids.indexOf again | `src/render/print/tree.ts` | red: 1 failed \| 19 passed (20). the cost of print mode is linear in the document searches no long array for a node's position: print adds few  |
+| P7ax | print searches no long array for a node's position | idx answers through indexOf | `src/render/print/tree.ts` | red: 1 failed \| 19 passed (20). the cost of print mode is linear in the document searches no long array for a node's position: print adds few  |
+| P7bb | print's time is in proportion to the document | the position hint ignored (each walk step scans from the start, with no indexOf) | `src/render/print/tree.ts` | red: 3 failed \| 2 passed (20). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7ay | a numbered capture names a scope (inherited__ is listed) | the scope key's regex without digits | `test/print-vocabulary.ts` | red: 1 failed \| 19 passed (20). conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed cla |
+| P7az | a label is never a class (def_ is not listed) | the label exclusion removed | `test/print-vocabulary.ts` | red: 2 failed \| 18 passed (20). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7bc | the registered languages are read from highlight.ts | only the first five languages read | `test/print-vocabulary.ts` | red: 1 failed \| 0 passed (20). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7ba | wrap takes adjacent siblings of one parent | the adjacency check removed | `src/render/print/tree.ts` | red: 1 failed \| 19 passed (20). wrap takes adjacent siblings of one parent, in order, and throws on anything else (P7ba) |
+
+```json
+[
+  {
+    "id": "P7am2",
+    "guard": "print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex)",
+    "edit": "nextEl finds its node with p.kids.indexOf again",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 19,
+    "total": 20,
+    "red": [
+      "the cost of print mode is linear in the document searches no long array for a node's position: print adds few such searches to a render, however many blocks (P7am, P7ax)"
+    ]
+  },
+  {
+    "id": "P7ax",
+    "guard": "print searches no long array for a node's position",
+    "edit": "idx answers through indexOf",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 19,
+    "total": 20,
+    "red": [
+      "the cost of print mode is linear in the document searches no long array for a node's position: print adds few such searches to a render, however many blocks (P7am, P7ax)"
+    ]
+  },
+  {
+    "id": "P7bb",
+    "guard": "print's time is in proportion to the document",
+    "edit": "the position hint ignored (each walk step scans from the start, with no indexOf)",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 2,
+    "total": 20,
+    "red": [
+      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)",
+      "conformance/print/vocabulary.json is complete for what the consumer derives from it: every alert kind, every heading level, and every class print emits is listed or in a family (P7an)",
+      "the attributes and the elements writes no attribute but class, id, data-line, open, colspan, rowspan, align, alt, title and href, and an img's src, over the corpus"
+    ]
+  },
+  {
+    "id": "P7ay",
+    "guard": "a numbered capture names a scope (inherited__ is listed)",
+    "edit": "the scope key's regex without digits",
+    "file": "test/print-vocabulary.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 19,
+    "total": 20,
+    "red": [
+      "conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed class is in one, and no other family is declared (P7ao)"
+    ]
+  },
+  {
+    "id": "P7az",
+    "guard": "a label is never a class (def_ is not listed)",
+    "edit": "the label exclusion removed",
+    "file": "test/print-vocabulary.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 18,
+    "total": 20,
+    "red": [
+      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)",
+      "conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed class is in one, and no other family is declared (P7ao)"
+    ]
+  },
+  {
+    "id": "P7bc",
+    "guard": "the registered languages are read from highlight.ts",
+    "edit": "only the first five languages read",
+    "file": "test/print-vocabulary.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 0,
+    "total": 20,
+    "red": [
+      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)"
+    ]
+  },
+  {
+    "id": "P7ba",
+    "guard": "wrap takes adjacent siblings of one parent",
+    "edit": "the adjacency check removed",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 19,
+    "total": 20,
+    "red": [
+      "wrap takes adjacent siblings of one parent, in order, and throws on anything else (P7ba)"
+    ]
+  }
+]
+```

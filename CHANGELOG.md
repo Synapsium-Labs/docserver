@@ -24,6 +24,7 @@ The frame assets' sizes are now held by two append-only tables, `conformance/siz
 - `assets/frame/enhance.js`: `30b3c8aa8a9d8fa920b5649c3ad8ef09c9ad6f325ecd16b783d6ff63f1a17a90`, csp `'sha256-MLPIqoqdj6kgtWScOtjvCcmtbzJezRa3g9b/Y/GhepA='`
 - `assets/frame/reader.css`: `811bd9b312c7009ba6368599c6a2a8b2284265ec68041f22f184175f84d9cd2f`
 - `assets/reader.css`: `19011025e3f40c49f9585d7d09c6948d7c9861c2d092a2717ff5a7f5f8f2455d`
+- `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`
 
 ## 1.1.0
 

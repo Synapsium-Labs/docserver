@@ -52,3 +52,7 @@ Text.
 Text.
 
 [^1]: The note.
+
+```javascript
+class A extends B {}
+```

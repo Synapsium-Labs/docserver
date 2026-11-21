@@ -3,10 +3,10 @@
 // raw tag in the Markdown source (it stays text: B10's guarantee); and the stylesheet, every rule scoped.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render } from '../src/render/index.js';
-import { all, attr, el, KEPT_ATTRS, KEPT_IMG_ATTRS, parse, probe, serialize, setAttr, text, type ElN } from '../src/render/print/tree.js';
-import { emitted, FAMILIES, fixture, fixtureNames, highlightSubScopeClasses, inFamily, inputs, PRINT, ROOT } from './print-vocabulary.js';
+import { all, attr, el, KEPT_ATTRS, KEPT_IMG_ATTRS, parse, serialize, setAttr, text, wrap, type ElN, type N } from '../src/render/print/tree.js';
+import { emitted, FAMILIES, fixture, fixtureNames, highlightSubScopeClasses, inFamily, inputs, PRINT, registeredLanguages, ROOT } from './print-vocabulary.js';
 
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
 
@@ -42,6 +42,12 @@ describe('conformance/print/vocabulary.json', () => {
     // What highlight.js writes besides the families is finite for the languages registered: its sub-scope classes are listed.
     expect(highlightSubScopeClasses()).toEqual(expect.arrayContaining(['function_', 'class_', 'prompt_']));
     for (const c of highlightSubScopeClasses()) expect(file.classes).toContain(c);
+    // A numbered capture (`7: "title.class.inherited"`) names a scope; a `label` names a mode and is no class (P7ay, P7az).
+    expect(highlightSubScopeClasses()).toContain('inherited__');
+    expect(highlightSubScopeClasses()).not.toContain('def_');
+    expect(file.classes).not.toContain('def_');
+    expect(registeredLanguages()).toEqual(expect.arrayContaining(['bash', 'javascript', 'python', 'yaml']));
+    expect(registeredLanguages()).toHaveLength(18);
   });
 });
 
@@ -230,14 +236,61 @@ describe('the cost of print mode is linear in the document', () => {
     return lines.join('\n');
   };
 
-  it('looks at no sibling position past a node\'s own but a few: a walk over N blocks costs O(N), not O(N squared) (P7am)', () => {
+  /** The calls of Array's position searches on a long array during `fn`, by the array's length. */
+  function longSearches(fn: () => void): number {
+    let long = 0;
+    const spies = (['indexOf', 'lastIndexOf', 'findIndex'] as const).map((name) => {
+      const original = Array.prototype[name] as (...a: unknown[]) => number;
+      return vi.spyOn(Array.prototype, name).mockImplementation(function (this: unknown[], ...a: unknown[]): number {
+        if (this.length > 500) long += 1;
+        return original.apply(this, a);
+      } as never);
+    });
+    try {
+      fn();
+    } finally {
+      for (const s of spies) s.mockRestore();
+    }
+    return long;
+  }
+
+  it('costs time in proportion to the document, not its square: 20000 blocks print in a few times the plain render\'s time (P7bb)', () => {
+    const md = `# Big\n\n## In short\n\n${Array.from({ length: 20000 }, (_, i) => `Paragraph ${String(i)}.`).join('\n\n')}\n\n## Where things stand\n\n### Waiting on you\n\n- one\n`;
+    const time = (fn: () => void): number => {
+      const t = performance.now();
+      fn();
+      return performance.now() - t;
+    };
+    const plain = time(() => void render(md));
+    const printed = time(() => void render(md, PRINT));
+    expect(printed, `plain ${plain.toFixed(0)} ms`).toBeLessThan(10 * plain + 1500);
+  });
+
+  it('searches no long array for a node\'s position: print adds few such searches to a render, however many blocks (P7am, P7ax)', () => {
     for (const n of [1000, 4000]) {
       const md = big(n);
-      probe.scans = 0;
-      const r = render(md, PRINT);
-      expect(r.outcome).toBe('rendered');
-      expect(r.html).toContain('class="review-strip"');
-      expect(probe.scans, `n = ${String(n)}`).toBeLessThan(n);
+      const plain = longSearches(() => void render(md));
+      const printed = longSearches(() => {
+        const r = render(md, PRINT);
+        expect(r.outcome).toBe('rendered');
+        expect(r.html).toContain('class="review-strip"');
+      });
+      expect(printed - plain, `n = ${String(n)}`).toBeLessThan(50);
     }
+  });
+});
+
+describe('wrap', () => {
+  it('takes adjacent siblings of one parent, in order, and throws on anything else (P7ba)', () => {
+    const p = el('div', undefined, [el('a'), el('b'), el('c'), el('d')]);
+    const [a, b, c, d] = p.kids as [N, N, N, N];
+    expect(() => wrap([a, c], el('x'))).toThrow(/adjacent siblings/);
+    expect(() => wrap([b, a], el('x'))).toThrow(/adjacent siblings/);
+    expect(() => wrap([a, el('z')], el('x'))).toThrow(/adjacent siblings/);
+    expect(p.kids).toHaveLength(4);
+    const w = wrap([b, c], el('x'));
+    expect(p.kids.map((k) => (k as ElN).name)).toEqual(['a', 'x', 'd']);
+    expect(w.kids).toEqual([b, c]);
+    expect(d.up).toBe(p);
   });
 });

@@ -132,9 +132,6 @@ export const txt = (n: N): string => squash(textOf(n));
 
 export const elements = (e: ElN): ElN[] => e.kids.filter(isEl);
 
-/** What the sibling walks cost, in positions looked at past a node's hint: a test holds it linear in the document. */
-export const probe = { scans: 0 };
-
 /**
  * The position of `n` among its parent's children (-1 when it has none). Each node keeps the position it was last at, so a
  * walk over the children of a block-heavy document costs one look per step; after an insertion or removal the hint is off by
@@ -147,7 +144,6 @@ function idx(n: N): number {
   const from = n.at;
   if (k[from] === n) return from;
   for (let d = 1; d < k.length + from; d += 1) {
-    probe.scans += 1;
     if (k[from - d] === n) return (n.at = from - d);
     if (k[from + d] === n) return (n.at = from + d);
   }
@@ -234,6 +230,8 @@ export function wrap(nodes: readonly N[], wrapper: ElN): ElN {
   const p = f?.up;
   if (f === undefined || p === null || p === undefined) return wrapper;
   const i = idx(f);
+  // The run is adjacent siblings of one parent, in order: a caller that breaks that would drop siblings silently.
+  if (nodes.some((n, j) => n.up !== p || idx(n) !== i + j)) throw new Error('print: wrap takes adjacent siblings of one parent, in order');
   detach(wrapper);
   p.kids.splice(i, nodes.length, wrapper);
   wrapper.up = p;

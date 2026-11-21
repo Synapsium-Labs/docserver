@@ -37,20 +37,25 @@ export function inputs(): string[] {
 export const FAMILIES: readonly string[] = ['hljs-', 'language-'];
 export const inFamily = (c: string): boolean => FAMILIES.some((f) => c.startsWith(f));
 
-/** The languages src/render/highlight.ts registers. */
-const LANGUAGES = ['bash', 'css', 'diff', 'dockerfile', 'go', 'ini', 'java', 'javascript', 'json', 'markdown', 'plaintext', 'python', 'rust', 'shell', 'sql', 'typescript', 'xml', 'yaml'];
+/** The languages src/render/highlight.ts registers, read from its imports, so a language added there is read here. */
+export function registeredLanguages(): string[] {
+  const src = readFileSync(path.join(ROOT, 'src/render/highlight.ts'), 'utf8');
+  return [...src.matchAll(/from 'highlight\.js\/lib\/languages\/([a-z0-9]+)'/g)].map((m) => m[1] as string);
+}
 
 /**
  * The classes highlight.js gives a dotted scope of those languages after the first piece ("title.function.invoke" is
  * `hljs-title function_ invoke__`): `function_` and `invoke__`. They are finite for the registered languages, so the file lists
- * them, whether or not the corpus has a code block that reaches each.
+ * them, whether or not the corpus has a code block that reaches each. A scope is a value of `scope`, `className`, `beginScope`,
+ * `endScope` or a numbered capture (`7: "title.class.inherited"`); a `label` names a mode and is never a class.
  */
 export function highlightSubScopeClasses(): string[] {
   const out = new Set<string>();
-  for (const l of LANGUAGES) {
+  for (const l of registeredLanguages()) {
     const src = readFileSync(path.join(ROOT, 'node_modules/highlight.js/lib/languages', `${l}.js`), 'utf8');
-    for (const m of src.matchAll(/[A-Za-z_]+["']?\s*:\s*["']([a-z_]+(?:\.[a-z_]+)+)["']/g)) {
-      (m[1] ?? '').split('.').slice(1).forEach((x, i) => out.add(`${x}${'_'.repeat(i + 1)}`));
+    for (const m of src.matchAll(/([A-Za-z_0-9]+)["']?\s*:\s*["']([a-z_]+(?:\.[a-z_]+)+)["']/g)) {
+      if (m[1] === 'label') continue;
+      (m[2] ?? '').split('.').slice(1).forEach((x, i) => out.add(`${x}${'_'.repeat(i + 1)}`));
     }
   }
   return [...out].sort();
