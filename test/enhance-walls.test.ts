@@ -39,11 +39,20 @@ import { describe, expect, it, vi } from 'vitest';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const ENHANCE_DIR = path.join(ROOT, 'src', 'enhance');
 
+/**
+ * Every source of src/enhance: the flat modules, then each layout's (src/enhance/layouts/**, parity Task 9), so a layout's
+ * feature list is held to every wall the shared modules are.
+ */
 function sources(): string[] {
-  return readdirSync(ENHANCE_DIR)
-    .filter((f) => f.endsWith('.ts'))
-    .sort()
-    .map((f) => path.join(ENHANCE_DIR, f));
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      if (e.isDirectory()) walk(path.join(dir, e.name));
+      else if (e.name.endsWith('.ts')) out.push(path.join(dir, e.name));
+    }
+  };
+  walk(ENHANCE_DIR);
+  return out;
 }
 
 const rel = (p: string): string => path.relative(ROOT, p).split(path.sep).join('/');
@@ -666,16 +675,47 @@ describe('enhance walls: the language\'s own globals', () => {
   });
 });
 
+/** A module name of src/enhance: lower-case words joined by dashes. */
+const MODULE_NAME = '[a-z]+(?:-[a-z]+)*';
+
+/**
+ * True when `file` may import `spec`: a flat module, only a sibling (`./name.js`); a file under src/enhance/layouts/, a sibling,
+ * or a file of a directory above it up to src/enhance itself (`../name.js`, `../../name.js`), never past src/enhance.
+ */
+function importAllowed(file: string, spec: string): boolean {
+  const dir = path.dirname(file);
+  if (dir === ENHANCE_DIR) return new RegExp(`^\\./${MODULE_NAME}\\.js$`).test(spec);
+  if (!dir.startsWith(`${path.join(ENHANCE_DIR, 'layouts')}${path.sep}`) && dir !== path.join(ENHANCE_DIR, 'layouts')) return false;
+  const depth = dir.slice(ENHANCE_DIR.length).split(path.sep).filter((s) => s !== '').length;
+  const ups = '(?:\\.\\./){1,' + String(depth) + '}';
+  return new RegExp(`^(?:\\./|${ups})${MODULE_NAME}\\.js$`).test(spec);
+}
+
 describe('enhance walls: the import graph', () => {
   it('every source imports only sibling files of src/enhance, named in lower-case words joined by dashes', () => {
     const outside = sources().flatMap((f) =>
       ts
         .preProcessFile(readFileSync(f, 'utf8'), true, true)
         .importedFiles.map((i) => i.fileName)
-        .filter((spec) => !/^\.\/[a-z]+(?:-[a-z]+)*\.js$/.test(spec))
+        .filter((spec) => !importAllowed(f, spec))
         .map((spec) => `${rel(f)} imports ${spec}`),
     );
     expect(outside).toEqual([]);
+  });
+
+  it('a layout\'s sources (src/enhance/layouts/**) import only a sibling, or a module of src/enhance itself, by the same names; nothing else, and no module of src/enhance reaches into layouts/', () => {
+    const outsideLayouts = sources().filter((f) => !rel(f).startsWith('src/enhance/layouts/'));
+    for (const f of outsideLayouts) {
+      for (const i of ts.preProcessFile(readFileSync(f, 'utf8'), true, true).importedFiles) expect(i.fileName.includes('layouts'), `${rel(f)} imports ${i.fileName}`).toBe(false);
+    }
+    expect(sources().filter((f) => rel(f).startsWith('src/enhance/layouts/')).length).toBeGreaterThanOrEqual(5);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../../attention.js')).toBe(true);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../mark.js')).toBe(true);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../../../frame/seed.js')).toBe(false);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../../Attention.js')).toBe(false);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), 'esbuild')).toBe(false);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'cards.ts'), '../frame/seed.js')).toBe(false);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'cards.ts'), './layouts/mark.js')).toBe(false);
   });
 });
 

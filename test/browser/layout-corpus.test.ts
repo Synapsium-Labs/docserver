@@ -14,12 +14,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type OpenHow } from './harness.js';
+import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenHow } from './harness.js';
 import {
   compareOrWrite,
   holdClean,
   holdSnapshot,
+  layoutsWithSnapshots,
   loadLayoutCases,
+  loadLayoutCasesFor,
+  OWN_LAYOUT_NAMES,
   parseCaseFile,
   snapshotHold,
   updateRequested,
@@ -29,6 +32,12 @@ import {
 const UPDATE = updateRequested(process.env);
 const CASES = loadLayoutCases();
 const hold = snapshotHold(UPDATE);
+/** The layouts with a snapshot directory under conformance/layouts/ (parity Task 9): each runs every case below under its own bundle. */
+const SNAPSHOTTED = layoutsWithSnapshots();
+const UNSNAPSHOTTED = OWN_LAYOUT_NAMES.filter((n) => !SNAPSHOTTED.includes(n));
+if (UNSNAPSHOTTED.length > 0) {
+  console.warn(`layout corpus: skipped for ${UNSNAPSHOTTED.join(', ')}: no conformance/layouts/<name>/ directory yet (write one with UPDATE_LAYOUT=1 once the layout is ported)`);
+}
 
 /** The ids the two clobbering cases give their headings and anchors. */
 const CLOBBERING = ['jump', 'keys', 'xcard', 'toc-contents', '__proto__', 'constructor', 'toString', 'data-docreader-root'];
@@ -89,13 +98,20 @@ async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc
 
 afterAll(closeBrowsers);
 
-function how(c: LayoutCase): Omit<OpenHow, 'browser'> {
-  return { ...(c.viewport === undefined ? {} : { viewport: c.viewport }), ...(c.csp === undefined ? {} : { csp: c.csp }) };
+function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
+  return {
+    ...(c.viewport === undefined ? {} : { viewport: c.viewport }),
+    ...(c.csp === undefined ? {} : { csp: c.csp }),
+    ...(layout === undefined ? {} : { layout }),
+  };
 }
 
-/** One case in one browser: the page is clean (holdClean), then its snapshot is held to the expected file. */
-async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void): Promise<void> {
-  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c) });
+/**
+ * One case in one browser: the page is clean (holdClean), then its snapshot is held to the expected file. With a `layout` the
+ * reader is bundled for it (the harness's layout option) and the snapshot is that layout's.
+ */
+async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void, layout?: HarnessLayout): Promise<void> {
+  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout) });
   try {
     await waitForCues(c, doc);
     const snap = await doc.snapshot(c.scope);
@@ -180,6 +196,55 @@ describe('the Level 2 cases', () => {
     }
   });
 
+  it("a layout's snapshots are conformance/layouts/<name>/<slug>/<id>.dom.txt over the shared inputs; a layout with no directory is skipped, a stray name or file is an error, and an update writes the directory", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'docserver-layouts-'));
+    try {
+      const shared = path.join(dir, 'shared');
+      const own = path.join(dir, 'layouts');
+      mkdirSync(path.join(shared, 'x'), { recursive: true });
+      writeFileSync(path.join(shared, 'x', 'a.md'), '# A\n');
+      writeFileSync(path.join(shared, 'x', 'a.options.json'), '{"options":{},"scope":["byline"]}');
+      expect(layoutsWithSnapshots(own)).toEqual([]);
+      mkdirSync(path.join(own, 'review'), { recursive: true });
+      mkdirSync(path.join(own, 'classic'));
+      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'review']);
+      mkdirSync(path.join(own, 'plain'));
+      expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
+      rmSync(path.join(own, 'plain'), { recursive: true });
+      // The same case, a snapshot of its own under each layout; the inputs are the shared ones.
+      const [c] = loadLayoutCasesFor('review', shared, own);
+      expect(c?.id).toBe('x/a');
+      expect(c?.expected).toBe(path.join(own, 'review', 'x', 'a.dom.txt'));
+      expect(c?.markdown).toBe('# A\n');
+      expect(loadLayoutCasesFor('classic', shared, own)[0]?.expected).toBe(path.join(own, 'classic', 'x', 'a.dom.txt'));
+      // A file that belongs to no shared case is an error.
+      mkdirSync(path.join(own, 'review', 'x'));
+      writeFileSync(path.join(own, 'review', 'x', 'stray.dom.txt'), '');
+      expect(() => loadLayoutCasesFor('review', shared, own)).toThrow('layout snapshot review/x/stray.dom.txt belongs to no case');
+      rmSync(path.join(own, 'review', 'x', 'stray.dom.txt'));
+      // An update writes the file, and its directory when the layout's first snapshot of a slug makes it; no update writes nothing.
+      const file = path.join(own, 'classic', 'x', 'a.dom.txt');
+      expect(compareOrWrite('one\n', file, false)).toBe('missing');
+      expect(existsSync(file)).toBe(false);
+      expect(compareOrWrite('one\n', file, true)).toBe('written');
+      expect(readFileSync(file, 'utf8')).toBe('one\n');
+      // Two layouts update the same case under their own ids: each is written once, neither holds the other's file.
+      const a = snapshotHold(true);
+      const b = snapshotHold(true);
+      const other = path.join(own, 'review', 'x', 'a.dom.txt');
+      a('classic/x/a', 'one\n', file);
+      b('review/x/a', 'two\n', other);
+      expect([readFileSync(file, 'utf8'), readFileSync(other, 'utf8')]).toEqual(['one\n', 'two\n']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('every layout has a snapshot directory or is skipped with a note: the layouts the runner knows are the build\'s, besides the default', () => {
+    expect(OWN_LAYOUT_NAMES).toEqual(['classic', 'editorial', 'review', 'guided']);
+    expect([...SNAPSHOTTED, ...UNSNAPSHOTTED].sort()).toEqual([...OWN_LAYOUT_NAMES].sort());
+  });
+
   it('a case page that was refused something, reached another origin or asked for an unserved file fails', () => {
     const clean = { violations: [], aborted: [], missing: [] };
     expect(() => holdClean('x/a', clean)).not.toThrow();
@@ -247,3 +312,26 @@ describeBrowsers((browser) => {
     });
   }
 });
+
+// Each layout besides the default, over the same cases (parity Task 9): the reader bundled for it, its snapshots under
+// conformance/layouts/<name>/. A layout with no directory yet is skipped under a title that says so (and a note on stderr above);
+// UPDATE_LAYOUT=1 writes a layout's snapshots, once its directory exists. No layout's snapshots are written by the infrastructure.
+for (const layout of OWN_LAYOUT_NAMES) {
+  if (!SNAPSHOTTED.includes(layout)) {
+    describe.skip(`${layout}: skipped, no conformance/layouts/${layout}/ directory yet`, () => {
+      it('has no snapshots to hold', () => undefined);
+    });
+    continue;
+  }
+  describe(`layout ${layout}`, () => {
+    const own = loadLayoutCasesFor(layout);
+    const holdLayout = snapshotHold(UPDATE);
+    describeBrowsers((browser) => {
+      for (const c of own) {
+        it(c.id, async () => {
+          await runCase(c, browser, (id, actual, expected) => holdLayout(`${layout}/${id}`, actual, expected), layout);
+        });
+      }
+    });
+  });
+}

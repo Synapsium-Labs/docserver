@@ -3,9 +3,33 @@
 // test/browser/frame-boot.test.ts.
 import type { ScriptScan } from './free-globals.mjs';
 
-export type FrameAssetName = 'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid';
-export type FrameScriptName = 'guard' | 'bootstrap' | 'enhance';
-export type ScannedName = 'guard' | 'bootstrap' | 'enhance' | 'mermaid';
+/** The five frame assets every layout shares or that are the default layout's. */
+export type FrameBaseName = 'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid';
+/** The enhance bundle of each layout besides `default`, by manifest name. */
+export type LayoutBundleName = 'enhanceClassic' | 'enhanceEditorial' | 'enhanceReview' | 'enhanceGuided';
+/** The own stylesheet of each layout besides `default`, by manifest name. */
+export type LayoutStyleName = 'cssClassic' | 'cssEditorial' | 'cssReview' | 'cssGuided';
+export type FrameAssetName = FrameBaseName | LayoutBundleName | LayoutStyleName;
+export type FrameScriptName = 'guard' | 'bootstrap' | 'enhance' | LayoutBundleName;
+export type ScannedName = 'guard' | 'bootstrap' | 'enhance' | 'mermaid' | LayoutBundleName;
+/** A layout of LAYOUT_TABLE. */
+export type LayoutName = 'default' | 'classic' | 'editorial' | 'review' | 'guided';
+
+/** One layout of LAYOUT_TABLE. */
+export interface LayoutEntry {
+  /** The manifest name of its enhance bundle. */
+  readonly enhance: 'enhance' | LayoutBundleName;
+  /** The manifest name of its own stylesheet; null for none (`default`). */
+  readonly css: LayoutStyleName | null;
+  /** The module that is its feature list, from the package root; null for `default` (built with no substitution). */
+  readonly features: string | null;
+  /** The tracked source of its stylesheet, from the package root; null for none. */
+  readonly source: string | null;
+  /** The frame file of its bundle, under assets/. */
+  readonly bundle: string;
+  /** The frame file of its stylesheet, under assets/; null for none. */
+  readonly stylesheet: string | null;
+}
 
 /** One built frame file. */
 export interface BuiltFile {
@@ -21,7 +45,9 @@ export interface BuiltFile {
   /** Its CSP hash source, or null for the stylesheet. */
   readonly csp: string | null;
   readonly kind: 'script' | 'style';
-  /** For guard, bootstrap and enhance: the esbuild metafile's inputs, from the package root, sorted. */
+  /** The layout it belongs to (the default enhance bundle is `default`'s), or null. */
+  readonly layout: LayoutName | null;
+  /** For guard, bootstrap and every enhance bundle: the esbuild metafile's inputs, from the package root, sorted. */
   readonly inputs?: readonly string[];
 }
 
@@ -32,6 +58,8 @@ export interface ListedAsset {
   readonly bytes: number;
   readonly kind: 'script' | 'module' | 'style' | 'font' | 'text';
   readonly csp?: string;
+  /** Present on every layout asset: the layout's name (the default enhance bundle's is `default`). */
+  readonly layout?: LayoutName;
 }
 
 /** The free-global list and the two scans it is checked by (Reference §5.5). */
@@ -77,6 +105,14 @@ export interface BuildProblems extends Error {
 }
 
 export declare const FRAME_FILES: Readonly<Record<FrameAssetName, string>>;
+/** The layouts in one place (see the build's header): names, feature lists, stylesheets and frame files. */
+export declare const LAYOUT_TABLE: Readonly<Record<LayoutName, LayoutEntry>>;
+/** What joins `frame/reader.css` and a layout's stylesheet inside the srcdoc's `<style>`. */
+export declare const STYLE_JOIN: string;
+/** The layout a frame asset belongs to, by its asset name, or null. */
+export declare function layoutOfAsset(name: string): LayoutName | null;
+/** The esbuild options of a layout's enhance bundle: the default's plus the one plugin that substitutes its feature list. */
+export declare function layoutScriptOptions(layout: Exclude<LayoutName, 'default'>, root?: string): import('esbuild').BuildOptions & { write: false; metafile: true };
 export declare const MERMAID_MODULE: string;
 export declare const OUTPUT_DIRS: readonly string[];
 export declare const ASSETS_JSON: string;
@@ -84,14 +120,14 @@ export declare const MANIFEST_TS: string;
 export declare const FREE_DEFINES: Readonly<Record<string, string>>;
 export declare const MERMAID_FRAME_ENTRY: string;
 export declare const HAZARDS: Readonly<{ script: readonly string[]; css: readonly string[] }>;
-export declare const ASSET_BUDGETS: Readonly<Record<FrameAssetName | 'tarball', number>>;
+export declare const ASSET_BUDGETS: Readonly<Record<FrameBaseName | 'tarball', number>>;
 export declare const FREE_GLOBALS_ALLOWLIST: Readonly<Record<string, string>>;
 export declare const OFL_NOTICE: string;
 export { scanFreeGlobals } from './free-globals.mjs';
 export declare function byteRules(root?: string): Promise<ByteRules>;
 /** The esbuild options the build uses for one frame script; the bootstrap's carries `freeGlobals` (default none). */
 export declare function scriptOptions(
-  name: FrameScriptName,
+  name: 'guard' | 'bootstrap' | 'enhance',
   root?: string,
   freeGlobals?: readonly string[],
 ): import('esbuild').BuildOptions & { write: false; metafile: true };

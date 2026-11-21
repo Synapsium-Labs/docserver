@@ -15,6 +15,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { checkFrameCsp, frameCsp } from '../src/frame/csp.js';
 import { CSP_REFUSALS, cspFloor, FRAME_DIRECTIVES, type CspRefusal } from '../src/frame/csp-rules.js';
+import { FRAME_LAYOUTS, LAYOUT_ENTRIES, type FrameLayout } from '../src/frame/layouts.js';
 import { FRAME_MANIFEST } from '../src/frame/manifest.generated.js';
 import { cspHash } from '../src/frame/sha256.js';
 
@@ -25,6 +26,9 @@ const M = FRAME_MANIFEST;
 const THREE: readonly string[] = [M.guard.csp, M.bootstrap.csp, M.enhance.csp];
 const FOUR: readonly string[] = [...THREE, M.mermaid.csp];
 const GOOD = frameCsp();
+/** The layouts besides `default`, and the four hashes a frame of one inlines when Mermaid is on. */
+const OWN_LAYOUTS = FRAME_LAYOUTS.filter((l) => l !== 'default');
+const layoutFour = (l: FrameLayout): readonly string[] => [M.guard.csp, M.bootstrap.csp, M[LAYOUT_ENTRIES[l].enhance].csp, M.mermaid.csp];
 /** A hash source of the right form that no asset of this version has. */
 const UNKNOWN = `'sha256-${'A'.repeat(43)}='`;
 
@@ -189,6 +193,9 @@ const ROWS: readonly Row[] = [
     (k): Row => [`the ${k} hash removed while ${k} is inlined`, () => swap(` ${M[k].csp}`, ''), 'missing-hash', FOUR],
   ),
   ['a required hash this version does not know', () => GOOD, 'missing-hash', [...FOUR, UNKNOWN]],
+  // A policy built for one layout lacks the hash of another layout's bundle: missing-hash still catches it (plan Design B12).
+  ...OWN_LAYOUTS.map((l): Row => [`frameCsp('${l}') while the default layout's bundle is required`, () => frameCsp(l), 'missing-hash', FOUR]),
+  ...OWN_LAYOUTS.map((l): Row => [`the default policy while the ${l} layout's bundle is required`, () => GOOD, 'missing-hash', layoutFour(l)]),
 
   // unknown-hash: no hash this version does not ship
   ['an unknown hash of the right form', () => swap('script-src ', `script-src ${UNKNOWN} `), 'unknown-hash'],
@@ -201,6 +208,11 @@ const ACCEPTED: readonly (readonly [name: string, policy: () => string, required
   ['frameCsp(), every hash required', () => GOOD, FOUR],
   ['frameCsp(), Mermaid not inlined', () => GOOD, THREE],
   ['frameCsp(), nothing required', () => GOOD, []],
+  // Every layout's own policy passes with its own four hashes required; any hash this version ships is accepted whichever layout
+  // the policy was built for, so a stored policy for one layout stays valid (plan Design B12).
+  ...OWN_LAYOUTS.map((l): readonly [string, () => string, readonly string[]] => [`frameCsp('${l}'), its own four hashes required`, () => frameCsp(l), layoutFour(l)]),
+  ...OWN_LAYOUTS.map((l): readonly [string, () => string, readonly string[]] => [`frameCsp('${l}'), the hashes the default layout's frame needs, less its bundle's`, () => frameCsp(l), [M.guard.csp, M.bootstrap.csp, M.mermaid.csp]]),
+  ["the default policy with every layout's hash added", () => swap('script-src ', `script-src ${OWN_LAYOUTS.map((l) => M[LAYOUT_ENTRIES[l].enhance].csp).join(' ')} `), FOUR],
   ['frameCsp() without the Mermaid hash, Mermaid not inlined', () => swap(` ${M.mermaid.csp}`, ''), THREE],
   ['exactly 4096 characters (the bound is inclusive)', () => GOOD + ' '.repeat(4096 - GOOD.length), FOUR],
   ['the directives in reverse order', () => GOOD.split('; ').reverse().join('; '), FOUR],
@@ -256,6 +268,22 @@ describe('L3.M6 frameCsp()', () => {
 
   it('is one constant: two calls give the same string', () => {
     expect(frameCsp()).toBe(frameCsp());
+  });
+
+  it("frameCsp() is frameCsp('default'), byte for byte, and each layout's policy holds its own bundle's hash and no other layout's (parity Task 9)", () => {
+    expect(frameCsp()).toBe(frameCsp('default'));
+    for (const l of FRAME_LAYOUTS) {
+      const sources = /script-src ([^;]+);/.exec(frameCsp(l))?.[1]?.split(' ');
+      expect(sources, l).toEqual(layoutFour(l));
+      const others = FRAME_LAYOUTS.filter((m) => m !== l).map((m) => M[LAYOUT_ENTRIES[m].enhance].csp);
+      for (const h of others) expect(frameCsp(l).includes(h), `${l} carries ${h}`).toBe(false);
+    }
+  });
+
+  it('a name that is not a layout is a TypeError, never the default policy', () => {
+    for (const bad of ['', 'Default', 'classic ', '__proto__', 'constructor', 'toString', null, 0, {}, ['classic']]) {
+      expect(() => frameCsp(bad as never), String(bad)).toThrow(TypeError);
+    }
   });
 
   it('every hash in it is a SHA-256 hash source', () => {

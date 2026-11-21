@@ -172,6 +172,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'ERROR_WHY',
         'FRAGMENT_ID_GRAMMAR',
         'FRAME_ACCEPTS',
+        'FRAME_LAYOUTS',
         'FRAME_MANIFEST',
         'FrameError',
         'MAX_SRCDOC_CHARS_DEFAULT',
@@ -188,6 +189,8 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'frameDocument',
         'isAnchorToken',
         'isFragmentId',
+        'isFrameLayout',
+        'maxSrcdocChars',
         'mermaidGate',
         'mermaidThemeOf',
         'parseAppearance',
@@ -493,8 +496,11 @@ describe('L3.M7 each code at its boundary', () => {
   });
 
   it('MAX_SRCDOC_CHARS_DEFAULT is SEED_HTML_MAX_CHARS + the five assets\' chars + IMAGE_BUDGET_CHARS + SEED_FIELDS_MAX_CHARS + the skeleton at its longest (C92)', () => {
-    const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
-    expect(Object.keys(FRAME_MANIFEST).sort()).toEqual(['bootstrap', 'css', 'enhance', 'guard', 'mermaid']);
+    // The five assets of the default frame (a layout's own are counted by maxSrcdocChars(layout), test/frame-layouts.test.ts's).
+    const assetChars = ASSET_CHARS_NOW;
+    expect(Object.keys(FRAME_MANIFEST).sort()).toEqual(
+      ['bootstrap', 'css', 'cssClassic', 'cssEditorial', 'cssGuided', 'cssReview', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'enhanceGuided', 'enhanceReview', 'guard', 'mermaid'],
+    );
     for (const name of ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const) expect(FRAME_MANIFEST[name].chars, name).toBe(built.files[name].chars);
     // The skeleton at its longest, measured on a real srcdoc rather than read from document.ts: the empty document framed
     // with Mermaid on (every element written) under the longest policy the floor admits (CSP_MAX_CHARS characters; one
@@ -541,9 +547,27 @@ describe('L3.M7 each code at its boundary', () => {
       walk(init);
       return { literals, names: [...names] };
     };
+    // MAX_SRCDOC_CHARS_DEFAULT is maxSrcdocChars('default'); the sum is the function's (parity Task 9).
     const total = initialiser('MAX_SRCDOC_CHARS_DEFAULT');
     expect(total.literals).toEqual([]);
-    for (const n of ['SEED_HTML_MAX_CHARS', 'FRAME_MANIFEST', 'IMAGE_BUDGET_CHARS', 'SEED_FIELDS_MAX_CHARS', 'SKELETON_MAX_CHARS']) expect(total.names, n).toContain(n);
+    expect(total.names).toContain('maxSrcdocChars');
+    let fn: ts.FunctionDeclaration | undefined;
+    sf.forEachChild((n) => {
+      if (ts.isFunctionDeclaration(n) && n.name?.text === 'maxSrcdocChars') fn = n;
+    });
+    const body = fn?.body;
+    if (body === undefined) throw new Error('maxSrcdocChars: no function body');
+    const fnLiterals: string[] = [];
+    const fnNames = new Set<string>();
+    const walkFn = (n: ts.Node): void => {
+      if (ts.isNumericLiteral(n) || ts.isBigIntLiteral(n)) fnLiterals.push(n.text);
+      if (ts.isIdentifier(n)) fnNames.add(n.text);
+      ts.forEachChild(n, walkFn);
+    };
+    walkFn(body);
+    // The one numeric literal is the empty stylesheet's `0` (a layout with no stylesheet of its own adds nothing).
+    expect(fnLiterals).toEqual(['0']);
+    for (const n of ['SEED_HTML_MAX_CHARS', 'FRAME_MANIFEST', 'IMAGE_BUDGET_CHARS', 'SEED_FIELDS_MAX_CHARS', 'SKELETON_MAX_CHARS', 'STYLE_JOIN']) expect(fnNames, n).toContain(n);
     // The skeleton term: measured from the skeleton frameDocument writes, plus the floor's own bound on the policy.
     const skeleton = initialiser('SKELETON_MAX_CHARS');
     expect(skeleton.literals).toEqual([]);
@@ -1208,7 +1232,8 @@ describe('the appearance contract: the derived srcdoc cap rises by both fields a
       + `,"inShort":false`.length + `,"changesBase":"${'f'.repeat(64)}"`.length;
     const rise = faces + MAXIMAL_APPEARANCE_TEXT().length + keys;
     expect(SEED_FIELDS_MAX_CHARS - SEED_FIELDS_MAX_CHARS_1_1_0).toBe(rise);
-    const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
+    // The five assets of the default frame (a layout's own are counted by maxSrcdocChars(layout), test/frame-layouts.test.ts's).
+    const assetChars = ASSET_CHARS_NOW;
     const skeletonAndRest = MAX_SRCDOC_CHARS_DEFAULT - (SEED_HTML_MAX_CHARS + assetChars + IMAGE_BUDGET_CHARS + SEED_FIELDS_MAX_CHARS);
     expect(skeletonAndRest).toBeGreaterThan(CSP_MAX_CHARS);
     expect(MAX_SRCDOC_CHARS_DEFAULT - (SEED_HTML_MAX_CHARS + assetChars + IMAGE_BUDGET_CHARS + SEED_FIELDS_MAX_CHARS_1_1_0 + skeletonAndRest)).toBe(rise);
