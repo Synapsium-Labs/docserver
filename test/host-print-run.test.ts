@@ -4,7 +4,9 @@
 // figure. What this holds that no unit file does: a second `print-figures` command, with any number of the first run's figures still queued in
 // the host's port (an asynchronous port, the frame's `done` firing when a figure is posted and not when the host has handled it), costs the host
 // no refusal and never the sixteen that close the frame: the host's reopened run takes each stale copy under its index and the new run's own
-// copy replaces it (the latest copy of an index wins, as a consumer that keeps figures by index sees it); and a frame whose seed did not ask
+// copy replaces it (the latest copy of an index wins, as a consumer that keeps figures by index sees it). The edges it does not cover: a skipped index
+// keeps its stale copy, and near the 16 MiB total a stale copy larger than the new one can make the new copy's index refused as oversize, counted
+// (test/host-mount.test.ts holds the byte-total cases). It also holds that a frame whose seed did not ask
 // for print figures sends none. The mount's harness is the small half of test/host-mount.test.ts's, with the frame's assets from an in-memory build of the
 // frame's sources, so a mutation of the source still changes what the frame side does and nothing else.
 import { createRequire } from 'node:module';
@@ -255,6 +257,12 @@ describe('a reprint with k figures of the first run still queued in the host\'s 
       expect(m.fallbacks).toEqual([]);
       // no refusal: everything the frame posted was handed on (the queued copies, then run 2's, replacing them)
       expect(frame.posted.length - m.figures.length).toBe(0);
+      // and none was counted: forged figures (refused, never handed on) take the whole sixteen to close the frame
+      const forged = { t: 'print-figure', i: '0', n: '30', png: 'x' };
+      for (let c = 0; c < 15; c += 1) m.say(forged);
+      expect(m.fallbacks).toEqual([]);
+      m.say(forged);
+      expect(m.fallbacks).toEqual(['refusals']);
       // the consumer's map, latest copy of an index wins: 30 indexes, every one a run 2 copy
       const kept = new Map<number, string>();
       for (const f of m.figures) kept.set(f.i, f.png);

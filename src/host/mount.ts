@@ -46,9 +46,12 @@
 // count, its indexes and its byte totals before the adapter sees it; the run ends at the next
 // `printFigures()` call and with the mount (not at its last index). A figure of the previous run may still sit in the port's queue
 // when the host opens the next, and is accepted into it under its own index; so a run opened while the previous one was unfinished
-// (fewer than n distinct indexes accepted) is a reopened run, in which the first repeat of an index replaces the earlier copy
-// (handed to `onPrintFigure` again, the run's total adjusted before the 16 MiB check, no refusal) and a second repeat is
-// refused. If the new run skips an index it could not draw, the stale copy of it stays, as its own never arrives.
+// (a reopened run itself, or fewer than n distinct indexes accepted) is a reopened run, in which the first repeat of an index
+// replaces the earlier copy (handed to `onPrintFigure` again, the run's total adjusted before the 16 MiB check, no refusal) and a
+// second repeat is refused; once a mount's run was reopened, every later run is too, and a run after a complete ordinary run is
+// ordinary. Two edges: if the new run skips an index it could not draw, the stale copy of it stays, as its own never arrives; and
+// near the 16 MiB total a stale copy larger than the new one (drawn before an appearance change, say) can make the new copy's
+// index refused as oversize, counted, with the stale copy staying.
 // `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
 // after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
 //
@@ -933,9 +936,11 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     };
     sendPrintFigures = () => {
       if (!live || !ready) return;
-      // Unfinished: the previous run accepted fewer than n distinct indices, or none. Its figures still in the port's queue are
-      // then absorbed by this run (a first repeat replaces); after a complete run, or with none before, this run is ordinary.
-      const unfinished = run !== null && (run.n === null || run.seen.size < run.n);
+      // Unfinished: the previous run was itself reopened (some of its distinct indexes are stale copies, so a full count proves
+      // nothing: its own figures may still be in the port), or it accepted fewer than n distinct indices, or none. Its figures
+      // still in the port's queue are then absorbed by this run (a first repeat replaces); only a run after a complete ordinary
+      // run, or the first run of the mount, is ordinary.
+      const unfinished = run !== null && (run.reopened || run.n === null || run.seen.size < run.n);
       run = { n: null, seen: new Set<number>(), bytes: 0, reopened: unfinished, replaceable: new Map<number, number>() };
       post({ t: 'command', name: 'print-figures' });
     };

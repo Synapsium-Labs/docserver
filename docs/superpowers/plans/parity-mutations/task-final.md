@@ -131,3 +131,21 @@ I2's case and the equality test were run first against the unfixed code: `20000 
   {"id": "RS7", "guard": "an item href's scheme has no Unicode case folding (I1)", "edit": "the scheme back to `https` and the flags back to `iu`", "file": "src/frame/items.ts", "tests": "test/host-links.test.ts", "rc": 1, "failed": 1, "passed": 25, "total": 26, "red": ["the scheme is read as the host reads it, with no Unicode case folding: HTTPS is admitted, a long s is not (review 3081 round 2, I1)"]}
 ]
 ```
+
+## Review 3081 round 2, F2 (the reopened state carries forward)
+
+The new three-run case was run first against the round 1 code and was red: `test/host-mount.test.ts` 1 failed \| 195 passed (196), the handed indexes `[0, 1, 2, 0, 1, 2, 0]` where `[0, 1, 2, 0, 1, 2, 0, 1, 2]` is expected (run 3, ordinary, took run 2's own 1 and 2 as first copies and refused its own). Rows measured in place as above (`src/host/mount.ts` saved with its sha256 `11489415e559b58c99c14bd23e626cbd5cbf799afe692835d426e04933381752`, one edit, one test file, restored and compared).
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| RF8 | only a reopened run keeps replaceable copies (M1) | the gate removed (`} else if (run.reopened) run.replaceable.set` is `} else run.replaceable.set`) | `src/host/mount.ts` | red: 6 failed \| 190 passed (196) in `test/host-mount.test.ts`, among them "the first run of a mount is ordinary" and "a previous run that was complete leaves the next one ordinary" |
+| RF9 | once a mount's run was reopened, later runs are too (I1) | the `run.reopened \|\|` clause removed from `unfinished` | `src/host/mount.ts` | red: 1 failed \| 195 passed (196). a third call while the second run's own figures are still in the port |
+| RF2 (again) | a replacement counts no refusal (M3) | the mount's effect calls `refused()` for a replaced copy | `src/host/mount.ts` | red: 3 failed \| 6 passed (9) in `test/host-print-run.test.ts`: k = 1, 4 and 16 (round 1 reddened k = 16 alone) |
+
+```json
+[
+  {"id": "RF8", "guard": "only a reopened run keeps replaceable copies", "edit": "the run.reopened gate removed", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 6, "passed": 190, "total": 196},
+  {"id": "RF9", "guard": "once a mount's run was reopened, later runs are too", "edit": "run.reopened || removed from unfinished", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 1, "passed": 195, "total": 196},
+  {"id": "RF2-r2", "guard": "a replacement counts no refusal", "edit": "refused() called for a replaced copy", "file": "src/host/mount.ts", "tests": "test/host-print-run.test.ts", "rc": 1, "failed": 3, "passed": 6, "total": 9}
+]
+```

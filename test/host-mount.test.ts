@@ -2563,6 +2563,28 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
         expect(m.fallbacks()).toEqual(['refusals']);
       });
 
+      it('a third call while the second run\'s own figures are still in the port: its run is reopened too, so nothing of it is refused (review 3081 F2, round 2)', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        // call 1: the frame posted 0, 1, 2 and the host has handled only 0
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        // call 2 reopens: the stale 1 and 2 are accepted, then run 2's own 0 (three distinct indexes, so run 2 looks complete)
+        m.frame.printFigures();
+        m.say(fig(1, 3));
+        m.say(fig(2, 3));
+        m.say(fig(0, 3));
+        // call 3 arrives while run 2's own 1 and 2 are still in the port: they are accepted as first copies of run 3, and run 3's own copies replace them
+        m.frame.printFigures();
+        for (const i of [1, 2, 0, 1, 2]) m.say(fig(i, 3));
+        expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2]);
+        // nothing was refused: the sixteen third copies of index 1 (its one replacement is spent) are the whole count that closes the frame
+        for (let k = 0; k < 15; k += 1) m.say(fig(1, 3));
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(1, 3));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
       it('the first run of a mount is ordinary: a repeat is refused and counted (unchanged)', async () => {
         const { c, over } = calls();
         const m = await ready(PLAIN, over);
