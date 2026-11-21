@@ -544,7 +544,11 @@ function buildByline(ctx: FeatureContext, h1: Element, minutes: number, delta: D
     // Two journaled moves bracket the work: one takes it out of its parent into a fragment, one puts it back before the sibling
     // that followed it. Undo runs in reverse: the second move's undo takes it out again, the per-fact moves and the cut are undone
     // while it is off the document, and the first move's undo puts it back. Nothing in between calls the host, so nothing else
-    // can touch the parent meanwhile; a throw in between leaves the first move's undo to put it back.
+    // can touch the parent meanwhile (a custom element's connect or disconnect callback would still run during the moves, as the
+    // per-fact moves ran such callbacks before; neither occurs in the frame or on render()'s output); a throw in between leaves
+    // the first move's undo to put it back. The paragraph's own place is a journal.move: if the host removes the node that
+    // followed it while enhanced, destroy still puts the paragraph back after the node before it and reports a fault, and a
+    // paragraph the host removed is put back where it was.
     const home = metaP.parentNode as Node;
     const homeNext = metaP.nextSibling;
     journal.move(metaP, doc.createDocumentFragment(), null);

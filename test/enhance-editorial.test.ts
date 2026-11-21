@@ -530,6 +530,8 @@ describe('many separators in the byline (review 3088 F3)', () => {
    * children, a write being a call of insertBefore, appendChild, removeChild, replaceChild, splitText or a range's deleteContents,
    * counted for the parent it is called on and, for an insert, for the parent the node leaves. A structural count, never a clock:
    * WebKit takes time quadratic in such writes to a large live parent, in the build and in the undo (CI, review 3088 F3).
+   * Its scope is those calls only: append, prepend, before, after, remove, replaceWith, replaceChildren and a range's
+   * insertNode or extractContents are not counted, and the code under test uses none of them on the paragraph.
    */
   async function largeParentWrites(k: number): Promise<{ build: number; undo: number; facts: number; restored: boolean }> {
     const md = byline(k);
