@@ -88,7 +88,7 @@ describe('no default tracker anywhere in the library', () => {
 
     it('the guard, the bootstrap, the reader and its stylesheet name none', () => {
       // The five assets of the default frame, and each layout's bundle and stylesheet (parity Task 9).
-      const layoutAssets = ['enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial', 'enhanceReview', 'cssReview', 'enhanceGuided', 'cssGuided'];
+      const layoutAssets = ['enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial'];
       expect(Object.keys(texts).sort()).toEqual(['bootstrap', 'css', 'enhance', 'guard', 'mermaid', ...layoutAssets].sort());
       const found = ['guard', 'bootstrap', 'enhance', 'css', ...layoutAssets].flatMap((name) => hits(texts[name] ?? '').map((re) => `${name}: ${re}`));
       expect(found).toEqual([]);

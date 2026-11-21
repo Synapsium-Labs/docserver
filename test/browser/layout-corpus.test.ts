@@ -205,23 +205,23 @@ describe('the Level 2 cases', () => {
       writeFileSync(path.join(shared, 'x', 'a.md'), '# A\n');
       writeFileSync(path.join(shared, 'x', 'a.options.json'), '{"options":{},"scope":["byline"]}');
       expect(layoutsWithSnapshots(own)).toEqual([]);
-      mkdirSync(path.join(own, 'review'), { recursive: true });
+      mkdirSync(path.join(own, 'editorial'), { recursive: true });
       mkdirSync(path.join(own, 'classic'));
-      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'review']);
+      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial']);
       mkdirSync(path.join(own, 'plain'));
       expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
       rmSync(path.join(own, 'plain'), { recursive: true });
       // The same case, a snapshot of its own under each layout; the inputs are the shared ones.
-      const [c] = loadLayoutCasesFor('review', shared, own);
+      const [c] = loadLayoutCasesFor('editorial', shared, own);
       expect(c?.id).toBe('x/a');
-      expect(c?.expected).toBe(path.join(own, 'review', 'x', 'a.dom.txt'));
+      expect(c?.expected).toBe(path.join(own, 'editorial', 'x', 'a.dom.txt'));
       expect(c?.markdown).toBe('# A\n');
       expect(loadLayoutCasesFor('classic', shared, own)[0]?.expected).toBe(path.join(own, 'classic', 'x', 'a.dom.txt'));
       // A file that belongs to no shared case is an error.
-      mkdirSync(path.join(own, 'review', 'x'));
-      writeFileSync(path.join(own, 'review', 'x', 'stray.dom.txt'), '');
-      expect(() => loadLayoutCasesFor('review', shared, own)).toThrow('layout snapshot review/x/stray.dom.txt belongs to no case');
-      rmSync(path.join(own, 'review', 'x', 'stray.dom.txt'));
+      mkdirSync(path.join(own, 'editorial', 'x'));
+      writeFileSync(path.join(own, 'editorial', 'x', 'stray.dom.txt'), '');
+      expect(() => loadLayoutCasesFor('editorial', shared, own)).toThrow('layout snapshot editorial/x/stray.dom.txt belongs to no case');
+      rmSync(path.join(own, 'editorial', 'x', 'stray.dom.txt'));
       // An update writes the file, and its directory when the layout's first snapshot of a slug makes it; no update writes nothing.
       const file = path.join(own, 'classic', 'x', 'a.dom.txt');
       expect(compareOrWrite('one\n', file, false)).toBe('missing');
@@ -231,9 +231,9 @@ describe('the Level 2 cases', () => {
       // Two layouts update the same case under their own ids: each is written once, neither holds the other's file.
       const a = snapshotHold(true);
       const b = snapshotHold(true);
-      const other = path.join(own, 'review', 'x', 'a.dom.txt');
+      const other = path.join(own, 'editorial', 'x', 'a.dom.txt');
       a('classic/x/a', 'one\n', file);
-      b('review/x/a', 'two\n', other);
+      b('editorial/x/a', 'two\n', other);
       expect([readFileSync(file, 'utf8'), readFileSync(other, 'utf8')]).toEqual(['one\n', 'two\n']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -241,7 +241,7 @@ describe('the Level 2 cases', () => {
   });
 
   it('every layout has a snapshot directory or is skipped with a note: the layouts the runner knows are the build\'s, besides the default', () => {
-    expect(OWN_LAYOUT_NAMES).toEqual(['classic', 'editorial', 'review', 'guided']);
+    expect(OWN_LAYOUT_NAMES).toEqual(['classic', 'editorial']);
     expect([...SNAPSHOTTED, ...UNSNAPSHOTTED].sort()).toEqual([...OWN_LAYOUT_NAMES].sort());
   });
 

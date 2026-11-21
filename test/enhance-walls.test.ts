@@ -708,12 +708,12 @@ describe('enhance walls: the import graph', () => {
     for (const f of outsideLayouts) {
       for (const i of ts.preProcessFile(readFileSync(f, 'utf8'), true, true).importedFiles) expect(i.fileName.includes('layouts'), `${rel(f)} imports ${i.fileName}`).toBe(false);
     }
-    expect(sources().filter((f) => rel(f).startsWith('src/enhance/layouts/')).length).toBeGreaterThanOrEqual(5);
-    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../../attention.js')).toBe(true);
-    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../mark.js')).toBe(true);
-    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../../../frame/seed.js')).toBe(false);
-    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), '../../Attention.js')).toBe(false);
-    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'review', 'features.ts'), 'esbuild')).toBe(false);
+    expect(sources().filter((f) => rel(f).startsWith('src/enhance/layouts/')).length).toBeGreaterThanOrEqual(3);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'editorial', 'features.ts'), '../../attention.js')).toBe(true);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'editorial', 'features.ts'), '../mark.js')).toBe(true);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'editorial', 'features.ts'), '../../../frame/seed.js')).toBe(false);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'editorial', 'features.ts'), '../../Attention.js')).toBe(false);
+    expect(importAllowed(path.join(ENHANCE_DIR, 'layouts', 'editorial', 'features.ts'), 'esbuild')).toBe(false);
     expect(importAllowed(path.join(ENHANCE_DIR, 'cards.ts'), '../frame/seed.js')).toBe(false);
     expect(importAllowed(path.join(ENHANCE_DIR, 'cards.ts'), './layouts/mark.js')).toBe(false);
   });

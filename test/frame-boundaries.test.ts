@@ -194,7 +194,7 @@ describe('the record: its shape and its newest entries', () => {
 
   it("each layout's policy has one hash source per script that layout's frame inlines (four), and each is a hash this version ships; the manifest holds one per script of every layout", () => {
     const sources = (policy: string): string[] => policy.split('; ').find((d) => d.startsWith('script-src '))?.split(' ').slice(1) ?? [];
-    // Every script the manifest names: the guard, the bootstrap, Mermaid's, and one enhance bundle for each of the five layouts.
+    // Every script the manifest names: the guard, the bootstrap, Mermaid's, and one enhance bundle for each layout.
     const scripts = Object.values(FRAME_MANIFEST).filter((a) => a.csp !== null).length;
     expect(scripts).toBe(3 + FRAME_LAYOUTS.length);
     const INLINED = 4;

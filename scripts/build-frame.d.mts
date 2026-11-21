@@ -6,14 +6,14 @@ import type { ScriptScan } from './free-globals.mjs';
 /** The five frame assets every layout shares or that are the default layout's. */
 export type FrameBaseName = 'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid';
 /** The enhance bundle of each layout besides `default`, by manifest name. */
-export type LayoutBundleName = 'enhanceClassic' | 'enhanceEditorial' | 'enhanceReview' | 'enhanceGuided';
+export type LayoutBundleName = 'enhanceClassic' | 'enhanceEditorial';
 /** The own stylesheet of each layout besides `default`, by manifest name. */
-export type LayoutStyleName = 'cssClassic' | 'cssEditorial' | 'cssReview' | 'cssGuided';
+export type LayoutStyleName = 'cssClassic' | 'cssEditorial';
 export type FrameAssetName = FrameBaseName | LayoutBundleName | LayoutStyleName;
 export type FrameScriptName = 'guard' | 'bootstrap' | 'enhance' | LayoutBundleName;
 export type ScannedName = 'guard' | 'bootstrap' | 'enhance' | 'mermaid' | LayoutBundleName;
 /** A layout of LAYOUT_TABLE. */
-export type LayoutName = 'default' | 'classic' | 'editorial' | 'review' | 'guided';
+export type LayoutName = 'default' | 'classic' | 'editorial';
 
 /** One layout of LAYOUT_TABLE. */
 export interface LayoutEntry {

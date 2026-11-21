@@ -30,8 +30,6 @@ vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const lists = {
     classic: (await import('../src/enhance/layouts/classic/features.js')).features,
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features,
-    review: (await import('../src/enhance/layouts/review/features.js')).features,
-    guided: (await import('../src/enhance/layouts/guided/features.js')).features,
   } as Record<string, () => readonly Feature[]>;
   return { ...real, features: (): readonly Feature[] => (pick.layout === 'default' ? real.features() : (lists[pick.layout] as () => readonly Feature[])()) };
 });
@@ -61,8 +59,6 @@ async function lists(): Promise<Record<string, readonly Feature[]>> {
     default: defaultFeatures(),
     classic: (await import('../src/enhance/layouts/classic/features.js')).features(),
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features(),
-    review: (await import('../src/enhance/layouts/review/features.js')).features(),
-    guided: (await import('../src/enhance/layouts/guided/features.js')).features(),
   };
 }
 
@@ -71,8 +67,6 @@ describe('the layouts\' feature lists', () => {
     const mods = {
       classic: await import('../src/enhance/layouts/classic/features.js'),
       editorial: await import('../src/enhance/layouts/editorial/features.js'),
-      review: await import('../src/enhance/layouts/review/features.js'),
-      guided: await import('../src/enhance/layouts/guided/features.js'),
     };
     for (const [name, m] of Object.entries(mods)) {
       const a = m.features();
@@ -145,7 +139,7 @@ describe('the layout mark on the root', () => {
   }
 
   it('a host attribute of the same name, changed since, wins at teardown (the journal restores only what it wrote)', async () => {
-    pick.layout = 'review';
+    pick.layout = 'classic';
     const root = mount(DOC);
     await enhance(root);
     root.setAttribute('data-docreader-layout', 'host');

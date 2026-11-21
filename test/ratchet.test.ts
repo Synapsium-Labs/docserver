@@ -469,7 +469,7 @@ describe('the ratchet command', () => {
     const snap = (name: string, text: string): Record<string, string> => ({ [`conformance/layouts/${name}/core/a.dom.txt`]: text });
     commit(dir, { 'conformance/hostile.json': '[]\n', ...layoutCase(false, 'h1\n'), ...snap('classic', 'c1\n') }, 'start');
     // A layout's first snapshot, and a second layout's: additions, named by nothing.
-    commit(dir, { ...snap('review', 'r1\n'), 'conformance/layouts/classic/core/b.dom.txt': 'c1\n' }, 'new snapshots');
+    commit(dir, { ...snap('editorial', 'r1\n'), 'conformance/layouts/classic/core/b.dom.txt': 'c1\n' }, 'new snapshots');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(0));
     commit(dir, snap('classic', 'c2\n'), 'move a layout snapshot');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
@@ -489,13 +489,13 @@ describe('the ratchet command', () => {
     git(dir, 'commit', '-q', '--amend', '-m', 'move a layout snapshot\n\nLayout-moved: classic/core/a');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(1));
     // A snapshot of another layout does not stand for it, and a deletion is a move.
-    rmSync(path.join(dir, 'conformance/layouts/review/core/a.dom.txt'));
+    rmSync(path.join(dir, 'conformance/layouts/editorial/core/a.dom.txt'));
     git(dir, 'add', '-A');
     git(dir, 'commit', '-q', '-m', 'delete a layout snapshot');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
       status: 1,
       out: '',
-      err: 'ratchet: review/core/a: its layout snapshot changed, and no Layout-moved trailer names it\n',
+      err: 'ratchet: editorial/core/a: its layout snapshot changed, and no Layout-moved trailer names it\n',
     });
   });
 

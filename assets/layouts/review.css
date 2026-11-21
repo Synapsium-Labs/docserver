@@ -1,2 +1,0 @@
-/* review layout: provisional stylesheet (docserver parity Task 9). Every rule is scoped under the layout's mark, which the layout builds first; no font of its own, and colours only from the reader's tokens. The layout's own rules arrive with its task. */
-[data-docreader-root][data-docreader-layout="review"] { --docreader-layout: review; }

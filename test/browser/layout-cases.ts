@@ -27,7 +27,7 @@ export const LAYOUT_DIR = fileURLToPath(new URL('../../conformance/layout/', imp
 export const LAYOUTS_DIR = fileURLToPath(new URL('../../conformance/layouts/', import.meta.url));
 
 /** The layouts besides `default`, in table order. */
-export const OWN_LAYOUT_NAMES = Object.keys(LAYOUT_TABLE).filter((n) => n !== 'default') as ('classic' | 'editorial' | 'review' | 'guided')[];
+export const OWN_LAYOUT_NAMES = Object.keys(LAYOUT_TABLE).filter((n) => n !== 'default') as ('classic' | 'editorial')[];
 
 /**
  * The layouts that have a snapshot directory under `dir`, in table order; a layout with none yet is skipped by the runner, with a

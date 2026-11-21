@@ -159,7 +159,7 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
     }
     // Its scripts, hashed: the guard, the bootstrap, Mermaid's and one bundle per layout; a stylesheet has no hash source.
     expect(Object.entries(FRAME_MANIFEST).filter(([, e]) => e.csp !== null).map(([n]) => n).sort()).toEqual(
-      ['bootstrap', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'enhanceGuided', 'enhanceReview', 'guard', 'mermaid'],
+      ['bootstrap', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'guard', 'mermaid'],
     );
     for (const l of OWN) expect(FRAME_MANIFEST[LAYOUT_ENTRIES[l].css as 'cssClassic'].csp).toBeNull();
   });
@@ -181,9 +181,9 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
     expect(total).toBe(Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0));
     // A layout asset left unmarked in the text is no layout's: its layout's size drops by its characters, and a layout row of the
     // contract that reads the sizes would see the miscount.
-    const unmarked = text.replace(/(enhanceReview: \{[^\n]*layout: )"review"/, '$1null');
+    const unmarked = text.replace(/(enhanceEditorial: \{[^\n]*layout: )"editorial"/, '$1null');
     expect(unmarked).not.toBe(text);
-    expect(layoutSizes(parseManifest(unmarked))['review']).toBe(FRAME_MANIFEST.cssReview.chars);
+    expect(layoutSizes(parseManifest(unmarked))['editorial']).toBe(FRAME_MANIFEST.cssEditorial.chars);
   });
 
   it('assets.json marks every layout asset with its layout in the same way: the bundles, the stylesheets and the tracked sources', () => {
@@ -217,7 +217,7 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
     }
     expect(Object.keys(FRAME_FILES)).toEqual([
       'guard', 'bootstrap', 'enhance', 'css', 'mermaid',
-      'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial', 'enhanceReview', 'cssReview', 'enhanceGuided', 'cssGuided',
+      'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial',
     ]);
   });
 });
@@ -442,9 +442,9 @@ describe('each layout\'s srcdoc inlines only its own bundle and stylesheet', () 
 
   it('a layout is refused when its policy is another layout\'s: the bundle\'s hash must be in it (csp)', () => {
     for (const layout of OWN) expect(refusal(() => frameOf(layout, { csp: frameCsp('default') })), layout).toBe('csp');
-    expect(refusal(() => frameOf('default', { csp: frameCsp('review') }))).toBe('csp');
+    expect(refusal(() => frameOf('default', { csp: frameCsp('editorial') }))).toBe('csp');
     // Another layout's policy, with that layout's own hash added to the right one, is still a policy of this version's: accepted.
-    const both = frameCsp('classic').replace('script-src ', `script-src ${FRAME_MANIFEST.enhanceReview.csp} `);
+    const both = frameCsp('classic').replace('script-src ', `script-src ${FRAME_MANIFEST.enhanceEditorial.csp} `);
     expect(refusal(() => frameOf('classic', { csp: both }))).toBe('no refusal');
   });
 
@@ -487,11 +487,11 @@ describe('assets.layoutCss: required where the layout has a stylesheet, refused 
 
   it('the default has no stylesheet of its own: any layoutCss, whatever its text, is refused (asset-mismatch), and a layout\'s bundle under it is refused too', () => {
     const base = assetsFor('default');
-    for (const text of [built.files.cssReview.text, built.files.css.text, '', 'x']) {
+    for (const text of [built.files.cssEditorial.text, built.files.css.text, '', 'x']) {
       expect(refusal(() => frameOf('default', { assets: { ...base, layoutCss: text } })), JSON.stringify(text.slice(0, 12))).toBe('asset-mismatch');
       expect(refusal(() => frameOf(undefined, { assets: { ...base, layoutCss: text } })), `no layout, ${JSON.stringify(text.slice(0, 12))}`).toBe('asset-mismatch');
     }
-    expect(refusal(() => frameOf('default', { assets: { ...base, enhance: built.files.enhanceReview.text } }))).toBe('asset-mismatch');
+    expect(refusal(() => frameOf('default', { assets: { ...base, enhance: built.files.enhanceEditorial.text } }))).toBe('asset-mismatch');
   });
 
   it('a stylesheet text that holds a style end tag, an @import or a url( is refused as unsafe-asset before its hash is compared', () => {
@@ -583,7 +583,7 @@ describe("test 7's old-cap row, under every layout besides the default (the defa
   for (const layout of OWN) {
     it(`${layout}: a document at the old srcdoc cap, with both faces at 131 072 decoded bytes and the largest appearance, is framed within this layout's cap, and the cap in force is the layout's`, () => {
       // Each srcdoc is about 115 million characters: only its length is kept, and the next is framed after it is released. The
-      // document is built once for the four layouts.
+      // document is built once for the layouts.
       const { input: doc, options } = (oldCap ??= oldCapDocument());
       const on = { ...options, assets: assetsFor(layout, true) };
       const lengthOf = (o: Partial<FrameOptions>): number => frameOf(layout, { ...on, ...o }, doc).length;
@@ -635,8 +635,8 @@ describe('the build holds every layout asset to the byte rules, the free-global 
   });
 
   it('a layout\'s stylesheet that holds a font of its own, a url( or an @import is refused, named; a style end tag too, alone and joined to reader.css', () => {
-    const css = built.files.cssReview.text;
-    const at = (plant: string): string[] => problems(bundleOf({ cssReview: `${css}\n${plant}\n` })).filter((m) => m.startsWith('frame/layout-review.css: '));
+    const css = built.files.cssEditorial.text;
+    const at = (plant: string): string[] => problems(bundleOf({ cssEditorial: `${css}\n${plant}\n` })).filter((m) => m.startsWith('frame/layout-editorial.css: '));
     expect(at('@font-face{font-family:x;src:url(data:font/woff2;base64,AAAA)}').some((m) => m.includes('a font or url( of its own'))).toBe(true);
     expect(at('a{background:url(https://example.invalid/x.png)}').some((m) => m.includes('a font or url( of its own'))).toBe(true);
     expect(at('@import "x.css";').some((m) => m.includes('@import'))).toBe(true);
@@ -647,11 +647,11 @@ describe('the build holds every layout asset to the byte rules, the free-global 
   });
 
   it('a layout bundle is a frame script: a script tag, a NUL and an HTML comment token planted in one fail the build, named', () => {
-    const text = built.files.enhanceGuided.text;
-    const p = (plant: string): string[] => problems(bundleOf({ enhanceGuided: `${text};var planted="${plant}";\n` })).filter((m) => m.startsWith('frame/enhance-guided.js: '));
+    const text = built.files.enhanceClassic.text;
+    const p = (plant: string): string[] => problems(bundleOf({ enhanceClassic: `${text};var planted="${plant}";\n` })).filter((m) => m.startsWith('frame/enhance-classic.js: '));
     expect(p('</script>').some((m) => m.includes('script tag'))).toBe(true);
     expect(p('\0').some((m) => m.includes('NUL'))).toBe(true);
-    expect(problems(bundleOf({ enhanceGuided: `${text};var a = 1 <!-- 2;\n` })).some((m) => m.startsWith('frame/enhance-guided.js: ') && m.includes('HTML comment token'))).toBe(true);
+    expect(problems(bundleOf({ enhanceClassic: `${text};var a = 1 <!-- 2;\n` })).some((m) => m.startsWith('frame/enhance-classic.js: ') && m.includes('HTML comment token'))).toBe(true);
   });
 
   it('a layout bundle that reads a global name outside the bootstrap\'s list fails the build, naming the name: the list is made from the four base scripts and never moves for a layout', () => {
@@ -674,8 +674,8 @@ describe('the build holds every layout asset to the byte rules, the free-global 
 
   it('a bundle that lacks a layout\'s text is a problem named by the file, never a crash', () => {
     const b = bundleOf();
-    const { enhanceReview: _drop, ...rest } = b.texts as Record<string, string>;
+    const { enhanceEditorial: _drop, ...rest } = b.texts as Record<string, string>;
     void _drop;
-    expect(problems({ ...b, texts: rest as Bundle['texts'] }).some((m) => m.startsWith('frame/enhance-review.js: no text was built'))).toBe(true);
+    expect(problems({ ...b, texts: rest as Bundle['texts'] }).some((m) => m.startsWith('frame/enhance-editorial.js: no text was built'))).toBe(true);
   });
 });

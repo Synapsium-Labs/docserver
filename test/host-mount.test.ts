@@ -46,7 +46,7 @@ vi.mock('../src/frame/document.js', async (importOriginal) => {
 let assets: FrameAssets;
 let mermaidText: string;
 /** Each layout besides `default`: the assets its frame inlines in place of the default's (parity Task 9). */
-let layoutAssets: Record<'classic' | 'editorial' | 'review' | 'guided', { enhance: string; layoutCss: string }>;
+let layoutAssets: Record<'classic' | 'editorial', { enhance: string; layoutCss: string }>;
 
 /** jsdom ships no types; its one constructor this file uses, typed here. */
 const { JSDOM } = createRequire(import.meta.url)('jsdom') as { JSDOM: new (html: string) => { readonly window: unknown } };
@@ -61,8 +61,6 @@ beforeAll(async () => {
   layoutAssets = {
     classic: { enhance: built.files.enhanceClassic.text, layoutCss: built.files.cssClassic.text },
     editorial: { enhance: built.files.enhanceEditorial.text, layoutCss: built.files.cssEditorial.text },
-    review: { enhance: built.files.enhanceReview.text, layoutCss: built.files.cssReview.text },
-    guided: { enhance: built.files.enhanceGuided.text, layoutCss: built.files.cssGuided.text },
   };
 }, 300_000);
 
@@ -3178,7 +3176,7 @@ describe('docserver parity T5: adapters.changesBase seeds the comparison base', 
 // ───────── docserver parity T9: the layout adapter ─────────
 
 describe('docserver parity T9: HostAdapters.layout', () => {
-  const OWN = ['classic', 'editorial', 'review', 'guided'] as const;
+  const OWN = ['classic', 'editorial'] as const;
   const srcdocOf = (m: Mounted): string => m.iframe.getAttribute('srcdoc') ?? '';
   /** A srcdoc with its fresh nonce replaced, so two mounts of one document can be compared byte for byte. */
   const fixed = (m: Mounted): string => srcdocOf(m).replace(NONCE_RE, '"nonce":"0"');
@@ -3226,11 +3224,11 @@ describe('docserver parity T9: HostAdapters.layout', () => {
 
   it('a layout with the default layout\'s assets, or the default with a layout\'s, falls back as `assets` with no iframe', () => {
     for (const [name, over] of [
-      ['a layout with the default assets', { layout: 'review' }],
-      ['a layout with its bundle and no stylesheet', { layout: 'review', assets: { ...assets, enhance: layoutAssets.review.enhance } }],
-      ['a layout with another layout\'s stylesheet', { layout: 'review', assets: { ...assets, ...layoutAssets.review, layoutCss: layoutAssets.guided.layoutCss } }],
-      ['the default with a layout\'s bundle', { assets: { ...assets, enhance: layoutAssets.review.enhance } }],
-      ['the default with a stylesheet of its own', { assets: { ...assets, layoutCss: layoutAssets.review.layoutCss } }],
+      ['a layout with the default assets', { layout: 'editorial' }],
+      ['a layout with its bundle and no stylesheet', { layout: 'editorial', assets: { ...assets, enhance: layoutAssets.editorial.enhance } }],
+      ['a layout with another layout\'s stylesheet', { layout: 'editorial', assets: { ...assets, ...layoutAssets.editorial, layoutCss: layoutAssets.classic.layoutCss } }],
+      ['the default with a layout\'s bundle', { assets: { ...assets, enhance: layoutAssets.editorial.enhance } }],
+      ['the default with a stylesheet of its own', { assets: { ...assets, layoutCss: layoutAssets.editorial.layoutCss } }],
     ] as const) {
       const before = iframes();
       const m = mountDocFrameFallback(over);
