@@ -230,6 +230,24 @@ describe('the comparison base: asked of `changes` once, and shown as a compariso
     expect(norm(root.querySelector('.chg-trig .ct-label')?.textContent)).toBe(what(root));
   });
 
+  it('finds the base commit whichever side holds the short sha: a short sha in `info.commits`, or a short base', async () => {
+    const SHORT = BASE.slice(0, 7);
+    const two = (sha: string): { sha: string; subject: string; date: string; parents: string[] }[] => [
+      { sha: HEAD, subject: 'feat: newer change', date: '2026-01-02T10:00:00Z', parents: [sha] },
+      { sha, subject: 'fix: the base commit', date: '2026-01-01T10:00:00Z', parents: ['2345678'] },
+    ];
+    for (const [name, commitSha, base] of [['short commit, full base', SHORT, BASE], ['full commit, short base', BASE, SHORT], ['equal', BASE, BASE]] as const) {
+      const root = mount();
+      await enhance(root, { info: info({ commits: two(commitSha) }), changesBase: base, changes: () => Promise.resolve({ changed: [[1, 1]] }) });
+      await flush();
+      expect(what(root), name).toContain('the base commit');
+    }
+    const other = mount();
+    await enhance(other, { info: info({ commits: two('7654321') }), changesBase: BASE, changes: () => Promise.resolve({ changed: [[1, 1]] }) });
+    await flush();
+    expect(what(other)).toBe('Since your comparison');
+  });
+
   it('is labelled "Since your comparison" when the commits do not name the base', async () => {
     const root = mount();
     await enhance(root, { info: info({ commits: [{ sha: HEAD, subject: 'feat: x', date: '2026-01-02T10:00:00Z', parents: ['2345678'] }, { sha: '3456789', subject: 'fix: y', date: '2026-01-01T10:00:00Z', parents: ['4567890'] }] }), changesBase: BASE, changes: () => Promise.resolve({ changed: [[1, 1]] }) });

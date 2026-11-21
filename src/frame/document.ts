@@ -52,6 +52,7 @@ import {
   FONT_ROLES,
   IMAGE_BUDGET_CHARS,
   isNonce,
+  OPTIONAL_SEED_KEYS,
   SEED_FIELDS_MAX_CHARS,
   SEED_HTML_MAX_CHARS,
   SEED_LIMITS,
@@ -532,11 +533,14 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
     ...(items === undefined ? {} : { items }),
     ...(changesBase === undefined ? {} : { changesBase }),
   };
-  // The vocabulary's words, judged here in full: the bootstrap's validator holds the field to a plain object (src/frame/vocabulary.ts).
-  // The refusal reads as the validator's own, which named this field before the split.
-  if (fields.features.vocabulary !== undefined && !vocabularyOk(fields.features.vocabulary)) invalid('the seed is refused (features.vocabulary)');
   // Every field but the html (judged above, by its own cap) through the bootstrap's own validator.
   const check = validateSeed(fields);
+  // The vocabulary's words are judged here in full (the bootstrap's validator holds the field to a plain object, src/frame/vocabulary.ts),
+  // and refused as the validator's own check did before the split, in its place in the order: a seed with two faults names the first
+  // the old validator reached. It judged `features` after the fields up to `prefs` and `snapshot`, and before `mermaid`, `bridge` and
+  // the optional keys, so a refusal of those later fields gives way to a vocabulary that is not whole.
+  const later = !check.ok && (check.why === 'bridge' || check.why.startsWith('mermaid') || OPTIONAL_SEED_KEYS.includes(check.why));
+  if ((check.ok || later) && fields.features.vocabulary !== undefined && !vocabularyOk(fields.features.vocabulary)) invalid('the seed is refused (features.vocabulary)');
   if (!check.ok) invalid(`the seed is refused (${check.why})`);
   const a: unknown = o.assets;
   if (typeof a !== 'object' || a === null) invalid('assets');

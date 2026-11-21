@@ -49,10 +49,10 @@
     },
     {
       "path": "frame/enhance.js",
-      "sha256": "e689d697bd87fc618f70138fa216615e56fa90ae843c7ea47da1bd2ff5a39346",
-      "bytes": 219814,
+      "sha256": "30b3c8aa8a9d8fa920b5649c3ad8ef09c9ad6f325ecd16b783d6ff63f1a17a90",
+      "bytes": 219849,
       "kind": "script",
-      "csp": "'sha256-5onWl72H/GGPcBOPohZhXlb6kK6EPH6kfaG9L/Wjk0Y='"
+      "csp": "'sha256-MLPIqoqdj6kgtWScOtjvCcmtbzJezRa3g9b/Y/GhepA='"
     },
     {
       "path": "frame/guard.js",

@@ -53,6 +53,9 @@ describeBrowsers((browser) => {
     const { nonce, messages } = await mount((s) => s, 1);
     try {
       expect(messages).toEqual([{ t: 'ready', v: 1, nonce }]);
+      // no late `error` after ready: wait, then exactly the one message is all the frame sent
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(data(await host.record())).toEqual([{ t: 'ready', v: 1, nonce }]);
       expect(host.errors).toEqual([]);
     } finally {
       await host.close().catch(() => undefined);

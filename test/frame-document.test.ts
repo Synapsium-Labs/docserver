@@ -1570,6 +1570,29 @@ describe('features.vocabulary: judged in full on the host side before the bootst
     expect(message(vocabulary)).toBe(REFUSED);
   });
 
+  it('names the first fault the bootstrap\'s validator reached before the split: a vocabulary that is not whole gives way to a fault judged before `features`, and goes before one judged after it', () => {
+    const run = (over: Partial<FrameOptions>, vocabulary: unknown = { qualifiers: [''] }): string => {
+      try {
+        frame(plain(), { ...over, features: { ...(over.features ?? {}), vocabulary } as unknown as FrameFeatures });
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+      return 'no refusal';
+    };
+    const seed = (why: string): string => `frameDocument: the seed is refused (${why})`;
+    // judged before `features`: the earlier fault is named
+    expect(run({ prefs: { theme: 'neon' } as unknown as NonNullable<FrameOptions['prefs']> })).toBe(seed('prefs.theme'));
+    // judged inside `features`, before the vocabulary: the flag and the chrome are named
+    expect(run({ features: { rules: 'yes' } as unknown as FrameFeatures })).toBe(seed('features.rules'));
+    expect(run({ features: { chrome: { bar: 1 } } as unknown as FrameFeatures })).toBe(seed('features.chrome'));
+    // judged after `features`: the vocabulary is named
+    expect(run({ mermaid: { secure: ['1bad'], draw: 'auto' } })).toBe(seed('features.vocabulary'));
+    expect(run({ bridge: { links: 'yes' } as unknown as NonNullable<FrameOptions['bridge']> })).toBe(seed('features.vocabulary'));
+    // the same later faults alone are named as themselves, and a vocabulary that is whole changes nothing
+    expect(run({ mermaid: { secure: ['1bad'], draw: 'auto' } }, {})).toBe(seed('mermaid.secure'));
+    expect(run({ bridge: { links: 'yes' } as unknown as NonNullable<FrameOptions['bridge']> }, {})).toBe(seed('bridge'));
+  });
+
   it('passes a vocabulary the reader takes: every list full, ids false, and none at all', () => {
     expect(message({ ids: false, qualifiers: ['annex'], status: { ok: ['done'] }, ruleIds: { prefixes: ['R'] } })).toBe('no refusal');
     expect(message({ qualifiers: words(200) })).toBe('no refusal');
