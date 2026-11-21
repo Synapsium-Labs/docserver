@@ -473,6 +473,8 @@ describe('many separators in the byline (review 3088 F3)', () => {
   // browser case of a byline with 32 000 separators (test/browser/byline-many.test.ts) holds it in Chromium, where the DOM is
   // linear (CI runs it in WebKit too; its WebKit time is unmeasured locally).
   const byline = (k: number): string => `# T\n\n**Spec** · ${Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
+  /** A parent with more children than this, and connected, is a large live parent. */
+  const LARGE_PARENT = 64;
   const SPIED: readonly [string, object, string][] = [
     ['splitText', Text.prototype, 'splitText'],
     ['appendData', CharacterData.prototype, 'appendData'],
@@ -523,6 +525,65 @@ describe('many separators in the byline (review 3088 F3)', () => {
     expect(big.undone['createRange']).toBeLessThanOrEqual(4);
   }, 120000);
 
+  /**
+   * The DOM writes of an enhance and of its destroy that touch a parent that is connected and holds more than LARGE_PARENT
+   * children, a write being a call of insertBefore, appendChild, removeChild, replaceChild, splitText or a range's deleteContents,
+   * counted for the parent it is called on and, for an insert, for the parent the node leaves. A structural count, never a clock:
+   * WebKit takes time quadratic in such writes to a large live parent, in the build and in the undo (CI, review 3088 F3).
+   */
+  async function largeParentWrites(k: number): Promise<{ build: number; undo: number; facts: number; restored: boolean }> {
+    const md = byline(k);
+    const root = mount(md);
+    const html = root.outerHTML;
+    const before = nodes(root);
+    let count = 0;
+    const large = (p: Node | null): boolean => p !== null && p.isConnected && p.childNodes.length > LARGE_PARENT;
+    type Fn = (...a: unknown[]) => unknown;
+    const spy = (proto: object, key: string, parentsOf: (self: Node, a: unknown[]) => (Node | null)[]) => {
+      const original = (proto as Record<string, Fn>)[key] as Fn;
+      return vi.spyOn(proto as Record<string, Fn>, key).mockImplementation(function (this: unknown, ...a: unknown[]) {
+        if (parentsOf(this as Node, a).some(large)) count += 1;
+        return original.apply(this, a);
+      });
+    };
+    const leaves = (a: unknown[]): Node | null => (a[0] as Node | null | undefined)?.parentNode ?? null;
+    const spies = [
+      spy(Node.prototype, 'insertBefore', (self, a) => [self, leaves(a)]),
+      spy(Node.prototype, 'appendChild', (self, a) => [self, leaves(a)]),
+      spy(Node.prototype, 'removeChild', (self) => [self]),
+      spy(Node.prototype, 'replaceChild', (self, a) => [self, leaves(a)]),
+      spy(Text.prototype, 'splitText', (self) => [self.parentNode]),
+      spy(Range.prototype, 'deleteContents', (self) => [(self as unknown as Range).commonAncestorContainer]),
+    ];
+    try {
+      await enhance(root, infoOf(md));
+      const build = count;
+      const facts = root.querySelectorAll('dl.byline > div').length;
+      count = 0;
+      await destroyEnhancement(root);
+      const after = nodes(root);
+      const restored = root.outerHTML === html && after.length === before.length && after.every((a, i) => a.node === before[i]?.node && a.data === before[i]?.data);
+      return { build, undo: count, facts, restored };
+    } finally {
+      for (const s of spies) s.mockRestore();
+    }
+  }
+
+  it('no write touches a large live parent, to build the byline or to undo it: the count is the same for 500 separators as for 2 000 (review 3088 F3, WebKit cycle 2)', async () => {
+    // The meta paragraph is taken out of the document before it is cut and gathered, and put back after (two journaled moves),
+    // so its tens of thousands of inserts and moves, and their undo, happen on a parent that is not connected. The count is
+    // measured 0 here; the bound is a few, for the document's own writes, and must not follow k.
+    const small = await largeParentWrites(500);
+    const big = await largeParentWrites(2000);
+    expect(small.facts, 'one fact per piece').toBeGreaterThanOrEqual(500);
+    expect(big.facts, 'one fact per piece').toBeGreaterThanOrEqual(2000);
+    expect(small.restored && big.restored, 'destroy restores the same nodes with the same text').toBe(true);
+    expect(big.build, `build: ${String(small.build)} writes for 500 separators, ${String(big.build)} for 2 000`).toBe(small.build);
+    expect(big.undo, `undo: ${String(small.undo)} writes for 500 separators, ${String(big.undo)} for 2 000`).toBe(small.undo);
+    expect(big.build).toBeLessThanOrEqual(4);
+    expect(big.undo).toBeLessThanOrEqual(4);
+  }, 120000);
+
   it('the screen cuts no text left once per separator: the long cuts of the whole enhance return about the byline, for 1 000 separators and for 2 000 (review 3088 F3, WebKit cycle 1)', async () => {
     // As in test/render-print.test.ts: the code units returned by slice/substring/substr on a receiver of 4096 or more are
     // counted, whatever the engine does with a cut (JavaScriptCore may copy one that V8 shares). The pieces are cut once each and
@@ -551,6 +612,150 @@ describe('many separators in the byline (review 3088 F3)', () => {
       `<dl data-docreader-chrome="" class="byline" data-line="3-3">${dt('Date', '2026-10-19')}${dt('Status', 'Draft')}<div data-docreader-chrome=""><dd data-docreader-chrome="">· Owner: a</dd></div><div data-docreader-chrome=""><dd data-docreader-chrome="">b ·</dd></div></dl>`,
     );
     expect(root.querySelector('p[hidden]')?.outerHTML).toBe('<p data-line="3-3" hidden=""><strong>Spec</strong> ·  · Status:  ·   · </p>');
+  });
+});
+
+describe('the meta paragraph is cut and gathered off the document (review 3088 F3, WebKit cycle 2)', () => {
+  // Two journaled moves bracket the byline build: the paragraph goes into a fragment, and comes back before the sibling that
+  // followed it. These cases pin where it goes and returns, that destroy is byte-equal, that no reader of the document runs
+  // while it is out (by code reading: buildByline's window holds only segments, chrome and the journal, and no host callback,
+  // await or query; here by a probe of every write, query and host call in the window), and the paths that skip or take it.
+  const meta = (k: number): string => `# T\n\n**Spec** · ${Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
+  type Fn = (...a: unknown[]) => unknown;
+
+  /** Every insertBefore call whose node is `watch` (what it was called on, before what), in order, for one enhance and its destroy. */
+  async function trace(md: string, pick: (root: HTMLElement) => Element, options: Partial<EnhanceOptions> = {}) {
+    const root = mount(md);
+    const html = root.outerHTML;
+    const before = nodes(root);
+    const watch = pick(root);
+    const home = watch.parentNode;
+    const next = watch.nextSibling;
+    const prev = watch.previousSibling;
+    const calls: { on: Node; before: Node | null; connected: boolean }[] = [];
+    const original = Node.prototype.insertBefore as unknown as Fn;
+    const spy = vi.spyOn(Node.prototype as unknown as Record<string, Fn>, 'insertBefore').mockImplementation(function (this: unknown, ...a: unknown[]) {
+      if (a[0] === watch) calls.push({ on: this as Node, before: a[1] as Node | null, connected: (this as Node).isConnected });
+      return original.apply(this, a);
+    });
+    try {
+      await enhance(root, { ...infoOf(md), ...options });
+      const built = { calls: calls.length, parent: watch.parentNode, prev: watch.previousElementSibling, hidden: watch.hasAttribute('hidden') };
+      await destroyEnhancement(root);
+      const after = nodes(root);
+      return {
+        calls,
+        built,
+        home,
+        next,
+        prev,
+        watch,
+        root,
+        restored: root.outerHTML === html && after.length === before.length && after.every((a, i) => a.node === before[i]?.node && a.data === before[i]?.data),
+        placed: watch.parentNode === home && watch.nextSibling === next && watch.previousSibling === prev,
+      };
+    } finally {
+      spy.mockRestore();
+    }
+  }
+  const metaOf = (root: HTMLElement): Element => root.querySelector('h1')?.nextElementSibling as Element;
+
+  it.each([1, 3, 500])('with %i separators the paragraph goes into a fragment and returns to its exact place, and destroy is byte-equal (1, 2)', async (k) => {
+    const t = await trace(meta(k), metaOf);
+    expect(t.calls.length, 'the paragraph moves four times: out, in, and the two undos').toBe(4);
+    const [out, back, undoBack, undoOut] = t.calls as [(typeof t.calls)[number], (typeof t.calls)[number], (typeof t.calls)[number], (typeof t.calls)[number]];
+    // Out: into a fragment that is not in the document, appended.
+    expect([out.on.nodeType, out.connected, out.before]).toEqual([11, false, null]);
+    // In: the same parent and before the same next sibling it had.
+    expect(back.on).toBe(t.home);
+    expect(back.before).toBe(t.next);
+    // Undo, in reverse: out again (to the same fragment), then home, before the same next sibling.
+    expect(undoBack.on).toBe(out.on);
+    expect([undoBack.connected, undoBack.before]).toEqual([false, null]);
+    expect(undoOut.on).toBe(t.home);
+    expect(undoOut.before).toBe(t.next);
+    expect(t.built.parent, 'built: back in the root').toBe(t.home);
+    expect(t.built.prev?.localName, 'built: right after the title').toBe('h1');
+    expect(t.built.hidden).toBe(true);
+    expect(t.placed, 'destroyed: same parent, same previous and next sibling').toBe(true);
+    expect(t.restored, 'destroyed: every node, its place and its text, the root\'s html byte-equal').toBe(true);
+  }, 120000);
+
+  it('with no separator in a text child (the dot is inside an element) the paragraph takes the same path and is restored', async () => {
+    const t = await trace('# T\n\n**Spec** *a ·* b\n\n## Body\n\nText.\n', metaOf);
+    expect(t.calls.length).toBe(4);
+    expect(t.built.hidden).toBe(true);
+    expect(t.placed && t.restored).toBe(true);
+  });
+
+  it('a document with no meta paragraph moves no paragraph at all, and is restored', async () => {
+    const md = '# T\n\nPlain text, no byline.\n\n## Body\n\nText.\n';
+    const t = await trace(md, (root) => root.querySelector('p') as Element);
+    expect(t.calls).toEqual([]);
+    expect(t.root.querySelector('dl.byline')).toBeNull();
+    expect(t.placed && t.restored).toBe(true);
+  });
+
+  it('while the paragraph is out, no write touches the document, no query reads it and the host is not called', async () => {
+    // The window is from the call that takes the paragraph out to the one that brings it back. Probed: every insert, append and
+    // remove in it has a parent that is not connected; no selector, id, containment or position query runs in it; and a host
+    // callback (itemLink, called for the delta route before and for the byline route after the build) never runs in it.
+    const md = '# T\n\n**Spec** · **Tracker:** AB-1 · Status: Draft\n\n## Body\n\nText.\n';
+    const root = mount(md);
+    const metaP = metaOf(root);
+    let inside = false;
+    const during = { writes: 0, connectedWrites: 0, queries: 0, host: 0, hostSeenOut: 0 };
+    const spies: { mockRestore(): void }[] = [];
+    const wrap = (proto: object, key: string, run: (self: unknown, a: unknown[]) => void): void => {
+      const orig = (proto as Record<string, Fn>)[key] as Fn;
+      spies.push(vi.spyOn(proto as Record<string, Fn>, key).mockImplementation(function (this: unknown, ...a: unknown[]) {
+        run(this, a);
+        return orig.apply(this, a);
+      }));
+    };
+    const write = (self: unknown, a: unknown[]): void => {
+      void a;
+      if (inside) {
+        during.writes += 1;
+        if ((self as Node).isConnected) during.connectedWrites += 1;
+      }
+    };
+    wrap(Node.prototype, 'insertBefore', (self, a) => {
+      if (a[0] === metaP) inside = !inside && !(self as Node).isConnected; // out: a parent not in the document; back: a connected one
+      else write(self, a);
+    });
+    wrap(Node.prototype, 'appendChild', write);
+    wrap(Node.prototype, 'removeChild', write);
+    const query = (): void => {
+      if (inside) during.queries += 1;
+    };
+    for (const key of ['getElementById', 'querySelector', 'querySelectorAll', 'getElementsByTagName', 'getElementsByClassName']) wrap(Document.prototype, key, query);
+    for (const key of ['querySelector', 'querySelectorAll', 'closest', 'matches', 'getElementsByTagName', 'getElementsByClassName', 'contains', 'getRootNode', 'compareDocumentPosition']) {
+      wrap(key === 'closest' || key === 'matches' || key.startsWith('query') || key.startsWith('getElementsBy') ? Element.prototype : Node.prototype, key, query);
+    }
+    const links: string[] = [];
+    try {
+      await enhance(root, {
+        ...infoOf(md),
+        vocabulary: { itemFields: ['Tracker'] },
+        itemLink: (key: string) => {
+          if (inside) during.host += 1;
+          if (!metaP.isConnected) during.hostSeenOut += 1;
+          links.push(key);
+          return `https://items.example/${key}`;
+        },
+      });
+    } finally {
+      for (const s of spies) s.mockRestore();
+    }
+    expect(links, 'the host was called, outside the window').toEqual(['AB-1']);
+    expect(inside, 'the paragraph came back').toBe(false);
+    expect(during.writes, 'the window has writes (the cut and the moves)').toBeGreaterThan(0);
+    expect(during).toEqual({ writes: during.writes, connectedWrites: 0, queries: 0, host: 0, hostSeenOut: 0 });
+    // The result is what the build in place made: the byline, in the same order, and the paragraph hidden right after the title.
+    expect(Array.from(root.querySelectorAll('dl.byline > div')).map((d) => `${text(d.querySelector('dt'))}: ${text(d.querySelector('dd'))}`)).toEqual(['Tracker: AB-1 ↗', 'Status: Draft']);
+    expect(metaP.previousElementSibling?.localName).toBe('h1');
+    expect(metaP.hasAttribute('hidden')).toBe(true);
   });
 });
 

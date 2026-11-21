@@ -74,19 +74,47 @@ async function measure(name: BrowserName, k: number, fragments: number) {
             record[key] = original;
           };
         });
+        // Writes to a large live parent (review 3088 F3, WebKit cycle 2): a call of insertBefore, appendChild, removeChild,
+        // replaceChild, splitText or a range's deleteContents on a connected parent of more than 64 children, or that takes a
+        // node out of one. A structural count: WebKit is quadratic in such writes, in the build and in the undo.
+        let largeWrites = 0;
+        const isLarge = (p: Node | null): boolean => p !== null && p.isConnected && p.childNodes.length > 64;
+        const leaves = (a: unknown[]): Node | null => (a[0] as Node | null | undefined)?.parentNode ?? null;
+        const guards: [object, string, (self: Node, a: unknown[]) => (Node | null)[]][] = [
+          [Node.prototype, 'insertBefore', (self, a) => [self, leaves(a)]],
+          [Node.prototype, 'appendChild', (self, a) => [self, leaves(a)]],
+          [Node.prototype, 'removeChild', (self) => [self]],
+          [Node.prototype, 'replaceChild', (self, a) => [self, leaves(a)]],
+          [Text.prototype, 'splitText', (self) => [self.parentNode]],
+          [Range.prototype, 'deleteContents', (self) => [(self as unknown as Range).commonAncestorContainer]],
+        ];
+        const guardRestores = guards.map(([proto, key, parentsOf]) => {
+          const record = proto as Record<string, (...a: unknown[]) => unknown>;
+          const original = record[key] as (...a: unknown[]) => unknown;
+          record[key] = function (this: unknown, ...a: unknown[]): unknown {
+            if (parentsOf(this as Node, a).some(isLarge)) largeWrites += 1;
+            return original.apply(this, a);
+          };
+          return () => {
+            record[key] = original;
+          };
+        });
         const before = api.root.innerHTML;
         const t0 = performance.now();
         const outcome = await api.enhance();
         const enhanceMs = performance.now() - t0;
         const enhanced = { ...calls };
+        const largeBuild = largeWrites;
+        largeWrites = 0;
         const facts = api.root.querySelectorAll('dl.byline > div').length;
         for (const key of Object.keys(calls)) calls[key] = 0;
         const t1 = performance.now();
         await api.destroy();
         const destroyMs = performance.now() - t1;
         const undone = { ...calls };
-        for (const restore of originals) restore();
-        return { texts, outcome, enhanced, undone, facts, restored: api.root.innerHTML === before, enhanceMs, destroyMs };
+        const largeUndo = largeWrites;
+        for (const restore of [...originals, ...guardRestores]) restore();
+        return { texts, outcome, enhanced, undone, facts, restored: api.root.innerHTML === before, enhanceMs, destroyMs, largeBuild, largeUndo };
       },
       fragments,
     );
@@ -106,6 +134,10 @@ function expectBounded(out: Awaited<ReturnType<typeof measure>>, k: number, back
   expect(out.undone['createRange']).toBeGreaterThanOrEqual(1);
   expect(out.undone['createRange']).toBeLessThanOrEqual(out.texts);
   expect(out.restored).toBe(true);
+  // The meta paragraph is cut and gathered off the document, so no write touches a large live parent, to build or to undo:
+  // a count that is a constant (measured 0), not k. WebKit's time was quadratic in exactly these writes (CI, WebKit cycle 2).
+  expect(out.largeBuild, 'writes to a large live parent while building').toBeLessThanOrEqual(4);
+  expect(out.largeUndo, 'writes to a large live parent while undoing').toBeLessThanOrEqual(4);
   // A backstop, not the bound: the old loop took many seconds here.
   expect(out.enhanceMs).toBeLessThan(backstopMs);
   expect(out.destroyMs).toBeLessThan(backstopMs);

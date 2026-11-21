@@ -539,6 +539,15 @@ function buildByline(ctx: FeatureContext, h1: Element, minutes: number, delta: D
 
   const metaP = metaParagraph(h1);
   if (metaP !== null) {
+    // The paragraph is cut and gathered off the document, so no write touches a large connected parent (review 3088 F3, WebKit
+    // cycle 2: tens of thousands of inserts and moves in a live paragraph were quadratic in WebKit, in the build and in the undo).
+    // Two journaled moves bracket the work: one takes it out of its parent into a fragment, one puts it back before the sibling
+    // that followed it. Undo runs in reverse: the second move's undo takes it out again, the per-fact moves and the cut are undone
+    // while it is off the document, and the first move's undo puts it back. Nothing in between calls the host, so nothing else
+    // can touch the parent meanwhile; a throw in between leaves the first move's undo to put it back.
+    const home = metaP.parentNode as Node;
+    const homeNext = metaP.nextSibling;
+    journal.move(metaP, doc.createDocumentFragment(), null);
     const segs = segments(metaP, journal);
     const first = (segs[0] ?? []).filter((n) => !isBlank(n));
     const lone = first[0];
@@ -580,6 +589,7 @@ function buildByline(ctx: FeatureContext, h1: Element, minutes: number, delta: D
     const line = metaP.getAttribute('data-line');
     if (line !== null) byline.setAttribute('data-line', line);
     journal.setAttribute(metaP, 'hidden', '');
+    journal.move(metaP, home, homeNext);
   }
 
   /** Where a fact goes ahead of the wide ones: before the first, or last. */
