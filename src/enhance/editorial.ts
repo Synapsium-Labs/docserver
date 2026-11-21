@@ -57,8 +57,8 @@
 //
 // The "Headlines | Full" switch of "In short" (parity Task 5; `features.inShort`, default off, so a host that asks for nothing
 // gets the box as it always was): a `div.short-view` of two buttons, "Headlines" and "Full", `aria-pressed` on the chosen
-// one. Headlines shows the lead of each item of the box's lists, the first strong run, else the first sentence, and hides the
-// rest (a `span.rest` the box's `headlines` class and the `hidden` attribute both hide, so it is out of view and out of the
+// one. Headlines shows the lead of each item of the box's lists, the first strong run, else the first sentence (in a loose list, an item
+// with no strong run shows its whole first paragraph), and hides the rest (a `span.rest` the box's `headlines` class and the `hidden` attribute both hide, so it is out of view and out of the
 // accessibility tree); an item with no lead to cut at keeps all its text. The rest is wrapped, never re-typed (journal.wrap,
 // journal.split). The choice is the reader-wide UI memory's `inshort` field ('headlines' or 'full'; Full by default).
 //
