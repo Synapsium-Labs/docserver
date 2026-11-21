@@ -248,6 +248,18 @@ describe('the comparison base: asked of `changes` once, and shown as a compariso
     expect(what(other)).toBe('Since your comparison');
   });
 
+  it('an upper-case commit sha still names the base, and a commit sha under 7 characters never reaches the label (the options check refuses it; baseLabel keeps its own floor of 7 as defence in depth)', async () => {
+    const two = (sha: string): { sha: string; subject: string; date: string; parents: string[] }[] => [
+      { sha: HEAD, subject: 'feat: newer change', date: '2026-01-02T10:00:00Z', parents: [sha] },
+      { sha, subject: 'fix: the base commit', date: '2026-01-01T10:00:00Z', parents: ['2345678'] },
+    ];
+    await expect(enhance(mount(), { info: info({ commits: two(BASE.slice(0, 3)) }), changesBase: BASE, changes: () => Promise.resolve({ changed: [[1, 1]] }) })).rejects.toThrow(/7 to 40 hex/);
+    const upper = mount();
+    await enhance(upper, { info: info({ commits: two(BASE.slice(0, 9).toUpperCase()) }), changesBase: BASE, changes: () => Promise.resolve({ changed: [[1, 1]] }) });
+    await flush();
+    expect(what(upper)).toContain('the base commit');
+  });
+
   it('is labelled "Since your comparison" when the commits do not name the base', async () => {
     const root = mount();
     await enhance(root, { info: info({ commits: [{ sha: HEAD, subject: 'feat: x', date: '2026-01-02T10:00:00Z', parents: ['2345678'] }, { sha: '3456789', subject: 'fix: y', date: '2026-01-01T10:00:00Z', parents: ['4567890'] }] }), changesBase: BASE, changes: () => Promise.resolve({ changed: [[1, 1]] }) });

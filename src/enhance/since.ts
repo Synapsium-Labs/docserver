@@ -421,7 +421,11 @@ function attachPicker(ctx: FeatureContext, state: SinceState): void {
 
 /** The label of a seeded comparison: "Since" the base commit's subject when `info.commits` names it, else "Since your comparison". */
 function baseLabel(ctx: FeatureContext, base: string): string {
-  const entry = (ctx.info.commits ?? []).find((commit) => commit.sha === base.toLowerCase() || (base.length >= 7 && commit.sha.startsWith(base.toLowerCase())) || base.toLowerCase().startsWith(commit.sha));
+  const low = base.toLowerCase();
+  const entry = (ctx.info.commits ?? []).find((commit) => {
+    const sha = commit.sha.toLowerCase();
+    return sha === low || (low.length >= 7 && sha.startsWith(low)) || (sha.length >= 7 && low.startsWith(sha));
+  });
   if (entry === undefined) return 'Since your comparison';
   const subject = ctx.text.clip(entry.subject.replace(ctx.vocab.commitPrefix, '').trim() || entry.sha.slice(0, 7), SUBJECT_MAX);
   return `Since ${subject}`;
