@@ -12,6 +12,26 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('shows phone chips and opens the contents drawer on narrow screens', async () => {
+    const doc = await openDoc(DOC, {}, { browser, layout: 'classic', viewport: { width: 412, height: 915 } });
+    try {
+      expect(await doc.page.locator('nav.chips a').count()).toBe(4);
+      await doc.page.locator('.toc-btn').click();
+      expect(await doc.page.locator('.doc-toc').isVisible()).toBe(true);
+      await doc.page.keyboard.press('Escape');
+      expect(await doc.page.locator('.doc-toc').isVisible()).toBe(false);
+      expect(await doc.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    } finally { await doc.close(); }
+  });
+
+  it('shows desktop contents and hides phone chips', async () => {
+    const doc = await openDoc(DOC, {}, { browser, layout: 'classic', viewport: { width: 1280, height: 800 } });
+    try {
+      expect(await doc.page.locator('.doc-toc').isVisible()).toBe(true);
+      expect(await doc.page.locator('nav.chips').isVisible()).toBe(false);
+    } finally { await doc.close(); }
+  });
+
   it('classic keeps the original header without editorial byline or facts', async () => {
     const doc = await openDoc(DOC, {}, { browser, layout: 'classic' });
     try {

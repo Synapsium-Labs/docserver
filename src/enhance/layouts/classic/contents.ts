@@ -16,6 +16,16 @@ export function build(ctx: FeatureContext): void {
   const rail = chrome(doc, 'nav', { className: 'doc-toc', attrs: { id, 'aria-label': 'Contents' } }, [head, list]);
   const button = chrome(doc, 'button', { className: 'toc-btn', text: 'Contents', attrs: { type: 'button', 'aria-controls': id, 'aria-expanded': 'false' } });
   const scrim = chrome(doc, 'div', { className: 'toc-scrim', attrs: { hidden: '' } });
+  const chips = chrome(doc, 'nav', { className: 'chips', attrs: { 'aria-label': 'Sections' } });
+  for (const heading of headings.filter((h) => h.localName === 'h2')) {
+    chips.append(chrome(doc, 'a', { text: headingText(heading, (el) => el.hasAttribute('data-docreader-chrome')), attrs: { href: `#${heading.id}` } }));
+  }
+  const title = root.querySelector('h1');
+  if (title !== null && title.parentNode === root) {
+    const next = title.nextElementSibling;
+    const after = next?.localName === 'p' ? next : title;
+    journal.insert(chips, root, after.nextSibling);
+  }
   const items = new Map<HTMLElement, { anchor: HTMLAnchorElement; top: HTMLLIElement }>();
   let top: HTMLLIElement | null = null;
   let sub: HTMLUListElement | null = null;
@@ -58,6 +68,12 @@ export function build(ctx: FeatureContext): void {
     collapse.focus({ preventScroll: true });
   };
   journal.listen(button, 'click', () => { if (opened) close(); else open(); });
+  ctx.commands.register('contents', () => {
+    if (opened) { close(); return true; }
+    if (ctx.env.viewport().w >= 1240 || ctx.overlays.any()) return false;
+    open();
+    return true;
+  });
   journal.listen(scrim, 'click', close);
   journal.listen(rail, 'keydown', (event) => { if ((event as KeyboardEvent).key === 'Escape' && opened) { event.preventDefault(); close(); } });
   journal.listen(rail, 'click', (event) => {

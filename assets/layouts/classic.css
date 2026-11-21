@@ -1,2 +1,24 @@
-/* classic layout: provisional stylesheet (docserver parity Task 9). Every rule is scoped under the layout's mark, which the layout builds first; no font of its own, and colours only from the reader's tokens. The layout's own rules arrive with its task. */
-[data-docreader-root][data-docreader-layout="classic"] { --docreader-layout: classic; }
+/* Classic contents and reading cues use the host's reader slots. */
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc { overflow-y: auto; border-right: 1px solid var(--border); }
+[data-docreader-root][data-docreader-layout="classic"] .toc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 8px 10px; }
+[data-docreader-root][data-docreader-layout="classic"] .toc-title { color: var(--text-muted); font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+[data-docreader-root][data-docreader-layout="classic"] .toc-head button { font: inherit; font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); cursor: pointer; }
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc a { display: block; padding: 5px 9px; border-left: 2px solid transparent; border-radius: 7px; color: var(--text-muted); text-decoration: none; overflow-wrap: anywhere; }
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc a:hover, [data-docreader-root][data-docreader-layout="classic"] .doc-toc a.active { color: var(--text); background: var(--surface); }
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc a.active { border-left-color: var(--accent); font-weight: 600; }
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc ul ul { display: none; margin: 2px 0 6px; }
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc li.open > ul { display: block; }
+[data-docreader-root][data-docreader-layout="classic"] .doc-toc ul ul a { padding-left: 30px; font-size: 12.5px; }
+[data-docreader-root][data-docreader-layout="classic"] .chips { display: none; }
+@media screen and (max-width: 700px) {
+  [data-docreader-root][data-docreader-layout="classic"] .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+  [data-docreader-root][data-docreader-layout="classic"] .chips a { max-width: 100%; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-docreader-root][data-docreader-layout="classic"] .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+  [data-docreader-root][data-docreader-layout="classic"] .reveal.in { opacity: 1; transform: none; }
+}
+@media print {
+  [data-docreader-root][data-docreader-layout="classic"] .chips { display: none; }
+  [data-docreader-root][data-docreader-layout="classic"] .reveal { opacity: 1; transform: none; }
+}

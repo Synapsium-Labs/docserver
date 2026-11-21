@@ -49,10 +49,10 @@
     },
     {
       "path": "frame/enhance-classic.js",
-      "sha256": "2a10ecbffad1fa9e6a8bb02348b0e4204508eb214a14d332748dc311146e5a59",
-      "bytes": 185991,
+      "sha256": "a8677afa88981c7d453b64c7252bacb1f038b3bcda88f0847c2bcafdc8ae1d47",
+      "bytes": 140483,
       "kind": "script",
-      "csp": "'sha256-KhDsv/rR+p5qi7AjSLDkIEUI6yFKFNMydI3DERRuWlk='",
+      "csp": "'sha256-qGd6+oiYHH1FO2THJSussfA4s7zaiPCEfCvK/ciuHUc='",
       "layout": "classic"
     },
     {
@@ -80,8 +80,8 @@
     },
     {
       "path": "frame/layout-classic.css",
-      "sha256": "35e27161e1cb49c2f0d3410e2cbc4eb46e9e68dd6a765c951f46180a94f0f42d",
-      "bytes": 345,
+      "sha256": "dd98a53f3a14b5ae397dde26258d6b146ea1de6ab35b2e1f14a7408aa6f94393",
+      "bytes": 2687,
       "kind": "style",
       "layout": "classic"
     },
@@ -100,8 +100,8 @@
     },
     {
       "path": "layouts/classic.css",
-      "sha256": "35e27161e1cb49c2f0d3410e2cbc4eb46e9e68dd6a765c951f46180a94f0f42d",
-      "bytes": 345,
+      "sha256": "dd98a53f3a14b5ae397dde26258d6b146ea1de6ab35b2e1f14a7408aa6f94393",
+      "bytes": 2687,
       "kind": "style",
       "layout": "classic"
     },
