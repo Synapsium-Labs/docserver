@@ -386,6 +386,7 @@ The final whole-branch review (base e10182f) found four important points and eig
 
 ### Known limits
 
+- **Safari: a byline with very many separators is slow.** In WebKit, building the screen's byline and undoing it grow faster than linearly in the number of its separators. CI measured, at 4 000 and 10 000 separators: build 0.47 to 0.59 s and 1.7 to 2.4 s, undo 0.52 to 0.72 s and 2.6 to 5.2 s. Chromium builds 32 000 in 1.3 s and undoes them in 0.07 s. A byline of the size real documents have (tens of separators) is not affected. Two fixes did not make it linear: a separator scan that never slices the remaining text, and a build and undo done with the paragraph off the document. The cause inside WebKit is not identified; it needs a WebKit run, which the box that built this landing cannot do (review 3088 F3; the coordinator's ruling of 2026-11-21).
 - When `printFigures()` interrupts a print run, any figure of the earlier run still in flight lands in the new run under its index and the new run's own copy replaces it, with no refusal; once a mount's run has been interrupted, every later run behaves this way too (review 3081 F2). The limits, in the coordinator's wording of 2026-11-21:
   - (a) If the new run skips an index (a figure it could not draw), the earlier copy of that index stays, in the earlier colours if the appearance changed in between.
   - (b) A reprint can cost refusals in two cases only, and refusals never decay on a mount:
@@ -396,6 +397,7 @@ The final whole-branch review (base e10182f) found four important points and eig
 
 ### Open follow-ups (for the library's next wave)
 
+- Find and remove WebKit's superlinear cost in the screen's byline build and undo (the Safari limit above), measured on a WebKit run, with the CI timing lines of `test/browser/byline-many.test.ts` as the baseline.
 - The free-globals comparison is sensitive to which minified name an alias gets: Tasks 3 and 6 both met the `window` and `document` tie. An alias-insensitive comparison would end the search for code shapes.
 - What stays open of the race the host causes (a stale figure after its own reprint): the first stale copy of an index no longer counts as a frame refusal (review 3081 F2, host-side), but the host still cannot tell a stale figure of a cancelled run from a figure of the frame's own, so the two cases of limit (b) above (the oversize edge, and three runs' figures in flight) remain refusals counted toward the sixteen. A run token on the wire would tell them apart; it was declined for this landing as beyond the design's ops.
 - The comparison-base recording rule is ambiguous on the wire: the frame sends `changes` for the last-visit measure and for day views too, so a host cannot tell, from the call alone, a comparison the reader chose.
