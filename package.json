@@ -58,6 +58,7 @@
     "conformance/DEPARTURES.json",
     "conformance/bridge-cases.json",
     "conformance/frame-mutants",
+    "conformance/print",
     "LICENSE",
     "README.md"
   ],

@@ -5,13 +5,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { render } from '../src/render/index.js';
-import { all, attr, el, KEPT_ATTRS, parse, serialize, setAttr, text, type ElN } from '../src/render/print/tree.js';
-import { emitted, fixture, fixtureNames, inputs, PRINT, ROOT } from './print-vocabulary.js';
+import { all, attr, el, KEPT_ATTRS, KEPT_IMG_ATTRS, parse, probe, serialize, setAttr, text, type ElN } from '../src/render/print/tree.js';
+import { emitted, FAMILIES, fixture, fixtureNames, highlightSubScopeClasses, inFamily, inputs, PRINT, ROOT } from './print-vocabulary.js';
 
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
 
 describe('conformance/print/vocabulary.json', () => {
-  const file = JSON.parse(read('conformance/print/vocabulary.json')) as { elements: string[]; classes: string[] };
+  const file = JSON.parse(read('conformance/print/vocabulary.json')) as { elements: string[]; classes: string[]; families: string[] };
 
   it('lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)', () => {
     const now = emitted();
@@ -21,25 +21,44 @@ describe('conformance/print/vocabulary.json', () => {
 
   it('is sorted, without repeats, and names the print root and each class of the strip and the plan marks', () => {
     expect(file.classes).toEqual([...new Set(file.classes)].sort());
-    for (const c of ['docreader-print', 'review-strip', 'rs-wait', 'rs-label', 'rs-facts', 'fact', 'cnt', 'sep', 'task-id', 'tmeta', 'step-no', 'who', 'attn', 'yours', 'sec-no', 'eyebrow', 'byline', 'pill', 'rule-head']) {
+    for (const c of ['docreader-print', 'review-strip', 'rs-wait', 'rs-label', 'rs-facts', 'fact', 'cnt', 'sep', 'task-id', 'tmeta', 'step-no', 'who', 'attn', 'yours', 'sec-no', 'eyebrow', 'byline', 'pill', 'rule-head', 'task-check']) {
       expect(file.classes).toContain(c);
     }
     expect(file.elements).not.toContain('input');
     expect(file.elements).not.toContain('script');
   });
+
+  it('is complete for what the consumer derives from it: every alert kind, every heading level, and every class print emits is listed or in a family (P7an)', () => {
+    for (const k of ['note', 'tip', 'important', 'warning', 'caution']) expect(file.classes).toContain(`gh-${k}`);
+    for (const h of ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']) expect(file.elements).toContain(h);
+    for (const c of emitted().all) expect(file.classes.includes(c) || file.families.some((f) => c.startsWith(f)), c).toBe(true);
+  });
+
+  it('declares two open families, hljs- and language-, and no other: no listed class is in one, and no other family is declared (P7ao)', () => {
+    expect(file.families).toEqual(['hljs-', 'language-']);
+    expect(file.families).toEqual([...FAMILIES]);
+    expect(file.classes.filter(inFamily)).toEqual([]);
+    expect(file.classes).toContain('hljs');
+    // What highlight.js writes besides the families is finite for the languages registered: its sub-scope classes are listed.
+    expect(highlightSubScopeClasses()).toEqual(expect.arrayContaining(['function_', 'class_', 'prompt_']));
+    for (const c of highlightSubScopeClasses()) expect(file.classes).toContain(c);
+  });
 });
 
 describe('the attributes and the elements', () => {
-  it('writes no attribute but class, id, data-line, open, colspan, rowspan, align, alt, title and href, over the corpus', () => {
+  it('writes no attribute but class, id, data-line, open, colspan, rowspan, align, alt, title and href, and an img\'s src, over the corpus', () => {
     expect(KEPT_ATTRS).toEqual(['class', 'id', 'data-line', 'open', 'colspan', 'rowspan', 'align', 'alt', 'title', 'href']);
+    expect(KEPT_IMG_ATTRS).toEqual(['src']);
     const seen = new Set<string>();
+    const onImg = new Set<string>();
     for (const md of inputs()) {
       const r = render(md, PRINT);
       if (r.outcome !== 'rendered') continue;
-      for (const e of all(parse(r.html), () => true)) for (const [k] of e.attrs) seen.add(k);
+      for (const e of all(parse(r.html), () => true)) for (const [k] of e.attrs) (k === 'src' ? onImg : seen).add(k === 'src' ? e.name : k);
     }
     for (const k of seen) expect(KEPT_ATTRS).toContain(k);
-    expect([...seen].sort()).toEqual(expect.arrayContaining(['class', 'id', 'data-line', 'open', 'href']));
+    expect([...seen].sort()).toEqual(expect.arrayContaining(['class', 'id', 'data-line', 'open', 'href', 'alt']));
+    expect([...onImg]).toEqual(['img']);
   });
 
   it('writes no hidden attribute even from a node that has one (P7d), and no event handler or style', () => {
@@ -48,6 +67,18 @@ describe('the attributes and the elements', () => {
     setAttr(e, 'onclick', 'x()');
     setAttr(e, 'style', 'color:red');
     expect(serialize(e)).toBe('<span class="x">t</span>');
+  });
+
+  it('keeps src on an img only, and on no other element (P7ap)', () => {
+    const img = el('img');
+    setAttr(img, 'src', 'a.png');
+    setAttr(img, 'alt', 'x');
+    expect(serialize(img)).toBe('<img src="a.png" alt="x" />');
+    for (const name of ['a', 'span', 'div', 'script', 'iframe', 'input', 'td']) {
+      const e = el(name);
+      setAttr(e, 'src', 'a.png');
+      expect(serialize(e)).not.toContain('src');
+    }
   });
 
   it('turns a table\'s text-align style into align, a checkbox into the text of its box, and opens every details', () => {
@@ -178,8 +209,35 @@ describe('assets/print.css', () => {
 });
 
 describe('the fixtures', () => {
-  it('are the five of the plan: the section 6 plan and one per block group', () => {
-    expect(fixtureNames()).toEqual(['boxes', 'plan', 'rules', 'status', 'title']);
+  it('are the section 6 plan, one per block group, the alerts and the plain blocks', () => {
+    expect(fixtureNames()).toEqual(['alerts', 'blocks', 'boxes', 'plan', 'rules', 'status', 'title']);
     expect(fixture('plan')).toContain('### Waiting on you');
+  });
+});
+
+describe('the cost of print mode is linear in the document', () => {
+  /** A document of `n` blocks with every kind of walk in it: a long box, many sections, a long Waiting box, tasks and steps. */
+  const big = (n: number): string => {
+    const lines = ['# Big', '', '**Spec** · 2026-11-20 · Status: Draft', '', '## In short', ''];
+    for (let i = 0; i < n; i += 1) lines.push(`Paragraph ${String(i)}.`, '');
+    lines.push('## 1. Tasks', '', '### Task 1: Many', '');
+    for (let i = 0; i < n; i += 1) lines.push(`- [ ] **Step ${String(i + 1)} (you):** do it`);
+    lines.push('', '## 2. Table', '', '| ID | Status |', '|---|---|');
+    for (let i = 0; i < Math.min(n, 500); i += 1) lines.push(`| R${String(i)} | Agreed |`);
+    lines.push('', '## 3. End', '', 'x', '', '## Where things stand', '', '### Waiting on you', '');
+    for (let i = 0; i < n; i += 1) lines.push(`- item ${String(i)}`);
+    lines.push('', '### Agreed', '', '- one', '');
+    return lines.join('\n');
+  };
+
+  it('looks at no sibling position past a node\'s own but a few: a walk over N blocks costs O(N), not O(N squared) (P7am)', () => {
+    for (const n of [1000, 4000]) {
+      const md = big(n);
+      probe.scans = 0;
+      const r = render(md, PRINT);
+      expect(r.outcome).toBe('rendered');
+      expect(r.html).toContain('class="review-strip"');
+      expect(probe.scans, `n = ${String(n)}`).toBeLessThan(n);
+    }
   });
 });

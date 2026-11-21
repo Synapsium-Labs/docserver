@@ -14,12 +14,12 @@ import { PLAN_FACT_MIN_STEPS } from '../src/render/print/strip.js';
 import { printVocab } from '../src/render/print/vocab.js';
 import { checkReader } from '../src/render/reader.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
+import { pinned } from './print-vocabulary.js';
 
 const ROOT = process.cwd();
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
-const NAMES = ['plan', 'title', 'boxes', 'status', 'rules'] as const;
+const NAMES = ['plan', 'title', 'boxes', 'status', 'rules', 'alerts', 'blocks'] as const;
 const PRINT = { print: true, reader: { rules: true } } as const;
-const pinned = (html: string): string => `${html.replace(/></g, '>\n<')}\n`;
 
 const dom = (html: string): Document => new DOMParser().parseFromString(`<!doctype html><body>${html}`, 'text/html');
 const q = (d: ParentNode, sel: string): Element[] => Array.from(d.querySelectorAll(sel));
@@ -138,6 +138,21 @@ describe('section 6 fixture: a plan of three tasks, the reader as an owner, a Wa
 });
 
 describe('the block groups', () => {
+  it('alerts: every kind render emits keeps its class (gh-note, gh-tip, gh-important, gh-warning, gh-caution) and its title', () => {
+    const d = printed('alerts');
+    expect(q(d, 'div.gh-alert').map((a) => a.className)).toEqual(['gh-alert gh-note', 'gh-alert gh-tip', 'gh-alert gh-important', 'gh-alert gh-warning', 'gh-alert gh-caution']);
+    expect(q(d, 'p.gh-alert-title').map((t) => t.textContent)).toEqual(['Note', 'Tip', 'Important', 'Warning', 'Caution']);
+  });
+
+  it('an image keeps its src, as render wrote it, with its alt and title; a link keeps its href', () => {
+    const d = printed('boxes');
+    const img = q(d, 'img')[0] as Element;
+    expect(img.getAttribute('src')).toBe('pictures/one.png');
+    expect([img.getAttribute('alt'), img.getAttribute('title')]).toEqual(['A picture', 'Title']);
+    expect(q(d, 'a').map((a) => a.getAttribute('href'))).toEqual(['https://example.com/a']);
+    expect(q(d, '[src]').map((e) => e.localName)).toEqual(['img']);
+  });
+
   it('title: the eyebrow, the byline with its reading time, and the facts panel from the front matter', () => {
     const d = printed('title');
     expect(q(d, 'div.eyebrow > span').map((s) => s.textContent)).toEqual(['Spec', 'Design', 'Docs']);

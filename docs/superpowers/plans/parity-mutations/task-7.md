@@ -625,3 +625,188 @@ Each row was measured in place: the bytes of the file saved with their sha256, o
   }
 ]
 ```
+
+## Review round 1 (docserver parity T7)
+
+Measured the same way, in place, at the state of the round-1 commit (the files of rows P7a to P7al were edited in this round only where the rows below say; their sha256 above are of the first commit). Rows P7am to P7aw are this round's. The sha256 of each file as restored: `conformance/print/vocabulary.json` `e41c3fc8166003b0f7f24538b7972a24db5a01d11e57c7fa4781ee1f17a45297`, `package.json` `0c0f4e8a777d6a95756393cd8f28e70415d6b2e7d1674f27b652c8a0dc3ec92e`, `src/render/print/index.ts` `80523df599d7842815cbe57907ed8bbc2bdf0b0a7e0ab52f7d806e5149f98c73`, `src/render/print/tree.ts` `04265aafe2be61f64b9d77f5374fed2b8df39331ae3831d864e4b98de7e70493`, `test/pack.test.ts` `e1bf60b9a1d68388d0d308d44b9b72c8a624286b4c049b9b6d8e74f2dd3ffc43`.
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| P7am | print is linear in the block count (sibling walks keep their position) | the position hint ignored, so each walk step scans from the start | `src/render/print/tree.ts` | red: 1 failed \| 17 passed (18). the cost of print mode is linear in the document looks at no sibling position past a node's own but a few: a w |
+| P7an | vocabulary.json holds every alert kind | gh-caution dropped from the file | `conformance/print/vocabulary.json` | red: 2 failed \| 16 passed (18). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7ao | only two open class families | a third family declared | `conformance/print/vocabulary.json` | red: 1 failed \| 17 passed (18). conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed cla |
+| P7ap | src on an img only | src kept on every element | `src/render/print/tree.ts` | red: 1 failed \| 79 passed (80). the attributes and the elements keeps src on an img only, and on no other element (P7ap) |
+| P7aq | an img keeps its src | src not kept | `src/render/print/tree.ts` | red: 4 failed \| 76 passed (80). the attributes and the elements writes no attribute but class, id, data-line, open, colspan, rowspan, align, a |
+| P7ar | a task's checkbox prints as span.task-check | the box's text not written | `src/render/print/index.ts` | red: 5 failed \| 75 passed (80). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7as | the open families are declared | language- dropped from the families | `conformance/print/vocabulary.json` | red: 2 failed \| 16 passed (18). conformance/print/vocabulary.json is complete for what the consumer derives from it: every alert kind, every h |
+| P7at | highlight.js's sub-scope classes are listed | function_ dropped from the file | `conformance/print/vocabulary.json` | red: 3 failed \| 15 passed (18). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7au | the package ships conformance/print | conformance/print left out of `files` | `package.json` | red: 1 failed \| 14 passed (15). npm pack holds the six entries with their types, the corpus files, the licence, the readme, the assets and the |
+| P7av | pack allows assets/print.css and no unnamed file | the print.css pattern removed from ALLOWED | `test/pack.test.ts` | red: 1 failed \| 14 passed (15). npm pack holds nothing else: no references, scripts, sources, tests, CI files or working papers |
+| P7aw | dist/render/print is shipped and allowed | the dist/render/print pattern removed from ALLOWED | `test/pack.test.ts` | red: 1 failed \| 14 passed (15). npm pack holds nothing else: no references, scripts, sources, tests, CI files or working papers |
+
+```json
+[
+  {
+    "id": "P7am",
+    "guard": "print is linear in the block count (sibling walks keep their position)",
+    "edit": "the position hint ignored, so each walk step scans from the start",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 17,
+    "total": 18,
+    "red": [
+      "the cost of print mode is linear in the document looks at no sibling position past a node's own but a few: a walk over N blocks costs O(N), not O(N squared) (P7am)"
+    ]
+  },
+  {
+    "id": "P7an",
+    "guard": "vocabulary.json holds every alert kind",
+    "edit": "gh-caution dropped from the file",
+    "file": "conformance/print/vocabulary.json",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 16,
+    "total": 18,
+    "red": [
+      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)",
+      "conformance/print/vocabulary.json is complete for what the consumer derives from it: every alert kind, every heading level, and every class print emits is listed or in a family (P7an)"
+    ]
+  },
+  {
+    "id": "P7ao",
+    "guard": "only two open class families",
+    "edit": "a third family declared",
+    "file": "conformance/print/vocabulary.json",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 17,
+    "total": 18,
+    "red": [
+      "conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed class is in one, and no other family is declared (P7ao)"
+    ]
+  },
+  {
+    "id": "P7ap",
+    "guard": "src on an img only",
+    "edit": "src kept on every element",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts test/render-print.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 79,
+    "total": 80,
+    "red": [
+      "the attributes and the elements keeps src on an img only, and on no other element (P7ap)"
+    ]
+  },
+  {
+    "id": "P7aq",
+    "guard": "an img keeps its src",
+    "edit": "src not kept",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts test/render-print.test.ts",
+    "rc": 1,
+    "failed": 4,
+    "passed": 76,
+    "total": 80,
+    "red": [
+      "the attributes and the elements writes no attribute but class, id, data-line, open, colspan, rowspan, align, alt, title and href, and an img's src, over the corpus",
+      "the attributes and the elements keeps src on an img only, and on no other element (P7ap)",
+      "the pinned output boxes: render(\u2026, { print: true, reader: { rules: true } }) is conformance/print/boxes.html"
+    ]
+  },
+  {
+    "id": "P7ar",
+    "guard": "a task's checkbox prints as span.task-check",
+    "edit": "the box's text not written",
+    "file": "src/render/print/index.ts",
+    "tests": "test/print-surface.test.ts test/render-print.test.ts",
+    "rc": 1,
+    "failed": 5,
+    "passed": 75,
+    "total": 80,
+    "red": [
+      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)",
+      "the attributes and the elements turns a table's text-align style into align, a checkbox into the text of its box, and opens every details",
+      "the pinned output plan: render(\u2026, { print: true, reader: { rules: true } }) is conformance/print/plan.html"
+    ]
+  },
+  {
+    "id": "P7as",
+    "guard": "the open families are declared",
+    "edit": "language- dropped from the families",
+    "file": "conformance/print/vocabulary.json",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 16,
+    "total": 18,
+    "red": [
+      "conformance/print/vocabulary.json is complete for what the consumer derives from it: every alert kind, every heading level, and every class print emits is listed or in a family (P7an)",
+      "conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed class is in one, and no other family is declared (P7ao)"
+    ]
+  },
+  {
+    "id": "P7at",
+    "guard": "highlight.js's sub-scope classes are listed",
+    "edit": "function_ dropped from the file",
+    "file": "conformance/print/vocabulary.json",
+    "tests": "test/print-surface.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 15,
+    "total": 18,
+    "red": [
+      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)",
+      "conformance/print/vocabulary.json is complete for what the consumer derives from it: every alert kind, every heading level, and every class print emits is listed or in a family (P7an)",
+      "conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed class is in one, and no other family is declared (P7ao)"
+    ]
+  },
+  {
+    "id": "P7au",
+    "guard": "the package ships conformance/print",
+    "edit": "conformance/print left out of `files`",
+    "file": "package.json",
+    "tests": "test/pack.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 14,
+    "total": 15,
+    "red": [
+      "npm pack holds the six entries with their types, the corpus files, the licence, the readme, the assets and their notices"
+    ]
+  },
+  {
+    "id": "P7av",
+    "guard": "pack allows assets/print.css and no unnamed file",
+    "edit": "the print.css pattern removed from ALLOWED",
+    "file": "test/pack.test.ts",
+    "tests": "test/pack.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 14,
+    "total": 15,
+    "red": [
+      "npm pack holds nothing else: no references, scripts, sources, tests, CI files or working papers"
+    ]
+  },
+  {
+    "id": "P7aw",
+    "guard": "dist/render/print is shipped and allowed",
+    "edit": "the dist/render/print pattern removed from ALLOWED",
+    "file": "test/pack.test.ts",
+    "tests": "test/pack.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 14,
+    "total": 15,
+    "red": [
+      "npm pack holds nothing else: no references, scripts, sources, tests, CI files or working papers"
+    ]
+  }
+]
+```

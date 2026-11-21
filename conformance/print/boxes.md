@@ -7,7 +7,7 @@
 
 ## 1. Scope
 
-Text.
+Text, and a picture: ![A picture](pictures/one.png "Title") and a [link](https://example.com/a).
 
 ## A2. Appendix
 

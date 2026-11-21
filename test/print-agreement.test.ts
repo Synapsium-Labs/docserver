@@ -128,7 +128,7 @@ describe('print mode agrees with the screen', () => {
     });
   }
 
-  for (const name of ['plan', 'title', 'boxes', 'status', 'rules']) {
+  for (const name of ['plan', 'title', 'boxes', 'status', 'rules', 'alerts', 'blocks']) {
     it(`print fixture ${name}: the same`, async () => {
       const { screen, print } = await both(read(`conformance/print/${name}.md`));
       expect(clipped(print)).toEqual(screen);

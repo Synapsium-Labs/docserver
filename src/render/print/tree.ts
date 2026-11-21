@@ -8,6 +8,8 @@ export interface TextN {
   readonly k: 't';
   data: string;
   up: ElN | null;
+  /** Where the node was last known to stand in its parent's `kids` (a hint: see `idx`). */
+  at: number;
 }
 export interface ElN {
   readonly k: 'e';
@@ -15,6 +17,7 @@ export interface ElN {
   attrs: [string, string][];
   kids: N[];
   up: ElN | null;
+  at: number;
 }
 export type N = TextN | ElN;
 
@@ -37,21 +40,22 @@ function decode(s: string): string {
 const ATTR = /\s([A-Za-z_:][-A-Za-z0-9_:.]*)(?:="([^"]*)")?/g;
 
 export const el = (name: string, classes?: string, kids: (N | string)[] = []): ElN => {
-  const e: ElN = { k: 'e', name, attrs: [], kids: [], up: null };
+  const e: ElN = { k: 'e', name, attrs: [], kids: [], up: null, at: 0 };
   if (classes !== undefined && classes !== '') e.attrs.push(['class', classes]);
   for (const c of kids) append(e, typeof c === 'string' ? text(c) : c);
   return e;
 };
-export const text = (data: string): TextN => ({ k: 't', data, up: null });
+export const text = (data: string): TextN => ({ k: 't', data, up: null, at: 0 });
 
 /** The html as a tree under an unnamed root. A comment is dropped; an end tag closes the nearest open element of its name. */
 export function parse(html: string): ElN {
-  const root: ElN = { k: 'e', name: '', attrs: [], kids: [], up: null };
+  const root: ElN = { k: 'e', name: '', attrs: [], kids: [], up: null, at: 0 };
   const stack: ElN[] = [root];
   const current = (): ElN => stack[stack.length - 1] ?? root;
   const push = (n: N): void => {
     const p = current();
     n.up = p;
+    n.at = p.kids.length;
     p.kids.push(n);
   };
   let i = 0;
@@ -85,7 +89,7 @@ export function parse(html: string): ElN {
         }
       }
     } else {
-      const e: ElN = { k: 'e', name, attrs: [], kids: [], up: null };
+      const e: ElN = { k: 'e', name, attrs: [], kids: [], up: null, at: 0 };
       for (const m of (tag[3] ?? '').matchAll(ATTR)) e.attrs.push([(m[1] ?? '').toLowerCase(), decode(m[2] ?? '')]);
       push(e);
       if (!VOID.has(name)) stack.push(e);
@@ -128,10 +132,32 @@ export const txt = (n: N): string => squash(textOf(n));
 
 export const elements = (e: ElN): ElN[] => e.kids.filter(isEl);
 
+/** What the sibling walks cost, in positions looked at past a node's hint: a test holds it linear in the document. */
+export const probe = { scans: 0 };
+
+/**
+ * The position of `n` among its parent's children (-1 when it has none). Each node keeps the position it was last at, so a
+ * walk over the children of a block-heavy document costs one look per step; after an insertion or removal the hint is off by
+ * the distance the siblings moved, and the search goes outward from it, so it costs that distance, never the document.
+ */
+function idx(n: N): number {
+  const p = n.up;
+  if (p === null) return -1;
+  const k = p.kids;
+  const from = n.at;
+  if (k[from] === n) return from;
+  for (let d = 1; d < k.length + from; d += 1) {
+    probe.scans += 1;
+    if (k[from - d] === n) return (n.at = from - d);
+    if (k[from + d] === n) return (n.at = from + d);
+  }
+  return -1;
+}
+
 export function nextEl(n: N): ElN | null {
   const p = n.up;
   if (p === null) return null;
-  for (let i = p.kids.indexOf(n) + 1; i < p.kids.length; i += 1) {
+  for (let i = idx(n) + 1; i < p.kids.length; i += 1) {
     const c = p.kids[i];
     if (isEl(c)) return c;
   }
@@ -140,13 +166,13 @@ export function nextEl(n: N): ElN | null {
 export function prevEl(n: N): ElN | null {
   const p = n.up;
   if (p === null) return null;
-  for (let i = p.kids.indexOf(n) - 1; i >= 0; i -= 1) {
+  for (let i = idx(n) - 1; i >= 0; i -= 1) {
     const c = p.kids[i];
     if (isEl(c)) return c;
   }
   return null;
 }
-export const nextSibling = (n: N): N | null => n.up?.kids[n.up.kids.indexOf(n) + 1] ?? null;
+export const nextSibling = (n: N): N | null => n.up?.kids[idx(n) + 1] ?? null;
 
 /** Every element under `root` (not `root`) for which `pred` holds, in document order. */
 export function all(root: ElN, pred: (e: ElN) => boolean): ElN[] {
@@ -167,23 +193,35 @@ export const withClass = (c: string) => (e: ElN): boolean => hasClass(e, c);
 
 // ── writing
 
+/** Every child of `p` from position `from` on knows its position again (after a splice moved them). */
+function renumber(p: ElN, from: number): void {
+  for (let i = from; i < p.kids.length; i += 1) (p.kids[i] as N).at = i;
+}
+
 export function detach(n: N): void {
   const p = n.up;
   if (p === null) return;
-  p.kids.splice(p.kids.indexOf(n), 1);
+  const i = idx(n);
+  if (i >= 0) {
+    p.kids.splice(i, 1);
+    renumber(p, i);
+  }
   n.up = null;
 }
 export function append(p: ElN, n: N): void {
   detach(n);
   n.up = p;
+  n.at = p.kids.length;
   p.kids.push(n);
 }
 /** Put `n` into `p` before `ref` (at the end when `ref` is null). */
 export function insert(p: ElN, n: N, ref: N | null): void {
   detach(n);
-  const at = ref === null ? p.kids.length : p.kids.indexOf(ref);
+  const at = ref === null ? p.kids.length : idx(ref);
   n.up = p;
-  p.kids.splice(at < 0 ? p.kids.length : at, 0, n);
+  n.at = at < 0 ? p.kids.length : at;
+  p.kids.splice(n.at, 0, n);
+  renumber(p, n.at);
 }
 /** Put `n` where `after` is, right after it. */
 export function insertAfter(after: N, n: N): void {
@@ -193,9 +231,19 @@ export function insertAfter(after: N, n: N): void {
 /** Put `wrapper` where the first of `nodes` is and move the nodes (adjacent siblings, in order) into it. */
 export function wrap(nodes: readonly N[], wrapper: ElN): ElN {
   const f = nodes[0];
-  if (f === undefined || f.up === null) return wrapper;
-  insert(f.up, wrapper, f);
-  for (const n of nodes) append(wrapper, n);
+  const p = f?.up;
+  if (f === undefined || p === null || p === undefined) return wrapper;
+  const i = idx(f);
+  detach(wrapper);
+  p.kids.splice(i, nodes.length, wrapper);
+  wrapper.up = p;
+  renumber(p, i);
+  const base = wrapper.kids.length;
+  nodes.forEach((n, j) => {
+    n.up = wrapper;
+    n.at = base + j;
+  });
+  for (const n of nodes) wrapper.kids.push(n);
   return wrapper;
 }
 /** Cut a text node at `at`: it keeps the first part, a new text node right after it holds the rest, which is returned. */
@@ -208,15 +256,21 @@ export function split(t: TextN, at: number): TextN {
 /** The siblings from `from` up to, not including, `to` (to the end when null). */
 export function run(from: N, to: N | null): N[] {
   const p = from.up as ElN;
-  const a = p.kids.indexOf(from);
-  const b = to === null ? p.kids.length : p.kids.indexOf(to);
+  const a = idx(from);
+  const b = to === null ? p.kids.length : idx(to);
   return p.kids.slice(a, b < 0 ? p.kids.length : b);
 }
 
 /** The attributes print mode writes. */
 export const KEPT_ATTRS: readonly string[] = ['class', 'id', 'data-line', 'open', 'colspan', 'rowspan', 'align', 'alt', 'title', 'href'];
 
-/** The tree as html: text escaped, attributes only those in KEPT_ATTRS (a void element closes with ` />`). */
+/**
+ * The one attribute an `img` keeps besides KEPT_ATTRS: its `src`, render()'s own image reference exactly as the screen's html carries
+ * it (the host resolves it through its image map, and drops a reference it has not loaded). No other element keeps one.
+ */
+export const KEPT_IMG_ATTRS: readonly string[] = ['src'];
+
+/** The tree as html: text escaped, attributes only those in KEPT_ATTRS (and an img's src) (a void element closes with ` />`). */
 export function serialize(n: N, out: string[] = []): string {
   if (n.k === 't') {
     out.push(pyEscape(n.data));
@@ -225,7 +279,7 @@ export function serialize(n: N, out: string[] = []): string {
   const write = (e: ElN): void => {
     if (e.name !== '') {
       out.push(`<${e.name}`);
-      for (const [k, v] of e.attrs) if (KEPT_ATTRS.includes(k)) out.push(` ${k}="${pyEscape(v)}"`);
+      for (const [k, v] of e.attrs) if (KEPT_ATTRS.includes(k) || (e.name === 'img' && KEPT_IMG_ATTRS.includes(k))) out.push(` ${k}="${pyEscape(v)}"`);
       out.push(VOID.has(e.name) ? ' />' : '>');
     }
     if (VOID.has(e.name)) return;

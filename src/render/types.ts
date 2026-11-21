@@ -120,7 +120,9 @@ export interface RenderOptions {
    * without the browser reader. The html is one `div.docreader-print` holding the document with its eyebrow, byline, facts
    * panel, review strip, section numbers, boxes, status labels, plan marks and (with `reader.rules`) rule paragraphs; every
    * `details` is open, nothing is hidden, a figure stays its source, and no attribute but class, id, data-line, open,
-   * colspan, rowspan, align, alt, title and href is written. Default false: the html is what it was. Not a boolean: a TypeError.
+   * colspan, rowspan, align, alt, title and href is written (an `img` also keeps its `src`, the image reference as render wrote it).
+   * The two fallback blocks, for an outcome of 'failed' or 'output-over-limit', are what they are without `print`: they are not inside
+   * `div.docreader-print`. Default false: the html is what it was. Not a boolean: a TypeError.
    */
   print?: boolean;
 }
