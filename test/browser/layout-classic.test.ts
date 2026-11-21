@@ -63,6 +63,35 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('tracks subsections and follows the active link inside the rail', async () => {
+    const markdown = `# Title\n\n**Spec** · 2026-01-01 · Status: Draft\n\n${Array.from({ length: 50 }, (_, i) => `## Section ${i}\n\n${FILL}\n\n### Subsection ${i}\n\n${FILL}`).join('\n\n')}`;
+    const doc = await openDoc(markdown, {}, { browser, layout: 'classic', viewport: { width: 1280, height: 800 } });
+    try {
+      const { page } = doc;
+      const expectedY = await page.locator('#subsection-45').evaluate((el) => {
+        const y = el.getBoundingClientRect().top + window.scrollY - 200;
+        window.scrollTo(0, y);
+        return y;
+      });
+      await expect.poll(() => page.locator('.doc-toc a[href="#subsection-45"]').getAttribute('aria-current')).toBe('location');
+      const state = await page.evaluate(() => {
+        const rail = document.querySelector<HTMLElement>('.doc-toc')!;
+        const link = rail.querySelector<HTMLElement>('a[href="#subsection-45"]')!;
+        const r = rail.getBoundingClientRect();
+        const a = link.getBoundingClientRect();
+        return { scrollTop: rail.scrollTop, visible: a.top >= r.top && a.bottom <= r.bottom, y: window.scrollY, hash: location.hash };
+      });
+      expect(state.scrollTop).toBeGreaterThan(0);
+      expect(state.visible).toBe(true);
+      expect(state.hash).toBe('');
+      expect(Math.abs(state.y - expectedY)).toBeLessThan(2);
+      await page.getByRole('button', { name: 'Collapse' }).click();
+      await page.evaluate(() => window.scrollBy(0, 10));
+      await page.waitForTimeout(100);
+      expect(await page.locator('.doc-toc a[href="#section-45"]').locator('..').evaluate((el) => el.classList.contains('open'))).toBe(false);
+    } finally { await doc.close(); }
+  });
+
   it('only a table with at least 12 rows gets a filter; its visible rows and count update', async () => {
     const doc = await openDoc(`${DOC}\n\n${TABLE(11)}\n\n${TABLE(12)}`, {}, { browser, layout: 'classic' });
     try {

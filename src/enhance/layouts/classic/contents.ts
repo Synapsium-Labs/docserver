@@ -1,4 +1,5 @@
 import { chrome } from '../../journal.js';
+import { queueFrameWork, type Cancel } from '../../env.js';
 import { headingText } from '../../headctl.js';
 import type { FeatureContext } from '../../types.js';
 
@@ -85,17 +86,45 @@ export function build(ctx: FeatureContext): void {
   journal.listen(collapse, 'click', () => { for (const item of items.values()) journal.toggleClass(item.top, 'open', false); });
   journal.defer(ctx.overlays.register('drawer', { isOpen: () => opened, close }));
   journal.defer(close);
-  journal.defer(ctx.events.on('spy', ({ section, unit }) => {
-    const active = items.get(unit ?? section as HTMLElement);
-    for (const item of items.values()) {
-      const current = item === active;
-      journal.toggleClass(item.anchor, 'active', current);
-      journal.setAttribute(item.anchor, 'aria-current', current ? 'location' : null);
-      journal.toggleClass(item.top, 'open', active?.top === item.top);
+  const tracked = headings.filter((heading) => items.has(heading));
+  let active: { anchor: HTMLAnchorElement; top: HTMLLIElement } | undefined;
+  let scheduled: Cancel | null = null;
+  const spy = (): void => {
+    scheduled = null;
+    const line = Math.max(150, ctx.env.viewport().h * 0.3);
+    let lo = 0;
+    let hi = tracked.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (tracked[mid]!.getBoundingClientRect().top < line) lo = mid + 1;
+      else hi = mid;
     }
-  }));
+    const next = lo === 0 ? undefined : items.get(tracked[lo - 1]!);
+    if (next === active) return;
+    if (active !== undefined) {
+      journal.toggleClass(active.anchor, 'active', false);
+      journal.setAttribute(active.anchor, 'aria-current', null);
+      journal.toggleClass(active.top, 'open', false);
+    }
+    active = next;
+    if (next === undefined) return;
+    journal.toggleClass(next.anchor, 'active', true);
+    journal.setAttribute(next.anchor, 'aria-current', 'location');
+    journal.toggleClass(next.top, 'open', true);
+    if (rail.getClientRects().length === 0 || next.anchor.getClientRects().length === 0) return;
+    const panel = rail.getBoundingClientRect();
+    const link = next.anchor.getBoundingClientRect();
+    if (panel.height > 0 && (link.top < panel.top + 40 || link.bottom > panel.bottom - 20)) {
+      rail.scrollTop += link.top - panel.top - panel.height / 2;
+    }
+  };
+  const schedule = (): void => { scheduled ??= queueFrameWork(root, 'rail', spy); };
+  ctx.env.onScroll(schedule);
+  journal.defer(ctx.events.on('relayout', schedule));
+  journal.defer(() => { scheduled?.(); scheduled = null; });
   journal.insert(rail, root, root.firstChild);
   journal.insert(scrim, root, null);
   if (ctx.slots !== null) ctx.slots.tool('contents', button);
   journal.toggleClass(root, 'has-toc', true);
+  spy();
 }
