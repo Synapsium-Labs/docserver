@@ -84,6 +84,14 @@ export interface Journal {
    * two again, only while the new node still follows the first (a host that moved it wins).
    */
   split(text: Text, offset: number): Text;
+  /**
+   * `split` at many offsets in one pass, for a text that holds many cuts: `offsets` strictly increasing, each inside the text.
+   * The node keeps the text before the first, and the new text nodes, built together and inserted with one write, hold the
+   * pieces in order; the pieces are returned, the node itself first. No character changes. Undo joins them again with one
+   * write and one range deletion, in time linear in the pieces, and only while the pieces still follow the node in order (a
+   * host that moved one wins). A text cut at k places costs O(k), where k calls of `split` cost O(k) each on a long text.
+   */
+  splitAll(text: Text, offsets: readonly number[]): Text[];
   /** addEventListener with the handler run inside the instance's operation; undo removes the listener. */
   listen(
     target: EventTarget,
@@ -419,6 +427,51 @@ export function createJournal(live: () => boolean, operate: (fn: () => void) => 
         tail.parentNode?.removeChild(tail);
       });
       return tail;
+    },
+
+    splitAll(text, offsets) {
+      if (!live()) throw new Error('docreader: journal.splitAll after a destroy');
+      const data = text.data;
+      const parent = text.parentNode;
+      if (parent === null) throw new Error('docreader: journal.splitAll takes an attached text');
+      let prev = 0;
+      for (const o of offsets) {
+        if (!(Number.isInteger(o) && o > prev && o < data.length)) throw new Error('docreader: journal.splitAll takes increasing offsets inside the text');
+        prev = o;
+      }
+      const doc = text.ownerDocument;
+      const frag = doc.createDocumentFragment();
+      const tails: Text[] = [];
+      // Each piece is a shallow clone of an empty copy of the source text (never a clone of the text itself, which would copy
+      // all of it per piece), as `splitText` makes its tail from the node it splits: a piece is a source text node like the one
+      // it came from, which the layout test page follows (test/browser/page/source.ts).
+      const blank = text.cloneNode(false) as Text;
+      blank.data = '';
+      for (let i = 0; i < offsets.length; i += 1) {
+        const tail = blank.cloneNode(false) as Text;
+        tail.data = data.slice(offsets[i], offsets[i + 1] ?? data.length);
+        tails.push(tail);
+        frag.appendChild(tail);
+      }
+      if (tails.length === 0) return [text];
+      const next = text.nextSibling;
+      text.data = data.slice(0, offsets[0]);
+      parent.insertBefore(frag, next);
+      undo.push(() => {
+        let at: Node = text;
+        for (const tail of tails) {
+          if (at.nextSibling !== tail) return; // the host moved one of them since: the host wins
+          at = tail;
+        }
+        let joined = text.data;
+        for (const tail of tails) joined += tail.data;
+        const range = doc.createRange();
+        range.setStartAfter(text);
+        range.setEndAfter(at);
+        range.deleteContents();
+        text.data = joined;
+      });
+      return [text, ...tails];
     },
 
     listen(target, type, handler, options) {

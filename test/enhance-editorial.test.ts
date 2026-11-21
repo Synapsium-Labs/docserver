@@ -461,3 +461,173 @@ describe('a long run of white space in the byline (review 3081 F1)', () => {
     }
   }, 120000);
 });
+
+describe('many separators in the byline (review 3088 F3)', () => {
+  // The screen cut each separator out of the live text with two `journal.split`s, each copying the text left, and undid each with
+  // an `appendData`: quadratic in the separators (32 000 took seconds in a browser, 64 000 minutes). One `journal.splitAll` per
+  // text child now cuts at every separator, and undoes with one write and one range deletion. The bound is a count of DOM
+  // operations, never a clock: the calls of `splitText`, `appendData`, `removeChild` and `createRange` are the same for 4
+  // separators as for 500 through the whole enhance, and the same again for 1 000 pieces of one text cut and joined by the
+  // journal alone, below. jsdom itself is quadratic in a parent's children (one `move` per fact, a fragment insert, a range
+  // deletion: 32 000 facts run out of memory, 8 000 pieces take ten seconds), so the unit cases stop at these sizes; the
+  // browser layout test of a byline (test/browser/layout-corpus.test.ts) holds 32 000 in Chromium, where the DOM is linear.
+  const byline = (k: number): string => `# T\n\n**Spec** · ${Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
+  const SPIED: readonly [string, object, string][] = [
+    ['splitText', Text.prototype, 'splitText'],
+    ['appendData', CharacterData.prototype, 'appendData'],
+    ['removeChild', Node.prototype, 'removeChild'],
+    ['createRange', Document.prototype, 'createRange'],
+  ];
+
+  async function run(k: number): Promise<{ enhanced: Record<string, number>; undone: Record<string, number>; facts: number; html: string; restored: boolean }> {
+    const md = byline(k);
+    const root = mount(md);
+    const html = root.outerHTML;
+    const before = nodes(root);
+    const calls: Record<string, number> = {};
+    const spies = SPIED.map(([name, proto, key]) => {
+      calls[name] = 0;
+      const original = (proto as Record<string, (...a: unknown[]) => unknown>)[key] as (...a: unknown[]) => unknown;
+      return vi.spyOn(proto as Record<string, (...a: unknown[]) => unknown>, key).mockImplementation(function (this: unknown, ...a: unknown[]) {
+        calls[name] = (calls[name] ?? 0) + 1;
+        return original.apply(this, a);
+      });
+    });
+    try {
+      await enhance(root, infoOf(md));
+      const enhanced = { ...calls };
+      const facts = root.querySelectorAll('dl.byline > div').length;
+      for (const name of Object.keys(calls)) calls[name] = 0;
+      await destroyEnhancement(root);
+      const after = nodes(root);
+      const restored = root.outerHTML === html && after.length === before.length && after.every((a, i) => a.node === before[i]?.node && a.data === before[i]?.data);
+      return { enhanced, undone: { ...calls }, facts, html, restored };
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  }
+
+  it('500 separators cost the same count of splits, appends, removals and ranges as 4, and destroy restores every node', async () => {
+    const small = await run(4);
+    const big = await run(500);
+    expect(big.facts, 'one fact per piece').toBeGreaterThanOrEqual(500);
+    expect(small.restored && big.restored, 'destroy restores the same nodes with the same text').toBe(true);
+    expect(big.enhanced['splitText']).toBe(small.enhanced['splitText']);
+    expect(big.enhanced['splitText']).toBeLessThanOrEqual(4);
+    expect(big.undone['appendData']).toBe(small.undone['appendData']);
+    expect(big.undone['appendData']).toBeLessThanOrEqual(4);
+    expect(big.undone['removeChild']).toBe(small.undone['removeChild']);
+    expect(big.undone['createRange']).toBe(small.undone['createRange']);
+    expect(big.undone['createRange']).toBeGreaterThanOrEqual(1);
+    expect(big.undone['createRange']).toBeLessThanOrEqual(4);
+  }, 120000);
+
+  it('the byline of a text with separators is the one the per-separator splits made: a label, a date, adjacent and edge separators', async () => {
+    const md = '# T\n\n**Spec** · 2026-10-19 · Status: Draft ·  · Owner: a · b · \n\n## Body\n\nText.\n';
+    const root = mount(md);
+    await enhance(root, infoOf(md));
+    // Pinned from the per-separator splits this one-pass cut replaced (measured on the code before the change): the same byline,
+    // and the same pieces left in the hidden meta line.
+    const dt = (k: string, v: string): string => `<div data-docreader-chrome=""><dt data-docreader-chrome="" data-k="${k}">${k}</dt><dd data-docreader-chrome="">${v}</dd></div>`;
+    expect(root.querySelector('dl.byline')?.outerHTML).toBe(
+      `<dl data-docreader-chrome="" class="byline" data-line="3-3">${dt('Date', '2026-10-19')}${dt('Status', 'Draft')}<div data-docreader-chrome=""><dd data-docreader-chrome="">· Owner: a</dd></div><div data-docreader-chrome=""><dd data-docreader-chrome="">b ·</dd></div></dl>`,
+    );
+    expect(root.querySelector('p[hidden]')?.outerHTML).toBe('<p data-line="3-3" hidden=""><strong>Spec</strong> ·  · Status:  ·   · </p>');
+  });
+});
+
+describe('the journal\'s splitAll', () => {
+  const setup = (): { control: ReturnType<typeof createJournal>; p: HTMLElement; t: Text; live: { on: boolean } } => {
+    const live = { on: true };
+    const control = createJournal(
+      () => live.on,
+      (fn) => {
+        fn();
+      },
+    );
+    const p = document.createElement('p');
+    p.append('ab · cd · ef', document.createElement('b'), 'gh');
+    document.body.append(p);
+    return { control, p, t: p.firstChild as Text, live };
+  };
+
+  it('cuts a text at every offset in one call, returns the pieces with the node first, and undo joins them exactly', () => {
+    const { control, p, t } = setup();
+    const html = p.outerHTML;
+    const before = Array.from(p.childNodes);
+    const pieces = control.journal.splitAll(t, [2, 5, 7, 10]);
+    expect(pieces.map((n) => n.data)).toEqual(['ab', ' · ', 'cd', ' · ', 'ef']);
+    expect(pieces[0]).toBe(t);
+    expect(Array.from(p.childNodes).slice(0, 5)).toEqual(pieces);
+    expect(p.childNodes.length).toBe(7);
+    expect(control.undoAll()).toEqual([]);
+    expect(p.outerHTML).toBe(html);
+    expect(Array.from(p.childNodes)).toEqual(before);
+    expect(t.data).toBe('ab · cd · ef');
+  });
+
+  it('1 000 separators in one text: no splitText, no appendData, no removeChild and one range, to cut and to join, and every node comes back', () => {
+    const { control, p, t } = setup();
+    const k = 1000;
+    const data = Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ');
+    t.data = data;
+    const html = p.outerHTML;
+    const before = Array.from(p.childNodes);
+    const offsets: number[] = [];
+    for (let at = 0, i = 0; i < k; i += 1) {
+      const word = `w${String(i)}`;
+      if (i > 0) {
+        offsets.push(at, at + 3);
+        at += 3;
+      }
+      at += word.length;
+    }
+    const counts = { splitText: 0, appendData: 0, removeChild: 0, createRange: 0 };
+    const spies = (
+      [
+        ['splitText', Text.prototype],
+        ['appendData', CharacterData.prototype],
+        ['removeChild', Node.prototype],
+        ['createRange', Document.prototype],
+      ] as const
+    ).map(([name, proto]) => {
+      const original = (proto as unknown as Record<string, (...a: unknown[]) => unknown>)[name] as (...a: unknown[]) => unknown;
+      return vi.spyOn(proto as unknown as Record<string, (...a: unknown[]) => unknown>, name).mockImplementation(function (this: unknown, ...a: unknown[]) {
+        counts[name] += 1;
+        return original.apply(this, a);
+      });
+    });
+    try {
+      const pieces = control.journal.splitAll(t, offsets);
+      expect(pieces.length).toBe(2 * k - 1);
+      expect(pieces.map((n) => n.data).join('')).toBe(data);
+      expect(counts).toEqual({ splitText: 0, appendData: 0, removeChild: 0, createRange: 0 });
+      expect(control.undoAll()).toEqual([]);
+      expect(counts).toEqual({ splitText: 0, appendData: 0, removeChild: 0, createRange: 1 });
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    expect(Array.from(p.childNodes)).toEqual(before);
+    expect(t.data).toBe(data);
+    expect(p.outerHTML).toBe(html);
+  }, 120000);
+
+  it('no offsets is no change; bad offsets, a detached text and a dead instance throw', () => {
+    const { control, p, t, live } = setup();
+    expect(control.journal.splitAll(t, [])).toEqual([t]);
+    expect(p.childNodes.length).toBe(3);
+    for (const bad of [[0], [12], [5, 5], [5, 3], [1.5], [-1], [Number.NaN]]) expect(() => control.journal.splitAll(t, bad), String(bad)).toThrow(/increasing offsets/);
+    expect(() => control.journal.splitAll(document.createTextNode('abc'), [1])).toThrow(/attached text/);
+    expect(t.data).toBe('ab · cd · ef');
+    live.on = false;
+    expect(() => control.journal.splitAll(t, [2])).toThrow(/after a destroy/);
+  });
+
+  it('a piece the host moved since: the pieces stay as they are, the host wins', () => {
+    const { control, p, t } = setup();
+    const pieces = control.journal.splitAll(t, [2, 5, 7, 10]);
+    p.append(pieces[2] as Text);
+    expect(control.undoAll()).toEqual([]);
+    expect([t.data, p.lastChild]).toEqual(['ab', pieces[2]]);
+  });
+});

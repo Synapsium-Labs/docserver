@@ -209,20 +209,38 @@ function metaParagraph(h1: Element): Element | null {
   return null;
 }
 
-/** Split every text child of `p` at its separators, and return the runs of nodes between them. */
+/**
+ * Split every text child of `p` at its separators, and return the runs of nodes between them, in one pass: each text child is
+ * scanned once for all its separators (findSeparator is linear) and cut at all of them by one `journal.splitAll`, so a
+ * paragraph of k separators costs O(k) to build and to undo, not two splits per separator, each one copying the text left.
+ * The pieces are the old splits' own: the node keeps its first piece, and each separator is a piece of its own.
+ */
 function segments(p: Element, journal: Journal): Node[][] {
   const seps = new Set<Node>();
   for (const child of Array.from(p.childNodes)) {
     if (child.nodeType !== 3) continue;
-    let t = child as Text;
+    const text = child as Text;
+    const data = text.data;
+    const cuts: number[] = []; // where each piece after the first starts
+    const kinds: boolean[] = []; // per piece, in order: is it a separator
+    const piece = (start: number, sep: boolean): void => {
+      if (kinds.length > 0) cuts.push(start);
+      kinds.push(sep);
+    };
+    let at = 0;
     for (;;) {
-      const m = findSeparator(t.data);
+      const m = findSeparator(at === 0 ? data : data.slice(at));
       if (m === null) break;
-      const sep = m.index > 0 ? journal.split(t, m.index) : t;
-      const rest = m.length < sep.data.length ? journal.split(sep, m.length) : null;
-      seps.add(sep);
-      if (rest === null) break;
-      t = rest;
+      const start = at + m.index;
+      if (start > at) piece(at, false);
+      piece(start, true);
+      at = start + m.length;
+    }
+    if (kinds.length === 0) continue;
+    if (at < data.length) piece(at, false);
+    const pieces = journal.splitAll(text, cuts);
+    for (let i = 0; i < pieces.length; i += 1) {
+      if (kinds[i] === true) seps.add(pieces[i] as Text);
     }
   }
   const segs: Node[][] = [[]];

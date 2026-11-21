@@ -165,8 +165,12 @@ describe('L3.H6 accepted: external links', () => {
 describe('the frame\'s item-href grammar and the host\'s agree on characters (review 3081 F7)', () => {
   // An item link is drawn only when the frame's isItemHref takes it, and its click is kept only when classifyLink takes it, so
   // a character one refuses and the other admits draws a link whose click is dropped. The two files cannot import each other
-  // (src/frame/items.ts is import-free), so the grammars are held equal here, over every code point, in the three places an
-  // href carries free text: the path, the query and the fragment.
+  // (src/frame/items.ts is import-free), so the grammars are held equal here, over every code point but the lone surrogates (which
+  // have their own case below), in the three places an href carries free text: the path, the query and the fragment. The
+  // hidden-character and white-space classes are also placed in the host part (below); the rest of the host part is the host's.
+  // A lone surrogate: the path, query and fragment agree (both admit it, the host reads an external link); in the host part the
+  // frame admits it and the host's URL parser refuses it (U+FFFD is no host code point), the host grammar's own difference.
+  const SURROGATE_VERDICTS = [0xd800, 0xdbff, 0xdc00, 0xdfff].flatMap(() => ['true/null', 'true/external', 'true/external', 'true/external']);
   const places = (c: string): string[] => [`https://tracker.example/a${c}b`, `https://tracker.example/?a${c}b`, `https://tracker.example/#a${c}b`];
 
   it('the bidi controls, directional marks and zero-width characters are refused by both', () => {
@@ -191,6 +195,60 @@ describe('the frame\'s item-href grammar and the host\'s agree on characters (re
     }
     expect(differ).toEqual([]);
   }, 120000);
+
+  it('a percent-encoded backslash, %5c in either case, is refused by both, in the host part, path, query and fragment, and frame-accepted implies host external https (review 3088 F5)', () => {
+    const hrefs: string[] = [];
+    for (const esc of ['%5c', '%5C', '%5c%5C', 'a%5cb', '%255c']) {
+      hrefs.push(`https://tracker.example/${esc}`, `https://tracker.example/a${esc}b`, `https://tracker.example/?q=${esc}`, `https://tracker.example/?${esc}`, `https://tracker.example/#${esc}`, `https://tracker.example/#a${esc}b`);
+      // In the host part "%25" is a percent escape the host's URL parser decodes, a host difference the host's grammar owns.
+      if (esc !== '%255c') hrefs.push(`https://tracker${esc}.example/`, `https://tracker.example${esc}/x`);
+    }
+    const refused = hrefs.filter((href) => /%5c/i.test(href));
+    expect(refused.length).toBeGreaterThan(30);
+    for (const href of hrefs) {
+      const accepted = isItemHref(href);
+      const link = classifyLink(href);
+      if (/%5c/i.test(href)) {
+        expect(accepted, href).toBe(false);
+        expect(link, href).toBeNull();
+      } else {
+        // %255c is a percent sign and "5c": no backslash in either grammar's reading.
+        expect(accepted, href).toBe(true);
+        expect(link, href).toMatchObject({ kind: 'external', scheme: 'https' });
+      }
+      if (accepted) expect(link !== null && link.kind === 'external' && link.scheme === 'https', href).toBe(true);
+    }
+  });
+
+  it('the hidden-character and white-space classes are refused by both in the host part too, and lone surrogates agree outside it (review 3088 M1)', () => {
+    // A code point the frame refuses in the path is one of the shared classes (white space, controls, hidden characters); each
+    // is placed in the host part, where the frame refuses it by the same table and the host by its own checks. Lone surrogates are below.
+    const shared: number[] = [];
+    for (let code = 0; code <= 0x10ffff; code += 1) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      if (!isItemHref(`https://tracker.example/a${String.fromCodePoint(code)}b`)) shared.push(code);
+    }
+    expect(shared.length).toBeGreaterThan(100);
+    const differ: string[] = [];
+    for (const code of shared) {
+      const c = String.fromCodePoint(code);
+      for (const href of [`https://tracker${c}b.example/`, `https://${c}tracker.example/`, `https://tracker.example${c}/x`]) {
+        if (isItemHref(href) || classifyLink(href) !== null) differ.push(`${code.toString(16)}: ${href.slice(0, 22)}`);
+      }
+    }
+    expect(differ).toEqual([]);
+    // Lone surrogates, in the four places, host first: what each grammar says is pinned, so a change in either shows.
+    const verdicts = new Map<string, string>();
+    for (const code of [0xd800, 0xdbff, 0xdc00, 0xdfff]) {
+      const c = String.fromCharCode(code);
+      const hosts = [`https://tracker${c}b.example/`, `https://tracker.example/a${c}b`, `https://tracker.example/?a${c}b`, `https://tracker.example/#a${c}b`];
+      for (const href of hosts) {
+        const link = classifyLink(href);
+        verdicts.set(`${code.toString(16)} ${href.includes('?') ? 'query' : href.includes('#') ? 'fragment' : href.endsWith('/') ? 'host' : 'path'}`, `${String(isItemHref(href))}/${link === null ? 'null' : link.kind}`);
+      }
+    }
+    expect([...verdicts.values()]).toEqual(SURROGATE_VERDICTS);
+  });
 
   it('an ordinary absolute https URL, and a path in another script, are still admitted by both', () => {
     for (const href of ['https://tracker.example/AB-1', 'https://tracker.example/browse/AB-1?x=1#top', 'https://tracker.example/\u0434\u043e\u043a', 'https://tracker.example/%E2%80%AE']) {
