@@ -218,6 +218,8 @@ describe('the frame\'s item-href grammar and the host\'s agree on characters (re
       }
       if (accepted) expect(link !== null && link.kind === 'external' && link.scheme === 'https', href).toBe(true);
     }
+    // The host-part difference items.ts names: the frame admits %255c in the host, the URL parser refuses it.
+    for (const href of ['https://tracker%255c.example/', 'https://tracker%255C.example/']) { expect(isItemHref(href), href).toBe(true); expect(classifyLink(href), href).toBeNull(); }
   });
 
   it('the hidden-character and white-space classes are refused by both in the host part too, and lone surrogates agree outside it (review 3088 M1)', () => {

@@ -2715,6 +2715,49 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
           }
         });
 
+        it('each printFigures() call starts its own count: a second full reopened run hands on its 2 x 16 MiB too, with no refusal', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          expect(c.figures).toHaveLength(64);
+          expect(handedBytes(c.figures)).toBe(64 * MiB);
+          expect(m.fallbacks()).toEqual([]);
+        });
+
+        it('the run is charged before onPrintFigure is called: a press from inside that call starts a fresh count, which the figure being handed over is not charged to', async () => {
+          const { c, over } = calls();
+          let mounted: Mounted | null = null;
+          let pressed = false;
+          const record = over['onPrintFigure'] as (figure: unknown) => unknown;
+          const m = paced({
+            ...over,
+            onPrintFigure: (figure: unknown): void => {
+              record(figure);
+              if (!pressed) {
+                pressed = true;
+                mounted?.frame.printFigures();
+              }
+            },
+          });
+          mounted = m;
+          m.frame.printFigures();
+          m.frame.printFigures();
+          // the first figure is the old run's; the press from inside its call opens the run that follows
+          m.say(fig(0, 16, pngOf(MiB)));
+          // the fresh run hands on exactly its own 2 x 16 MiB: 16 figures, then a replacement of each
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          expect(c.figures).toHaveLength(33);
+          expect(handedBytes(c.figures)).toBe(33 * MiB);
+          expect(m.fallbacks()).toEqual([]);
+        });
+
         it('an ordinary run is unchanged: its live total of 16 MiB is the cap, and a repeat is refused', async () => {
           const { c, over } = calls();
           const m = paced(over);

@@ -529,7 +529,7 @@ describe('many separators in the byline (review 3088 F3)', () => {
    * The DOM writes of an enhance and of its destroy that touch a parent that is connected and holds more than LARGE_PARENT
    * children, a write being a call of insertBefore, appendChild, removeChild, replaceChild, splitText or a range's deleteContents,
    * counted for the parent it is called on and, for an insert, for the parent the node leaves. A structural count, never a clock:
-   * WebKit takes time quadratic in such writes to a large live parent, in the build and in the undo (CI, review 3088 F3).
+   * The count follows the diagnosis of review 3088 F3 for WebKit; removing such writes did not make WebKit linear (the README's Safari limit).
    * Its scope is those calls only: append, prepend, before, after, remove, replaceWith, replaceChildren and a range's
    * insertNode or extractContents are not counted, and the code under test uses none of them on the paragraph.
    */
@@ -822,15 +822,30 @@ describe('the journal\'s splitAll', () => {
         return original.apply(this, a);
       });
     });
+    // The pieces go into the parent with one write: counted on the paragraph itself (`this === p`).
+    const writeSpies: { mockRestore: () => void }[] = [];
+    const writes = { insertBefore: 0, appendChild: 0 };
+    for (const name of ['insertBefore', 'appendChild'] as const) {
+      const original = Node.prototype[name] as (...a: unknown[]) => unknown;
+      writeSpies.push(
+        vi.spyOn(Node.prototype as unknown as Record<string, (...a: unknown[]) => unknown>, name).mockImplementation(function (this: unknown, ...a: unknown[]) {
+          if (this === p) writes[name] += 1;
+          return original.apply(this, a);
+        }),
+      );
+    }
     try {
       const pieces = control.journal.splitAll(t, offsets);
       expect(pieces.length).toBe(2 * k - 1);
       expect(pieces.map((n) => n.data).join('')).toBe(data);
       expect(counts).toEqual({ splitText: 0, appendData: 0, removeChild: 0, createRange: 0 });
+      expect(writes).toEqual({ insertBefore: 1, appendChild: 0 });
       expect(control.undoAll()).toEqual([]);
       expect(counts).toEqual({ splitText: 0, appendData: 0, removeChild: 0, createRange: 1 });
+      // the undo adds no insert into the paragraph
+      expect(writes).toEqual({ insertBefore: 1, appendChild: 0 });
     } finally {
-      for (const spy of spies) spy.mockRestore();
+      for (const spy of [...spies, ...writeSpies]) spy.mockRestore();
     }
     expect(Array.from(p.childNodes)).toEqual(before);
     expect(t.data).toBe(data);
