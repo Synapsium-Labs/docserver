@@ -4,7 +4,7 @@
 // bootstrap; DOM-free, and its time and timers come from the caller's clock, so a test runs it on a fake one.
 //
 // Before open() (the frame's `ready`): a bounded queue of 64 entries, in arrival order: store.set coalesced per key
-// (the latest value wins and moves to the end), the latest navigate, version and hash, at most 4 copies (a fifth is
+// (the latest value wins and moves to the end), the latest navigate, version and hash (a place is never coalesced: each stays, in order), at most 4 copies (a fifth is
 // refused), one changes (a newer request supersedes the queued one, which resolves null at once and is never sent).
 // Past 64 entries the oldest entry that is not a store.set is dropped; with the coalescing above the queue holds at most
 // 16, so the cap is a defensive bound. open() flushes it: the copies at once, every other entry through the pacer.
@@ -24,7 +24,8 @@
 // ms, batch 1.1): the first value at once, the window's latest at its end, so the final value always arrives, at most
 // four a second. A progress still waiting in the pacer's line takes the newer value in place (as store.set does for its
 // key), so at most one progress ever waits there and a navigate asked for later is never queued behind stale values
-// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends.
+// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends, with `push` and the `from` of the
+// first push of the window when it held one (a jump is not lost to a `j` or `k` that follows it, docserver parity T6).
 //
 // The changes slot: one request in flight, one queued. A request is in flight from the instant it is posted; its
 // answer (answer(), matched by sha) or 35 s without one (frameChangesTimeoutMs, longer than the parent's own 30 s)
@@ -54,7 +55,7 @@ export interface OutboxOptions {
 }
 
 /** The ops send() takes; copy and changes have their own calls. */
-export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' }>;
+export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' | 'place' | 'print-figure' }>;
 
 /** A changes answer as L2's `changes` callback resolves it (L2's readChangeSet reads it), or null. */
 export interface ChangesAnswer {
@@ -65,8 +66,11 @@ export interface ChangesAnswer {
 export type ChangesResult = Extract<ParentToFrame, { t: 'changes.result' }>;
 
 export interface Outbox {
-  /** store.set, navigate, version, hash or progress: queued before open(), paced and coalesced after. */
-  send(op: QueuedOp): void;
+  /**
+   * store.set, navigate, version, hash, progress, place or print-figure: queued before open(), paced and coalesced after.
+   * `done`, for a print-figure (it is never coalesced), is called once the op has been posted.
+   */
+  send(op: QueuedOp, done?: () => void): void;
   /** A copy: true when it was posted (or queued before open()), false when it is refused (its share is spent). */
   copy(text: string): boolean;
   /** A changes request for a full sha (the caller checks the grammar); resolves once, with the answer or null. */
@@ -94,7 +98,7 @@ interface Request {
 }
 
 /** One entry of the pre-ready queue or of the pacer's line. */
-type Entry = { readonly kind: 'op'; op: QueuedOp } | { readonly kind: 'copy'; readonly text: string } | { readonly kind: 'changes'; readonly req: Request };
+type Entry = { readonly kind: 'op'; op: QueuedOp; readonly done?: (() => void) | undefined } | { readonly kind: 'copy'; readonly text: string } | { readonly kind: 'changes'; readonly req: Request };
 
 /** A coalescing window: whether one is running, the latest op it holds, and its timer. */
 interface Lane {
@@ -170,6 +174,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
     }
     if (e.op.t === 'store.set') sentStore.push(now);
     post(e.op);
+    e.done?.();
   };
 
   /** Post every op of the line the windows allow now; set one timer for when the head may go. */
@@ -237,9 +242,14 @@ export function createOutbox(o: OutboxOptions): Outbox {
     enqueue({ kind: 'op', op });
   };
 
-  /** hash: the latest of the 100 ms the first opened. */
-  const trail = (op: QueuedOp): void => {
-    hashLane.held = op;
+  /**
+   * hash: the latest of the 100 ms the first opened. A push is not lost to a move that follows it within the window (the
+   * `j` and `k` keys, the changes stepper): the one op posted keeps `push` and the `from` of the first push, with the
+   * latest id (docserver parity T6).
+   */
+  const trail = (op: Extract<QueuedOp, { t: 'hash' }>): void => {
+    const h = hashLane.held as Extract<QueuedOp, { t: 'hash' }> | null;
+    hashLane.held = h?.push === undefined ? op : { t: 'hash', id: op.id, push: 'true', ...(h.from === undefined ? {} : { from: h.from }) };
     if (hashLane.active) return;
     hashLane.active = true;
     hashLane.timer = clock.setTimeout(() => {
@@ -251,11 +261,15 @@ export function createOutbox(o: OutboxOptions): Outbox {
     }, HASH_MS);
   };
 
-  /** Into the pre-ready queue, with its coalescing and its bound. */
+  /**
+   * Into the pre-ready queue, with its coalescing and its bound. A `print-figure` never reaches the coalescing below: the reader
+   * prints only on the host's command, which the frame accepts after ready, so no two figures are ever queued here (and a figure
+   * dropped by the coalescing would lose its `done`).
+   */
   const queueEarly = (e: Entry): void => {
     if (e.kind === 'op') {
       const op = e.op;
-      early = early.filter((x) => !(x.kind === 'op' && x.op.t === op.t && (op.t !== 'store.set' || (x.op.t === 'store.set' && x.op.key === op.key))));
+      early = early.filter((x) => !(x.kind === 'op' && op.t !== 'place' && x.op.t === op.t && (op.t !== 'store.set' || (x.op.t === 'store.set' && x.op.key === op.key))));
     }
     early.push(e);
     if (early.length > QUEUE_MAX) {
@@ -270,17 +284,17 @@ export function createOutbox(o: OutboxOptions): Outbox {
     }
   };
 
-  const route = (op: QueuedOp): void => {
+  const route = (op: QueuedOp, done?: () => void): void => {
     if (op.t === 'navigate' || op.t === 'version' || op.t === 'progress') lead(lanes[op.t], op, windowOf[op.t]);
     else if (op.t === 'hash') trail(op);
-    else enqueue({ kind: 'op', op });
+    else enqueue({ kind: 'op', op, done });
   };
 
   return {
-    send(op) {
+    send(op, done) {
       if (disposed) return;
-      if (!opened) queueEarly({ kind: 'op', op });
-      else route(op);
+      if (!opened) queueEarly({ kind: 'op', op, done });
+      else route(op, done);
     },
     copy(text) {
       if (disposed) return false;
@@ -337,7 +351,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
       const now = clock.now();
       for (const e of queued) {
         if (e.kind === 'copy') postEntry(e, now);
-        else if (e.kind === 'changes' || e.op.t === 'hash' || e.op.t === 'store.set') enqueue(e);
+        else if (e.kind === 'changes' || e.op.t === 'hash' || e.op.t === 'store.set' || e.op.t === 'place' || e.op.t === 'print-figure') enqueue(e);
         else lead(lanes[e.op.t], e.op, windowOf[e.op.t]);
       }
     },

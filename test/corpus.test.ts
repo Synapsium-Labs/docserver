@@ -187,3 +187,32 @@ describe('the corpus against render()', () => {
     }
   }
 });
+
+describe('runCorpus: the meta of the goldens and `items` (docserver parity, Task 4)', () => {
+  const ids = ['headings', 'alerts'];
+  /** A stand-in renderer that answers the golden of the case whose input it is given, with `items` added to the golden meta. */
+  const withItems =
+    (items: readonly string[]): RenderFn =>
+    (md: string): RenderResult => {
+      const expected = cases.find((x) => x.input === md)?.expected;
+      if (expected === undefined || expected === null) throw new Error('no golden case for this input');
+      return { html: expected.html, outcome: 'rendered', bytes: 0, meta: { ...(JSON.parse(expected.meta) as RenderMeta), items } };
+    };
+
+  it('leaves out an empty `items`, which is not a key of the goldens: no golden moves', () => {
+    expect(cases.filter((c) => ids.includes(c.id))).toHaveLength(2);
+    expect(runCorpus(withItems([]), { only: ids }).ok).toBe(true);
+  });
+
+  it('keeps a value in: a render that lists items for a document rendered with no reader fails on its meta', () => {
+    const run = runCorpus(withItems(['AB-1']), { only: ids });
+    expect(run.ok).toBe(false);
+    expect(run.results.flatMap((r) => r.failures).map((f) => f.split(' ')[0])).toEqual(['meta', 'meta']);
+  });
+
+  it("the real render() has an `items` in every meta and still passes every golden", () => {
+    const goldens = cases.filter((c) => c.kind === 'golden');
+    expect(goldens.every((c) => Array.isArray(render(c.input, c.options).meta.items))).toBe(true);
+    expect(runCorpus(render, { only: goldens.map((c) => c.id) }).results.filter((r) => !r.ok)).toEqual([]);
+  });
+});

@@ -11,7 +11,7 @@
 // shipped token-bucket limiter, Task 9's createLimiter, and (b) a strict sliding-window limiter of 20 messages and 10
 // store.set per 1000 ms. The parent answers each `changes` it admits after a random delay, at most its own 30 s deadline,
 // and some answers are lost on the way back.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BRIDGE_LIMITS, type FrameToParent, type ParentToFrame } from '../src/frame/protocol.js';
 import { createAdapters } from '../src/frame-runtime/adapters.js';
 import { createOutbox, TRANSIT_MARGIN_MS, type Outbox, type OutboxClock } from '../src/frame-runtime/outbox.js';
@@ -90,6 +90,107 @@ function maxInWindow(times: readonly number[], ms: number): number {
   }
   return best;
 }
+
+describe('place ops (docserver parity T3): each one is sent, in order, never coalesced', () => {
+  it('before ready two places both survive the queue, in order, with the hash between them', () => {
+    const { clock, box, posted } = setup();
+    box.send({ t: 'place', kind: 'overlay' });
+    box.send({ t: 'hash', id: 'x', push: 'true' });
+    box.send({ t: 'place', kind: 'overlay-closed' });
+    box.send({ t: 'place', kind: 'overlay' });
+    box.open();
+    clock.advance(5000);
+    expect(posted.map((p) => p.msg)).toEqual([
+      { t: 'place', kind: 'overlay' },
+      { t: 'hash', id: 'x', push: 'true' },
+      { t: 'place', kind: 'overlay-closed' },
+      { t: 'place', kind: 'overlay' },
+    ]);
+  });
+
+  it('after ready each place is posted at once, in order, and takes a pacer slot', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'place', kind: 'overlay' });
+    box.send({ t: 'place', kind: 'overlay-closed' });
+    expect(posted.map((p) => p.msg)).toEqual([
+      { t: 'place', kind: 'overlay' },
+      { t: 'place', kind: 'overlay-closed' },
+    ]);
+    clock.advance(5000);
+    expect(posted).toHaveLength(2);
+  });
+});
+
+describe('print-figure ops (docserver parity T6): through the pacer, never coalesced, and `done` when posted', () => {
+  const fig = (i: number): FrameToParent => ({ t: 'print-figure', i: String(i), n: '40', png: 'iVBORw0KGgo=' });
+
+  it('goes through the pacer: a burst of 40 posts at most 12 in any 1000 ms (plus the transit margin), in order, none lost', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    for (let i = 0; i < 40; i += 1) box.send(fig(i) as Parameters<Outbox['send']>[0]);
+    clock.advance(10_000);
+    expect(posted.map((p) => (p.msg as { i: string }).i)).toEqual(Array.from({ length: 40 }, (_, i) => String(i)));
+    const times = posted.map((p) => p.at);
+    expect(maxInWindow(times, 1000 + TRANSIT_MARGIN_MS)).toBeLessThanOrEqual(BRIDGE_LIMITS.frameMaxPerWindow - BRIDGE_LIMITS.frameCopyMaxPerWindow);
+    expect(posted[0]?.at).toBe(0);
+    expect(posted[12]?.at).toBeGreaterThan(1000);
+  });
+
+  it('shares the pacer with the other ops: 14 figures and three store.set together post all 17, at most 12 in any window', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    for (let i = 0; i < 14; i += 1) box.send(fig(i) as Parameters<Outbox['send']>[0]);
+    for (const key of ['pref:prefs', 'pref:ui', 'doc:pos'] as const) box.send({ t: 'store.set', key, value: '1' });
+    clock.advance(10_000);
+    expect(posted).toHaveLength(17);
+    expect(maxInWindow(posted.map((p) => p.at), 1000 + TRANSIT_MARGIN_MS)).toBeLessThanOrEqual(12);
+  });
+
+  it('is never coalesced: two figures with the same i both go, in order', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send(fig(3) as Parameters<Outbox['send']>[0]);
+    box.send(fig(3) as Parameters<Outbox['send']>[0]);
+    clock.advance(5000);
+    expect(posted.map((p) => p.msg)).toEqual([fig(3), fig(3)]);
+  });
+
+  it('calls `done` once the op is posted, not before: a figure waiting in the pacer\'s line is not done', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    const done: number[] = [];
+    for (let i = 0; i < 14; i += 1) box.send(fig(i) as Parameters<Outbox['send']>[0], () => void done.push(posted.length));
+    // twelve went at once, each done right after its own post; the other two wait for the window
+    expect(done).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+    expect(posted).toHaveLength(12);
+    clock.advance(10_000);
+    expect(done).toHaveLength(14);
+    expect(done.slice(12)).toEqual([13, 14]);
+  });
+
+  it('a figure sent before ready is posted by open() and then done', () => {
+    const { box, posted } = setup();
+    const done = vi.fn();
+    box.send(fig(0) as Parameters<Outbox['send']>[0], done);
+    expect(done).not.toHaveBeenCalled();
+    box.open();
+    expect(posted).toHaveLength(1);
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it('after dispose() an op is not posted and its `done` is never called', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    const done = vi.fn();
+    for (let i = 0; i < 14; i += 1) box.send(fig(i) as Parameters<Outbox['send']>[0], i < 12 ? undefined : done);
+    box.dispose();
+    box.send(fig(99) as Parameters<Outbox['send']>[0], done);
+    clock.advance(10_000);
+    expect(posted).toHaveLength(12);
+    expect(done).not.toHaveBeenCalled();
+  });
+});
 
 describe('the outbox before ready: a bounded, coalescing queue', () => {
   it('holds every op until open(); store.set coalesces per key (latest wins); the latest navigate, version and hash', () => {
@@ -231,6 +332,40 @@ describe('the outbox after ready: the pacer', () => {
     expect(posted).toEqual([]);
     clock.advance(100);
     expect(posted).toEqual([{ at: 100, msg: { t: 'hash', id: 'b' } }]);
+  });
+
+  it('a push followed within the window by a move that is not a push still posts one hash with push, and the place the reader left (docserver parity T6)', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'hash', id: 'target', push: 'true', from: 'left-1' });
+    clock.advance(30);
+    box.send({ t: 'hash', id: 'next' });
+    clock.advance(200);
+    expect(posted).toEqual([{ at: 100, msg: { t: 'hash', id: 'next', push: 'true', from: 'left-1' } }]);
+  });
+
+  it('two pushes in one window post one hash: the latest id, the first from', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'hash', id: 'one', push: 'true', from: 'left-1' });
+    box.send({ t: 'hash', id: 'two', push: 'true', from: 'left-2' });
+    clock.advance(200);
+    expect(posted).toEqual([{ at: 100, msg: { t: 'hash', id: 'two', push: 'true', from: 'left-1' } }]);
+  });
+
+  it('a first push with no from stays a push with none, a later push\'s from is not borrowed; moves alone stay moves', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'hash', id: 'one', push: 'true' });
+    box.send({ t: 'hash', id: 'two', push: 'true', from: 'left-2' });
+    clock.advance(200);
+    box.send({ t: 'hash', id: 'a' });
+    box.send({ t: 'hash', id: 'b' });
+    clock.advance(400);
+    expect(posted.map((p) => p.msg)).toEqual([
+      { t: 'hash', id: 'two', push: 'true' },
+      { t: 'hash', id: 'b' },
+    ]);
   });
 });
 
@@ -496,7 +631,7 @@ async function randomRun(seed: number, calls: number): Promise<Run> {
   const outbox = box;
   const a = createAdapters(outbox, {
     snapshot: [],
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: true },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false },
   });
   // Progress calls come from a generator of their own, so the sequence of the other calls is unchanged.
   const pr = rng(seed + 7919);

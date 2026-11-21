@@ -750,8 +750,8 @@ describe('commands without the bar: settings (B6.1, B6.3)', () => {
 });
 
 describe('the command registry (B6.3)', () => {
-  it('names four commands, runs a registered one only while live, and answers false otherwise', () => {
-    expect([...COMMAND_NAMES]).toEqual(['jump', 'settings', 'contents', 'outline']);
+  it('names seven commands, runs a registered one only while live, and answers false otherwise', () => {
+    expect([...COMMAND_NAMES]).toEqual(['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto', 'print-figures']);
     let alive = true;
     const commands = createCommands(() => alive);
     const ran: string[] = [];

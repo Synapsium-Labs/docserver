@@ -4,11 +4,14 @@
 // own pure files (never manifest.generated.ts or document.ts, Reference 3) and holds no import of render() or L2.
 //
 // Schema 1 has closed keys: s, nonce, html, title, frontList, version, images, initialHash, lang, prefs, snapshot,
-// features, mermaid and bridge, and two optional ones the appearance contract adds (OPTIONAL_SEED_KEYS, absent from a
-// mount with neither): `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
-// base64 text. The validator here checks their outer shape only, the bootstrap being small: the reader script runs
-// parseAppearance on the appearance, and the faces' signature and size are checked by frameDocument and again in the
-// reader script. Records (images, snapshot) are [key, value] pair arrays, so no `__proto__` key can exist.
+// features, mermaid and bridge, and four optional ones (OPTIONAL_SEED_KEYS, absent from a mount that gives none of them), two of
+// them the appearance contract's: `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
+// base64 text, and (the parity additions) `items`, the host's resolved item links, and `changesBase`, the comparison base (a full sha, judged whole here). The validator here checks their
+// outer shape only, the bootstrap being small, and `features.vocabulary` likewise (a plain object; its words are judged by
+// frameDocument, src/frame/vocabulary.ts, and by the reader's normalizeOptions): the reader script runs parseAppearance on the appearance, the faces'
+// signature and size are checked by frameDocument and again in the reader script, and an item's href (an absolute
+// `https:` URL) is judged by frameDocument (src/frame/items.ts) and again by the reader before it draws a link.
+// Records (images, snapshot) are [key, value] pair arrays, so no `__proto__` key can exist.
 // Every field has its grammar and its cap (SEED_LIMITS). Several caps are copies of L2's (src/enhance/options.ts) and
 // render()'s (src/render/frontMatter.ts, src/render/types.ts): this file typechecks with no DOM library and the bootstrap
 // must not bundle those modules, so it cannot import them; test/frame-seed.test.ts holds each copy equal to its original.
@@ -21,6 +24,7 @@
 import { APPEARANCE_SLOTS, type AppearanceSkinSlot } from '../enhance/appearance.js';
 import type { FrontEntry } from '../render/types.js';
 import { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';
+import { ITEM_LIMITS } from './items.js';
 import {
   BRIDGE_LIMITS,
   DOC_FIELDS,
@@ -104,9 +108,11 @@ export type MermaidDraw = (typeof MERMAID_DRAW)[number];
 
 /**
  * The ops the parent answers, each a boolean in the seed (FrameOptions.bridge: each defaults to true but `progress`,
- * which defaults to false, because a parent that never asked for progress should never be sent it; batch 1.1, C108).
+ * `places` and `printFigures`, which default to false, because a parent that never asked for progress, places or print
+ * figures should never be sent them; batch 1.1, C108, and the parity wire). `places` adds the `place` op and the `push` and
+ * `from` of `hash`; `printFigures` adds the `print-figure` op.
  */
-export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress'] as const);
+export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures'] as const);
 
 /**
  * The keys of `features`: three flags, `chrome`'s flags and `vocabulary`'s word lists, in groups (`status`,
@@ -114,7 +120,7 @@ export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'v
  * The same lists as L2's normalizeOptions reads (src/enhance/options.ts; held equal by test/frame-seed.test.ts).
  */
 export const FEATURE_KEYS = Object.freeze({
-  flags: Object.freeze(['rules', 'folds', 'keyboard'] as const),
+  flags: Object.freeze(['rules', 'folds', 'keyboard', 'inShort'] as const),
   chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),
   groups: Object.freeze({
     status: Object.freeze(['ok', 'wait', 'no', 'info'] as const),
@@ -130,6 +136,12 @@ export type SeedPrefs = FramePrefValues;
 
 /** The host's verdict (a parseAppearance result's `appearance`) as the seed carries it: strings, and groups of strings. */
 export type SeedAppearance = { readonly [key: string]: string | { readonly [key: string]: string } };
+
+/** One resolved item link: an item value the document names, and the absolute `https:` URL it opens. */
+export interface SeedItem {
+  readonly value: string;
+  readonly href: string;
+}
 
 /** The host's faces as base64 text, by role. */
 export type SeedFonts = { readonly sans?: string; readonly mono?: string };
@@ -147,6 +159,7 @@ export interface SeedFeatures {
   readonly rules?: boolean;
   readonly folds?: boolean;
   readonly keyboard?: boolean;
+  readonly inShort?: boolean;
   readonly chrome?: ChromeOptions;
   readonly vocabulary?: VocabularyOptions;
 }
@@ -183,6 +196,10 @@ export interface Seed {
   readonly appearance?: SeedAppearance;
   /** The host's faces; absent unless the host handed a good one. */
   readonly fonts?: SeedFonts;
+  /** The resolved item links (parity Task 4); absent unless the host resolved some. Full checks are the host side's (src/frame/items.ts). */
+  readonly items?: readonly SeedItem[];
+  /** The comparison base (parity Task 5): a full sha; absent unless the host seeded one. The reader asks `changes` for it once. */
+  readonly changesBase?: string;
 }
 
 /** A nonce: 128 bits as 32 lower-case hex digits. */
@@ -191,14 +208,6 @@ const NONCE = new RegExp(NONCE_SOURCE);
 
 /** A language tag, loosely BCP 47: a 2 to 8 letter primary tag, then subtags of 1 to 8 letters or digits. */
 export const LANG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/;
-
-/** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */
-export const SEED_KEYS: readonly string[] = Object.freeze([
-  'appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version',
-]);
-
-/** The keys a seed may leave out: a mount with no appearance and no faces writes the 1.1.0 seed, byte for byte. */
-export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(['appearance', 'fonts']);
 
 /** Keys refused at any depth: they could reach a prototype through a careless merge. */
 const PROTO_KEYS: readonly string[] = ['__proto__', 'constructor', 'prototype'];
@@ -346,6 +355,11 @@ function fontsMaxChars(): number {
   return obj(FONT_ROLES.map((role) => member(role, raw(SEED_LIMITS.fontFaceMaxChars))));
 }
 
+/** The longest seed text of `items`: 50 links, each a value and an href at its cap of the character that escapes longest. */
+function itemsMaxChars(): number {
+  return arr(ITEM_LIMITS.max, obj([member('value', str(ITEM_LIMITS.valueMax)), member('href', str(ITEM_LIMITS.hrefMax))]));
+}
+
 function seedFieldsMaxChars(): number {
   const L = SEED_LIMITS;
   const frontKey = member('key', str(L.frontKeyMaxCodePoints));
@@ -385,6 +399,8 @@ function seedFieldsMaxChars(): number {
     member('bridge', obj(BRIDGE_KEYS.map((k) => member(k, FALSE)))),
     member('appearance', appearanceMaxChars()),
     member('fonts', fontsMaxChars()),
+    member('items', itemsMaxChars()),
+    member('changesBase', raw(64)),
   ]);
   return fields + imagePadding;
 }
@@ -564,29 +580,6 @@ function snapshotOk(v: unknown): boolean {
   return total <= BRIDGE_LIMITS.storeBudgetBytes;
 }
 
-/** A vocabulary word list: L2's wordList (src/enhance/options.ts), duplicates kept (L2 drops them). */
-const isWordList = (v: unknown): boolean =>
-  listOf(v, SEED_LIMITS.words, (w) => isString(w, SEED_LIMITS.wordMaxCodeUnits, 1) && w.trim() === w);
-
-/** An object of own word lists, only these keys. */
-const isWordGroup = (v: unknown, keys: readonly string[]): boolean => isPlain(v) && onlyKeys(v, keys) && Object.values(v).every(isWordList);
-
-function vocabularyOk(v: unknown): boolean {
-  if (!isPlain(v)) return false;
-  const groups: Readonly<Record<string, readonly string[]>> = FEATURE_KEYS.groups;
-  const known = [...Object.keys(groups), ...FEATURE_KEYS.grammars, ...FEATURE_KEYS.lists];
-  if (!onlyKeys(v, known)) return false;
-  for (const [k, x] of Object.entries(v)) {
-    const group = Object.hasOwn(groups, k) ? groups[k] : undefined;
-    if (group !== undefined) {
-      if (!isWordGroup(x, group)) return false;
-    } else if ((FEATURE_KEYS.grammars as readonly string[]).includes(k)) {
-      if (!(k === 'ids' && x === false) && !isWordGroup(x, ['prefixes'])) return false;
-    } else if (!isWordList(x)) return false;
-  }
-  return true;
-}
-
 /** The features' own failure: its key set, then each key by name. */
 function featuresWhy(v: unknown): string | null {
   if (!isPlain(v) || !onlyKeys(v, [...FEATURE_KEYS.flags, 'chrome', 'vocabulary'])) return 'features';
@@ -594,7 +587,8 @@ function featuresWhy(v: unknown): string | null {
   const chrome = v['chrome'];
   if (chrome !== undefined && !(isPlain(chrome) && onlyKeys(chrome, FEATURE_KEYS.chrome) && Object.values(chrome).every(isBool))) return 'features.chrome';
   const vocabulary = v['vocabulary'];
-  if (vocabulary !== undefined && !vocabularyOk(vocabulary)) return 'features.vocabulary';
+  // The words are the host side's (src/frame/vocabulary.ts) and the reader's (normalizeOptions) to judge: only the outer shape here.
+  if (vocabulary !== undefined && !isPlain(vocabulary)) return 'features.vocabulary';
   return null;
 }
 
@@ -611,6 +605,27 @@ export const BASE64_FACE = /^[A-Za-z0-9+/]*={0,2}$/;
 /** The faces' outer shape: only `sans` and `mono`, each a base64 string within the cap. The signature and decoded size are checked after. */
 const fontsOk = (v: unknown): boolean =>
   isPlain(v) && onlyKeys(v, FONT_ROLES) && Object.values(v).every((f) => isString(f, SEED_LIMITS.fontFaceMaxChars) && BASE64_FACE.test(f));
+
+/**
+ * The items' outer shape: at most 50 plain `{value, href}` objects, a value of 1 to 100 code units and an href of 1 to 4096. The
+ * host side judges what a link is (items.ts). The caps are written out, not read from ITEM_LIMITS, which would put that object
+ * in the bootstrap's 32 KiB; test/frame-seed.test.ts holds them equal.
+ */
+const itemsOk = (v: unknown): boolean => listOf(v, 50, (i) => isPlain(i) && sameKeys(i, ['value', 'href']) && isString(i['value'], 100, 1) && isString(i['href'], 4096, 1));
+
+/**
+ * The optional keys of the seed, each with its outer check (a refusal names the key). One table, so each key is written once:
+ * OPTIONAL_SEED_KEYS and SEED_KEYS are derived from it, and validateSeed reads it. Defined here, after the checks it names.
+ */
+const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['changesBase', isFullSha], ['fonts', fontsOk], ['items', itemsOk]] as const;
+
+/** The keys a seed may leave out: the appearance, the comparison base, the faces and the item links. A mount that gives none of them writes a seed with none of these four keys (its `bridge` still carries all 8 of its own keys). */
+export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(OPTIONAL_CHECKS.map((c) => c[0]));
+
+/** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */
+export const SEED_KEYS: readonly string[] = Object.freeze(
+  ['bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version', ...OPTIONAL_SEED_KEYS].sort(),
+);
 
 const capOk = (v: unknown, max: number): boolean => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= max);
 
@@ -677,7 +692,7 @@ export function validateSeed(v: unknown): SeedCheck {
   }
   const bridge = v['bridge'];
   if (!isPlain(bridge) || !sameKeys(bridge, BRIDGE_KEYS) || !Object.values(bridge).every(isBool)) return fail('bridge');
-  if (Object.hasOwn(v, 'appearance') && !appearanceOk(v['appearance'])) return fail('appearance');
-  if (Object.hasOwn(v, 'fonts') && !fontsOk(v['fonts'])) return fail('fonts');
+  // The optional fields, each by its own outer check (a refusal names the field).
+  for (const [k, ok] of OPTIONAL_CHECKS) if (Object.hasOwn(v, k) && !ok(v[k])) return fail(k);
   return { ok: true, seed: v as unknown as Seed };
 }

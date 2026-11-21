@@ -8,6 +8,7 @@ export { DEFAULT_MAX_BYTES, DEFAULT_MAX_IMAGES } from './types.js';
 export type {
   FrontEntry,
   Heading,
+  ReaderVocabulary,
   RenderMeta,
   RenderOptions,
   RenderOutcome,

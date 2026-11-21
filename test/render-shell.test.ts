@@ -15,6 +15,7 @@ const EMPTY = {
   figures: 0,
   tables: 0,
   mermaidKinds: [],
+  items: [],
 };
 
 /** An engine whose core chain throws once it has parsed: the fault injection for the fallback. */

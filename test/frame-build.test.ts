@@ -556,8 +556,11 @@ describe('L3.M17: the free-global list', () => {
     const list = JSON.stringify(b.freeGlobals.names);
     expect(text.split(list)).toHaveLength(2);
     const once = 'free-globals: the bootstrap does not carry the list exactly once';
-    expect(problems(bundleOf(b, { bootstrap: text.replace(list, '[]') }))).toEqual([once]);
-    expect(problems(bundleOf(b, { bootstrap: `${text};${list};\n` }))).toEqual([once]);
+    // A second copy of the list is itself larger than the bootstrap's headroom under its budget (the parity wire's first landing
+    // left less than the list's size), so the budget's own problem is set aside: the row is about the embedding check.
+    const embedding = (bootstrap: string): string[] => problems(bundleOf(b, { bootstrap })).filter((m) => !m.startsWith('frame/bootstrap.js: ') || !m.includes('over its budget'));
+    expect(embedding(text.replace(list, '[]'))).toEqual([once]);
+    expect(embedding(`${text};${list};\n`)).toEqual([once]);
   });
 
   it('in a document, with the list pinned first, the Mermaid frame file evaluates and registers (no pinned name is one it writes)', () => {

@@ -203,11 +203,12 @@ async function colourAt(page: Page, target: Locator, dx: number): Promise<number
 
 // ───────── a page ─────────
 
-type How = { appearance?: unknown; width?: number; stylesheet?: string; marks?: boolean };
+type How = { appearance?: unknown; width?: number; stylesheet?: string; marks?: boolean; inShort?: boolean };
 
 async function open(browser: BrowserName, how: How = {}): Promise<OpenedDoc> {
   const options: Record<string, unknown> = { folds: false, storageKey: 'cues' };
   if (how.appearance !== undefined) options['appearance'] = how.appearance;
+  if (how.inShort === true) options['inShort'] = true;
   if (how.marks === true) options['storage'] = { snapshot: { 'docreader:doc:cues:marks': JSON.stringify({ '1-section': 'zz' }) } };
   return openDoc(DOC, options, {
     browser,
@@ -517,6 +518,27 @@ describeBrowsers((browser) => {
       }, rootSel);
       expect(got.on).toEqual({ weight: '600', shadow: `${css(HUE.ref)} 0px -2px 0px 0px inset` });
       expect(got.off).toEqual({ weight: '400', shadow: 'none' });
+    } finally {
+      await doc.close();
+    }
+  });
+
+  it('the switch the reader draws has the same pressed button: at 600 with an inset bottom bar of 2px in accent, in Full and in Headlines, and the unpressed one neither', async () => {
+    const doc = await open(browser, { appearance: COLLISION, inShort: true });
+    try {
+      const read = (): Promise<{ pressed: string; on: { weight: string; shadow: string }; off: { weight: string; shadow: string } }> =>
+        doc.page.evaluate((sel) => {
+          const style = (e: Element): { weight: string; shadow: string } => ({ weight: getComputedStyle(e).fontWeight, shadow: getComputedStyle(e).boxShadow });
+          const buttons = Array.from(document.querySelectorAll(`${sel} .short-view button`));
+          const on = buttons.find((b) => b.getAttribute('aria-pressed') === 'true') as Element;
+          const off = buttons.find((b) => b.getAttribute('aria-pressed') === 'false') as Element;
+          return { pressed: on.textContent ?? '', on: style(on), off: style(off) };
+        }, rootSel);
+      const bar = { weight: '600', shadow: `${css(HUE.ref)} 0px -2px 0px 0px inset` };
+      const none = { weight: '400', shadow: 'none' };
+      expect(await read()).toEqual({ pressed: 'Full', on: bar, off: none });
+      await doc.page.evaluate((sel) => (document.querySelector(`${sel} .short-view button`) as HTMLElement).click(), rootSel);
+      expect(await read()).toEqual({ pressed: 'Headlines', on: bar, off: none });
     } finally {
       await doc.close();
     }

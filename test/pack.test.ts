@@ -58,16 +58,16 @@ const STRICT_LINE = 'consumer-smoke: the packed declarations typecheck under str
 
 /** The runtime exports of each L3 entry, as the smoke lists them (sorted). */
 const FRAME_API = [
-  'APPEARANCE_CONTRACT', 'APPEARANCE_LABEL_DEFAULT', 'APPEARANCE_PAIRS', 'APPEARANCE_SLOTS', 'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_ACCEPTS', 'FRAME_MANIFEST', 'FrameError',
-  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_HOSTED_KINDS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
-  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isFragmentId', 'mermaidGate', 'mermaidThemeOf', 'parseAppearance',
+  'ANCHOR_LIMITS', 'APPEARANCE_CONTRACT', 'APPEARANCE_LABEL_DEFAULT', 'APPEARANCE_PAIRS', 'APPEARANCE_SLOTS', 'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_ACCEPTS', 'FRAME_MANIFEST', 'FrameError',
+  'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_HOSTED_KINDS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PLACE_KINDS', 'PREF_KEYS', 'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA',
+  'checkFrameCsp', 'frameCsp', 'frameDocument', 'isAnchorToken', 'isFragmentId', 'mermaidGate', 'mermaidThemeOf', 'parseAppearance', 'pngBytesOfBase64',
 ];
 const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'MAX_LINE_CHARS', 'MAX_WHOLE_BLOCK_CHARS', 'createHighlighter', 'resolveLanguage'];
 
 const INERT_LINE =
   'consumer-smoke: @synapsium-labs/pinax-lib/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
 const ASSETS_LINE =
-  'consumer-smoke: every one of the 13 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
+  'consumer-smoke: every one of the 14 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
 const SCANS_LINE =
   "consumer-smoke: the M8.3, M8.4 and M8.8 scans pass on both srcdocs and on the clean template, and each of the 16 labelled frame mutants fails its own row's scan";
 
@@ -105,6 +105,11 @@ const ALLOWED = [
   /^conformance\/frame-mutants\/[a-z-]+\.(?:html|json)$/,
   /^conformance\/(?:corpus|expected)\/[A-Za-z0-9/_-]+\.(?:md|html|meta\.json)$/,
   /^assets\/reader\.css$/,
+  // Print mode (docserver parity T7): its stylesheet, its modules (one directory deep, named as the others are) and the fixtures and
+  // vocabulary file the first consumer derives its print allow-list from.
+  /^assets\/print\.css$/,
+  /^dist\/render\/print\/[a-z]+\.(?:js|d\.ts)$/,
+  /^conformance\/print\/(?:[a-z]+\.(?:md|html)|vocabulary\.json)$/,
   /^assets\/fonts\/[A-Za-z0-9._-]+\.(?:woff2|txt|md)$/,
   /^assets\/mermaid\/mermaid\.mjs$/,
   // The frame assets (docserver L3): the committed manifest, the frame files and the Mermaid frame file (Task 6).
@@ -275,6 +280,11 @@ describe('npm pack', () => {
       'package.json',
       // the layout's stylesheet, its fonts, and the licence and notices the fonts must travel with
       'assets/reader.css',
+      'assets/print.css',
+      'conformance/print/vocabulary.json',
+      'conformance/print/plan.html',
+      'dist/render/print/index.js',
+      'dist/render/print/index.d.ts',
       'assets/fonts/source-serif-4-latin-opsz-normal.woff2',
       'assets/fonts/source-serif-4-latin-opsz-italic.woff2',
       'assets/fonts/source-sans-3-latin-wght-normal.woff2',

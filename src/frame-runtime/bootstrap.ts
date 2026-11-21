@@ -425,6 +425,10 @@ interface EnhanceApi extends ReaderApi<HTMLElement> {
         ...(adapters.changes === undefined ? {} : { changes: adapters.changes }),
         ...(adapters.openVersion === undefined ? {} : { openVersion: adapters.openVersion }),
         ...(adapters.onProgress === undefined ? {} : { onProgress: adapters.onProgress }),
+        ...(adapters.onPlace === undefined ? {} : { onPlace: adapters.onPlace }),
+        ...adapters.itemOption,
+        ...adapters.printOption,
+        ...(seed.changesBase === undefined ? {} : { changesBase: seed.changesBase }),
         // The seed's caps, secure keys and `draw`, passed through (Task 16): in 'after-ready' always, with the deferred load.
         ...mermaidOption(seed.mermaid, mermaidModule, () => lateBuild),
       });

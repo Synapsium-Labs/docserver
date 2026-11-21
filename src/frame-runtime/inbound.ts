@@ -17,12 +17,18 @@
 //                   by length) or `unavailable: true`; both, neither, another key, a non-string text or any other
 //                   `unavailable` is ignored. Whether the frame acts on it (its seed draws 'after-ready', it has
 //                   settled, it is the first) is the bootstrap's own check; this file judges the shape only (C107).
-//   command         exactly `name`, a string that is one of COMMAND_OPS; any other name, a non-string or another key is
-//                   ignored (batch 1.1, C108). Whether the reader has that tool is the reader's own answer.
+//   command         `name`, a string that is one of COMMAND_OPS; any other name, a non-string or another key is ignored
+//                   (batch 1.1, C108). Whether the reader has that tool is the reader's own answer. `goto` alone carries
+//                   `id` (required, the fragment grammar) and `from` (optional, a string of at most ANCHOR_LIMITS.from UTF-16
+//                   code units, counted by length): the shape only, and the token's own grammar is the reader's (the
+//                   bootstrap does not bundle it). Every other name, `close-overlay` and `print-figures` included, is
+//                   exactly `name`: an `id` or a `from` on it is ignored (the parity wire).
 //   appearance      exactly `v` (the number 1) and `appearance`, a plain object (prototype Object.prototype or null) whose
 //                   own properties are all data properties with string keys and no proto key: the outer shape and nothing
 //                   deeper. The reader script runs the contract's full validator (parseAppearance) on every value it
 //                   applies, so a forged value meets the whole grammar in the frame (the appearance contract, section 8).
+import { ANCHOR_LIMITS } from '../frame/anchor.js';
+import { isFragmentId } from '../frame/fragment.js';
 import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_ACCEPTS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type CommandOp, type ParentToFrame } from '../frame/protocol.js';
 
 const getProto = Object.getPrototypeOf;
@@ -80,7 +86,13 @@ export function parseParentMessage(data: unknown): ParentToFrame | null {
   if (op === 'command') {
     const name = m.get('name');
     // Another key is already refused by the key set above, and a missing `name` is not a string.
-    return typeof name === 'string' && (COMMAND_OPS as readonly string[]).includes(name) ? { t: 'command', name: name as CommandOp } : null;
+    if (typeof name !== 'string' || !(COMMAND_OPS as readonly string[]).includes(name)) return null;
+    if (name !== 'goto') return m.size === 2 ? { t: 'command', name: name as Exclude<CommandOp, 'goto'> } : null;
+    const id = m.get('id');
+    if (!isFragmentId(id)) return null;
+    if (!m.has('from')) return { t: 'command', name: 'goto', id };
+    const from = m.get('from');
+    return typeof from === 'string' && from.length <= ANCHOR_LIMITS.from ? { t: 'command', name: 'goto', id, from } : null;
   }
   if (op === 'mermaid') {
     const hasText = m.has('text');

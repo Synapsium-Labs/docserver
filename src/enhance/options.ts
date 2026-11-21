@@ -12,7 +12,7 @@
 // (state.ts), so a storage hook can never run before the instance is reserved. The signal is a host object read
 // through its own interface (`aborted`, its listeners).
 //
-// A function option (onLink, onHash, copy, changes, openVersion, itemLink, onProgress, and mermaid.load) is an own data property
+// A function option (onLink, onHash, copy, changes, openVersion, itemLink, onProgress, onPlace, onPrintFigure, and mermaid.load) is an own data property
 // holding a function. It is only checked with `typeof` here, never called, and no property of it is read, so no host
 // code runs; it is kept with the object it came from (its receiver) in `callbacks`, which only host.ts calls, inside
 // the instance's operations. Features never see the functions: they use `ctx.host`.
@@ -70,6 +70,10 @@ export interface NormalizedOptions {
   readonly keyboard: boolean;
   readonly chrome: ChromeFlags;
   readonly rules: boolean;
+  /** The "Headlines | Full" switch of "In short" (editorial.ts). */
+  readonly inShort: boolean;
+  /** The comparison base to show at start (since.ts); null for none. */
+  readonly changesBase: string | null;
   /** The id to open the document at, without '#'; null for none. */
   readonly initialHash: string | null;
   /** Null: no drawing. */
@@ -111,8 +115,8 @@ export function prefNames(): (keyof Prefs)[] {
 /** Every option enhance() accepts. */
 export const OPTION_KEYS: readonly string[] = [
   'prefs', 'storage', 'storageKey', 'info', 'folds', 'signal',
-  'posKey', 'keyboard', 'chrome', 'rules', 'initialHash',
-  'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'mermaid',
+  'posKey', 'keyboard', 'chrome', 'rules', 'inShort', 'changesBase', 'initialHash',
+  'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'onPlace', 'onPrintFigure', 'mermaid',
   'vocabulary', 'namespace', 'appearance',
 ];
 const INFO_KEYS: readonly string[] = ['title', 'frontList', 'sha', 'draft', 'commits', 'only'];
@@ -474,6 +478,13 @@ function normalizeHash(v: unknown): string | null {
   return v.length > LIMITS.hash ? null : v;
 }
 
+/** changesBase: a sha (see SHA) or left out; anything else is refused. */
+function normalizeBase(v: unknown): string | null {
+  if (v === undefined) return null;
+  if (!isSha(v)) throw invalid('changesBase must be 7 to 40 hex characters, or 64');
+  return v;
+}
+
 /** enhance()'s options, normalized, or EnhanceError('invalid-options'). */
 export function normalizeOptions(options: unknown): NormalizedOptions {
   if (options === undefined) return normalizeOptions({});
@@ -495,6 +506,8 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
     itemLink: callback('itemLink', fields['itemLink'], options),
     mermaid: mermaid?.load ?? null,
     onProgress: callback('onProgress', fields['onProgress'], options),
+    onPlace: callback('onPlace', fields['onPlace'], options),
+    onPrintFigure: callback('onPrintFigure', fields['onPrintFigure'], options),
   });
   return {
     prefs: prefs === undefined ? {} : normalizePrefs(prefs),
@@ -508,6 +521,8 @@ export function normalizeOptions(options: unknown): NormalizedOptions {
     keyboard: flag('keyboard', fields['keyboard'], true),
     chrome: normalizeChrome(fields['chrome']),
     rules: flag('rules', fields['rules'], false),
+    inShort: flag('inShort', fields['inShort'], false),
+    changesBase: normalizeBase(fields['changesBase']),
     initialHash: normalizeHash(fields['initialHash']),
     mermaid: mermaid?.settings ?? null,
     vocabulary: normalizeVocabulary(fields['vocabulary']),

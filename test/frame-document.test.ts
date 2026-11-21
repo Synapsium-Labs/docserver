@@ -160,6 +160,7 @@ describe("./frame's entry: Reference §1's full export list", () => {
     const entry = (await import('../src/frame/index.js')) as Record<string, unknown>;
     expect(Object.keys(entry).sort()).toEqual(
       [
+        'ANCHOR_LIMITS',
         'APPEARANCE_CONTRACT',
         'APPEARANCE_LABEL_DEFAULT',
         'APPEARANCE_PAIRS',
@@ -178,16 +179,19 @@ describe("./frame's entry: Reference §1's full export list", () => {
         'MERMAID_HOSTED_KINDS',
         'MERMAID_LIMIT_CEILINGS',
         'OP_KEYS',
+        'PLACE_KINDS',
         'PREF_KEYS',
         'SEED_HTML_MAX_CHARS',
         'SEED_SCHEMA',
         'checkFrameCsp',
         'frameCsp',
         'frameDocument',
+        'isAnchorToken',
         'isFragmentId',
         'mermaidGate',
         'mermaidThemeOf',
         'parseAppearance',
+        'pngBytesOfBase64',
       ].sort(),
     );
   });
@@ -697,7 +701,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     expect(seed['prefs']).toEqual({ theme: 'dark', width: 'wide', font: 'sans' });
     expect(seed['snapshot']).toEqual([['pref:prefs', '{"theme":"dark"}'], ['doc:pos', '{"y":120}'], ['pref:ui', 'null']]);
     expect(seed['features']).toEqual(o.features);
-    expect(seed['bridge']).toEqual({ links: false, hash: true, copy: true, changes: false, versions: true, progress: false });
+    expect(seed['bridge']).toEqual({ links: false, hash: true, copy: true, changes: false, versions: true, progress: false, places: false, printFigures: false });
     expect(seed['mermaid']).toEqual({ maxTextSize: 16384, maxEdges: 200, secure: ['themeCSS'], draw: 'on-request' });
     expect(validateSeed(seed)).toEqual({ ok: true, seed });
   });
@@ -712,7 +716,7 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
       snapshot: [],
       features: {},
       mermaid: null,
-      bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
+      bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false },
     });
   });
 
@@ -900,14 +904,15 @@ describe('L3.M7 the real version, images, snapshot, features and bridge: seeded 
     expect(refusal(run)).toBe('no refusal');
     const seed = seedOf(run());
     expect(seed['version']).toEqual({ sha: null, draft: true, commits: null, only: null });
-    expect(seed['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
+    expect(seed['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false });
     expect(seed['features']).toEqual({});
   });
 });
 
-describe("B7.2 the progress switch: absent is false while every other bridge switch defaults to true (batch 1.1, C108)", () => {
+describe("B7.2 the progress switch: absent is false while the five answered bridge switches default to true (batch 1.1, C108)", () => {
   const d = (): RenderInput => plain();
-  const OTHERS = { links: true, hash: true, copy: true, changes: true, versions: true };
+  // The two switches of the parity wire (places, printFigures) are off by default too, as `progress` is; the five answered ops default to true.
+  const OTHERS = { links: true, hash: true, copy: true, changes: true, versions: true, places: false, printFigures: false };
 
   it('no bridge at all seeds progress false and the other switches true', () => {
     expect(seedOf(frame(d()))['bridge']).toEqual({ ...OTHERS, progress: false });
@@ -922,7 +927,32 @@ describe("B7.2 the progress switch: absent is false while every other bridge swi
   it('progress: true and progress: false are seeded as given; the others keep their defaults', () => {
     expect(seedOf(frame(d(), { bridge: { progress: true } }))['bridge']).toEqual({ ...OTHERS, progress: true });
     expect(seedOf(frame(d(), { bridge: { progress: false } }))['bridge']).toEqual({ ...OTHERS, progress: false });
-    expect(seedOf(frame(d(), { bridge: { progress: true, links: false, versions: false } }))['bridge']).toEqual({ ...OTHERS, links: false, versions: false, progress: true });
+    expect(seedOf(frame(d(), { bridge: { progress: true, links: false, versions: false } }))['bridge']).toEqual({ ...OTHERS, links: false, versions: false, progress: true, places: false, printFigures: false });
+  });
+
+  it('places and printFigures are off unless asked for, in any bridge that leaves them out (P1e)', () => {
+    for (const bridge of [undefined, {}, { links: false }, { progress: true }, { places: undefined, printFigures: undefined }] as const) {
+      const got = seedOf(frame(d(), bridge === undefined ? {} : { bridge: bridge as NonNullable<FrameOptions['bridge']> }))['bridge'] as Record<string, unknown>;
+      expect(got['places'], JSON.stringify(bridge)).toBe(false);
+      expect(got['printFigures'], JSON.stringify(bridge)).toBe(false);
+    }
+  });
+
+  it('places: true and printFigures: true are seeded as given, each alone, and the seed passes the validator', () => {
+    expect(seedOf(frame(d(), { bridge: { places: true } }))['bridge']).toEqual({ ...OTHERS, progress: false, places: true });
+    expect(seedOf(frame(d(), { bridge: { printFigures: true } }))['bridge']).toEqual({ ...OTHERS, progress: false, printFigures: true });
+    expect(seedOf(frame(d(), { bridge: { places: true, printFigures: true, progress: true } }))['bridge']).toEqual({ ...OTHERS, places: true, printFigures: true, progress: true });
+    expect(seedOf(frame(d(), { bridge: { places: false, printFigures: false } }))['bridge']).toEqual({ ...OTHERS, progress: false });
+    const seed = seedOf(frame(d(), { bridge: { places: true, printFigures: true } }));
+    expect(validateSeed(seed)).toEqual({ ok: true, seed });
+  });
+
+  it('a places or printFigures switch that is not a boolean is invalid-input', () => {
+    for (const k of ['places', 'printFigures']) {
+      for (const v of ['yes', 1, null, {}]) {
+        expect(refusal(() => frame(d(), { bridge: { [k]: v } as unknown as NonNullable<FrameOptions['bridge']> })), `${k} ${JSON.stringify(v)}`).toBe('invalid-input');
+      }
+    }
   });
 
   it('a seed with progress true passes the validator', () => {
@@ -943,7 +973,7 @@ describe('L3.M7 Task 3 the default keys: frameDocument\'s seed holds every schem
     images: [],
     snapshot: [],
     features: {},
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false },
   };
 
   it('mermaid off: exactly SEED_KEYS, each new key at its default, and the seed passes validateSeed', () => {
@@ -1167,11 +1197,15 @@ describe('the appearance contract: the derived srcdoc cap rises by both fields a
   /** SEED_FIELDS_MAX_CHARS at 1.1.0 (the commit aceb346's src/frame/seed.ts, evaluated): neither field was counted. */
   const SEED_FIELDS_MAX_CHARS_1_1_0 = 45768624;
 
-  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters', () => {
+  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters (the two bridge members of the parity wire, the In short flag and the comparison base among them)', () => {
     const faces = 2 * 174764;
     expect(faces).toBe(349528);
-    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`.
-    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length;
+    // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`, the parity wire's two bridge members (the cap counts a switch as `false`),
+    // and the items (Task 4): `,"items":` and 50 links of a 100-unit value and a 4096-unit href, each character of the six `\u003c` writes.
+    const items = JSON.stringify(Array.from({ length: 50 }, () => ({ value: '<'.repeat(100), href: '<'.repeat(4096) }))).replace(/</g, '\\u003c');
+    // Task 5 adds the `inShort` flag (counted `false`) and the comparison base, a 64-digit sha: `,"changesBase":"` and the digits and the closing quote.
+    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length + `,"places":false`.length + `,"printFigures":false`.length + `,"items":`.length + items.length
+      + `,"inShort":false`.length + `,"changesBase":"${'f'.repeat(64)}"`.length;
     const rise = faces + MAXIMAL_APPEARANCE_TEXT().length + keys;
     expect(SEED_FIELDS_MAX_CHARS - SEED_FIELDS_MAX_CHARS_1_1_0).toBe(rise);
     const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
@@ -1407,5 +1441,203 @@ describe('L3.M8 Mermaid in the skeleton (the prototype\'s P7)', () => {
     expect(mermaidText).not.toContain('org.eclipse.elk');
     expect(mermaidText).not.toMatch(/\(void 0\)\(/);
     expect(frameCsp()).toContain(FRAME_MANIFEST.mermaid.csp);
+  });
+});
+
+describe('the resolved item links (docserver parity, Task 4): FrameOptions.items, an optional seed field judged in full here', () => {
+  const link = (i = 1): { value: string; href: string } => ({ value: `AB-${String(i)}`, href: `https://tracker.example/AB-${String(i)}` });
+  const links = (n: number): { value: string; href: string }[] => Array.from({ length: n }, (_, i) => link(i + 1));
+  const bad = (items: unknown): string => refusal(() => frame(plain(), { items: items as NonNullable<FrameOptions['items']> }));
+
+  it('seeds the links as given, in order, and with none the srcdoc is the one without the option, byte for byte', () => {
+    const out = frame(plain(), { items: [link(2), link(1)] });
+    expect(seedOf(out)['items']).toEqual([link(2), link(1)]);
+    const without = frame(plain());
+    expect(Object.hasOwn(seedOf(without), 'items')).toBe(false);
+    for (const none of [undefined, []]) expect(frame(plain(), { items: none as NonNullable<FrameOptions['items']> }), String(none)).toBe(without);
+  });
+
+  it('takes at most 50 links: 50 are seeded, 51 are refused invalid-input (P4b at the seed)', () => {
+    expect(seedOf(frame(plain(), { items: links(50) }))['items']).toHaveLength(50);
+    expect(bad(links(51))).toBe('invalid-input');
+    expect(bad(links(600))).toBe('invalid-input');
+  });
+
+  it('takes a value of 1 to 100 code units: 1 and 100 are seeded, 0 and 101 are refused', () => {
+    for (const n of [1, 100]) expect(refusal(() => frame(plain(), { items: [{ value: 'V'.repeat(n), href: 'https://x.example/' }] })), String(n)).toBe('no refusal');
+    for (const n of [0, 101]) expect(bad([{ value: 'V'.repeat(n), href: 'https://x.example/' }]), String(n)).toBe('invalid-input');
+  });
+
+  it('takes an absolute https: URL of at most 4096 code units: `https:` passes; `http:`, other schemes, relative and malformed hrefs are refused (P4c at the seed)', () => {
+    const host = 'https://tracker.example/';
+    for (const href of [host, 'https://tracker.example', `${host}a?b=c#d`, 'HTTPS://tracker.example/x', `${host}${'p'.repeat(4096 - host.length)}`]) {
+      expect(refusal(() => frame(plain(), { items: [{ value: 'AB-1', href }] })), href.slice(0, 40)).toBe('no refusal');
+    }
+    const refused = [
+      'http://tracker.example/AB-1',
+      'javascript:alert(1)',
+      'data:text/html,x',
+      'ftp://tracker.example/',
+      `http${String.fromCharCode(0x17f)}://tracker.example/AB-1`,
+      '//tracker.example/AB-1',
+      '/AB-1',
+      'AB-1',
+      '',
+      'https:',
+      'https://',
+      'https:///path',
+      'https://user@tracker.example/',
+      'https://user:pw@tracker.example/',
+      'https://tracker.example/ x',
+      'https://tracker.example/ x',
+      'https://tracker.example/﻿x',
+      'https://tracker.example/\u0000',
+      'https://tracker.example/\u007f',
+      'https://tracker.example/\u0085',
+      'https://tracker.example/\\x',
+      'https://tracker.example\\x',
+      ' https://tracker.example/',
+      'https://tracker.example/\n',
+      `${host}${'p'.repeat(4097 - host.length)}`,
+    ];
+    for (const href of refused) expect(bad([{ value: 'AB-1', href }]), JSON.stringify(href).slice(0, 50)).toBe('invalid-input');
+  });
+
+  it('takes plain data only: a list of plain { value, href } objects; a getter, a class, extra or missing keys, a non-string are refused', () => {
+    expect(bad('AB-1')).toBe('invalid-input');
+    expect(bad({ 0: link() })).toBe('invalid-input');
+    expect(bad(null)).toBe('invalid-input');
+    expect(bad([null])).toBe('invalid-input');
+    expect(bad([['AB-1', 'https://x.example/']])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1' }])).toBe('invalid-input');
+    expect(bad([{ ...link(), extra: 'x' }])).toBe('invalid-input');
+    expect(bad([{ value: 1, href: 'https://x.example/' }])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1', href: undefined }])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1', get href() { return 'https://x.example/'; } }])).toBe('invalid-input');
+    class Link { value = 'AB-1'; href = 'https://x.example/'; }
+    expect(bad([new Link()])).toBe('invalid-input');
+    expect(bad([{ value: 'AB-1', href: 'https://x.example/', ['__proto__']: 1 }])).toBe('invalid-input');
+    // A value is data the seed carries, never markup: it is escaped like every field.
+    const hostile = frame(plain(), { items: [{ value: '</script><script>x()</script>', href: 'https://x.example/?a=<b>&c' }] });
+    expect(hostile).not.toContain('</script><script>x()');
+    expect(seedOf(hostile)['items']).toEqual([{ value: '</script><script>x()</script>', href: 'https://x.example/?a=<b>&c' }]);
+  });
+
+  it('copies the list once: a later change by the host reaches no seed, and the host\'s own list is not changed', () => {
+    const own = [link()];
+    const out = frame(plain(), { items: own });
+    own[0] = { value: 'ZZ-9', href: 'https://elsewhere.example/' };
+    expect(seedOf(out)['items']).toEqual([link()]);
+  });
+
+  it('the seed with items is judged by the bootstrap\'s own validator, whose outer check it passes', () => {
+    const check = validateSeed({ ...seedOf(frame(plain(), { items: links(50) })) });
+    expect(check.ok).toBe(true);
+  });
+});
+
+describe('features.vocabulary: judged in full on the host side before the bootstrap\'s own check (docserver parity, Task 5, the bootstrap split)', () => {
+  const words = (n: number): string[] => Array.from({ length: n }, (_, i) => `w${String(i)}`);
+  /** The refusal's message, or 'no refusal'. */
+  const message = (vocabulary: unknown): string => {
+    try {
+      frame(plain(), { features: { vocabulary } as unknown as FrameFeatures });
+    } catch (e) {
+      return e instanceof FrameError ? `${e.code}: ${e.message}` : `not a FrameError: ${String(e)}`;
+    }
+    return 'no refusal';
+  };
+  const REFUSED = 'invalid-input: frameDocument: the seed is refused (features.vocabulary)';
+  const cases: readonly (readonly [string, unknown])[] = [
+    ['a key the vocabulary does not have', { unknown: [] }],
+    ['an empty word', { qualifiers: [''] }],
+    ['a word with a leading space', { qualifiers: [' a'] }],
+    ['a word with a trailing no-break space', { qualifiers: ['a '] }],
+    ['a word of 65 code units', { qualifiers: ['w'.repeat(65)] }],
+    ['a list of 201 words', { qualifiers: words(201) }],
+    ['a list that is a string', { qualifiers: 'annex' }],
+    ['ids: true', { ids: true }],
+    ['ruleIds: false', { ruleIds: false }],
+    ['an id grammar with an extra key', { ids: { prefixes: ['R'], extra: [] } }],
+    ['a status group member that is a string', { status: { ok: 'done' } }],
+    ['an unknown status group member', { status: { good: ['done'] } }],
+    ['an unknown plan group member', { plan: { owner: ['x'] } }],
+    ['a non-string word', { attention: { status: [1] } }],
+    ['a vocabulary that is an array', []],
+    ['a vocabulary that is a string', 'annex'],
+  ];
+
+  it.each(cases)('refuses %s, naming features.vocabulary, as invalid-input', (_name, vocabulary) => {
+    expect(message(vocabulary)).toBe(REFUSED);
+  });
+
+  it('names the first fault the bootstrap\'s validator reached before the split: a vocabulary that is not whole gives way to a fault judged before `features`, and goes before one judged after it', () => {
+    const run = (over: Partial<FrameOptions>, vocabulary: unknown = { qualifiers: [''] }): string => {
+      try {
+        frame(plain(), { ...over, features: { ...(over.features ?? {}), vocabulary } as unknown as FrameFeatures });
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+      return 'no refusal';
+    };
+    const seed = (why: string): string => `frameDocument: the seed is refused (${why})`;
+    // judged before `features`: the earlier fault is named
+    expect(run({ prefs: { theme: 'neon' } as unknown as NonNullable<FrameOptions['prefs']> })).toBe(seed('prefs.theme'));
+    // judged inside `features`, before the vocabulary: the flag and the chrome are named
+    expect(run({ features: { rules: 'yes' } as unknown as FrameFeatures })).toBe(seed('features.rules'));
+    expect(run({ features: { chrome: { bar: 1 } } as unknown as FrameFeatures })).toBe(seed('features.chrome'));
+    // judged after `features`: the vocabulary is named
+    expect(run({ mermaid: { secure: ['1bad'], draw: 'auto' } })).toBe(seed('features.vocabulary'));
+    expect(run({ bridge: { links: 'yes' } as unknown as NonNullable<FrameOptions['bridge']> })).toBe(seed('features.vocabulary'));
+    // the same later faults alone are named as themselves, and a vocabulary that is whole changes nothing
+    expect(run({ mermaid: { secure: ['1bad'], draw: 'auto' } }, {})).toBe(seed('mermaid.secure'));
+    expect(run({ bridge: { links: 'yes' } as unknown as NonNullable<FrameOptions['bridge']> }, {})).toBe(seed('bridge'));
+  });
+
+  it('passes a vocabulary the reader takes: every list full, ids false, and none at all', () => {
+    expect(message({ ids: false, qualifiers: ['annex'], status: { ok: ['done'] }, ruleIds: { prefixes: ['R'] } })).toBe('no refusal');
+    expect(message({ qualifiers: words(200) })).toBe('no refusal');
+    expect(message({ qualifiers: ['w'.repeat(64)] })).toBe('no refusal');
+    expect(message({})).toBe('no refusal');
+    expect(refusal(() => frame(plain(), { features: {} }))).toBe('no refusal');
+  });
+});
+
+describe('the comparison base and the In short flag (docserver parity, Task 5): FrameOptions.changesBase, FrameFeatures.inShort', () => {
+  const SHA40 = 'a'.repeat(40);
+  const SHA64 = 'b'.repeat(64);
+  const bad = (changesBase: unknown): string => refusal(() => frame(plain(), { changesBase: changesBase as string }));
+
+  it('seeds a full sha as given, and with none the srcdoc is the one without the option, byte for byte', () => {
+    for (const sha of [SHA40, SHA64]) expect(seedOf(frame(plain(), { changesBase: sha }))['changesBase'], sha).toBe(sha);
+    const without = frame(plain());
+    expect(Object.hasOwn(seedOf(without), 'changesBase')).toBe(false);
+    expect(frame(plain(), { changesBase: undefined } as unknown as Partial<FrameOptions>)).toBe(without);
+  });
+
+  it('refuses anything but a full sha as invalid-input: a short sha, upper case, a non-string, null, empty', () => {
+    for (const v of ['abc1234', SHA40.slice(1), `${SHA40}a`, SHA40.toUpperCase(), '', null, 40, [SHA40], { sha: SHA40 }, true]) expect(bad(v), JSON.stringify(v)).toBe('invalid-input');
+    expect(bad(SHA40)).toBe('no refusal');
+  });
+
+  it('refuses it by its own check, before the bootstrap\'s validator: the message names the option and the grammar', () => {
+    for (const v of ['abc1234', SHA40.toUpperCase(), null, 40]) {
+      let message = 'no refusal';
+      try {
+        frame(plain(), { changesBase: v as unknown as string });
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+      }
+      expect(message, JSON.stringify(v)).toBe('frameDocument: changesBase must be a full sha: 40 or 64 lower-case hex digits');
+    }
+  });
+
+  it('the seed with the base is judged by the bootstrap\'s own validator, whose check it passes', () => {
+    expect(validateSeed({ ...seedOf(frame(plain(), { changesBase: SHA40 })) })).toMatchObject({ ok: true });
+  });
+
+  it('seeds features.inShort as given: true and false are kept, anything else is refused', () => {
+    for (const v of [true, false]) expect(seedOf(frame(plain(), { features: { inShort: v } }))['features'], String(v)).toEqual({ inShort: v });
+    for (const v of ['yes', 1, null]) expect(refusal(() => frame(plain(), { features: { inShort: v } as unknown as FrameFeatures })), String(v)).toBe('invalid-input');
   });
 });

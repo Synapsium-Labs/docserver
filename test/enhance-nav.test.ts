@@ -16,6 +16,7 @@ import {
   destroyEnhancement,
   enhance,
   goToHash,
+  runEnhancementCommand,
   type ChromeOptions,
   type CommitEntry,
   type EnhanceOptions,
@@ -1516,5 +1517,52 @@ describe('the section link', () => {
     expect(onHash.mock.calls).toEqual([['one', { push: true, from: null }]]);
     expect(document.activeElement).toBe(el(root, 'h2', 'one'));
     expect(current?.intoView.at(-1)?.[0]).toBe(el(root, 'h2', 'one'));
+  });
+});
+
+describe('the goto command (docserver parity T3): what Back sends the frame', () => {
+  it("a real jump's from, passed back through goto, lands on the place left and calls no onHash", async () => {
+    const s = stage();
+    const onHash = vi.fn();
+    const root = mount();
+    await enhance(root, { onHash });
+    const para = blockAfter(root, '1-scope');
+    s.tops.set(para, 600);
+    s.y = 560;
+    s.hit = para;
+    click(find(root, 'a[href="#2-design"]'));
+    expect(onHash).toHaveBeenCalledTimes(1);
+    const entry = onHash.mock.calls[0]?.[1] as { push: boolean; from: string };
+    expect(entry.push).toBe(true);
+    s.tops.set(para, 900);
+    s.y = 3000;
+    expect(runEnhancementCommand(root, 'goto', { id: '2-design', from: entry.from })).toBe(true);
+    expect(s.scrolled.at(-1)).toEqual([860, 'auto']);
+    expect(onHash).toHaveBeenCalledTimes(1);
+  });
+
+  it('a from the reader rejects goes to id alone; no from goes to id; an id that names nothing does nothing', async () => {
+    const s = stage();
+    const root = mount();
+    await enhance(root, {});
+    const design = el(root, 'h2', '2-design');
+    expect(runEnhancementCommand(root, 'goto', { id: '2-design', from: '{"line": "x y", "offset": 0, "y": 0}' })).toBe(true);
+    expect(runEnhancementCommand(root, 'goto', { id: '2-design' })).toBe(true);
+    expect(s.intoView.map(([e]) => e)).toEqual([design, design]);
+    expect(runEnhancementCommand(root, 'goto', { id: 'nowhere' })).toBe(true);
+    expect(s.intoView).toHaveLength(2);
+    expect(s.scrolled).toEqual([]);
+  });
+
+  it('a malformed argument, a missing one and a root that is not enhanced answer false and move nothing', async () => {
+    const s = stage();
+    const root = mount();
+    await enhance(root, {});
+    for (const args of [undefined, null, 7, 'x', {}, { id: 7 }, { id: null }, { id: 'x', from: 7 }, { id: '2-design', from: ['t'] }]) {
+      expect(runEnhancementCommand(root, 'goto', args as never), JSON.stringify(args)).toBe(false);
+    }
+    expect(s.intoView).toEqual([]);
+    expect(s.scrolled).toEqual([]);
+    expect(runEnhancementCommand(mount(), 'goto', { id: '2-design' })).toBe(false);
   });
 });

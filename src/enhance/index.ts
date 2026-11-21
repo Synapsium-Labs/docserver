@@ -11,7 +11,9 @@ export type {
   EnhanceOptions,
   FrontListEntry,
   MermaidOptions,
+  PlaceKind,
   Prefs,
+  PrintFigure,
   ReaderStorage,
   VocabularyOptions,
 } from './types.js';

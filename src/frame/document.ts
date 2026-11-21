@@ -41,7 +41,9 @@ import { CSP_MAX_CHARS } from './csp-rules.js';
 import { MERMAID_LIMIT_CEILINGS } from './gate.js';
 import { FRAME_MANIFEST } from './manifest.generated.js';
 import { isFragmentId } from './fragment.js';
-import { FRAME_PREF_VALUES, type BridgeStoreKey } from './protocol.js';
+import { ITEM_LIMITS, itemsWhy, type ItemLink } from './items.js';
+import { vocabularyOk } from './vocabulary.js';
+import { FRAME_PREF_VALUES, isFullSha, type BridgeStoreKey } from './protocol.js';
 import {
   BASE64_FACE,
   BRIDGE_KEYS,
@@ -50,6 +52,7 @@ import {
   FONT_ROLES,
   IMAGE_BUDGET_CHARS,
   isNonce,
+  OPTIONAL_SEED_KEYS,
   SEED_FIELDS_MAX_CHARS,
   SEED_HTML_MAX_CHARS,
   SEED_LIMITS,
@@ -59,6 +62,7 @@ import {
   type Seed,
   type SeedAppearance,
   type SeedFonts,
+  type SeedItem,
   type SeedMermaid,
 } from './seed.js';
 import { hex, sha256Text } from './sha256.js';
@@ -83,7 +87,8 @@ export interface RenderInput {
     readonly outcome: RenderOutcome;
     /** render().html verbatim; at most SEED_HTML_MAX_CHARS as the seed carries it (too-large). */
     readonly html: string;
-    readonly meta: { readonly title: string | null; readonly frontList: readonly FrontEntry[] | null };
+    /** `items` is render()'s `meta.items`: the item values the document names, which ./host hands its `items` adapter. Not seeded. */
+    readonly meta: { readonly title: string | null; readonly frontList: readonly FrontEntry[] | null; readonly items?: readonly string[] };
   };
   /** sha, commits[].sha, commits[].parents and only are full 40- or 64-hex (stricter than enhance's 7 to 40). */
   readonly version?: {
@@ -136,6 +141,8 @@ export interface FrameFeatures {
   readonly rules?: boolean;
   readonly folds?: boolean;
   readonly keyboard?: boolean;
+  /** The "Headlines | Full" switch of the "In short" box (parity Task 5); default false: the box as it always was. */
+  readonly inShort?: boolean;
   readonly chrome?: ChromeOptions;
   readonly vocabulary?: VocabularyOptions;
 }
@@ -167,8 +174,9 @@ export interface FrameOptions {
    */
   readonly appearance?: unknown;
   /**
-   * Which ops the parent answers; each defaults to true except `progress`, which defaults to false (the frame sends
-   * `progress` only to a parent that asked for it). A false leaves that enhance callback absent.
+   * Which ops the parent answers; each defaults to true except `progress`, `places` and `printFigures`, which default to
+   * false (the frame sends `progress`, `place` and `print-figure` only to a parent that asked for them, and `hash`'s `push`
+   * and `from` only under `places`). A false leaves that enhance callback absent.
    */
   readonly bridge?: {
     readonly links?: boolean;
@@ -177,7 +185,23 @@ export interface FrameOptions {
     readonly changes?: boolean;
     readonly versions?: boolean;
     readonly progress?: boolean;
+    readonly places?: boolean;
+    readonly printFigures?: boolean;
   };
+  /**
+   * The resolved item links (parity Task 4): at most 50 `{ value, href }`, `value` 1 to 100 code units (an item value of
+   * render()'s `meta.items`) and `href` an absolute `https:` URL of at most 4096 code units. The reader draws a link for a
+   * value it asks for that is listed here, exactly, and leaves any other as text; a click goes the way every link goes
+   * (`navigate`, the host decides). Anything else is refused as invalid-input. Absent or empty: no `items` key in the seed.
+   */
+  readonly items?: readonly ItemLink[];
+  /**
+   * The comparison base (parity Task 5): a full sha (40 or 64 lower-case hex), the commit the host recorded when the frame asked
+   * it, through `changes`, for what changed since. With the bridge's `changes` on, the reader asks `changes` for it once when it
+   * starts and shows the comparison as "Changes since" shows one, labelled by that commit when `commits` names it, else "Since
+   * your comparison". Anything else than a full sha is refused as invalid-input. Absent: no `changesBase` key in the seed.
+   */
+  readonly changesBase?: string;
   /** Default MAX_SRCDOC_CHARS_DEFAULT; a host may only lower it. */
   readonly maxSrcdocChars?: number;
 }
@@ -270,6 +294,7 @@ function hostValuesMax(): number {
     rec([...K.flags.map(() => 1), rec(K.chrome.map(() => 1)), vocabulary]), // features
     rec([1, 1, list(L.secureKeys, 1), 1]), // mermaid
     rec(BRIDGE_KEYS.map(() => 1)),
+    list(ITEM_LIMITS.max, rec([1, 1])), // items
   ]);
 }
 
@@ -406,6 +431,15 @@ export function fontsOf(f: unknown): SeedFonts | undefined {
   return Object.keys(out).length === 0 ? undefined : (out as SeedFonts);
 }
 
+/** The resolved item links, copied as plain data and judged in full (src/frame/items.ts); undefined when there are none to seed. */
+function itemsOf(b: Budget, v: unknown): SeedItem[] | undefined {
+  if (v === undefined) return undefined;
+  const copy = dataOf(b, v, 'items', 1);
+  const why = itemsWhy(copy);
+  if (why !== null) invalid(why);
+  return (copy as SeedItem[]).length === 0 ? undefined : (copy as SeedItem[]);
+}
+
 /** Mermaid's settings, copied and completed with `secure: []` and `draw: 'auto'`; above a ceiling is refused. */
 function mermaidOf(b: Budget, m: unknown): SeedMermaid | null {
   if (m === undefined || m === null) return null;
@@ -418,10 +452,13 @@ function mermaidOf(b: Budget, m: unknown): SeedMermaid | null {
   return { ...caps, secure: field(f, 'secure', []), draw: field(f, 'draw', 'auto') } as SeedMermaid;
 }
 
-/** The bridge switches, copied, each absent one true, except `progress`: absent, it is false. */
+/** The bridge switches that are off unless the host asks for them; the others default to true. Held here, not in seed.ts: only the host side reads it, and seed.ts is bundled into the bootstrap. */
+const BRIDGE_OFF_BY_DEFAULT: readonly (typeof BRIDGE_KEYS)[number][] = ['progress', 'places', 'printFigures'];
+
+/** The bridge switches, copied, each absent one true, except `progress`, `places` and `printFigures`: absent, each is false. */
 function bridgeOf(budget: Budget, b: unknown): Seed['bridge'] {
   const f = fieldsOf(budget, b, 'bridge', BRIDGE_KEYS);
-  return Object.fromEntries(BRIDGE_KEYS.map((k) => [k, field(f, k, k !== 'progress')])) as Seed['bridge'];
+  return Object.fromEntries(BRIDGE_KEYS.map((k) => [k, field(f, k, !BRIDGE_OFF_BY_DEFAULT.includes(k))])) as Seed['bridge'];
 }
 
 /**
@@ -467,6 +504,9 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const assetsRaw: unknown = o.assets;
   // The faces are seeded whenever a host gives them; the frame loads them, and its stylesheet uses them only while hosted.
   const fonts = typeof assetsRaw === 'object' && assetsRaw !== null ? fontsOf((assetsRaw as FrameAssets).fonts) : undefined;
+  const items = itemsOf(b, o.items);
+  const changesBase: unknown = o.changesBase;
+  if (changesBase !== undefined && !isFullSha(changesBase)) invalid('changesBase must be a full sha: 40 or 64 lower-case hex digits');
   const appearance = o.appearance === undefined ? undefined : (parseAppearance(o.appearance).appearance as SeedAppearance);
   const fields: Seed = {
     s: 1,
@@ -490,9 +530,17 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
     bridge: bridgeOf(b, o.bridge),
     ...(appearance === undefined ? {} : { appearance }),
     ...(fonts === undefined ? {} : { fonts }),
+    ...(items === undefined ? {} : { items }),
+    ...(changesBase === undefined ? {} : { changesBase }),
   };
   // Every field but the html (judged above, by its own cap) through the bootstrap's own validator.
   const check = validateSeed(fields);
+  // The vocabulary's words are judged here in full (the bootstrap's validator holds the field to a plain object, src/frame/vocabulary.ts),
+  // and refused as the validator's own check did before the split, in its place in the order: a seed with two faults names the first
+  // the old validator reached. It judged `features` after the fields up to `prefs` and `snapshot`, and before `mermaid`, `bridge` and
+  // the optional keys, so a refusal of those later fields gives way to a vocabulary that is not whole.
+  const later = !check.ok && (check.why === 'bridge' || check.why.startsWith('mermaid') || OPTIONAL_SEED_KEYS.includes(check.why));
+  if ((check.ok || later) && fields.features.vocabulary !== undefined && !vocabularyOk(fields.features.vocabulary)) invalid('the seed is refused (features.vocabulary)');
   if (!check.ok) invalid(`the seed is refused (${check.why})`);
   const a: unknown = o.assets;
   if (typeof a !== 'object' || a === null) invalid('assets');

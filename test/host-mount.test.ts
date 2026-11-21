@@ -20,7 +20,7 @@ import vm from 'node:vm';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildFrame } from '../scripts/build-frame.mjs';
 import { frameCsp } from '../src/frame/csp.js';
-import type { FrameAssets, RenderInput } from '../src/frame/document.js';
+import { frameDocument, type FrameAssets, type RenderInput } from '../src/frame/document.js';
 import { MERMAID_GATE_DEFAULTS } from '../src/frame/gate.js';
 import { SEED_HTML_MAX_CHARS } from '../src/frame/seed.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES } from '../src/frame-runtime/inbound.js';
@@ -1197,18 +1197,18 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference �
 
   it('the bridge switches follow which adapters exist', () => {
     const all = mount(PLAIN, { changes: () => Promise.resolve(null), onProgress: () => undefined });
-    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true });
+    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false });
     all.frame.destroy();
     const none = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined });
-    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false });
+    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false });
   });
 
   it('B7.2: progress is switched on by onProgress alone, and by nothing else (B7i)', () => {
     const without = mount(PLAIN, { changes: () => Promise.resolve(null) });
-    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false });
+    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false });
     without.frame.destroy();
     const only = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined, onProgress: () => undefined });
-    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true });
+    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true, places: false, printFigures: false });
   });
 
   it('features and prefs pass through to the seed', () => {
@@ -2127,5 +2127,1042 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     expect(meta(hostedDoc)).toBe(meta(plainDoc));
     expect(hosted.iframe.getAttribute('csp')).toBe(plain.iframe.getAttribute('csp'));
     expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp());
+  });
+});
+
+// ───────── docserver parity T2: places, goto, close-overlay and print figures ─────────
+
+describe('docserver parity T2: the adapters, the seed and the three commands', () => {
+  const TOKEN = '{"line":null,"offset":0,"y":0}';
+  /** `n` zero bytes as canonical base64 text. */
+  const zeros = (bytes: number): string => 'AAAA'.repeat(Math.floor(bytes / 3)) + (bytes % 3 === 0 ? '' : bytes % 3 === 1 ? 'AA==' : 'AAA=');
+  /** A PNG-shaped text of `bytes` (at least 9) decoded bytes: the signature, a zero, then zeros. */
+  const pngOf = (bytes: number): string => zeros(bytes - 9).replace(/^/, 'iVBORw0KGgoA');
+  const PNG = 'iVBORw0KGgo=';
+  const fig = (i: number, n: number, png: string = PNG): unknown => ({ t: 'print-figure', i: String(i), n: String(n), png });
+
+  /** What the adapters of one row saw, with the arguments kept as given. */
+  interface Calls {
+    readonly hash: unknown[][];
+    readonly place: unknown[];
+    readonly figures: unknown[];
+  }
+  function calls(): { readonly c: Calls; readonly over: Partial<Record<keyof HostAdapters, unknown>> } {
+    const c: Calls = { hash: [], place: [], figures: [] };
+    return {
+      c,
+      over: {
+        onHash: (...args: unknown[]) => c.hash.push(args),
+        onPlace: (k: unknown) => c.place.push(k),
+        onPrintFigure: (f: unknown) => c.figures.push(f),
+      },
+    };
+  }
+  const bridgeOf = (m: Mounted): Record<string, unknown> => seedOf(m.iframe.getAttribute('srcdoc') ?? '')['bridge'] as Record<string, unknown>;
+  const readyFake = (over: Partial<Record<keyof HostAdapters, unknown>>): Mounted => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const m = mount(PLAIN, over);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    return m;
+  };
+
+  describe('the seed', () => {
+    it('a 1.1-shaped host (neither new adapter) seeds both switches false, and its onHash is called with one argument', async () => {
+      const { c } = calls();
+      const m = await ready(PLAIN, { onHash: (...a: unknown[]) => c.hash.push(a) });
+      expect(bridgeOf(m)).toMatchObject({ hash: true, places: false, printFigures: false });
+      m.say({ t: 'hash', id: 'title' });
+      expect(c.hash).toEqual([['title']]);
+      expect(c.hash[0]).toHaveLength(1);
+    });
+
+    it('onPlace switches places on and by itself; onPrintFigure switches printFigures on and by itself; both together', () => {
+      const place = mount(PLAIN, { onPlace: () => undefined });
+      expect(bridgeOf(place)).toMatchObject({ places: true, printFigures: false });
+      const fig_ = mount(PLAIN, { onPrintFigure: () => undefined });
+      expect(bridgeOf(fig_)).toMatchObject({ places: false, printFigures: true });
+      const both = mount(PLAIN, { onPlace: () => undefined, onPrintFigure: () => undefined });
+      expect(bridgeOf(both)).toMatchObject({ places: true, printFigures: true });
+    });
+
+    it('both are known adapter keys and must be functions when given', () => {
+      for (const k of ['onPlace', 'onPrintFigure']) {
+        expect(() => mount(PLAIN, { [k]: 'x' }), k).toThrow(new RegExp(`adapters\\.${k} must be a function`));
+        expect(() => mount(PLAIN, { [k]: undefined }), k).not.toThrow();
+      }
+    });
+
+    it('an update() keeps the switches', () => {
+      const m = mount(PLAIN, { onPlace: () => undefined, onPrintFigure: () => undefined });
+      m.frame.update(input(PLAIN));
+      const fresh = container.querySelector('iframe') as HTMLIFrameElement;
+      expect(seedOf(fresh.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ places: true, printFigures: true });
+    });
+  });
+
+  describe('place and the hash entry', () => {
+    it('each place kind reaches onPlace, as the one argument, as a method of the adapters', async () => {
+      const seenKinds: [unknown, boolean][] = [];
+      const m = await ready(PLAIN, { onPlace(this: unknown, k: unknown) { seenKinds.push([k, this !== undefined]); } });
+      m.say({ t: 'place', kind: 'overlay' });
+      m.say({ t: 'place', kind: 'overlay-closed' });
+      expect(seenKinds).toEqual([['overlay', true], ['overlay-closed', true]]);
+      expect(m.fallbacks()).toEqual([]);
+    });
+
+    it('a kind outside the list is refused and never handed on; sixteen refusals close the frame', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (const kind of ['tab', 'Overlay', '', 1]) m.say({ t: 'place', kind });
+      expect(c.place).toEqual([]);
+      for (let i = 0; i < 11; i += 1) m.say({ t: 'place', kind: 'x' });
+      expect(m.fallbacks()).toEqual([]);
+      m.say({ t: 'place', kind: 'x' });
+      expect(m.fallbacks()).toEqual(['refusals']);
+    });
+
+    it('a place sent to a host with no onPlace is refused and counted, never handed on (a frame that was not asked)', async () => {
+      const { c } = calls();
+      const m = await ready(PLAIN, { onPrintFigure: (f: unknown) => c.figures.push(f) });
+      for (let i = 0; i < 15; i += 1) m.say({ t: 'place', kind: 'overlay' });
+      expect(m.fallbacks()).toEqual([]);
+      m.say({ t: 'place', kind: 'overlay' });
+      expect(m.fallbacks()).toEqual(['refusals']);
+      expect(c.place).toEqual([]);
+    });
+
+    it('under onPlace, onHash gets a second argument: push is true only for the literal, from is the token or null', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.say({ t: 'hash', id: 'title' });
+      m.say({ t: 'hash', id: 'title', push: 'true' });
+      m.say({ t: 'hash', id: 'title', from: TOKEN });
+      m.say({ t: 'hash', id: 'title', push: 'true', from: TOKEN });
+      expect(c.hash).toEqual([
+        ['title', { push: false, from: null }],
+        ['title', { push: true, from: null }],
+        ['title', { push: false, from: TOKEN }],
+        ['title', { push: true, from: TOKEN }],
+      ]);
+    });
+
+    it('the { push, from } entry and the { i, n, png } figure handed to a host adapter are frozen, as ./enhance\'s are (final review M7)', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.say({ t: 'hash', id: 'title', push: 'true', from: TOKEN });
+      m.frame.printFigures();
+      m.say(fig(0, 1));
+      expect(Object.isFrozen(c.hash[0]?.[1])).toBe(true);
+      expect(Object.isFrozen(c.figures[0])).toBe(true);
+    });
+
+    it('a push or a from that is not valid is refused, never handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (const extra of [{ push: 'false' }, { push: true }, { from: 'x' }, { from: 'x'.repeat(4097) }]) m.say({ t: 'hash', id: 'title', ...extra });
+      expect(c.hash).toEqual([]);
+    });
+
+    it('without onPlace a hash with push or from is refused and counted, and a plain hash still reaches onHash with the id alone', async () => {
+      const { c } = calls();
+      const m = await ready(PLAIN, { onHash: (...a: unknown[]) => c.hash.push(a) });
+      m.say({ t: 'hash', id: 'title', push: 'true' });
+      m.say({ t: 'hash', id: 'title', from: TOKEN });
+      expect(c.hash).toEqual([]);
+      m.say({ t: 'hash', id: 'title' });
+      expect(c.hash).toEqual([['title']]);
+      for (let i = 0; i < 13; i += 1) m.say({ t: 'hash', id: 'title', push: 'true' });
+      expect(m.fallbacks()).toEqual([]);
+      m.say({ t: 'hash', id: 'title', push: 'true' });
+      expect(m.fallbacks()).toEqual(['refusals']);
+    });
+  });
+
+  describe('DocFrame.command is the four tools only', () => {
+    it('goto, close-overlay and print-figures throw a TypeError whose message lists the four, whatever the state, and post nothing', async () => {
+      const m = await ready(PLAIN, calls().over);
+      for (const name of ['goto', 'close-overlay', 'print-figures']) {
+        expect(() => m.frame.command(name as never), name).toThrow(TypeError);
+        expect(() => m.frame.command(name as never), name).toThrow(/jump, settings, contents, outline$/);
+      }
+      expect(frameBound(m)).toEqual([]);
+      m.frame.destroy();
+      expect(() => m.frame.command('goto' as never)).toThrow(TypeError);
+    });
+  });
+
+  describe('closeOverlay()', () => {
+    it('posts exactly {t:"command", name:"close-overlay"} once ready, and moves no focus', async () => {
+      const m = await ready(PLAIN, calls().over);
+      const other = document.createElement('button');
+      document.body.append(other);
+      other.focus();
+      m.frame.closeOverlay();
+      expect(frameBound(m)).toEqual([{ t: 'command', name: 'close-overlay' }]);
+      expect(Object.keys(frameBound(m)[0] as object)).toEqual(['t', 'name']);
+      expect(document.activeElement === other, 'the focus stays where it was').toBe(true);
+    });
+
+    it('does nothing before ready (and is not queued), after destroy() and after a fallback', async () => {
+      const m = mount(PLAIN, calls().over);
+      await m.loaded();
+      m.frame.closeOverlay();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(frameBound(m)).toEqual([]);
+      m.say({ t: 'error', why: 'render' });
+      m.frame.closeOverlay();
+      expect(frameBound(m)).toEqual([]);
+      const d = await ready(PLAIN, calls().over);
+      d.frame.destroy();
+      d.frame.closeOverlay();
+      expect(frameBound(d)).toEqual([]);
+    });
+
+    it('after update() the new mount is not ready: nothing is posted to either port until its own ready', async () => {
+      const m = await ready(PLAIN, calls().over);
+      m.frame.update(input(PLAIN));
+      const fresh = channels[channels.length - 1] as FakeChannel;
+      m.frame.closeOverlay();
+      expect(m.channel.port1.sent).toEqual([]);
+      expect(fresh.port1.sent).toEqual([]);
+      const nonce = NONCE_RE.exec((container.querySelector('iframe') as HTMLIFrameElement).getAttribute('srcdoc') ?? '')?.[1] ?? '';
+      fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+      m.frame.closeOverlay();
+      expect(fresh.port1.sent).toEqual([{ t: 'command', name: 'close-overlay' }]);
+    });
+
+    it('a host with no onPlace gets a TypeError, before ready, after ready and after destroy()', async () => {
+      const m = mount(PLAIN);
+      expect(() => m.frame.closeOverlay()).toThrow(TypeError);
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(() => m.frame.closeOverlay()).toThrow(/onPlace/);
+      m.frame.destroy();
+      expect(() => m.frame.closeOverlay()).toThrow(TypeError);
+      expect(frameBound(m)).toEqual([]);
+    });
+  });
+
+  describe('goto(id, from?)', () => {
+    it('posts {t, name, id} or {t, name, id, from} once ready, with exactly those keys and no focus moved', async () => {
+      const m = await ready(PLAIN, calls().over);
+      const other = document.createElement('button');
+      document.body.append(other);
+      other.focus();
+      m.frame.goto('heading-two');
+      m.frame.goto('fnref1:1', TOKEN);
+      expect(frameBound(m)).toEqual([
+        { t: 'command', name: 'goto', id: 'heading-two' },
+        { t: 'command', name: 'goto', id: 'fnref1:1', from: TOKEN },
+      ]);
+      expect(Object.keys(frameBound(m)[0] as object)).toEqual(['t', 'name', 'id']);
+      expect(document.activeElement === other).toBe(true);
+    });
+
+    it('an id outside the fragment grammar, or a from that is no token, throws a TypeError in every state and posts nothing', async () => {
+      const live = await ready(PLAIN, calls().over);
+      const early = mount(PLAIN, calls().over);
+      const gone = await ready(PLAIN, calls().over);
+      gone.frame.destroy();
+      for (const m of [live, early, gone]) {
+        for (const id of ['', 'a b', '#a', 'a[b]', 'x'.repeat(257), 1, null, undefined, {}]) expect(() => m.frame.goto(id as never), String(id)).toThrow(TypeError);
+        for (const from of ['x', '', '{}', '{"line":null,"offset":0,"y":-1}', 'x'.repeat(4097), 1, null, {}]) {
+          expect(() => m.frame.goto('title', from as never), String(from)).toThrow(TypeError);
+        }
+        expect(frameBound(m)).toEqual([]);
+      }
+      expect(() => live.frame.goto('x'.repeat(256))).not.toThrow();
+    });
+
+    it('does nothing before ready (not queued), after destroy() and after a fallback; a host with no onPlace gets a TypeError', async () => {
+      const m = mount(PLAIN, calls().over);
+      await m.loaded();
+      m.frame.goto('title');
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(frameBound(m)).toEqual([]);
+      m.say({ t: 'error', why: 'render' });
+      m.frame.goto('title');
+      expect(frameBound(m)).toEqual([]);
+      const d = await ready(PLAIN, calls().over);
+      d.frame.destroy();
+      d.frame.goto('title');
+      expect(frameBound(d)).toEqual([]);
+      const none = await ready();
+      expect(() => none.frame.goto('title')).toThrow(/onPlace/);
+      expect(frameBound(none)).toEqual([]);
+    });
+  });
+
+  describe('printFigures() and the run', () => {
+    it('needs onPrintFigure: a TypeError in every state, and nothing posted', async () => {
+      const m = mount(PLAIN, { onPlace: () => undefined });
+      expect(() => m.frame.printFigures()).toThrow(/onPrintFigure/);
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(() => m.frame.printFigures()).toThrow(TypeError);
+      m.frame.destroy();
+      expect(() => m.frame.printFigures()).toThrow(TypeError);
+      expect(frameBound(m)).toEqual([]);
+    });
+
+    it('posts exactly {t:"command", name:"print-figures"} once ready, and moves no focus', async () => {
+      const m = await ready(PLAIN, calls().over);
+      const other = document.createElement('button');
+      document.body.append(other);
+      other.focus();
+      m.frame.printFigures();
+      expect(frameBound(m)).toEqual([{ t: 'command', name: 'print-figures' }]);
+      expect(Object.keys(frameBound(m)[0] as object)).toEqual(['t', 'name']);
+      expect(document.activeElement === other).toBe(true);
+    });
+
+    it('before ready it posts nothing, queues nothing and opens no run: a figure after ready is refused', async () => {
+      const { c, over } = calls();
+      const m = mount(PLAIN, over);
+      await m.loaded();
+      m.frame.printFigures();
+      m.say({ t: 'ready', v: 1, nonce: m.nonce });
+      expect(frameBound(m)).toEqual([]);
+      m.say(fig(0, 1));
+      expect(c.figures).toEqual([]);
+    });
+
+    it('after destroy() and after a fallback it posts nothing', async () => {
+      const a = await ready(PLAIN, calls().over);
+      a.frame.destroy();
+      a.frame.printFigures();
+      expect(frameBound(a)).toEqual([]);
+      const b = await ready(PLAIN, calls().over);
+      b.say({ t: 'error', why: 'render' });
+      b.frame.printFigures();
+      expect(frameBound(b)).toEqual([]);
+    });
+
+    it('a figure with no run is refused, never handed on, and counted (the sixteenth closes the frame)', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (let i = 0; i < 15; i += 1) m.say(fig(0, 1));
+      expect(m.fallbacks()).toEqual([]);
+      m.say(fig(0, 1));
+      expect(m.fallbacks()).toEqual(['refusals']);
+      expect(c.figures).toEqual([]);
+    });
+
+    it('a figure reaches onPrintFigure as {i, n, png}: i and n numbers, the text unchanged; the run stays open after its last index', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(0, 2));
+      m.say(fig(1, 2, 'iVBORw0KGgoA'));
+      expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }, { i: 1, n: 2, png: 'iVBORw0KGgoA' }]);
+      expect(typeof (c.figures[0] as { i: unknown }).i).toBe('number');
+      // the run does not end at i = n - 1 (review I1): a figure of it is judged against the run, and a repeated index is refused
+      m.say(fig(0, 2));
+      expect(c.figures).toHaveLength(2);
+    });
+
+    it('the last index may come first, and the run goes on: a stale figure with i = n - 1 closes nothing (review I1)', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(24, 25));
+      m.say(fig(0, 25));
+      m.say(fig(1, 25));
+      m.say(fig(24, 25));
+      m.say(fig(2, 25));
+      expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([24, 0, 1, 2]);
+      // a new call is what ends it: its indexes are free again
+      m.frame.printFigures();
+      m.say(fig(24, 25));
+      expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([24, 0, 1, 2, 24]);
+      expect(m.fallbacks()).toEqual([]);
+    });
+
+    it('an index seen in the run, an n that changes and an index at or above n are refused and never handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(0, 3));
+      m.say(fig(0, 3));
+      m.say(fig(1, 4));
+      m.say(fig(3, 3));
+      m.say(fig(1, 3));
+      expect(c.figures).toEqual([{ i: 0, n: 3, png: PNG }, { i: 1, n: 3, png: PNG }]);
+    });
+
+    it('a second printFigures() call replaces the run: its indexes are free again and its n may differ', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(0, 3));
+      m.frame.printFigures();
+      m.say(fig(0, 5));
+      expect(c.figures).toEqual([{ i: 0, n: 3, png: PNG }, { i: 0, n: 5, png: PNG }]);
+      expect(frameBound(m)).toEqual([{ t: 'command', name: 'print-figures' }, { t: 'command', name: 'print-figures' }]);
+    });
+
+    describe('a reopened run: printFigures() while the previous run is unfinished (review 3081 F2)', () => {
+      const sizeOf = (f: unknown): number => (f as { png: string }).png.length;
+
+      it('the first repeat of an index replaces the earlier copy: handed on again, no refusal counted; a second repeat is refused and counted', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        // the previous run is unfinished (one of three): the next run is reopened
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        m.say(fig(0, 3, pngOf(100)));
+        expect(c.figures).toHaveLength(3);
+        expect(sizeOf(c.figures[2])).toBe(pngOf(100).length);
+        // the second repeat of 0 is refused and never handed on; with it, fifteen refusals leave the frame open and the sixteenth closes it,
+        // so the replacement above counted none
+        for (let k = 0; k < 15; k += 1) m.say(fig(0, 3));
+        expect(c.figures).toHaveLength(3);
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 3));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('each index has its own one replacement: 1 replaced, 2 still replaceable', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        m.say(fig(1, 3));
+        m.say(fig(0, 3, pngOf(100)));
+        m.say(fig(1, 3, pngOf(100)));
+        m.say(fig(0, 3, pngOf(200)));
+        m.say(fig(2, 3));
+        m.say(fig(2, 3, pngOf(100)));
+        expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([0, 1, 0, 1, 2, 2]);
+      });
+
+      it('a previous run that received no figure at all leaves the next one reopened', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        m.say(fig(0, 2, pngOf(100)));
+        expect(c.figures).toHaveLength(2);
+      });
+
+      it('a previous run that was complete leaves the next one ordinary: a repeat is refused and counted', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        m.say(fig(1, 2));
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        m.say(fig(0, 2, pngOf(100)));
+        expect(c.figures).toHaveLength(3);
+        for (let k = 0; k < 14; k += 1) m.say(fig(0, 2));
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 2));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('a third call while the second run\'s own figures are still in the port: its run is reopened too, so nothing of it is refused (review 3081 F2, round 2)', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        // call 1: the frame posted 0, 1, 2 and the host has handled only 0
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        // call 2 reopens: the stale 1 and 2 are accepted, then run 2's own 0 (three distinct indexes, so run 2 looks complete)
+        m.frame.printFigures();
+        m.say(fig(1, 3));
+        m.say(fig(2, 3));
+        m.say(fig(0, 3));
+        // call 3 arrives while run 2's own 1 and 2 are still in the port: they are accepted as first copies of run 3, and run 3's own copies replace them
+        m.frame.printFigures();
+        for (const i of [1, 2, 0, 1, 2]) m.say(fig(i, 3));
+        expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2]);
+        // nothing was refused: the sixteen third copies of index 1 (its one replacement is spent) are the whole count that closes the frame
+        for (let k = 0; k < 15; k += 1) m.say(fig(1, 3));
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(1, 3));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('the first run of a mount is ordinary: a repeat is refused and counted (unchanged)', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        for (let k = 0; k < 15; k += 1) m.say(fig(0, 2, pngOf(100)));
+        expect(c.figures).toHaveLength(1);
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 2));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('an n that differs from the run\'s is still refused, and a repeat of an index at or above n too', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        m.say(fig(0, 4, pngOf(100)));
+        m.say(fig(3, 3));
+        expect(c.figures).toHaveLength(1);
+      });
+
+      it('the run total is adjusted by the replacement before the cap: a replacement is refused or passes by exactly the adjusted total', async () => {
+        const { c, over } = calls();
+        const m = readyFake(over);
+        const say = m.say;
+        m.say = (data: unknown): void => {
+          say(data);
+          vi.advanceTimersByTime(63);
+        };
+        m.frame.printFigures();
+        m.frame.printFigures();
+        // 15 figures of 1 MiB and two of half a MiB make exactly 16 MiB
+        for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, pngOf(1048576)));
+        m.say(fig(15, 17, pngOf(524288)));
+        m.say(fig(16, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(17);
+        // one byte more than the copy it replaces: 16 MiB + 1, refused, handed on to nothing, and it leaves the earlier copy replaceable
+        m.say(fig(15, 17, pngOf(524289)));
+        expect(c.figures).toHaveLength(17);
+        // as large as the copy it replaces: the adjusted total is 16 MiB, and it passes (an unadjusted total would refuse it)
+        m.say(fig(15, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(18);
+        // a second repeat of index 15 is refused, whatever its size
+        m.say(fig(15, 17, pngOf(100)));
+        expect(c.figures).toHaveLength(18);
+      });
+
+      describe('what a reopened run hands on in all is capped at twice the run total (review 3088 F1)', () => {
+        const MiB = 1048576;
+        /** The same size as pngOf(bytes), a different text: a byte of its zeros set. */
+        const variant = (bytes: number): string => pngOf(bytes).replace(/^(.{100})A/, '$1B');
+        const paced = (over: Partial<Record<keyof HostAdapters, unknown>>): Mounted => {
+          const m = readyFake(over);
+          const say = m.say;
+          m.say = (data: unknown): void => {
+            say(data);
+            vi.advanceTimersByTime(63);
+          };
+          return m;
+        };
+        const handedBytes = (figures: readonly unknown[]): number => figures.reduce<number>((t, f) => t + ((f as { png: string }).png.length * 3) / 4 - ((f as { png: string }).png.match(/=*$/)?.[0].length ?? 0), 0);
+
+        it('the honest worst case: a full earlier run of 16 MiB queued at the host, then a full new run of 16 MiB, each index replaced once, passes whole with no refusal', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          expect(c.figures).toHaveLength(32);
+          expect(handedBytes(c.figures)).toBe(32 * MiB);
+          // the latest copy of every index is the new run's
+          const latest = new Map<number, string>();
+          for (const f of c.figures as { i: number; png: string }[]) latest.set(f.i, f.png);
+          expect([...latest.values()].every((png) => png === variant(MiB))).toBe(true);
+          expect(latest.size).toBe(16);
+          // no refusal was counted: sixteen more refusals are needed to close the frame, and fifteen leave it open
+          for (let k = 0; k < 15; k += 1) m.say(fig(0, 16));
+          expect(m.fallbacks()).toEqual([]);
+          m.say(fig(0, 16));
+          expect(m.fallbacks()).toEqual(['refusals']);
+          expect(c.figures).toHaveLength(32);
+        });
+
+        it('a hostile frame stops at the cap: 1 MiB figures each replaced at once, the figure that would pass twice the run total is refused and counted, never handed on', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          m.frame.printFigures();
+          let refusedAt = -1;
+          for (let i = 0; i < 48 && refusedAt < 0; i += 1) {
+            const before = c.figures.length;
+            m.say(fig(i, 64, pngOf(MiB)));
+            if (c.figures.length === before) refusedAt = i;
+            else m.say(fig(i, 64, PNG));
+          }
+          // 31 pairs hand on 31 MiB and 31 small copies; the next 1 MiB would make 32 MiB and 248 bytes
+          expect(refusedAt).toBe(31);
+          expect(handedBytes(c.figures)).toBe(31 * MiB + 31 * 8);
+          expect(handedBytes(c.figures)).toBeLessThanOrEqual(2 * 16 * MiB);
+          expect(m.fallbacks()).toEqual([]);
+          // it was counted: fourteen more refusals leave the frame open, the sixteenth in all closes it
+          for (let k = 0; k < 14; k += 1) m.say(fig(refusedAt, 64, pngOf(MiB)));
+          expect(m.fallbacks()).toEqual([]);
+          m.say(fig(refusedAt, 64, pngOf(MiB)));
+          expect(m.fallbacks()).toEqual(['refusals']);
+          expect(handedBytes(c.figures)).toBe(31 * MiB + 31 * 8);
+        });
+
+        it('exactly twice the run total passes, and one byte more is refused', async () => {
+          for (const extra of [0, 1]) {
+            const { c, over } = calls();
+            const m = paced(over);
+            m.frame.printFigures();
+            m.frame.printFigures();
+            // 31 pairs (1 MiB, then 8 bytes in its place) hand on 31 MiB and 248 bytes; the live total stays small, so only the cap on what was handed decides
+            for (let i = 0; i < 31; i += 1) {
+              m.say(fig(i, 64, pngOf(MiB)));
+              m.say(fig(i, 64, PNG));
+            }
+            expect(handedBytes(c.figures)).toBe(31 * MiB + 248);
+            const room = 2 * 16 * MiB - handedBytes(c.figures);
+            m.say(fig(31, 64, pngOf(room + extra)));
+            expect(c.figures, `room + ${extra}`).toHaveLength(extra === 0 ? 63 : 62);
+            expect(handedBytes(c.figures)).toBe(extra === 0 ? 2 * 16 * MiB : 31 * MiB + 248);
+          }
+        });
+
+        it('each printFigures() call starts its own count: a second full reopened run hands on its 2 x 16 MiB too, with no refusal', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          expect(c.figures).toHaveLength(64);
+          expect(handedBytes(c.figures)).toBe(64 * MiB);
+          expect(m.fallbacks()).toEqual([]);
+        });
+
+        it('the run is charged before onPrintFigure is called: a press from inside that call starts a fresh count, which the figure being handed over is not charged to', async () => {
+          const { c, over } = calls();
+          let mounted: Mounted | null = null;
+          let pressed = false;
+          const record = over['onPrintFigure'] as (figure: unknown) => unknown;
+          const m = paced({
+            ...over,
+            onPrintFigure: (figure: unknown): void => {
+              record(figure);
+              if (!pressed) {
+                pressed = true;
+                mounted?.frame.printFigures();
+              }
+            },
+          });
+          mounted = m;
+          m.frame.printFigures();
+          m.frame.printFigures();
+          // the first figure is the old run's; the press from inside its call opens the run that follows
+          m.say(fig(0, 16, pngOf(MiB)));
+          // the fresh run hands on exactly its own 2 x 16 MiB: 16 figures, then a replacement of each
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, pngOf(MiB)));
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 16, variant(MiB)));
+          expect(c.figures).toHaveLength(33);
+          expect(handedBytes(c.figures)).toBe(33 * MiB);
+          expect(m.fallbacks()).toEqual([]);
+        });
+
+        it('an ordinary run is unchanged: its live total of 16 MiB is the cap, and a repeat is refused', async () => {
+          const { c, over } = calls();
+          const m = paced(over);
+          m.frame.printFigures();
+          for (let i = 0; i < 16; i += 1) m.say(fig(i, 17, pngOf(MiB)));
+          expect(handedBytes(c.figures)).toBe(16 * MiB);
+          m.say(fig(16, 17, PNG));
+          m.say(fig(0, 17, PNG));
+          expect(c.figures).toHaveLength(16);
+        });
+      });
+
+      it('a smaller replacement frees its bytes for the next figure', async () => {
+        const { c, over } = calls();
+        const m = readyFake(over);
+        const say = m.say;
+        m.say = (data: unknown): void => {
+          say(data);
+          vi.advanceTimersByTime(63);
+        };
+        m.frame.printFigures();
+        m.frame.printFigures();
+        for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, pngOf(1048576)));
+        m.say(fig(15, 17, pngOf(1048576)));
+        expect(c.figures).toHaveLength(16);
+        // the run is full: fig 16 does not fit; replacing index 15 by a figure of 8 bytes frees 1 MiB - 8 for it
+        m.say(fig(16, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(16);
+        m.say(fig(15, 17, PNG));
+        expect(c.figures).toHaveLength(17);
+        m.say(fig(16, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(18);
+      });
+    });
+
+    it('the run belongs to its mount: after update() a figure with no new call is refused', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.frame.update(input(PLAIN));
+      const fresh = channels[channels.length - 1] as FakeChannel;
+      const nonce = NONCE_RE.exec((container.querySelector('iframe') as HTMLIFrameElement).getAttribute('srcdoc') ?? '')?.[1] ?? '';
+      fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+      fresh.port1.onmessage?.({ data: fig(0, 2), ports: [] });
+      expect(c.figures).toEqual([]);
+      m.frame.printFigures();
+      fresh.port1.onmessage?.({ data: fig(0, 2), ports: [] });
+      expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }]);
+    });
+
+    it('a host that calls printFigures() from onPrintFigure opens a fresh run, even from its last figure', async () => {
+      const seenFigures: unknown[] = [];
+      let m!: Mounted;
+      m = await ready(PLAIN, { onPrintFigure: (f: unknown) => { seenFigures.push(f); if (seenFigures.length === 1) m.frame.printFigures(); } });
+      m.frame.printFigures();
+      m.say(fig(0, 1));
+      m.say(fig(0, 1));
+      expect(seenFigures).toHaveLength(2);
+    });
+
+    it('1048575 and 1048576 decoded bytes are handed on, 1048577 is refused and never handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      for (const bytes of [1048575, 1048576, 1048577]) {
+        m.frame.printFigures();
+        m.say(fig(0, 1, pngOf(bytes)));
+      }
+      expect(c.figures.map((f) => (f as { png: string }).png.length)).toEqual([pngOf(1048575).length, pngOf(1048576).length]);
+    });
+
+    it('sixteen figures of 1048576 bytes pass; one more byte is refused by the total while within its own cap, and is not handed on', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      const big = pngOf(1048576);
+      for (let i = 0; i < 16; i += 1) m.say(fig(i, 17, big));
+      expect(c.figures).toHaveLength(16);
+      m.say(fig(16, 17, PNG));
+      expect(c.figures).toHaveLength(16);
+      // the same figure fits a run that has room
+      m.frame.printFigures();
+      m.say(fig(0, 17, PNG));
+      expect(c.figures).toHaveLength(17);
+    });
+
+    it('a refused figure takes none of the total: a refused big figure leaves room for the next', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, pngOf(1048576)));
+      m.say(fig(15, 17, pngOf(1048577)));
+      m.say(fig(15, 17, pngOf(1048576)));
+      expect(c.figures).toHaveLength(16);
+      m.say(fig(16, 17, PNG));
+      expect(c.figures).toHaveLength(16);
+    });
+
+    it('64 figures are handed on and a 65th is refused (n of 65, and a figure past the end of a run of 64), under the buckets: 16 a second, none refused by the rate', () => {
+      const { c, over } = calls();
+      const m = readyFake(over);
+      m.frame.printFigures();
+      for (let i = 0; i < 64; i += 1) {
+        m.say(fig(i, 64));
+        vi.advanceTimersByTime(63);
+      }
+      expect(c.figures).toHaveLength(64);
+      expect(c.figures.map((f) => (f as { i: number }).i)).toEqual(Array.from({ length: 64 }, (_, i) => i));
+      expect(m.fallbacks()).toEqual([]);
+      // the run is over: a 65th has none to join; nor does an n of 65 open one that large
+      m.say(fig(64, 64));
+      m.frame.printFigures();
+      m.say(fig(0, 65));
+      m.say(fig(64, 64));
+      expect(c.figures).toHaveLength(64);
+      // none of the 64 was refused, so only these three refusals count
+      for (let i = 0; i < 12; i += 1) m.say(fig(64, 64));
+      expect(m.fallbacks()).toEqual([]);
+      m.say(fig(64, 64));
+      expect(m.fallbacks()).toEqual(['refusals']);
+    });
+
+    describe('a forged figure, posted straight down the port with no reader in front of it, is refused by the host alone (docserver parity T6)', () => {
+      /** A run opened, one good figure (i 0 of 4) handed on; `forge` is then posted; the answer is what reached the host's callback. */
+      async function forged(forge: unknown[], opts: { before?: unknown[] } = {}): Promise<{ handed: unknown[]; m: Mounted }> {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (const f of opts.before ?? []) m.say(f);
+        m.say(fig(0, 4));
+        const keep = c.figures.length;
+        for (const f of forge) m.say(f);
+        const handed = c.figures.slice(keep);
+        // refused figures take nothing from the run: a good one still goes on
+        m.say(fig(1, 4));
+        expect(c.figures).toHaveLength(keep + handed.length + 1);
+        expect(m.fallbacks()).toEqual([]);
+        return { handed, m };
+      }
+
+      it('an i equal to or above n', async () => {
+        expect((await forged([fig(4, 4), fig(5, 4), fig(99, 4), fig(64, 64)])).handed).toEqual([]);
+      });
+
+      it('an n above 64, whatever the run holds', async () => {
+        expect((await forged([fig(0, 65), fig(1, 65), fig(0, 100), fig(0, 999)])).handed).toEqual([]);
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (const n of [65, 100, 999]) m.say(fig(0, n));
+        expect(c.figures).toEqual([]);
+      });
+
+      it('a PNG over 1 MiB, however its text is long', async () => {
+        const huge = 'iVBORw0KGgo' + 'A'.repeat(1398104 + 4);
+        expect((await forged([fig(2, 4, pngOf(1048577)), fig(2, 4, huge), fig(2, 4, pngOf(2_000_000))])).handed).toEqual([]);
+      });
+
+      it('a text that is not a PNG: base64 of anything else, a cut signature, an empty text, a number', async () => {
+        const jpeg = '/9j/4AAQSkZJRg==';
+        const bad = ['QQ==', 'AAAAAAAA', 'iVBORw0KGg==', jpeg, zeros(100), zeros(1048576), zeros(1048577), '', 7, null];
+        expect((await forged(bad.map((png) => ({ t: 'print-figure', i: '2', n: '4', png })))).handed).toEqual([]);
+      });
+
+      it('an i already seen in the run', async () => {
+        expect((await forged([fig(0, 4), fig(0, 4, 'iVBORw0KGgoA')])).handed).toEqual([]);
+        expect((await forged([fig(2, 4), fig(2, 4)], { before: [] })).handed).toEqual([{ i: 2, n: 4, png: PNG }]);
+      });
+
+      it('a n that is not the run\'s', async () => {
+        expect((await forged([fig(2, 3), fig(2, 5), fig(2, 64)])).handed).toEqual([]);
+      });
+
+      it('a figure that takes the run over its total, while within its own cap', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (let i = 0; i < 16; i += 1) m.say(fig(i, 20, pngOf(1048576)));
+        expect(c.figures).toHaveLength(16);
+        m.say(fig(16, 20));
+        m.say(fig(17, 20, pngOf(9)));
+        expect(c.figures).toHaveLength(16);
+        expect(m.fallbacks()).toEqual([]);
+      });
+
+      it('an i or an n that is not an integer, or no canonical decimal: a point, a fraction, an exponent, a sign, a number', async () => {
+        const bad = [
+          { t: 'print-figure', i: '1.5', n: '4', png: PNG },
+          { t: 'print-figure', i: '2', n: '4.5', png: PNG },
+          { t: 'print-figure', i: '2.0', n: '4', png: PNG },
+          { t: 'print-figure', i: '1e0', n: '4', png: PNG },
+          { t: 'print-figure', i: '-1', n: '4', png: PNG },
+          { t: 'print-figure', i: '02', n: '4', png: PNG },
+          { t: 'print-figure', i: 2, n: '4', png: PNG },
+          { t: 'print-figure', i: '2', n: 4, png: PNG },
+        ];
+        expect((await forged(bad)).handed).toEqual([]);
+      });
+
+      it('sixteen forged figures in a row close the frame, and none of them reached the host', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (let i = 0; i < 15; i += 1) m.say(fig(0, 65));
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 65));
+        expect(m.fallbacks()).toEqual(['refusals']);
+        expect(c.figures).toEqual([]);
+      });
+    });
+
+    it('a throwing onPrintFigure is caught and logged, and the run goes on', async () => {
+      const seenFigures: unknown[] = [];
+      const m = await ready(PLAIN, { onPrintFigure: (f: unknown) => { seenFigures.push(f); throw new Error('host'); } });
+      m.frame.printFigures();
+      m.say(fig(0, 2));
+      m.say(fig(1, 2));
+      expect(seenFigures).toHaveLength(2);
+      expect(m.fallbacks()).toEqual([]);
+    });
+  });
+});
+
+describe('docserver parity T4: the items adapter resolves the document\'s item values into seeded links', () => {
+  const READER = { itemFields: ['Tracker'], itemHeadings: ['Delta'] };
+  const DOC = '# Title\n\n**Spec** · 2026-10-12 · Tracker: AB-12 and CD-7\n\n## Delta\n\n```\nitem: EF-3\n```\n';
+  /** A document rendered with a reader vocabulary, so its meta lists the items. */
+  const withItems = (md = DOC, reader: object = READER): RenderInput => {
+    const r = render(md, { reader });
+    if (r.outcome !== 'rendered') throw new Error('did not render');
+    return { result: { outcome: r.outcome, html: r.html, meta: { title: r.meta.title, frontList: r.meta.frontList, items: r.meta.items } } };
+  };
+  const link = (k: string): { value: string; href: string } => ({ value: k, href: `https://tracker.example/${k}` });
+  const seedItems = (m: Mounted): unknown => seedOf(m.iframe.getAttribute('srcdoc') ?? '')['items'];
+  const mountItems = (items: unknown, doc: RenderInput = withItems()): Mounted => mount(PLAIN, { items }, doc);
+
+  it('is called with the item values the document\'s meta lists, and what it answers is seeded', () => {
+    const asked: unknown[] = [];
+    const m = mountItems((values: readonly string[]) => {
+      asked.push(values);
+      return values.map(link);
+    });
+    expect(asked).toEqual([['AB-12', 'CD-7', 'EF-3']]);
+    expect(Object.isFrozen(asked[0])).toBe(true);
+    expect(seedItems(m)).toEqual([link('AB-12'), link('CD-7'), link('EF-3')]);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('is called with this adapters object as its receiver', () => {
+    let self: unknown;
+    const adapters = {
+      assets,
+      watchdogMs: 5000,
+      onFallback: () => undefined,
+      items(this: unknown) {
+        self = this;
+        return [];
+      },
+    };
+    mountDocFrame(container, { document: withItems(), adapters: adapters as unknown as HostAdapters });
+    expect(self === adapters).toBe(true);
+  });
+
+  it('is not called, and seeds nothing, for a document whose meta lists no item (or has no `items` at all)', () => {
+    const items = vi.fn(() => [link('AB-12')]);
+    for (const doc of [withItems(DOC, {}), input(PLAIN), withItems('# T\n\nNo items.\n')]) {
+      const m = mountItems(items, doc);
+      expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+    }
+    expect(items).not.toHaveBeenCalled();
+  });
+
+  it('reads the meta\'s items as data: only strings of 1 to 100 code units, at most 50, never a getter', () => {
+    const asked: unknown[] = [];
+    const doc = withItems();
+    const meta = { title: 'T', frontList: null, items: ['AB-1', 7, '', 'x'.repeat(101), 'x'.repeat(100), ...Array.from({ length: 60 }, (_, i) => `K-${String(i)}`)] };
+    mountItems((v: readonly string[]) => (asked.push(v), []), { result: { ...doc.result, meta } } as unknown as RenderInput);
+    const got = asked[0] as string[];
+    expect(got.slice(0, 3)).toEqual(['AB-1', 'x'.repeat(100), 'K-0']);
+    expect(got).toHaveLength(50);
+    const trap = { result: { ...doc.result, meta: { title: 'T', frontList: null, get items() { throw new Error('no'); } } } };
+    const items = vi.fn(() => []);
+    expect(() => mountItems(items, trap as unknown as RenderInput)).not.toThrow();
+    expect(items).not.toHaveBeenCalled();
+  });
+
+  it('a throw is logged and means no links: the frame mounts, with no items key', () => {
+    const m = mountItems(() => {
+      throw new Error('tracker down');
+    });
+    expect(m.fallbacks()).toEqual([]);
+    expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    // An answer of undefined, or of an empty list, is no links either.
+    for (const none of [undefined, []]) {
+      const n = mountItems(() => none);
+      expect(Object.hasOwn(seedOf(n.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+    }
+  });
+
+  it('an answer the frame would refuse is no links: one warning, no items seeded, and the document still mounts (S2)', () => {
+    const getter = { value: 'AB-12' };
+    let called = false;
+    Object.defineProperty(getter, 'href', { enumerable: true, get: () => ((called = true), 'https://tracker.example/AB-12') });
+    const refusedAnswers: [string, unknown][] = [
+      ['http:', [{ value: 'AB-12', href: 'http://tracker.example/AB-12' }]],
+      ['javascript:', [{ value: 'AB-12', href: 'javascript:alert(1)' }]],
+      ['not a list', 'AB-12'],
+      ['a missing href', [{ value: 'AB-12' }]],
+      ['an extra key', [{ ...link('AB-12'), extra: 1 }]],
+      ['a long value', [{ value: 'V'.repeat(101), href: 'https://tracker.example/x' }]],
+      ['51 links', Array.from({ length: 51 }, (_, i) => link(`K-${String(i)}`))],
+      ['a getter', [getter]],
+      ['a class', [new (class { value = 'AB-12'; href = 'https://tracker.example/AB-12'; })()]],
+      ['a hole', [, link('AB-12')]],
+    ];
+    for (const [name, bad] of refusedAnswers) {
+      warn.mockClear();
+      const seen: Seen = { events: [] };
+      const before = iframes();
+      mountDocFrame(container, { document: withItems(), adapters: adaptersFor(seen, { items: () => bad }) });
+      expect(seen.events.filter(([n]) => n === 'fallback'), name).toEqual([]);
+      expect(iframes(), name).toBe(before + 1);
+      const frames = container.querySelectorAll('iframe');
+      expect(Object.hasOwn(seedOf((frames[frames.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? ''), 'items'), name).toBe(false);
+      const ours = warn.mock.calls.filter((c: unknown[]) => String(c[0]).includes('the items adapter answered links the frame refuses'));
+      expect(ours, name).toHaveLength(1);
+      expect(String(ours[0]?.[1]), name).toMatch(/^items/);
+      expect(JSON.stringify(ours[0]), name).not.toContain('tracker.example');
+    }
+    expect(called).toBe(false); // a getter of the answer is never called
+  });
+
+  it('frameDocument itself still refuses the same items as invalid-input (a direct caller\'s programming error)', () => {
+    const doc = withItems();
+    const options = { csp: frameCsp(), nonce: 'a'.repeat(32), assets };
+    for (const bad of [[{ value: 'AB-12', href: 'http://tracker.example/AB-12' }], 'AB-12', Array.from({ length: 51 }, (_, i) => link(`K-${String(i)}`))]) {
+      expect(() => frameDocument(doc, { ...options, items: bad as never })).toThrow(expect.objectContaining({ code: 'invalid-input' }));
+    }
+  });
+
+  it('a good answer is warned about nowhere, and an empty one is none', () => {
+    const m = mountItems((v: readonly string[]) => v.map(link));
+    expect(warn.mock.calls.filter((c: unknown[]) => String(c[0]).includes('items adapter'))).toEqual([]);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('is asked again at each update, with the new document\'s items, and seeds that mount', () => {
+    const asked: unknown[] = [];
+    const items = (v: readonly string[]): unknown => (asked.push(v), v.map(link));
+    const m = mountItems(items);
+    m.frame.update(withItems('# Two\n\n**Spec** · 2026-10-12 · Tracker: ZZ-9\n'));
+    expect(asked).toEqual([['AB-12', 'CD-7', 'EF-3'], ['ZZ-9']]);
+    const last = container.querySelectorAll('iframe');
+    expect(seedOf((last[last.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? '')['items']).toEqual([link('ZZ-9')]);
+  });
+
+  it('must be a function when given (a TypeError before any iframe exists), and is an adapter key', () => {
+    const create = vi.spyOn(document, 'createElement');
+    try {
+      expect(() => mountDocFrame(container, { document: withItems(), adapters: adaptersFor({ events: [] }, { items: [link('AB-12')] }) })).toThrow(TypeError);
+      expect(create.mock.calls.filter(([t]) => t === 'iframe')).toEqual([]);
+    } finally {
+      create.mockRestore();
+    }
+  });
+
+  it('a host with no items adapter seeds no items, and the seed is the one 1.1 wrote', () => {
+    const m = mount(PLAIN, {}, withItems());
+    expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
+  });
+});
+
+describe('docserver parity T5: adapters.changesBase seeds the comparison base', () => {
+  const SHA = 'c'.repeat(40);
+  const seedBase = (m: Mounted): unknown => seedOf(m.iframe.getAttribute('srcdoc') ?? '')['changesBase'];
+
+  it('seeds a full sha, in every mount, and a host with none seeds no key (the seed 1.1 wrote)', () => {
+    const m = mount(PLAIN, { changesBase: SHA });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedBase(m)).toBe(SHA);
+    const none = mount(PLAIN, {});
+    expect(Object.hasOwn(seedOf(none.iframe.getAttribute('srcdoc') ?? ''), 'changesBase')).toBe(false);
+    const sha64 = mount(PLAIN, { changesBase: 'd'.repeat(64) });
+    expect(seedBase(sha64)).toBe('d'.repeat(64));
+  });
+
+  it('a value that is not a string is a TypeError at step 1, before any iframe', () => {
+    for (const bad of [7, null, true, {}, [SHA]]) {
+      const before = container.querySelectorAll('iframe').length;
+      expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { changesBase: bad } as never) }), String(bad)).toThrow(TypeError);
+      expect(container.querySelectorAll('iframe').length, String(bad)).toBe(before);
+    }
+  });
+
+  it('a string that is not a full sha is logged once and not seeded: the document still mounts', () => {
+    for (const bad of ['abc1234', SHA.toUpperCase(), `${SHA}0`, '']) {
+      warn.mockClear();
+      const seen: Seen = { events: [] };
+      mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor(seen, { changesBase: bad } as never) });
+      expect(seen.events.filter(([n]) => n === 'fallback'), bad).toEqual([]);
+      const frames = container.querySelectorAll('iframe');
+      expect(Object.hasOwn(seedOf((frames[frames.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? ''), 'changesBase'), bad).toBe(false);
+      const ours = warn.mock.calls.filter((c: unknown[]) => String(c[0]).includes('adapters.changesBase is not a full sha'));
+      expect(ours, bad).toHaveLength(1);
+      expect(JSON.stringify(ours[0]), bad).not.toContain(bad === '' ? '\u0000' : bad);
+    }
   });
 });

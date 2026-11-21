@@ -39,6 +39,27 @@
 // set by that adapter alone) and is handed each as `Number(p) / 1000`; `DocFrame.command(name)` posts a `command` op after
 // focusing the iframe, once this mount is ready, and does nothing before it, after a fallback or after destroy().
 //
+// The parity additions (docserver parity T2): `onPlace` asks the frame to report its full-screen figure (the seed's `bridge.places`,
+// set by that adapter alone) and, with it, `onHash` is handed a second argument, `{ push, from }`; `onPrintFigure` asks
+// for print figures (`bridge.printFigures`, by that adapter alone). A run of figures belongs to one `printFigures()` call
+// (plan choice B5): the parser refuses a `print-figure` with no open run, and each figure is checked against the run's
+// count, its indexes and its byte totals before the adapter sees it; the run ends at the next
+// `printFigures()` call and with the mount (not at its last index). A figure of the previous run may still sit in the port's queue
+// when the host opens the next, and is accepted into it under its own index; so a run opened while the previous one was unfinished
+// (a reopened run itself, or fewer than n distinct indexes accepted) is a reopened run, in which the first repeat of an index
+// replaces the earlier copy (handed to `onPrintFigure` again, the run's total adjusted before the 16 MiB check, no refusal) and a
+// second repeat is refused; the 16 MiB bounds the latest copy of each index, and each index is replaced at most once, so a run hands
+// on at most 2n figures; a separate cap bounds what it hands on in all, replaced copies counted, at 2 x 16 MiB (a figure past
+// either cap is refused before any decode, and counted); once a mount's run was reopened, every later run is too, and a run after a complete ordinary run is
+// ordinary. The known limits (README, `printFigures()`): (a) if the new run skips an index it could not draw, the stale copy of it
+// stays; (b) a reprint costs refusals in two cases only: the oversize edge, near the 16 MiB total, when stale copies still counted are
+// larger than their replacements or belong to indexes the new run never replaces (several can be refused, the consumer keeping the
+// earlier copy, and in an extreme skew enough to close the frame); and three runs' figures in flight at once, where a third copy of an
+// index is refused (the run's own, so the consumer keeps a stale copy) and, with figure sizes that change between those runs, an honest
+// copy can be refused by the 2 x 16 MiB cap on what a run hands on.
+// `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
+// after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
+//
 // Teardown: a fallback clears the timers, closes the port, removes the iframe and calls onFallback once; it never
 // remounts. update() is a full remount (new iframe, channel, nonce and watchdog), never a srcdoc reassignment.
 // destroy() is idempotent and calls no adapter, also when host code that a mount step runs (a focusout at the focus)
@@ -47,18 +68,21 @@
 //
 // Import-inert: no module-level state. Each mount keeps its state in its own closure; two mounts share no port, nonce
 // or timer. The DOM is touched only inside mountDocFrame and the DocFrame it returns, through the element's own window.
+import { isAnchorToken } from '../frame/anchor.js';
 import { frameCsp } from '../frame/csp.js';
 import { parseAppearance, type Appearance } from '../enhance/appearance.js';
 import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
+import { isFragmentId } from '../frame/fragment.js';
+import { ITEM_LIMITS, itemsWhy, type ItemLink } from '../frame/items.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
-import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, COMMAND_OPS, FRAME_PREF_VALUES, isFullSha, type FrameToParent } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent, type PlaceKind } from '../frame/protocol.js';
 import { hex, sha256Text } from '../frame/sha256.js';
 import type { FramePrefs } from '../frame/wire-types.js';
 import { hiddenChars, type HiddenChar } from './copy.js';
 import { createLimiter, type Limiter } from './limits.js';
 import { classifyLink, type HostLink } from './links.js';
-import { parseBridgeMessage } from './parse.js';
+import { parseBridgeMessage, type ParseContext } from './parse.js';
 import { createHostStore, type HostStorage, type HostStore } from './store.js';
 
 /** Why a mount fell back: the host shows its own view of the document instead (Reference §1). */
@@ -110,9 +134,43 @@ export interface HostAdapters {
    * parseAppearance, so a bad slot never throws. Any value that is not a plain object is a TypeError.
    */
   readonly appearance?: Appearance;
+  /**
+   * The comparison base (parity Task 5): the commit the host recorded when the frame asked `changes` for it (a full sha, 40 or 64
+   * lower-case hex digits), handed back so the frame asks for it once at its start and shows the comparison as "Changes since"
+   * shows one. Seeded into every mount, and used only when `changes` is given. A value that is not a string is a TypeError; a
+   * string that is not a full sha is logged once and not seeded (the document still mounts). The host sets it, and nothing else does.
+   */
+  readonly changesBase?: string;
   /** ./host never navigates or opens a window: the host decides. */
   onLink?(link: HostLink): void;
-  onHash?(id: string): void;
+  /**
+   * The frame went to a place of the document. With `onPlace` given (the seed's `bridge.places`) a second argument says how:
+   * `push` is true when the move is a new place in the host's history and `from` is the opaque position token the move
+   * came from (hand it back to `goto`), or null. Without `onPlace` it is called with the id alone, as before.
+   */
+  onHash?(id: string, entry?: { readonly push: boolean; readonly from: string | null }): void;
+  /** Giving it asks the frame to report its full-screen figure: `'overlay'` when it opened, `'overlay-closed'` when it closed. */
+  onPlace?(kind: PlaceKind): void;
+  /**
+   * Giving it asks the frame for print figures after `DocFrame.printFigures()`: one call per figure, `i` of `n`, `png` the
+   * canonical base64 text of the image, at most 1 MiB decoded, and the latest copy of each index at most 16 MiB together.
+   * ./host checks the text and the sizes and never decodes: the host decodes. After a `printFigures()` call that interrupts an
+   * unfinished run, an index may come twice (a figure the frame had already posted for the earlier run, then the new run's
+   * own): the latest copy of an index wins, so keep figures by index and let a later call replace an earlier one. A run hands
+   * on at most 2n figures and at most 2 x 16 MiB in all, replaced copies counted; a figure past either is refused and counted.
+   */
+  onPrintFigure?(f: { readonly i: number; readonly n: number; readonly png: string }): void;
+  /**
+   * Resolves the item values a document names into links (parity Task 4). `render()`'s `meta.items` lists them (give render the
+   * `reader` option that names the item fields and headings); at each mount this is called, in the host's own code and
+   * synchronously, with the document's item values (at most 50, each 1 to 100 code units; not called when there are none), and
+   * answers the links: at most 50 `{ value, href }`, `href` an absolute `https:` URL. The frame draws a link for a value the
+   * reader asks for that is listed, exactly, and leaves any other as text; a click comes to `onLink` as every link does. A
+   * throw is logged and means no links, and so is an answer that is not a list of such links (logged once, naming the
+   * entry and field and never the value): no `items` are seeded, the items stay text and the document still mounts.
+   * `frameDocument` itself refuses such an `items` as `invalid-input`. The library carries no tracker: the host knows its own.
+   */
+  items?(values: readonly string[]): readonly ItemLink[] | undefined;
   /** ./host never touches the clipboard: the host writes the text, after showing what `hidden` lists. */
   copy?(text: string, check: { readonly hidden: readonly HiddenChar[] }): void;
   changes?(sha: string): Promise<{ ranges: readonly (readonly [number, number])[]; removedAfter?: readonly number[] } | null>;
@@ -144,21 +202,47 @@ export interface DocFrame {
   /**
    * Runs one of the reader's tools without the reader's own bar, as a toggle (batch 1.1, C108): focuses the iframe, then
    * posts the command. Before the frame is ready, after destroy() and after a fallback it does nothing (it is not
-   * queued); a name outside the four throws a TypeError, whatever the state.
+   * queued); a name outside the four throws a TypeError, whatever the state. The wire's other command words are sent only
+   * by closeOverlay(), goto() and printFigures().
    */
-  command(name: (typeof COMMAND_OPS)[number]): void;
+  command(name: ToolCommand): void;
+  /**
+   * Closes the full-screen figure, if one is open (needs `onPlace`, else a TypeError, whatever the state). Posted once ready;
+   * before it, after destroy() and after a fallback it does nothing.
+   */
+  closeOverlay(): void;
+  /**
+   * Takes the reader to the place `id` (a fragment id, by the same grammar the frame's `hash` op carries), optionally from
+   * the position token an `onHash` entry gave as `from`. An `id` outside the grammar or a `from` that is not a token
+   * throws a TypeError, whatever the state, and so does a host with no `onPlace`; once ready it posts, and before it, after
+   * destroy() and after a fallback it does nothing.
+   */
+  goto(id: string, from?: string): void;
+  /**
+   * Opens one print run and asks the frame for its figures; they arrive through `onPrintFigure` (needs it, else a
+   * TypeError, whatever the state). A second call replaces the run, and when the first was unfinished, figures it already
+   * posted may still arrive in the new one: a repeat of an index is then handed on again, and the latest copy of an index
+   * wins (a consumer keeps figures by index). Before ready, after destroy() and after a fallback it
+   * does nothing.
+   */
+  printFigures(): void;
   /** Idempotent; calls no adapter. */
   destroy(): void;
 }
+
+/** The four tools `DocFrame.command` runs: the toggles of the reader's own bar. The wire's other command words have their own methods. */
+const TOOL_COMMANDS = Object.freeze(['jump', 'settings', 'contents', 'outline'] as const);
+export type ToolCommand = (typeof TOOL_COMMANDS)[number];
 
 /** Every key HostAdapters may hold. */
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
   'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
+  'onPlace', 'onPrintFigure', 'items', 'changesBase',
 ]);
 
 /** The callbacks, each a function when given. */
-const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback'] as const);
+const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'onPlace', 'onPrintFigure', 'items'] as const);
 type CallbackName = (typeof CALLBACKS)[number];
 
 const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request', 'after-ready']);
@@ -282,6 +366,8 @@ interface Checked {
   readonly prefs: Partial<FramePrefs>;
   /** The verdict of the adapters' `appearance`; undefined when none was given. */
   readonly appearance: Appearance | undefined;
+  /** The seeded comparison base: a full sha; undefined when none was given or the one given is not a full sha. */
+  readonly changesBase: string | undefined;
   readonly features: unknown;
   readonly gate: MermaidGateCaps;
   readonly draw: 'auto' | 'on-request' | 'after-ready';
@@ -334,6 +420,9 @@ function check(adapters: unknown): Checked {
     if (!isPlain(a['appearance'])) throw new TypeError('pinax-lib host: adapters.appearance must be a plain object');
     appearance = parseAppearance(a['appearance']).appearance;
   }
+  const base = a['changesBase'];
+  if (base !== undefined && typeof base !== 'string') throw new TypeError('pinax-lib host: adapters.changesBase must be a string');
+  if (base !== undefined && !isFullSha(base)) console.warn('pinax-lib host: adapters.changesBase is not a full sha (40 or 64 lower-case hex digits), so no comparison is seeded');
   // A malformed `fonts` is a host's programming error: it throws here, at mount time, and never as a fallback.
   const checkedAssets = assetsOf(a['assets']);
   let store: HostStore | null = null;
@@ -348,7 +437,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('pinax-lib host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('pinax-lib host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
+  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, changesBase: base !== undefined && isFullSha(base) ? base : undefined, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -399,6 +488,50 @@ function windowOf(el: unknown): HostWindow {
   return win as HostWindow;
 }
 
+/** The item values a document names, as `render()` listed them: the strings of `meta.items` of 1 to 100 code units, at most 50; read through own data only, never throwing. */
+function itemValues(d: unknown): readonly string[] {
+  try {
+    const meta: unknown = isPlain(d) ? Object.getOwnPropertyDescriptor(Object.getOwnPropertyDescriptor(d, 'result')?.value as object, 'meta')?.value : undefined;
+    const list: unknown = isPlain(meta) ? Object.getOwnPropertyDescriptor(meta, 'items')?.value : undefined;
+    if (!Array.isArray(list)) return [];
+    const out: string[] = [];
+    for (let i = 0; i < list.length && out.length < ITEM_LIMITS.max; i += 1) {
+      const v: unknown = Object.getOwnPropertyDescriptor(list, String(i))?.value;
+      if (typeof v === 'string' && v.length >= 1 && v.length <= ITEM_LIMITS.valueMax) out.push(v);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The links the `items` adapter answered, copied as plain data and judged in full (src/frame/items.ts), or why not. The answer is
+ * untrusted: a getter is never called, and a value is never repeated in the reason. `undefined` and an empty list are no links.
+ */
+function itemLinksOf(answer: unknown): { readonly links: readonly ItemLink[] | undefined } | { readonly why: string } {
+  if (answer === undefined) return { links: undefined };
+  const data = (o: object, k: string): unknown => {
+    const d = Object.getOwnPropertyDescriptor(o, k);
+    return d !== undefined && 'value' in d ? (d.value as unknown) : undefined;
+  };
+  try {
+    if (!Array.isArray(answer)) return { why: 'items must be a list' };
+    if (answer.length > ITEM_LIMITS.max) return { why: `items has more than ${String(ITEM_LIMITS.max)} entries` };
+    const copy: unknown[] = [];
+    for (let i = 0; i < answer.length; i += 1) {
+      const e = data(answer, String(i));
+      const names = isPlain(e) ? Object.getOwnPropertyNames(e) : [];
+      copy.push(isPlain(e) && names.length === 2 && names.includes('value') && names.includes('href') ? { value: data(e, 'value'), href: data(e, 'href') } : null);
+    }
+    const why = itemsWhy(copy);
+    if (why !== null) return { why };
+    return { links: copy.length === 0 ? undefined : (copy as ItemLink[]) };
+  } catch {
+    return { why: 'items could not be read' };
+  }
+}
+
 /** Mounts the sealed reader frame for `o.document` into `el` (Reference §11). */
 export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInput; readonly adapters: HostAdapters }): DocFrame {
   const win = windowOf(el);
@@ -432,7 +565,11 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   /** Posts an appearance verdict on the current mount's port (now or at its ready). */
   let sendAppearance: (a: Appearance) => void = () => undefined;
   /** Focuses the current mount's iframe and posts a command on its port; nothing before its ready or once it is gone. */
-  let sendCommand: (name: (typeof COMMAND_OPS)[number]) => void = () => undefined;
+  let sendCommand: (name: ToolCommand) => void = () => undefined;
+  /** Posts a command that moves no focus (close-overlay, goto) on the current mount's port, once it is ready. */
+  let sendWire: (m: Record<string, string>) => void = () => undefined;
+  /** Opens a print run on the current mount and posts print-figures, once it is ready. */
+  let sendPrintFigures: () => void = () => undefined;
 
   /** What every 'after-ready' mount of this DocFrame posts: the build, or that there is none. */
   type Build = { readonly text: string } | { readonly unavailable: true };
@@ -492,6 +629,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     });
   };
 
+  /** Asked for by giving onPlace, and by nothing else: it also gates a hash's `push` and `from`, and onHash's second argument. */
+  const places = c.callbacks.onPlace !== undefined;
+
   const mount = (d: RenderInput): void => {
     let live = true;
     let fellBack = false;
@@ -507,6 +647,12 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const scanned: unknown = isPlain(d) ? (d as { scan?: { mermaid?: unknown } }).scan?.mermaid : undefined;
       const gated = scanned === undefined ? null : mermaidGate(scanned as Parameters<typeof mermaidGate>[0], c.gate);
       late = c.draw === 'after-ready' && gated !== null && gated.inline;
+      const values = c.callbacks.items === undefined ? [] : itemValues(d);
+      // The resolver's answer is judged here: one it cannot use is no links (one warning), as a throwing resolver is, and the
+      // document still mounts (frameDocument itself refuses a bad `items`, a direct caller's programming error).
+      const answered = itemLinksOf(values.length === 0 ? undefined : call('items', Object.freeze([...values])));
+      if ('why' in answered) console.warn('pinax-lib host: the items adapter answered links the frame refuses, so none are seeded:', answered.why);
+      const links = 'links' in answered ? answered.links : undefined;
       const frameOptions: FrameOptions = {
         csp: policy,
         nonce,
@@ -516,6 +662,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         ...(c.store === null ? {} : { snapshot: c.store.snapshot() }),
         mermaid: gated !== null && gated.inline ? { maxTextSize: gated.maxTextSize, draw: c.draw } : null,
         ...(c.features === undefined ? {} : { features: c.features as FrameFeatures }),
+        ...(links === undefined ? {} : { items: links as NonNullable<FrameOptions['items']> }),
+        ...(c.changesBase === undefined ? {} : { changesBase: c.changesBase }),
         bridge: {
           links: c.callbacks.onLink !== undefined,
           hash: c.callbacks.onHash !== undefined,
@@ -524,6 +672,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           versions: c.callbacks.openVersion !== undefined,
           // Asked for by giving onProgress, and by nothing else: a frame is never sent a progress nobody listens to.
           progress: c.callbacks.onProgress !== undefined,
+          // Likewise: places by onPlace alone, print figures by onPrintFigure alone.
+          places,
+          printFigures: c.callbacks.onPrintFigure !== undefined,
         },
       };
       page = frameDocument(d, frameOptions);
@@ -550,6 +701,15 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     let ready = false;
     let early = 0;
     let limiter: Limiter | null = null;
+    /**
+     * The open print run of this mount (B5); null when none is open. `reopened` is set when `printFigures()` opened it while the
+     * previous run was unfinished; `replaceable` then maps each index accepted once to its bytes, until a repeat replaces it.
+     * `bytes` is the live total (the latest copy of each index); `handed` what every accepted figure decoded to, replaced copies
+     * included, which the parser holds to twice the live cap.
+     */
+    let run: { n: number | null; readonly seen: Set<number>; bytes: number; handed: number; readonly reopened: boolean; readonly replaceable: Map<number, number> } | null = null;
+    /** What the figure in hand decodes to, as the parser read it: set before the limiter, read by its one effect. */
+    let figureBytes = 0;
     let pending: Partial<FramePrefs> | null = null;
     let pendingAppearance: Appearance | null = null;
     let answer: Build | null = null;
@@ -655,8 +815,33 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           if (isFullSha(msg.sha)) answerChanges(msg.sha);
           return;
         case 'hash':
-          call('onHash', msg.id);
+          // The entry only under bridge.places: a 1.1-shaped host's onHash is called with the id alone.
+          if (places) call('onHash', msg.id, Object.freeze({ push: msg.push === 'true', from: msg.from ?? null }));
+          else call('onHash', msg.id);
           return;
+        case 'place':
+          call('onPlace', msg.kind);
+          return;
+        case 'print-figure': {
+          // The run is updated before the adapter is called, so a host that calls printFigures() from it opens a fresh run.
+          const i = Number(msg.i);
+          const n = Number(msg.n);
+          if (run !== null) {
+            run.n = n;
+            // The first repeat in a reopened run replaces the earlier copy: its bytes leave the total (the parser judged the
+            // cap on the adjusted total) and the index is no longer replaceable. Any other accepted figure is new.
+            const earlier = run.replaceable.get(i);
+            if (earlier !== undefined) {
+              run.bytes -= earlier;
+              run.replaceable.delete(i);
+            } else if (run.reopened) run.replaceable.set(i, figureBytes);
+            run.seen.add(i);
+            run.bytes += figureBytes;
+            run.handed += figureBytes;
+          }
+          call('onPrintFigure', Object.freeze({ i, n, png: msg.png }));
+          return;
+        }
         case 'progress':
           call('onProgress', Number(msg.p) / 1000);
           return;
@@ -700,7 +885,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
 
     port.onmessage = (e: MessageEvent): void => {
       if (!live) return;
-      const parsed = parseBridgeMessage(e.data, e.ports, nonce);
+      const context: ParseContext = { places, run };
+      const parsed = parseBridgeMessage(e.data, e.ports, nonce, context);
       if (!ready) {
         if (parsed.ok && parsed.msg.t === 'ready') onReady();
         else if (!parsed.ok && (parsed.reason === 'nonce' || parsed.reason === 'protocol')) fail(parsed.reason);
@@ -711,6 +897,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         refused();
         return;
       }
+      figureBytes = parsed.bytes ?? 0;
       const admitted = (limiter as Limiter).admit(parsed.msg);
       if (!admitted.ok && admitted.closes) fail('refusals');
     };
@@ -752,6 +939,20 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       iframe.focus();
       post({ t: 'command', name });
     };
+    sendWire = (m) => {
+      if (!live || !ready) return;
+      post({ t: 'command', ...m });
+    };
+    sendPrintFigures = () => {
+      if (!live || !ready) return;
+      // Unfinished: the previous run was itself reopened (some of its distinct indexes are stale copies, so a full count proves
+      // nothing: its own figures may still be in the port), or it accepted fewer than n distinct indices, or none. Its figures
+      // still in the port's queue are then absorbed by this run (a first repeat replaces); only a run after a complete ordinary
+      // run, or the first run of the mount, is ordinary.
+      const unfinished = run !== null && (run.reopened || run.n === null || run.seen.size < run.n);
+      run = { n: null, seen: new Set<number>(), bytes: 0, handed: 0, reopened: unfinished, replaceable: new Map<number, number>() };
+      post({ t: 'command', name: 'print-figures' });
+    };
     teardown = () => {
       if (live) stop();
     };
@@ -787,6 +988,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendPrefs = () => undefined;
       sendAppearance = () => undefined;
       sendCommand = () => undefined;
+      sendWire = () => undefined;
+      sendPrintFigures = () => undefined;
       mount(d);
     },
     setPrefs(p) {
@@ -803,11 +1006,28 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendAppearance(verdict);
     },
     command(name) {
-      if (typeof name !== 'string' || !(COMMAND_OPS as readonly string[]).includes(name)) {
-        throw new TypeError(`pinax-lib host: command name must be one of ${COMMAND_OPS.join(', ')}`);
+      if (typeof name !== 'string' || !(TOOL_COMMANDS as readonly string[]).includes(name)) {
+        throw new TypeError(`pinax-lib host: command name must be one of ${TOOL_COMMANDS.join(', ')}`);
       }
       if (destroyed) return;
       sendCommand(name);
+    },
+    closeOverlay() {
+      if (!places) throw new TypeError('pinax-lib host: closeOverlay needs adapters.onPlace');
+      if (destroyed) return;
+      sendWire({ name: 'close-overlay' });
+    },
+    goto(id, from) {
+      if (typeof id !== 'string' || !isFragmentId(id)) throw new TypeError('pinax-lib host: goto needs an id inside the fragment grammar');
+      if (from !== undefined && !isAnchorToken(from)) throw new TypeError('pinax-lib host: goto\'s from must be a position token');
+      if (!places) throw new TypeError('pinax-lib host: goto needs adapters.onPlace');
+      if (destroyed) return;
+      sendWire(from === undefined ? { name: 'goto', id } : { name: 'goto', id, from });
+    },
+    printFigures() {
+      if (c.callbacks.onPrintFigure === undefined) throw new TypeError('pinax-lib host: printFigures needs adapters.onPrintFigure');
+      if (destroyed) return;
+      sendPrintFigures();
     },
     destroy() {
       if (destroyed) return;
@@ -817,6 +1037,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       sendPrefs = () => undefined;
       sendAppearance = () => undefined;
       sendCommand = () => undefined;
+      sendWire = () => undefined;
+      sendPrintFigures = () => undefined;
     },
   };
 }

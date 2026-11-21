@@ -7,10 +7,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APPEARANCE_LABEL_DEFAULT, APPEARANCE_SLOTS, SLOT_PROPERTY, type Appearance, type AppearanceColourSlot } from '../src/enhance/appearance.js';
 import { destroyEnhancement, enhance, setEnhancementAppearance, setEnhancementPrefs } from '../src/enhance/index.js';
 import { createJournal } from '../src/enhance/journal.js';
+import { wrapEnhance } from '../src/frame-runtime/enhance-wrap.js';
 import { contextOf } from '../src/enhance/lifecycle.js';
 import { EVENT_NAMES } from '../src/enhance/registry.js';
 import type { ReaderStorage } from '../src/enhance/types.js';
@@ -775,11 +777,16 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     expect(tip()).toEqual(['', '', '']);
   });
 
-  it('the entry hands the reader\'s own functions over: it wraps none of them and so touches no element itself (review 2906 F10)', async () => {
+  it('the entry hands the reader\'s own functions over, but `enhance` (wrapped for the item link\'s href only) and so touches no element itself (review 2906 F10)', async () => {
     const api = await register();
     const reader = await import('../src/enhance/index.js'); // the registry register() left: the entry's own copy
     expect(api['setEnhancementAppearance']).toBe(reader.setEnhancementAppearance);
-    expect(api['enhance']).toBe(reader.enhance);
+    // `enhance` is the one wrapped member (docserver parity T4): wrapEnhance(reader.enhance), whose behaviour is held with a fake
+    // `enhance` below (the same options object, or a copy that differs in `itemLink` alone, and no element touched).
+    // That the registered `enhance` is that wrapper over the reader's own, and not some other function, is pinned end to end by the
+    // item-link rows of test/enhance-frame-wire.test.ts, which call the registered api.enhance on a document and read the reader's
+    // own item links (`a.item-link`, the root's marks) and its https check from the result: a wrapper that dropped the reader, or
+    // one that passed an href on unchecked, would fail there. A comparison of source text here would pin nothing more.
     expect(api['destroyEnhancement']).toBe(reader.destroyEnhancement);
   });
 
@@ -1014,5 +1021,116 @@ describe('second review F8: several hosted roots in one document share the html 
     expect(other.documentElement.hasAttribute('data-docreader-hosted')).toBe(false);
     expect(marked()).toBe(true);
     expect(tip()).toEqual(tipOf(PHOSPHOR));
+  });
+});
+
+describe("the frame's enhance (docserver parity T4, review round 1): wrapEnhance forwards the options, and touches no element", () => {
+  const HREF = 'https://tracker.example/AB-1';
+
+  /** A fake `enhance` that records what it was given and writes nothing. */
+  function fake(): { readonly inner: (root: HTMLElement, options?: Record<string, unknown>) => string; readonly calls: [HTMLElement, Record<string, unknown> | undefined][] } {
+    const calls: [HTMLElement, Record<string, unknown> | undefined][] = [];
+    return {
+      calls,
+      inner: (root, options) => {
+        calls.push([root, options]);
+        return 'the reader answered';
+      },
+    };
+  }
+  const rootOf = (): HTMLElement => {
+    const root = document.createElement('main');
+    root.innerHTML = '<h1>Title</h1><p>Body</p>';
+    document.body.append(root);
+    return root;
+  };
+
+  it('without an itemLink function it forwards the same root and the very same options object, and the reader\'s answer', () => {
+    const { inner, calls } = fake();
+    const enhanceInFrame = wrapEnhance(inner);
+    const root = rootOf();
+    const options = { folds: false, itemLink: 'not a function' };
+    expect(enhanceInFrame(root, options)).toBe('the reader answered');
+    expect(enhanceInFrame(root)).toBe('the reader answered');
+    const noLink = { folds: false };
+    enhanceInFrame(root, noLink);
+    expect(calls).toHaveLength(3);
+    expect(calls[0]?.[0] === root && calls[0]?.[1] === options).toBe(true);
+    expect(calls[1]?.[1]).toBeUndefined();
+    expect(calls[2]?.[1] === noLink).toBe(true);
+    root.remove();
+  });
+
+  it('with an itemLink function it forwards a copy that differs in itemLink alone, and leaves the host\'s object as it was', () => {
+    const { inner, calls } = fake();
+    const root = rootOf();
+    const seen: string[] = [];
+    const given = (key: string): unknown => (seen.push(key), HREF);
+    const storage = { snapshot: {} };
+    const options = { folds: false, storage, vocabulary: { itemFields: ['Tracker'] }, itemLink: given };
+    wrapEnhance(inner)(root, options);
+    const forwarded = calls[0]?.[1] as Record<string, unknown>;
+    expect(forwarded === options).toBe(false);
+    expect(Object.keys(forwarded).sort()).toEqual(Object.keys(options).sort());
+    for (const k of ['folds', 'storage', 'vocabulary']) expect(forwarded[k] === (options as Record<string, unknown>)[k], k).toBe(true);
+    expect(options.itemLink === given).toBe(true); // the host's object is not changed
+    expect(forwarded['itemLink'] === given).toBe(false);
+    const ask = forwarded['itemLink'] as (k: string) => unknown;
+    expect(ask('AB-1')).toBe(HREF);
+    expect(seen).toEqual(['AB-1']);
+    root.remove();
+  });
+
+  it('answers the href only when it is an absolute https: URL, else null', () => {
+    const { inner, calls } = fake();
+    const root = rootOf();
+    for (const [answer, want] of [[HREF, HREF], ['http://tracker.example/AB-1', null], ['javascript:alert(1)', null], ['/AB-1', null], ['', null], [null, null], [7, null], [undefined, null]] as const) {
+      calls.length = 0;
+      wrapEnhance(inner)(root, { itemLink: () => answer });
+      expect(((calls[0]?.[1] as Record<string, unknown>)['itemLink'] as () => unknown)(), String(answer)).toBe(want);
+    }
+    root.remove();
+  });
+
+  it('touches no element, attribute or text, in the root or the document, on either path', () => {
+    const { inner } = fake();
+    const root = rootOf();
+    const before = [root.outerHTML, document.documentElement.outerHTML];
+    const watch = new MutationObserver(() => undefined);
+    watch.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+    wrapEnhance(inner)(root, { itemLink: () => HREF });
+    wrapEnhance(inner)(root, { folds: true });
+    wrapEnhance(inner)(root);
+    expect(watch.takeRecords()).toEqual([]);
+    watch.disconnect();
+    expect([root.outerHTML, document.documentElement.outerHTML]).toEqual(before);
+    root.remove();
+  });
+
+  it('src/frame-runtime/enhance-wrap.ts names no DOM, global or storage API (the walls test\'s own kind of scan)', () => {
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'frame-runtime', 'enhance-wrap.ts');
+    const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true);
+    const names: string[] = [];
+    const walk = (n: ts.Node): void => {
+      if (ts.isIdentifier(n) || ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) names.push(n.text);
+      ts.forEachChild(n, walk);
+    };
+    walk(sf);
+    const FORBIDDEN = [
+      'document', 'window', 'self', 'globalThis', 'top', 'parent', 'location', 'history', 'navigator',
+      'createElement', 'createTextNode', 'setAttribute', 'removeAttribute', 'appendChild', 'append', 'prepend', 'insertBefore', 'replaceChildren', 'remove',
+      'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'textContent', 'classList', 'style', 'dataset', 'attributeStyleMap',
+      'addEventListener', 'dispatchEvent', 'postMessage', 'fetch', 'localStorage', 'sessionStorage', 'indexedDB', 'eval', 'Function',
+    ];
+    expect(names.filter((n) => FORBIDDEN.includes(n))).toEqual([]);
+    // The control: the scan does see a name it forbids.
+    const planted = ts.createSourceFile('planted.ts', 'root.setAttribute("x", "y"); document.body.append(root);', ts.ScriptTarget.ES2022, true);
+    const seen: string[] = [];
+    const walkPlanted = (n: ts.Node): void => {
+      if (ts.isIdentifier(n)) seen.push(n.text);
+      ts.forEachChild(n, walkPlanted);
+    };
+    walkPlanted(planted);
+    expect(seen.filter((n) => FORBIDDEN.includes(n))).toEqual(['setAttribute', 'document', 'append']);
   });
 });

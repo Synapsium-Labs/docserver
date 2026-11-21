@@ -9,7 +9,7 @@
 //
 // For every golden and small hostile case, runCorpus checks that the render's outcome is 'rendered', that
 // normaliseForCompare(html) equals conformance/expected/<id>.html, that its meta, written as
-// JSON.stringify(meta, null, 2) + '\n', equals conformance/expected/<id>.meta.json, and that the output
+// JSON.stringify(meta, null, 2) + '\n' (an empty `items` left out: it is not a key of the goldens), equals conformance/expected/<id>.meta.json, and that the output
 // passes checkOutputSafety.
 //
 // Hostile and generated cases also carry a verdict (conformance/hostile.json, verdict.ts): what must hold of
@@ -28,7 +28,7 @@ import { normaliseForCompare } from './normalise.js';
 import { checkOutputSafety } from './oracle.js';
 import { evaluateVerdict, type Verdict, type VerdictContext } from './verdict.js';
 
-export type { BridgeCases, BridgeFill, BridgeMessageCase, BridgeSequence, BridgeStep } from './bridge.js';
+export type { BridgeCases, BridgeFill, BridgeGiven, BridgeMessageCase, BridgeSequence, BridgeStep } from './bridge.js';
 export { buildInput, inputSize, MAX_INPUT_BYTES } from './hostile.js';
 export type { InputPart, InputSpec } from './hostile.js';
 export { normaliseForCompare } from './normalise.js';
@@ -170,6 +170,16 @@ function verdictFailures(c: CorpusCase, verdict: Verdict, result: RenderResult, 
   return scanThrew === null ? lines : [...lines.filter((l) => !l.startsWith('scan:')), scanThrew];
 }
 
+/**
+ * The meta as the goldens write it: the reference renderer's keys. `items` (the item values of a render given a `reader`,
+ * RenderMeta.items) is this library's own addition, so an empty one is left out; a golden case is rendered with no `reader`,
+ * so any other value is a difference and stays in.
+ */
+function goldenMeta(meta: RenderResult['meta']): unknown {
+  const { items, ...rest } = meta;
+  return Array.isArray(items) && items.length === 0 ? rest : meta;
+}
+
 function checkCase(c: CorpusCase, render: RenderFn, o: RunCorpusOptions): CaseResult {
   const failures: string[] = [];
   const started = performance.now();
@@ -190,7 +200,7 @@ function checkCase(c: CorpusCase, render: RenderFn, o: RunCorpusOptions): CaseRe
   if (c.expected !== null) {
     const html = normaliseForCompare(result.html);
     if (html !== c.expected.html) failures.push(firstDifference('html', c.expected.html, html));
-    const meta = `${JSON.stringify(result.meta, null, 2)}\n`;
+    const meta = `${JSON.stringify(goldenMeta(result.meta), null, 2)}\n`;
     if (meta !== c.expected.meta) failures.push(firstDifference('meta', c.expected.meta, meta));
   }
   if (c.verdict !== null) failures.push(...verdictFailures(c, c.verdict, result, ms, o));

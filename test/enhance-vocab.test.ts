@@ -1164,3 +1164,100 @@ describe('README: the two options of Task 8', () => {
     expect(row('vocabulary')).toContain(`at most ${String(LIMITS.words)} words, each 1 to ${String(LIMITS.word)} code units with no white space at either end`);
   });
 });
+
+describe('the item link, by the header-line route: an item field\'s label anywhere in a header paragraph, the keys of its line', () => {
+  const hrefs = (root: Element): string[] => Array.from(root.querySelectorAll('a.item-link')).map((a) => a.getAttribute('href') ?? '');
+  const FIELDS = { vocabulary: { itemFields: ['Tracker'] } };
+
+  it('links the keys of the item line of a multi-line header paragraph where they stand, and nothing of the other lines', async () => {
+    const root = mount('# Example spec\n\n**Status:** Draft AB-1\n**Tracker:** AB-90, `CD-7`\n**Author:** EF-2\n\n## Scope\n\nBody.\n');
+    const itemLink = vi.fn(LINK);
+    const onLink = vi.fn();
+    await enhance(root, { itemLink, onLink, ...FIELDS });
+    expect(itemLink.mock.calls).toEqual([['AB-90'], ['CD-7']]);
+    const p = Array.from(root.children).find((c) => c.localName === 'p') as HTMLElement;
+    expect(hrefs(p)).toEqual([LINK('AB-90'), LINK('CD-7')]);
+    expect(text(p)).toBe('Status: Draft AB-1 Tracker: AB-90 \u2197, CD-7 \u2197 Author: EF-2');
+    (p.querySelector('a.item-link') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    expect(onLink.mock.calls).toEqual([[LINK('AB-90'), { newTab: true }]]);
+  });
+
+  it('cuts the line at a newline, a br and the next bold label, whatever its place, and the text nodes are split, never re-typed', async () => {
+    for (const [md, asked] of [
+      ['**Tracker:** AB-1\nCD-2 next line', ['AB-1']],
+      ['**Tracker:** AB-1  \nCD-2 after a hard break', ['AB-1']],
+      ['**Tracker:** AB-1<br>CD-2 after a tag', ['AB-1']],
+      ['**Owner:** CD-2 **Tracker:** AB-1 **Author:** EF-3', ['AB-1']],
+      ['**Owner**: CD-2 **Tracker**: AB-1 **Author**: EF-3', ['AB-1']],
+      ['Status: CD-2\nTracker: AB-1\nAuthor: EF-3', ['AB-1']],
+    ] as const) {
+      const root = mount(`# Example spec\n\n${md}\n\n## Scope\n`);
+      const before = root.innerHTML;
+      const itemLink = vi.fn(LINK);
+      await enhance(root, { itemLink, ...FIELDS });
+      expect(itemLink.mock.calls.map((c) => c[0]), md).toEqual(asked);
+      expect(hrefs(root), md).toEqual(asked.map(LINK));
+      await destroyEnhancement(root);
+      expect(root.innerHTML, md).toBe(before);
+    }
+  });
+
+  it('ends the line at a br with no newline after it (html the renderer did not write)', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = '<h1>T</h1><p><strong>Status:</strong> x<br><strong>Tracker:</strong> AB-1<br>CD-2<br>EF-3</p><h2>S</h2>';
+    document.body.append(root);
+    const itemLink = vi.fn(LINK);
+    await enhance(root, { itemLink, ...FIELDS });
+    expect(itemLink.mock.calls).toEqual([['AB-1']]);
+    await destroyEnhancement(root);
+    root.remove();
+  });
+
+  it('reads a blockquote\'s first paragraph, and the zone after the title only', async () => {
+    const itemLink = vi.fn(LINK);
+    const quote = mount('# T\n\n> **Status:** Draft\n> **Tracker:** AB-1\n\n## S\n');
+    await enhance(quote, { itemLink, ...FIELDS });
+    expect(hrefs(quote)).toEqual([LINK('AB-1')]);
+    const before = mount('**Tracker:** AB-2\n\n# T\n\n## S\n\n**Tracker:** AB-3\n');
+    await enhance(before, { itemLink, ...FIELDS });
+    expect(hrefs(before)).toEqual([]);
+    const list = mount('# T\n\n- **Tracker:** AB-4\n\n## S\n');
+    await enhance(list, { itemLink, ...FIELDS });
+    expect(hrefs(list)).toEqual([]);
+    expect(itemLink.mock.calls.map((c) => c[0])).toEqual(['AB-1']);
+  });
+
+  it('with no title it reads from the start of the document, linking the line and routing its click', async () => {
+    const root = mount('**Status:** Draft\n**Tracker:** AB-5\n\n## S\n\nBody.\n');
+    const onLink = vi.fn();
+    await enhance(root, { itemLink: LINK, onLink, ...FIELDS });
+    expect(hrefs(root)).toEqual([LINK('AB-5')]);
+    (root.querySelector('a.item-link') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    expect(onLink.mock.calls).toEqual([[LINK('AB-5'), { newTab: true }]]);
+  });
+
+  it('is the third route: not with a byline item fact or a delta link; only with itemLink and itemFields; never the meta line', async () => {
+    const itemLink = vi.fn(LINK);
+    const withFact = mount('# T\n\n**Spec** \u00b7 2026-10-12 \u00b7 Tracker: AB-1\n\n**Tracker:** AB-90\n\n## S\n');
+    await enhance(withFact, { itemLink, ...FIELDS });
+    expect(itemLink.mock.calls).toEqual([['AB-1']]);
+    itemLink.mockClear();
+    const meta = mount('# T\n\n**Spec** \u00b7 a note **Tracker:** AB-90\n\n## S\n');
+    await enhance(meta, { itemLink, ...FIELDS });
+    const off = mount('# T\n\n**Tracker:** AB-90\n\n## S\n');
+    await enhance(off, { itemLink });
+    const noLink = mount('# T\n\n**Tracker:** AB-90\n\n## S\n');
+    await enhance(noLink, FIELDS);
+    expect(itemLink.mock.calls).toEqual([]);
+    expect([hrefs(meta), hrefs(off), hrefs(noLink)]).toEqual([[], [], []]);
+    const md = '# T\n\n**Tracker:** AB-90\n\n## Delta\n\n```\nitem: CD-2\n```\n';
+    const resolved = mount(md);
+    const asked: string[] = [];
+    await enhance(resolved, { itemLink: (k: string) => (asked.push(k), LINK(k)), vocabulary: { itemFields: ['Tracker'], itemHeadings: ['Delta'] } });
+    expect(asked).toEqual(['CD-2']);
+    const none = mount(md);
+    const askedNone: string[] = [];
+    await enhance(none, { itemLink: (k: string) => (askedNone.push(k), null), vocabulary: { itemFields: ['Tracker'], itemHeadings: ['Delta'] } });
+    expect(askedNone).toEqual(['CD-2', 'AB-90']);
+  });
+});

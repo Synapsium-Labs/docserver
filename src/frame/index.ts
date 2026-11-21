@@ -3,6 +3,7 @@
 // the fragment grammar and the frame manifest. Pure: no DOM, no clock, no randomness, no I/O.
 //
 // Every export here is semver surface from v1 (FD20). The package's export map gains `./frame` in Task 12.
+export { ANCHOR_LIMITS, isAnchorToken, pngBytesOfBase64 } from './anchor.js';
 export { CSP_REFUSALS, checkFrameCsp, frameCsp } from './csp.js';
 export type { CspRefusal } from './csp.js';
 export {
@@ -24,6 +25,7 @@ export type {
 export { FrameError, frameDocument, MAX_SRCDOC_CHARS_DEFAULT } from './document.js';
 export type { FrameAssets, FrameErrorCode, FrameFeatures, FrameOptions, RenderInput } from './document.js';
 export { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';
+export type { ItemLink } from './items.js';
 export { MERMAID_GATE_DEFAULTS, MERMAID_LIMIT_CEILINGS, mermaidGate } from './gate.js';
 export { FRAME_MANIFEST } from './manifest.generated.js';
 export {
@@ -33,9 +35,10 @@ export {
   ERROR_WHY,
   FRAME_ACCEPTS,
   OP_KEYS,
+  PLACE_KINDS,
   PREF_KEYS,
   SEED_SCHEMA,
 } from './protocol.js';
-export type { BridgeStoreKey, ErrorWhy, FrameToParent, ParentToFrame } from './protocol.js';
+export type { BridgeStoreKey, ErrorWhy, FrameToParent, ParentToFrame, PlaceKind } from './protocol.js';
 export { SEED_HTML_MAX_CHARS } from './seed.js';
 export type { FramePrefs } from './wire-types.js';

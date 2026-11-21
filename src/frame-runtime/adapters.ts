@@ -7,11 +7,21 @@
 //             JSON text (valid JSON, at most 65,536 UTF-8 bytes, else dropped), a delete as the JSON literal 'null'
 //   onLink    navigate: 1 to 4096 code units, no C0, DEL or C1 control; newTab dropped. The guard's links (link()) go to the
 //             same sink
-//   onHash    hash: only an id inside FRAGMENT_ID_GRAMMAR; onHash(null), push and from are not sent in protocol 1
+//   onHash    hash: only an id inside FRAGMENT_ID_GRAMMAR; onHash(null) is not sent. With the seed's `bridge.places` a push adds
+//             `push: 'true'` and a `from` that isAnchorToken accepts (a move that is not a push sends neither, as scroll-spy and
+//             the section keys); without it the op is batch 1.1's, the id alone
+//   onPlace   place: only with `bridge.places`; the kind `overlay` or `overlay-closed` (the reader reports the figure only)
+//   printOption  enhance's `onPrintFigure`, as an object to spread: only with `bridge.printFigures`; print-figure `{ i, n, png }`
+//             for an `i` from 0 below an `n` of at most printFiguresMax and a text of at most a 1 MiB PNG's base64 length, else
+//             nothing (an `i` or `n` that is not an integer is no canonical decimal, which the host's parser refuses; the check
+//             stays out of the frame to keep the bootstrap in its budget); it answers a promise settled once the op is posted
+//             (or at once for a figure not sent), so the reader hands the pacer one figure at a time (docserver parity T6)
 //   copy      at most 65,536 UTF-8 bytes, and only while copy's share of the window lasts; otherwise it rejects, and L2
 //             shows a failed copy
 //   changes   only a full sha (40 or 64 lower-case hex): anything shorter resolves null locally; else the outbox's slot
 //   openVersion  version: null keys omitted, full shas only (a short one sends nothing); {} back to the latest
+//   itemLink     only with the seed's `items`: the href of the item whose value is exactly the key asked, else null (parity Task 4); the
+//                reader draws it only when it is an absolute https: URL (enhance-entry.ts)
 //   onProgress   progress: the share (0 to 1) as a string of thousandths, rounded and clamped to 0..1000; a value that is
 //                not a finite number sends nothing (batch 1.1, C108)
 //
@@ -33,10 +43,11 @@
 // full pass only in 'auto' mode (FD13, FD18); and probesInlineStyle() says when the bootstrap asks for inline style
 // before ready instead: in every other mode, whose first drawing comes after ready (styles.ts; fix round, review S1;
 // Reference §11.5, ruling R7).
+import { isAnchorToken } from '../frame/anchor.js';
 import { isFragmentId } from '../frame/fragment.js';
-import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey, type PlaceKind } from '../frame/protocol.js';
 import type { Seed, SeedMermaid } from '../frame/seed.js';
-import type { ChangesAnswer, Outbox } from './outbox.js';
+import type { ChangesAnswer, Outbox, QueuedOp } from './outbox.js';
 
 /** L2's namespace, storage key and position key inside the frame (FD7: no document identity in the frame). */
 export const FRAME_NAMESPACE = 'docreader';
@@ -83,6 +94,9 @@ function utf8Bytes(s: string): number {
 
 const parse = JSON.parse;
 
+/** The longest base64 text of a figure: a PNG of printFigurePngMaxBytes (1 MiB), four characters to three bytes, written out so the bootstrap does not compute it (test/enhance-frame-wire.test.ts holds the figure). */
+const PNG_B64_MAX = 1_398_104;
+
 /** True for an href the frame may send: 1 to hrefMaxChars code units, with no C0, DEL or C1 control. */
 export function sendableHref(href: unknown): href is string {
   return typeof href === 'string' && href.length > 0 && href.length <= BRIDGE_LIMITS.hrefMaxChars && !/[\u0000-\u001f\u007f-\u009f]/.test(href);
@@ -98,15 +112,26 @@ export interface FrameAdapters {
   readonly openVersion?: (v: { readonly sha: string | null; readonly only: string | null }) => void;
   /** Only when the seed's bridge asks for progress (its default is false): the share read so far, 0 to 1. */
   readonly onProgress?: (share: number) => void;
+  /** Only when the seed's bridge asks for places (its default is false): the figure overlay opened or closed. */
+  readonly onPlace?: (kind: PlaceKind) => void;
+  /**
+   * enhance's `itemLink` option, as an object to spread (so the bootstrap's one line serves it): `{ itemLink }` only when the
+   * seed carries `items` (parity Task 4), which answers the seeded href of the item whose value is exactly `key`, else null (the
+   * item stays text); `{}` otherwise.
+   */
+  readonly itemOption: { readonly itemLink?: (key: string) => string | null };
+  /** enhance's `onPrintFigure` option as an object to spread: `{ onPrintFigure }` only with the seed's `bridge.printFigures`, else `{}`. */
+  readonly printOption: { readonly onPrintFigure?: (f: { readonly i: number; readonly n: number; readonly png: string }) => Promise<void> };
   /** The guard's `docserver:link`: the same sink as onLink, dropped when links are off. */
   link(href: string): void;
 }
 
 /** The adapters for one frame over its outbox and seed (see the header). */
-export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'bridge'>): FrameAdapters {
+export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'bridge' | 'items'>): FrameAdapters {
   const snapshot: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const [k, v] of seed.snapshot) snapshot[fromBridgeKey(k)] = v;
   const b = seed.bridge;
+  const { items } = seed;
   const navigate = (href: string): void => {
     if (b.links && sendableHref(href)) outbox.send({ t: 'navigate', href });
   };
@@ -129,8 +154,14 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
     ...(b.links ? { onLink: (href: string): void => navigate(href) } : {}),
     ...(b.hash
       ? {
-          onHash: (id: string | null): void => {
-            if (isFragmentId(id)) outbox.send({ t: 'hash', id });
+          onHash: (id: string | null, entry?: { readonly push: boolean; readonly from: string | null }): void => {
+            if (!isFragmentId(id)) return;
+            const op: Extract<QueuedOp, { t: 'hash' }> = { t: 'hash', id };
+            if (b.places === true && entry?.push === true) {
+              op.push = 'true';
+              if (isAnchorToken(entry.from)) op.from = entry.from as string;
+            }
+            outbox.send(op);
           },
         }
       : {}),
@@ -152,6 +183,13 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
           },
         }
       : {}),
+    ...(b.places === true
+      ? {
+          onPlace: (kind: PlaceKind): void => {
+            if (kind === 'overlay' || kind === 'overlay-closed') outbox.send({ t: 'place', kind });
+          },
+        }
+      : {}),
     ...(b.progress === true
       ? {
           onProgress: (share: number): void => {
@@ -160,6 +198,17 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
           },
         }
       : {}),
+    printOption: b.printFigures
+      ? {
+          onPrintFigure: ({ i, n, png }): Promise<void> =>
+            new Promise<void>((done) => {
+              if (i >= 0 && i < n && n <= BRIDGE_LIMITS.printFiguresMax && typeof png === 'string' && png.length <= PNG_B64_MAX) {
+                outbox.send({ t: 'print-figure', i: String(i), n: String(n), png }, done);
+              } else done();
+            }),
+        }
+      : {},
+    itemOption: items === undefined ? {} : { itemLink: (key: string): string | null => items.find((i) => i.value === key)?.href ?? null },
     link: navigate,
   };
 }

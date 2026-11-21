@@ -63,7 +63,7 @@
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
 import { hostedVerdict, type Appearance } from './appearance.js';
 import { createBar } from './bar.js';
-import { createCommands } from './commands.js';
+import { createCommands, type CommandArgs } from './commands.js';
 import { createEnv } from './env.js';
 import { features, type Feature } from './features.js';
 import { createFolds } from './folds.js';
@@ -375,7 +375,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   const events = createEvents(live);
   const index = createIndex(root);
   const revealer = createReveal({ root, journal, events, live });
-  const overlays = createOverlays(live);
+  const overlays = createOverlays(live, host);
   const keys = createKeys({ root, journal, overlays, keyboard: options.keyboard, live, operate: operateHere });
   const bar = options.chrome.bar ? createBar({ root, journal, isDocument: info.isDocument }) : null;
   const navigation = createNavigation({
@@ -433,6 +433,13 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     },
   };
   inst.ctx = ctx;
+  // The host's history moved to an entry of this document (commands.ts: `goto`): the export goToHash, as a command.
+  ctx.commands.register('goto', (args) => {
+    const { id, from } = (typeof args === 'object' && args !== null ? args : {}) as { id?: unknown; from?: unknown };
+    if (typeof id !== 'string' || (from !== undefined && typeof from !== 'string')) return false;
+    nav.goToHash(id, from ?? null);
+    return true;
+  });
   // The prefs and the host's appearance, in this one synchronous run: the first paint is already the host's.
   applyPrefs(journal, root, state.prefs);
   if (state.hosted !== null) applyAppearance(journal, root, state.hosted);
@@ -666,14 +673,15 @@ export function goToHash(root: HTMLElement, id: string | null, from?: string | n
  * command toggles its overlay as its bar button did. True when it ran; false for a root that is not enhanced (or still
  * starting), an unknown name, a tool turned off or absent from this document, or a command that changes nothing (another
  * overlay is open; the contents rail is shown, so there is no drawer). Calls no host callback of its own: the Outline writes
- * its state through the host's storage, as its button did.
+ * its state through the host's storage, as its button did. `close-overlay` and `goto` are the host's history moving
+ * (commands.ts): `goto` takes `args`, `{ id, from? }`, and answers false for arguments of another shape.
  */
-export function runEnhancementCommand(root: HTMLElement, name: string): boolean {
+export function runEnhancementCommand(root: HTMLElement, name: string, args?: CommandArgs): boolean {
   if (!isElement(root) || typeof name !== 'string') return false;
   const inst = findByRoot(root);
   const ctx = inst?.ctx ?? null;
   if (inst === undefined || inst.phase !== 'active' || ctx === null) return false;
-  return operate(inst, () => ctx.commands.run(name)) === true;
+  return operate(inst, () => ctx.commands.run(name, args)) === true;
 }
 
 /**

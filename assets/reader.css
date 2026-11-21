@@ -1320,6 +1320,8 @@
 [data-docreader-root] svg[data-docreader-hosted-figure] .commit-label-bkg { opacity: 1 !important; }
 [data-docreader-root] svg[data-docreader-hosted-figure] :is(.messageText, .loopText, .loopText > tspan) { paint-order: stroke !important; stroke: var(--surface) !important; stroke-width: 3px !important; stroke-linejoin: round !important; }
 [data-docreader-root] figure.mermaid-figure > pre.mermaid[data-docreader-redraw] { position: absolute; top: 0; left: 0; right: 0; visibility: hidden; pointer-events: none; }
+/* a print run's drawing (print-figures): laid out for Mermaid to measure, never seen, and out of the page's flow */
+[data-docreader-root] > .print-stage { position: fixed; top: 0; left: -10000px; width: 1200px; visibility: hidden; pointer-events: none; }
 [data-docreader-root] .fig-overlay .fo-stage:has(> svg[data-docreader-hosted-figure]) { background: var(--surface) !important; }
 /* Mermaid's tooltip is in the frame's body, outside the root: the frame marks html and sets these three there */
 html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip, html[data-docreader-root][data-docreader-colours] > body > .mermaidTooltip { background: var(--dr-tip-bg) !important; color: var(--dr-tip-fg) !important; border-color: var(--dr-tip-edge) !important; }

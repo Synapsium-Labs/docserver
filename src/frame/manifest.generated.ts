@@ -5,8 +5,8 @@
 // layout's), else null. A frame inlines exactly one layout's assets; the size contract (test/size-contract.test.ts) counts by it.
 export const FRAME_MANIFEST = {
   guard: { path: "frame/guard.js", sha256: "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d", bytes: 3643, chars: 3643, csp: "'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0='", layout: null },
-  bootstrap: { path: "frame/bootstrap.js", sha256: "bfb497ab4efc3a91499bcc2d8977e5fa05fad4b4586c01539aca57c41a4b8f87", bytes: 31161, chars: 31161, csp: "'sha256-v7SXq078OpFJm8wtiXfl+gX61LRYbAFTmspXxBpLj4c='", layout: null },
-  enhance: { path: "frame/enhance.js", sha256: "ba16d04952e3960597436fefb94df1638c4c1f15f30e17647978651681852cd1", bytes: 214234, chars: 214215, csp: "'sha256-uhbQSVLjlgWXQ2/vuU3xY4xMHxXzDhdkeXhlFoGFLNE='", layout: "default" },
-  css: { path: "frame/reader.css", sha256: "811bd9b312c7009ba6368599c6a2a8b2284265ec68041f22f184175f84d9cd2f", bytes: 564311, chars: 562043, csp: null, layout: null },
+  bootstrap: { path: "frame/bootstrap.js", sha256: "47d310d29e5eb9487b66a8250ebddacbb15392cc6380b9424dd03cb33cc76d3d", bytes: 32740, chars: 32740, csp: "'sha256-R9MQ0p5euUh7ZqglDr3ay7FTksxjgLlCTdA8szzHbT0='", layout: null },
+  enhance: { path: "frame/enhance.js", sha256: "cc9613b7ed73b16789fee72a4b7263d9071bfbd143a16acaef1ea682b52670fe", bytes: 225727, chars: 225709, csp: "'sha256-zJYTt+1zsWeJ/ucqS3Jj2Qcb+9FDoWrK7x6mgrUmcP4='", layout: "default" },
+  css: { path: "frame/reader.css", sha256: "367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2", bytes: 564567, chars: 562299, csp: null, layout: null },
   mermaid: { path: "mermaid/mermaid.frame.js", sha256: "7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3", bytes: 3747084, chars: 3746940, csp: "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='", layout: null },
 } as const;

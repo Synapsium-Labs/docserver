@@ -21,6 +21,7 @@ import { DOC_BYTES, goldenDocuments, htmlCap, seedRatios } from '../scripts/meas
 import { loadCorpus } from '../src/conformance/index.js';
 import { APPEARANCE_SLOTS, parseAppearance } from '../src/enhance/appearance.js';
 import { LIMITS as ENHANCE_LIMITS, normalizeOptions } from '../src/enhance/options.js';
+import { ITEM_LIMITS } from '../src/frame/items.js';
 import { BRIDGE_LIMITS, DOC_FIELDS, FRAME_PREF_VALUES, PREF_KEYS } from '../src/frame/protocol.js';
 import {
   BRIDGE_KEYS,
@@ -67,7 +68,7 @@ function base(): Seed {
     snapshot: [],
     features: {},
     mermaid: null,
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false },
   };
 }
 
@@ -96,7 +97,8 @@ function full(): Seed {
     ],
     features: { rules: true, folds: false, keyboard: true, chrome: { bar: false }, vocabulary: { ids: false, qualifiers: ['annex'] } },
     mermaid: { maxTextSize: 16384, maxEdges: 500, secure: ['themeCSS'], draw: 'on-request' },
-    bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true },
+    bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true, places: false, printFigures: false },
+    items: [{ value: 'AB-12', href: 'https://tracker.example/AB-12' }],
   };
 }
 
@@ -185,16 +187,23 @@ describe('L3.M4 validateSeed: the shape', () => {
     for (const s of [base(), full()]) expect(validateSeed(s)).toEqual({ ok: true, seed: s });
   });
 
-  it("SEED_KEYS is schema 1's fourteen keys and the two optional ones the appearance contract adds", () => {
-    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
-    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'fonts']);
+  it("SEED_KEYS is schema 1's fourteen keys and the four optional ones the appearance contract and the parity additions add", () => {
+    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'changesBase', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'items', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
+    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'changesBase', 'fonts', 'items']);
     expect(Object.keys(base()).sort()).toEqual(SEED_KEYS.filter((k) => !OPTIONAL_SEED_KEYS.includes(k)));
     expect(Object.isFrozen(SEED_KEYS) && Object.isFrozen(OPTIONAL_SEED_KEYS)).toBe(true);
   });
 
-  it("B7.6 BRIDGE_KEYS is the five answered ops and the progress switch; the seed's bridge keeps exactly those keys, closed", () => {
-    expect([...BRIDGE_KEYS]).toEqual(['links', 'hash', 'copy', 'changes', 'versions', 'progress']);
-    for (const progress of [true, false]) expect(validateSeed({ ...base(), bridge: { ...base().bridge, progress } })).toMatchObject({ ok: true });
+  it("B7.6 BRIDGE_KEYS is the five answered ops, the progress switch and the two of the parity wire; the seed's bridge keeps exactly those keys, closed", () => {
+    expect([...BRIDGE_KEYS]).toEqual(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures']);
+    for (const k of ['progress', 'places', 'printFigures'] as const) {
+      for (const v of [true, false]) expect(validateSeed({ ...base(), bridge: { ...base().bridge, [k]: v } }), `${k} ${String(v)}`).toMatchObject({ ok: true });
+      expect(validateSeed(loose({ bridge: { ...base().bridge, [k]: 'true' } })), k).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
+      expect(validateSeed(loose({ bridge: { ...base().bridge, [k]: undefined } })), k).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
+    }
+    // A seed of the previous shape (no places, no printFigures) is refused: frameDocument and the bootstrap ship together.
+    const { places: _p, printFigures: _f, ...old } = base().bridge;
+    expect(validateSeed(loose({ bridge: old }))).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
     expect(validateSeed(loose({ bridge: { ...base().bridge, command: true } }))).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
   });
 
@@ -430,23 +439,26 @@ const BAD: readonly Row[] = [
   ['features', { rules: 'yes' }, 'features.rules'],
   ['features', { folds: 1 }, 'features.folds'],
   ['features', { keyboard: null }, 'features.keyboard'],
+  ['features', { inShort: 'yes' }, 'features.inShort'],
+  ['features', { inShort: 1 }, 'features.inShort'],
   ['features', { chrome: { bar: 1 } }, 'features.chrome'],
   ['features', { chrome: { menu: true } }, 'features.chrome'],
   ['features', { chrome: [] }, 'features.chrome'],
-  ['features', { vocabulary: { unknown: [] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: [''] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: [' a'] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: ['a\u00a0'] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: ['w'.repeat(65)] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: words(201) } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: 'annex' } }, 'features.vocabulary'],
-  ['features', { vocabulary: { ids: true } }, 'features.vocabulary'],
-  ['features', { vocabulary: { ruleIds: false } }, 'features.vocabulary'],
-  ['features', { vocabulary: { ids: { prefixes: ['R'], extra: [] } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { status: { ok: 'done' } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { status: { good: ['done'] } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { plan: { owner: ['x'] } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { attention: { status: [1] } } }, 'features.vocabulary'],
+  ['features', { vocabulary: [] }, 'features.vocabulary'],
+  ['features', { vocabulary: 'annex' }, 'features.vocabulary'],
+  ['features', { vocabulary: null }, 'features.vocabulary'],
+  ['changesBase', 'abc1234', 'changesBase'],
+  ['changesBase', 'a'.repeat(39), 'changesBase'],
+  ['changesBase', 'a'.repeat(41), 'changesBase'],
+  ['changesBase', 'a'.repeat(63), 'changesBase'],
+  ['changesBase', 'a'.repeat(65), 'changesBase'],
+  ['changesBase', 'A'.repeat(40), 'changesBase'],
+  ['changesBase', `${'a'.repeat(39)}g`, 'changesBase'],
+  ['changesBase', '', 'changesBase'],
+  ['changesBase', null, 'changesBase'],
+  ['changesBase', 40, 'changesBase'],
+  ['changesBase', ['a'.repeat(40)], 'changesBase'],
+  ['changesBase', { sha: 'a'.repeat(40) }, 'changesBase'],
   ['mermaid', [], 'mermaid'],
   ['mermaid', {}, 'mermaid'],
   ['mermaid', { secure: [] }, 'mermaid'],
@@ -467,10 +479,15 @@ const BAD: readonly Row[] = [
   ['bridge', {}, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true }, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true }, 'bridge'],
-  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true, progress: false }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: 0 }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, prefs: true }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, command: true }, 'bridge'],
+  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: 0, places: false, printFigures: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, prefs: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, command: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, printFigures: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: 1, printFigures: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: 'false' }, 'bridge'],
   ['bridge', null, 'bridge'],
 ];
 
@@ -567,6 +584,14 @@ describe('L3.M4 validateSeed: each bad field refused by its own name, with the n
   it('features: every key the seed knows, filled, passes; ids may be false', () => {
     expect(why(loose({ features: maximalFeatures(1, () => 'w') }))).toBe('ok');
     expect(why(loose({ features: { vocabulary: { ids: false } } }))).toBe('ok');
+  });
+
+  it('features.vocabulary: the bundled check holds the outer shape only (a plain object); the words are judged by the host side (src/frame/vocabulary.ts) and by the reader', () => {
+    // Held to a plain object to keep the bootstrap in its 32 KiB: a list of the wrong kind, an unknown key and a word of the
+    // wrong size all pass here, and frameDocument (test/frame-document.test.ts) and the reader's normalizeOptions refuse them.
+    for (const vocabulary of [{ unknown: [] }, { qualifiers: 'annex' }, { qualifiers: [' a'] }, { ids: true }, { status: { good: ['done'] } }]) {
+      expect(why(loose({ features: { vocabulary } })), JSON.stringify(vocabulary)).toBe('ok');
+    }
   });
 
   it('mermaid: secure and draw alone pass; the caps at their maxima pass', () => {
@@ -886,9 +911,13 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       // The validator keeps a repeated word (L2 drops it), so the longest list repeats the longest word.
       features: maximalFeatures(L.words, () => lt(L.wordMaxCodeUnits)) as Seed['features'],
       mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as MermaidDraw },
-      bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false },
+      bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false },
       appearance: maximalAppearance() as SeedAppearance,
       fonts: { sans: 'A'.repeat(SEED_LIMITS.fontFaceMaxChars), mono: `${'A'.repeat(SEED_LIMITS.fontFaceMaxChars - 1)}=` },
+      // 50 links, each a value of 100 and an href of 4096 code units of the character that escapes longest (the outer check lets them in).
+      items: Array.from({ length: 50 }, () => ({ value: lt(100), href: lt(BRIDGE_LIMITS.hrefMaxChars) })),
+      // The comparison base (parity Task 5): the longest full sha, 64 hex digits.
+      changesBase: 'f'.repeat(64),
     };
   }
 
@@ -906,17 +935,24 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
 
   it("the two fields' share of SEED_FIELDS_MAX_CHARS is both faces at their cap, the appearance's longest text and their keys: 2 x 174764 + the appearance + the key overhead", () => {
     const s = maximalSeed();
-    const { appearance, fonts, ...rest } = s;
+    const { appearance, fonts, items, changesBase, ...rest } = s;
+    expect(changesBase).toHaveLength(64);
     expect(appearance).toBeDefined();
     expect(fonts).toBeDefined();
+    expect(items).toBeDefined();
     const padding = 4 * (SEED_LIMITS.images - 1);
     const urls = s.images.reduce((n, [, u]) => n + u.length, 0);
     const old = serializeSeed(rest as Seed).length - urls + padding;
     const appearanceText = JSON.stringify(appearance).replace(/</g, '\\u003c').length;
     // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`: each member's comma and key, and the fonts object's own punctuation.
     const overhead = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length;
-    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead);
-    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead);
+    // The items (parity Task 4) are the third optional field: `,"items":` and their text.
+    const itemsText = JSON.stringify(items).replace(/</g, '\\u003c').length;
+    const itemsOverhead = `,"items":`.length;
+    // The comparison base (parity Task 5) is the fourth: `,"changesBase":"` and 64 hex digits and the closing quote.
+    const baseText = `,"changesBase":"${'f'.repeat(64)}"`.length;
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead + itemsText + itemsOverhead + baseText);
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead + itemsText + itemsOverhead + baseText);
   });
 
   it("each string field's worst case is six characters per code point: no character escapes longer", () => {
@@ -927,6 +963,71 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
   });
 });
 
+describe('the seed carries items (docserver parity, Task 4): the outer shape only', () => {
+  const link = (i = 0): { value: string; href: string } => ({ value: `AB-${String(i)}`, href: `https://tracker.example/AB-${String(i)}` });
+  const links = (n: number): { value: string; href: string }[] => Array.from({ length: n }, (_, i) => link(i));
+  const refused = (items: unknown): void => expect(validateSeed(loose({ items })), JSON.stringify(items)?.slice(0, 80)).toEqual({ ok: false, nonce: NONCE, why: 'items' });
+
+  it('is optional: absent passes, a list passes, an empty list passes, and the seed with it is the seed text without it plus the key', () => {
+    expect(why(base())).toBe('ok');
+    expect(why(loose({ items: [] }))).toBe('ok');
+    expect(why(loose({ items: links(1) }))).toBe('ok');
+    expect(serializeSeed({ ...base(), items: links(2) }).length).toBeGreaterThan(serializeSeed(base()).length);
+  });
+
+  it('holds at most 50 links: 49 and 50 pass, 51 is refused naming items', () => {
+    expect(why(loose({ items: links(49) }))).toBe('ok');
+    expect(why(loose({ items: links(50) }))).toBe('ok');
+    refused(links(51));
+  });
+
+  it('holds a value of 1 to 100 code units: 1 and 100 pass, 0 and 101 are refused', () => {
+    for (const n of [1, 99, 100]) expect(why(loose({ items: [{ value: 'V'.repeat(n), href: 'https://x.example/' }] })), String(n)).toBe('ok');
+    for (const n of [0, 101]) refused([{ value: 'V'.repeat(n), href: 'https://x.example/' }]);
+  });
+
+  it('holds an href of 1 to hrefMaxChars code units: 1 and 4096 pass, 0 and 4097 are refused', () => {
+    expect(BRIDGE_LIMITS.hrefMaxChars).toBe(4096);
+    for (const n of [1, 4095, 4096]) expect(why(loose({ items: [{ value: 'AB-1', href: 'h'.repeat(n) }] })), String(n)).toBe('ok');
+    for (const n of [0, 4097]) refused([{ value: 'AB-1', href: 'h'.repeat(n) }]);
+  });
+
+  it('is a list of plain objects with exactly value and href, both strings', () => {
+    refused('AB-1');
+    refused({ 0: link() });
+    refused(null);
+    refused([null]);
+    refused(['AB-1']);
+    refused([['AB-1', 'https://x.example/']]);
+    refused([{ value: 'AB-1' }]);
+    refused([{ href: 'https://x.example/' }]);
+    refused([{ ...link(), extra: 'x' }]);
+    refused([{ value: 1, href: 'https://x.example/' }]);
+    refused([{ value: 'AB-1', href: 7 }]);
+    refused([{ value: 'AB-1', href: null }]);
+    refused([link(), 3]);
+    // A non-plain object is refused earlier, by the hostile-value walk, at any depth.
+    expect(validateSeed(loose({ items: [Object.assign(Object.create({ value: 'AB-1', href: 'https://x.example/' }) as object, {})] }))).toEqual({ ok: false, nonce: NONCE, why: 'proto' });
+    expect(why(loose({ items: [Object.assign(Object.create(null) as object, link())] }))).toBe('ok');
+  });
+
+  it('judges no href grammar: the host side does (an http: href passes the bootstrap\'s check)', () => {
+    expect(why(loose({ items: [{ value: 'AB-1', href: 'http://x.example/' }] }))).toBe('ok');
+    expect(why(loose({ items: [{ value: 'AB-1', href: 'javascript:void(0)' }] }))).toBe('ok');
+  });
+
+  it("the caps written out in the bundled check are ITEM_LIMITS', and the href's is the bridge's", () => {
+    expect(ITEM_LIMITS).toEqual({ max: 50, valueMax: 100, hrefMax: BRIDGE_LIMITS.hrefMaxChars });
+  });
+
+  it('SEED_FIELDS_MAX_CHARS counts the field at its cap: the maximal seed with items is longer than without by exactly the field, and the formula equals it', () => {
+    const at = Array.from({ length: 50 }, () => ({ value: '<'.repeat(100), href: '<'.repeat(4096) }));
+    const text = JSON.stringify(at).replace(/</g, '\\u003c');
+    expect(text.length).toBe(2 + 50 * (`{"value":"","href":""}`.length + 6 * 100 + 6 * 4096) + 49);
+    expect(serializeSeed({ ...base(), items: at }).length - serializeSeed(base()).length).toBe(`,"items":`.length + text.length);
+  });
+});
+
 describe('the seed carries chrome.topSpace (B6.5)', () => {
   it('features.chrome.topSpace is accepted by the seed and by L2\'s normalizeOptions', () => {
     expect(FEATURE_KEYS.chrome).toContain('topSpace');
@@ -934,5 +1035,19 @@ describe('the seed carries chrome.topSpace (B6.5)', () => {
     expect(why(loose({ features: f }))).toBe('ok');
     expect(normalizeOptions(f).chrome.topSpace).toBe(false);
     expect(why(loose({ features: { chrome: { topSpace: 1 } } }))).toBe('features.chrome');
+  });
+});
+
+describe('the seed carries changesBase (docserver parity, Task 5): a full sha, optional', () => {
+  it('is optional: absent passes, a full sha of 40 or 64 lower-case hex digits passes, and the seed with it is the seed text without it plus the key', () => {
+    expect(why(base())).toBe('ok');
+    for (const sha of [SHA40, SHA64, '0123456789abcdef0123456789abcdef01234567']) expect(why(loose({ changesBase: sha })), sha).toBe('ok');
+    expect(serializeSeed({ ...base(), changesBase: SHA40 }).length - serializeSeed(base()).length).toBe(`,"changesBase":"${SHA40}"`.length);
+  });
+
+  it('refuses a short sha and any value that is not a full sha, naming changesBase and keeping the nonce', () => {
+    for (const bad of ['abc1234', SHA40.slice(1), `${SHA40}a`, SHA40.toUpperCase(), 7, null, true, [SHA40], { sha: SHA40 }, '']) {
+      expect(validateSeed(loose({ changesBase: bad })), JSON.stringify(bad)).toEqual({ ok: false, nonce: NONCE, why: 'changesBase' });
+    }
   });
 });

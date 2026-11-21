@@ -28,6 +28,16 @@ export interface Prefs {
   lens: 'all' | 'product';
 }
 
+/** What `onPlace` reports: the full-screen figure opened or closed (the frame wire's PlaceKind, held equal by test). */
+export type PlaceKind = 'overlay' | 'overlay-closed';
+
+/** One figure of a print run (docserver parity T6): its place `i` of `n` figures (0-based; `n` at most 64) and its PNG as base64 text. */
+export interface PrintFigure {
+  readonly i: number;
+  readonly n: number;
+  readonly png: string;
+}
+
 /** The host's storage, seen through two calls. The library never touches a storage API itself. */
 export interface ReaderStorage {
   /**
@@ -181,7 +191,16 @@ export interface VocabularyOptions {
   readonly plan?: { readonly task?: readonly string[]; readonly step?: readonly string[]; readonly who?: readonly string[] };
   /** Words that name the reader, in an owner line, an owner cell or a step's owner. Default: you. */
   readonly addressees?: readonly string[];
-  /** Byline labels whose value names an item key, exactly, in any case ("Tracker: AB-12"), for `itemLink`. Default: none. */
+  /**
+   * Labels whose text names an item key, for `itemLink`. The byline's: the label of a fact, exactly and in any case ("Tracker:
+   * AB-12"). The header line's, when the byline has no such fact and no delta link: in the first paragraph after the title (or from
+   * the start with none) and before the first level-2 heading (a blockquote's first paragraph too, never the meta line) that has
+   * one, a bold label ("**Tracker:** AB-90", the colon inside the bold text or right after it) or a plain label at the start of a
+   * line ("Tracker: AB-90") anywhere in it; the keys read are those of the text from the label to the end of that line, which a
+   * newline, a `<br>` or the next bold label ends. A bold label may be any text; a plain label is a letter, then up to 31 letters,
+   * digits, spaces, `_`, `/` or `-` (the byline's, a capital then up to 18 letters or spaces), so a field outside those is matched
+   * as a bold label only, not refused. Default: none.
+   */
   readonly itemFields?: readonly string[];
   /**
    * Level-2 headings, after an optional section number, whose section's first code block names an item key on an
@@ -219,6 +238,19 @@ export interface EnhanceOptions {
   chrome?: ChromeOptions;
   /** Rule paragraphs and the rules index; default false. */
   rules?: boolean;
+  /**
+   * The "Headlines | Full" switch of the "In short" box; default false (the box as it always was). On, the box carries two
+   * buttons: Full shows every item, Headlines only each item's lead (its first strong run, else its first sentence), the
+   * rest out of view and out of the accessibility tree. The choice is kept in the reader-wide UI memory.
+   */
+  inShort?: boolean;
+  /**
+   * A commit to compare the document with, shown as "Changes since" shows a comparison, asked of `changes` once when the
+   * reader starts (a sha of 7 to 40 hex characters, or 64). Used only with `changes` and a commit version; the host
+   * records a base when `changes` is asked for it and hands it back here. Labelled by the base's commit when
+   * `info.commits` names it, else "Since your comparison".
+   */
+  changesBase?: string;
   /** The id to open the document at, without '#' (a heading id or a defined ID); empty or null for none. */
   initialHash?: string | null;
   /** A link the reader was asked to follow. Absent: the browser follows it. */
@@ -233,6 +265,20 @@ export interface EnhanceOptions {
    * the bar. Called once when the reader starts, then on every change (batch 1.1, C108).
    */
   onProgress?(share: number): void;
+  /**
+   * The full-screen figure opened (`'overlay'`) or closed (`'overlay-closed'`), so a host that keeps a history entry for it
+   * can drop the entry when it closes. Closed by a host's own `close-overlay` command: no report. Only the figure is a place;
+   * the keys sheet, the quick jump, settings and the rest are not. Absent: nothing is reported.
+   */
+  onPlace?(kind: PlaceKind): void;
+  /**
+   * With this callback the `print-figures` command exists (commands.ts): it draws each Mermaid figure again for print,
+   * offscreen and in its own pass, rasterises it to a PNG (at most 2048 px a side and 1 MiB) and hands it over here, in
+   * document order, one at a time (the reader waits for the returned promise, if any, before the next). `n` is the figure
+   * count, at most 64; a figure that does not draw, taints the canvas or is too large is skipped, its `i` never handed over.
+   * A second command cancels the first run's remaining figures. Absent: the command does nothing.
+   */
+  onPrintFigure?(f: PrintFigure): void | Promise<void>;
   /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
   copy?(text: string): void | Promise<void>;
   /** The document's changes since commit `sha`, for "what changed". Absent: no comparison. */

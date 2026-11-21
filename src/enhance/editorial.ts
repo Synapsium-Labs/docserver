@@ -11,7 +11,7 @@
 // headings, the callout kinds' words and the front-matter keys that name the document's kind.
 //
 // The item link (the reference layout's section 2; docserver L2, Task 8): an item key the document names (`AB-12`)
-// becomes a link to what the host's `itemLink(key)` answers, by two routes, and only when the host gave `itemLink`:
+// becomes a link to what the host's `itemLink(key)` answers, by three routes, and only when the host gave `itemLink`:
 //   - the delta route: the first level-2 section (a child of the root) whose heading is one of
 //     `vocabulary.itemHeadings` and whose first code block names a key, by its first line that is not blank being
 //     `item: <key>`; a section whose first code block names none passes to the next such section, as the reference's
@@ -21,7 +21,17 @@
 //     the first item field, if any), before the wide facts;
 //   - the byline route, without a delta key (or when the host gives no link for it): in the first fact labelled with
 //     an item field, every key in its text (split off its text node and wrapped, never re-typed) and every code
-//     element whose text is a key (wrapped whole). An author's own link is left as the author wrote it.
+//     element whose text is a key (wrapped whole). An author's own link is left as the author wrote it;
+//   - the header-line route (a document whose header predates the meta line), the third, used only when neither of the
+//     two gave a link and the byline has no item fact. The zone is the elements after the title (the `h1`'s following
+//     siblings, up to the first level-2 heading; with no `h1`, the document's start): each `p`, and a blockquote's first
+//     `p`, except the meta line. In the first such paragraph that has one, the item field's label is found anywhere: a bold
+//     `**Tracker:**` (the colon inside the bold text or right after it) or a plain `Tracker:` at the start of a line, the
+//     label one of `vocabulary.itemFields`. A header is several lines in one paragraph (soft line breaks), `**Status:**
+//     Draft` / `**Tracker:** AB-90` / `**Author:** someone`, so the item's keys are the text from the label to the end of
+//     THAT line, which a newline, a `<br>` or the next bold label ends. They are linked where they stand, as the byline
+//     route links them (a text node is split at the line's ends, never re-typed). Content before the `h1` is not a header,
+//     and nothing outside such a line is ever scanned for keys;
 // The host is asked once per key, for at most ITEM_LINKS.keys keys in a document; a key past them stays text. At most
 // ITEM_LINKS.links links are written in a document (one key named many times is many links), the first in document
 // order; a key past them stays text. The host's answer is used only when it is a string of 1 to ITEM_LINKS.href code
@@ -38,13 +48,19 @@
 // data-docreader-chrome. Class names are the reference's, so assets/reader.css applies.
 //
 // Departures from the reference, on purpose: no address of an issue tracker (the host's itemLink answers the link),
-// no rules index in the facts panel, no document kinds of one product, no "Headlines | Full" switch in "In short", no
-// ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
+// no rules index in the facts panel, no document kinds of one product, no ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
 // (render() parses it, and the host passes it as info.frontList). The item link leaves an author's own link alone
 // (the reference re-pointed one that was not https), keeps a key's code element in the link (the reference replaced
-// it with the bare key), has no third route for a header line older than the meta line, writes at most
+// it with the bare key), writes at most
 // ITEM_LINKS.links links (the reference linked every occurrence), and takes the neutral class `item-link` (the
 // reference's named one tracker; no rule of the stylesheet reads either).
+//
+// The "Headlines | Full" switch of "In short" (parity Task 5; `features.inShort`, default off, so a host that asks for nothing
+// gets the box as it always was): a `div.short-view` of two buttons, "Headlines" and "Full", `aria-pressed` on the chosen
+// one. Headlines shows the lead of each item of the box's lists, the first strong run, else the first sentence (in a loose list, an item
+// with no strong run shows its whole first paragraph), and hides the rest (a `span.rest` the box's `headlines` class and the `hidden` attribute both hide, so it is out of view and out of the
+// accessibility tree); an item with no lead to cut at keeps all its text. The rest is wrapped, never re-typed (journal.wrap,
+// journal.split). The choice is the reader-wide UI memory's `inshort` field ('headlines' or 'full'; Full by default).
 //
 // It publishes what later features read of the title block (docserver L2, Task 7b): `ctx.page` (registry.ts), once,
 // at the end of its build: the byline (or null), the items of the first "Waiting" box of "Where things stand" and that
@@ -62,6 +78,7 @@
 import { CHROME_ATTR, chrome, siblingRun, type Journal } from './journal.js';
 import { documentMinutes, formatLong } from './reading.js';
 import { noFacts, type FactsSeam } from './registry.js';
+import { findSeparator } from './separator.js';
 import type { FeatureContext, FrontListEntry } from './types.js';
 import type { Vocab } from './vocab.js';
 
@@ -86,10 +103,95 @@ const txt = (n: Node): string => (n.textContent ?? '').replace(/\s+/g, ' ').trim
 
 const isBlank = (n: Node): boolean => n.nodeType === 3 && (n as Text).data.trim() === '';
 
+/** A sentence's end: `.`, `!`, `?` or `…`, closing quotes and brackets, then white space or the end of the text. */
+const SENTENCE_END = /[.!?\u2026][\u0022\u0027\u201d\u2019)\]]*(?=\s|$)/;
+
+/** The blocks that end an item's lead: a nested list or a block of its own. */
+const BLOCKS: readonly string[] = ['ul', 'ol', 'p', 'div', 'pre', 'blockquote', 'table', 'dl', 'figure', 'details'];
+
+/** The UI memory field of the switch's choice. */
+const SHORT_VIEW = 'inshort';
+
 const isStrong = (n: Node | null): n is Element => n !== null && n.nodeType === 1 && (n as Element).localName === 'strong';
 
-/** A byline separator: a middle dot with white space on both sides. */
-const SEP = /\s+·\s+/;
+/**
+ * The nodes of an item that follow its lead (adjacent siblings, in order, to the item's last child), or null when it has
+ * none. The lead is the first strong run (the child of the item that holds the first `strong` or `b` outside a nested list,
+ * to its end), else the first sentence: the text up to the first sentence end, the node split there when text follows, or the
+ * inline nodes before the first block. An item whose lead is all of it has no rest. In a loose list the item's first child is a
+ * `p`: when it is the first thing in the item (white space aside), that whole paragraph is the lead and the rest starts after it,
+ * so a loose item shows its first paragraph, not nothing.
+ */
+function restOf(li: Element, journal: Journal): Node[] | null {
+  const kids = Array.from(li.childNodes);
+  const strongIn = (n: Node): boolean =>
+    n.nodeType === 1 && !['ul', 'ol'].includes((n as Element).localName) && ((n as Element).matches('strong, b') || (n as Element).querySelector('strong, b') !== null);
+  const holder = kids.find(strongIn);
+  let from: Node | null = null;
+  if (holder !== undefined) from = holder.nextSibling;
+  else {
+    let leading = true;
+    for (const n of kids) {
+      if (n.nodeType === 1 && BLOCKS.includes((n as Element).localName)) {
+        from = leading && (n as Element).localName === 'p' ? n.nextSibling : n;
+        break;
+      }
+      if (n.nodeType !== 3) {
+        leading = false;
+        continue;
+      }
+      const text = n as Text;
+      if (!isBlank(n)) leading = false;
+      const m = SENTENCE_END.exec(text.data);
+      if (m === null) continue;
+      const end = m.index + m[0].length;
+      from = end < text.data.length && text.data.slice(end).trim() !== '' ? journal.split(text, end) : text.nextSibling;
+      break;
+    }
+  }
+  if (from === null) return null;
+  const rest: Node[] = [];
+  for (let n: Node | null = from; n !== null; n = n.nextSibling) rest.push(n);
+  return rest.every(isBlank) ? null : rest;
+}
+
+/**
+ * The "Headlines | Full" switch of the "In short" box (`features.inShort`): its two buttons after the heading, each item's rest
+ * wrapped in a `span.rest`, and the choice kept in the UI memory.
+ */
+function shortSwitch(ctx: FeatureContext, box: HTMLElement, heading: Element): void {
+  const { journal } = ctx;
+  const doc = ctx.root.ownerDocument;
+  const items: Element[] = [];
+  for (const list of Array.from(box.children)) {
+    if (list.localName === 'ul' || list.localName === 'ol') items.push(...Array.from(list.children).filter((li) => li.localName === 'li'));
+  }
+  const rests: HTMLElement[] = [];
+  for (const li of items) {
+    const rest = restOf(li, journal);
+    if (rest === null) continue;
+    const wrapper = chrome(doc, 'span', { className: 'rest' });
+    journal.wrap(rest, wrapper);
+    rests.push(wrapper);
+  }
+  const buttons = new Map<string, HTMLButtonElement>();
+  const view = chrome(doc, 'div', { className: 'short-view', attrs: { role: 'group', 'aria-label': 'In short view' } });
+  for (const [name, text] of [['headlines', 'Headlines'], ['full', 'Full']] as const) {
+    const button = chrome(doc, 'button', { text, attrs: { type: 'button', 'aria-pressed': 'false' } });
+    buttons.set(name, button);
+    view.appendChild(button);
+  }
+  const choose = (name: string, remember: boolean): void => {
+    const headlines = name === 'headlines';
+    journal.toggleClass(box, 'headlines', headlines);
+    for (const rest of rests) journal.setAttribute(rest, 'hidden', headlines ? '' : null);
+    for (const [key, button] of buttons) journal.setAttribute(button, 'aria-pressed', String(key === name));
+    if (remember) ctx.state.writeUi(SHORT_VIEW, name);
+  };
+  for (const [name, button] of buttons) journal.listen(button, 'click', () => choose(name, true));
+  journal.insert(view, box, heading.nextSibling);
+  choose(ctx.state.readUi(SHORT_VIEW) === 'headlines' ? 'headlines' : 'full', false);
+}
 
 /** A section number at the start of a heading: "3. ", "A2. ", "4b. ". */
 const SEC_NO = /^([A-Z]?\d+[a-z]?)\.\s+/;
@@ -107,20 +209,38 @@ function metaParagraph(h1: Element): Element | null {
   return null;
 }
 
-/** Split every text child of `p` at its separators, and return the runs of nodes between them. */
+/**
+ * Split every text child of `p` at its separators, and return the runs of nodes between them, in one pass: each text child is
+ * scanned once for all its separators (findSeparator is linear) and cut at all of them by one `journal.splitAll`, so a
+ * paragraph of k separators costs O(k) to build and to undo, not two splits per separator, each one copying the text left.
+ * The pieces are the old splits' own: the node keeps its first piece, and each separator is a piece of its own.
+ */
 function segments(p: Element, journal: Journal): Node[][] {
   const seps = new Set<Node>();
   for (const child of Array.from(p.childNodes)) {
     if (child.nodeType !== 3) continue;
-    let t = child as Text;
+    const text = child as Text;
+    const data = text.data;
+    const cuts: number[] = []; // where each piece after the first starts
+    const kinds: boolean[] = []; // per piece, in order: is it a separator
+    const piece = (start: number, sep: boolean): void => {
+      if (kinds.length > 0) cuts.push(start);
+      kinds.push(sep);
+    };
+    let at = 0;
     for (;;) {
-      const m = SEP.exec(t.data);
+      const m = findSeparator(data, at); // from `at`, never a cut of the text left (review 3088 F3, WebKit cycle 1)
       if (m === null) break;
-      const sep = m.index > 0 ? journal.split(t, m.index) : t;
-      const rest = m[0].length < sep.data.length ? journal.split(sep, m[0].length) : null;
-      seps.add(sep);
-      if (rest === null) break;
-      t = rest;
+      const start = m.index;
+      if (start > at) piece(at, false);
+      piece(start, true);
+      at = start + m.length;
+    }
+    if (kinds.length === 0) continue;
+    if (at < data.length) piece(at, false);
+    const pieces = journal.splitAll(text, cuts);
+    for (let i = 0; i < pieces.length; i += 1) {
+      if (kinds[i] === true) seps.add(pieces[i] as Text);
     }
   }
   const segs: Node[][] = [[]];
@@ -208,6 +328,112 @@ function deltaKey(root: HTMLElement, vocab: Vocab): string | null {
     }
   }
   return null;
+}
+
+/** One piece of a header paragraph: a run of a text node (`s` to `e`), a line break, or an element. */
+type Atom = { readonly k: 'run'; readonly node: Text; readonly s: number; readonly e: number } | { readonly k: 'nl' } | { readonly k: 'el'; readonly node: Element };
+
+/** A paragraph's pieces, its text nodes cut at their newlines and a `br` a line break. */
+function atomsOf(p: Element): Atom[] {
+  const out: Atom[] = [];
+  for (const c of Array.from(p.childNodes)) {
+    if (c.nodeType === 3) {
+      const t = c as Text;
+      let s = 0;
+      for (;;) {
+        const nl = t.data.indexOf('\n', s);
+        const e = nl < 0 ? t.data.length : nl;
+        if (e > s) out.push({ k: 'run', node: t, s, e });
+        if (nl < 0) break;
+        out.push({ k: 'nl' });
+        s = nl + 1;
+      }
+    } else if (c.nodeType === 1) out.push((c as Element).localName === 'br' ? { k: 'nl' } : { k: 'el', node: c as Element });
+  }
+  return out;
+}
+
+const runText = (a: Atom & { k: 'run' }): string => a.node.data.slice(a.s, a.e);
+
+/** A bold label at atom `i`: its name, and the atom index and offset the line's text starts from. Null when it is none. */
+function boldLabel(atoms: readonly Atom[], i: number): { readonly name: string; readonly from: number; readonly at: number } | null {
+  const a = atoms[i];
+  if (a?.k !== 'el' || a.node.localName !== 'strong') return null;
+  const t = txt(a.node);
+  if (t.endsWith(':')) return { name: t.slice(0, -1).trim(), from: i + 1, at: 0 };
+  const next = atoms[i + 1];
+  const colon = next?.k === 'run' ? /^\s*:/.exec(runText(next)) : null;
+  return colon === null || next?.k !== 'run' ? null : { name: t, from: i + 1, at: colon[0].length };
+}
+
+/** A piece of the header line's text: a run of a text node, or an element. */
+interface Piece {
+  readonly node: Node;
+  readonly s: number;
+  readonly e: number;
+}
+
+/** The header line of one paragraph: its item field's label found anywhere, and the pieces from it to the end of its line. */
+function headerLine(p: Element, vocab: Vocab): readonly Piece[] | null {
+  const atoms = atomsOf(p);
+  for (let i = 0; i < atoms.length; i += 1) {
+    const a = atoms[i];
+    let from = -1;
+    let at = 0;
+    let name = '';
+    if (a?.k === 'run' && (i === 0 || atoms[i - 1]?.k === 'nl')) {
+      const m = /^\s*([A-Za-z][A-Za-z0-9 _/-]{0,31}):/.exec(runText(a));
+      if (m !== null) {
+        name = (m[1] ?? '').trim();
+        from = i;
+        at = m[0].length;
+      }
+    } else {
+      const label = boldLabel(atoms, i);
+      if (label !== null) ({ name, from, at } = label);
+    }
+    if (from < 0 || !vocab.itemField.test(name)) continue;
+    const pieces: Piece[] = [];
+    for (let j = from; j < atoms.length; j += 1) {
+      const b = atoms[j];
+      if (b === undefined || b.k === 'nl' || (j > from && boldLabel(atoms, j) !== null)) break;
+      if (b.k === 'el') pieces.push({ node: b.node, s: 0, e: 0 });
+      else if ((j === from ? b.s + at : b.s) < b.e) pieces.push({ node: b.node, s: j === from ? b.s + at : b.s, e: b.e });
+    }
+    return pieces;
+  }
+  return null;
+}
+
+/**
+ * The header-line route's paragraph and line (see the header). The zone is the elements after the title (`h1`'s following
+ * siblings; with no `h1`, the root's children) up to the first level-2 heading; its paragraphs, and a blockquote's first
+ * paragraph, but the meta line, are read in order, and the first with an item field's label gives its line. Read before any
+ * node moves; null when there is none.
+ */
+function legacyHeader(root: HTMLElement, h1: Element | null, vocab: Vocab): { readonly el: Element; readonly pieces: readonly Piece[] } | null {
+  const meta = h1 === null ? null : metaParagraph(h1);
+  for (let n = h1 === null ? root.firstElementChild : h1.nextElementSibling; n !== null && n.localName !== 'h2'; n = n.nextElementSibling) {
+    const p = n.localName === 'blockquote' ? Array.from(n.children).find((c) => c.localName === 'p') : n.localName === 'p' ? n : undefined;
+    if (p === undefined || p === meta) continue;
+    const pieces = headerLine(p, vocab);
+    if (pieces !== null) return { el: p, pieces };
+  }
+  return null;
+}
+
+/**
+ * The nodes of a header line, each text run cut out of its text node (split at its ends, never re-typed), ready for linkKeys.
+ * A run that fills its node is the node.
+ */
+function headerNodes(ctx: FeatureContext, pieces: readonly Piece[]): Node[] {
+  return pieces.map(({ node, s, e }) => {
+    if (node.nodeType !== 3) return node;
+    let t = node as Text;
+    if (e < t.data.length) ctx.journal.split(t, e);
+    if (s > 0) t = ctx.journal.split(t, s);
+    return t;
+  });
 }
 
 /** A key in a byline value: in a text node at `at`, or a code element whose text is the key. */
@@ -313,6 +539,21 @@ function buildByline(ctx: FeatureContext, h1: Element, minutes: number, delta: D
 
   const metaP = metaParagraph(h1);
   if (metaP !== null) {
+    // The paragraph is cut and gathered off the document, so no write touches a large connected parent (review 3088 F3, WebKit
+    // cycle 2; it did not make WebKit linear, and the cause there is not identified: the README's Safari limit).
+    // Two journaled moves bracket the work: one takes it out of its parent into a fragment, one puts it back before the sibling
+    // that followed it. Undo runs in reverse: the second move's undo takes it out again, the per-fact moves and the cut are undone
+    // while it is off the document, and the first move's undo puts it back. Nothing in between calls the host, so nothing else
+    // can touch the parent meanwhile (a custom element's connect or disconnect callback would still run during the moves, as the
+    // per-fact moves ran such callbacks before; neither occurs in the frame or on render()'s output). A live Range or Selection
+    // inside the paragraph collapses to its parent when it leaves, and a boundary just after it ends just before it on return; a
+    // MutationObserver on the parent sees the paragraph removed and added back. A throw in between leaves
+    // the first move's undo to put it back. The paragraph's own place is a journal.move: if the host removes the node that
+    // followed it while enhanced, destroy still puts the paragraph back after the node before it and reports a fault, and a
+    // paragraph the host removed is put back where it was.
+    const home = metaP.parentNode as Node;
+    const homeNext = metaP.nextSibling;
+    journal.move(metaP, doc.createDocumentFragment(), null);
     const segs = segments(metaP, journal);
     const first = (segs[0] ?? []).filter((n) => !isBlank(n));
     const lone = first[0];
@@ -354,6 +595,7 @@ function buildByline(ctx: FeatureContext, h1: Element, minutes: number, delta: D
     const line = metaP.getAttribute('data-line');
     if (line !== null) byline.setAttribute('data-line', line);
     journal.setAttribute(metaP, 'hidden', '');
+    journal.move(metaP, home, homeNext);
   }
 
   /** Where a fact goes ahead of the wide ones: before the first, or last. */
@@ -488,11 +730,17 @@ export function buildEditorial(ctx: FeatureContext): void {
       if (!ctx.live()) return;
       if (href !== null) delta = { key, href };
     }
+    const header = links === null ? null : legacyHeader(root, h1, ctx.vocab); // read before any node moves
     const { el: byline, kinds, meta, item } = buildByline(ctx, h1, minutes, delta, links);
     // The byline route: the keys of the item fact's own nodes (call-outs, then writes). With a delta there are none:
     // the item fact shows the delta's link, and its own nodes stay in the hidden meta line.
     if (links !== null && item !== null && !linkKeys(ctx, item, links)) return;
     links?.route(byline);
+    // The header-line route: only when no delta link and no item fact in the byline gave the document its key.
+    if (links !== null && header !== null && delta === null && item === null) {
+      if (!linkKeys(ctx, headerNodes(ctx, header.pieces), links)) return;
+      links.route(header.el as HTMLElement);
+    }
     for (const f of front ?? []) if (!f.list && ctx.vocab.kindKey.test(f.key)) kinds.push(f.vals.join(', '));
     if (kinds.length > 0) {
       journal.insert(chrome(doc, 'div', { className: 'eyebrow' }, kinds.map((k) => chrome(doc, 'span', { text: k }))), parent, h1);
@@ -513,6 +761,14 @@ export function buildEditorial(ctx: FeatureContext): void {
       journal.insert(built.panel, parent, after.nextSibling);
       facts = built.seam;
     }
+  } else if (ctx.host.present.has('itemLink')) {
+    // With no title there is no byline and no delta route, and the header line is read from the document's start.
+    const links = itemLinks(ctx);
+    const header = legacyHeader(root, null, ctx.vocab);
+    if (header !== null) {
+      if (!linkKeys(ctx, headerNodes(ctx, header.pieces), links)) return;
+      links.route(header.el as HTMLElement);
+    }
   }
 
   // ── 5. boxes: In short, Where things stand
@@ -525,7 +781,10 @@ export function buildEditorial(ctx: FeatureContext): void {
     return wrapper;
   };
   const short = h2s.find((h) => ctx.vocab.box.short.test(labelOf(h)));
-  if (short !== undefined) box(short, 'short', ['h1', 'h2', 'hr']);
+  if (short !== undefined) {
+    const shortBox = box(short, 'short', ['h1', 'h2', 'hr']);
+    if (ctx.options.inShort) shortSwitch(ctx, shortBox, short);
+  }
 
   const stand = h2s.find((h) => ctx.vocab.box.stand.test(labelOf(h)));
   if (stand !== undefined) {

@@ -266,6 +266,7 @@ export function build(ctx: FeatureContext): void {
     const back = opener;
     opener = null;
     if (ownedFocus && back !== null && ctx.root.contains(back)) back.focus({ preventScroll: true });
+    ctx.overlays.report('figure', false); // the host's history hears it, unless the host's own close-overlay asked for it
   };
   /** A copy of a figure's drawing for the overlay, sized to the drawing's own box (its viewBox, else its laid-out size). */
   const copyOf = (source: SVGSVGElement): SVGSVGElement => {
@@ -309,6 +310,8 @@ export function build(ctx: FeatureContext): void {
     ctx.journal.toggleClass(ctx.root, 'fig-open', true);
     fitReadable();
     if (!ctx.live() || overlay === null || stage === null || openSvg === null) return;
+    ctx.overlays.report('figure', true);
+    if (!ctx.live() || stage === null || openSvg === null) return; // the host's callback may have closed it, or destroyed the instance
     lastWidth = stage.clientWidth;
     lastHeight = stage.clientHeight;
     (overlay.querySelector('.fo-close') as HTMLElement | null)?.focus({ preventScroll: true });
@@ -365,6 +368,7 @@ export function build(ctx: FeatureContext): void {
     overlay.append(bar, stage);
     ctx.journal.insert(overlay, ctx.root, null);
     ctx.overlays.register('figure', { isOpen: () => overlay?.classList.contains('open') === true, close });
+    ctx.commands.register('close-overlay', () => ctx.overlays.closeQuiet('figure'));
     const pointers = new Map<number, { x: number; y: number }>();
     let pinch: { distance: number; x: number; y: number } | null = null;
     let down: { readonly node: Element | null; readonly x: number; readonly y: number; readonly at: number; readonly count: number; moved: boolean } | null = null;

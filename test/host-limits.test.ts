@@ -363,3 +363,36 @@ describe('L3.H4 every op draws on the buckets, error included (sequenceRules: "e
     expect(limiter.admit(HASH)).toEqual(RATE);
   });
 });
+
+describe('docserver parity T2: place and print-figure draw one general token each, and the frame\'s pace stays under the buckets', () => {
+  const figure = (i: number): FrameToParent => ({ t: 'print-figure', i: String(i), n: '64', png: 'iVBORw0KGgo=' });
+  const place: FrameToParent = { t: 'place', kind: 'overlay' };
+
+  it('64 figures at the frame\'s pace (16 a second, as 1000 / 16 ms apart) are none of them refused, and the bridge stays open', () => {
+    const { clock, limiter, delivered } = setup();
+    for (let i = 0; i < 64; i += 1) {
+      clock.advance(Math.floor((i * BRIDGE_LIMITS.frameWindowMs) / BRIDGE_LIMITS.frameMaxPerWindow));
+      expect(limiter.admit(figure(i)), String(i)).toEqual({ ok: true });
+    }
+    expect(delivered).toHaveLength(64);
+    expect(limiter.refusals).toBe(0);
+    expect(limiter.closed).toBe(false);
+  });
+
+  it('a burst is the bucket\'s to refuse: 40 figures at one instant pass and the 41st is a rate refusal, as for any op', () => {
+    const { limiter, delivered } = setup();
+    for (let i = 0; i < 40; i += 1) expect(limiter.admit(figure(i % 64))).toEqual({ ok: true });
+    expect(limiter.admit(figure(40))).toEqual(RATE);
+    expect(delivered).toHaveLength(40);
+  });
+
+  it('each is delivered at once, never coalesced, and neither draws on the store.set bucket', () => {
+    const { clock, limiter, delivered } = setup();
+    expect(limiter.admit(place)).toEqual({ ok: true });
+    expect(limiter.admit(place)).toEqual({ ok: true });
+    expect(limiter.admit(figure(0))).toEqual({ ok: true });
+    expect(delivered.map((d) => d.msg.t)).toEqual(['place', 'place', 'print-figure']);
+    expect(clock.pending).toBe(0);
+    for (let i = 0; i < BRIDGE_LIMITS.storeSetBucketCapacity; i += 1) expect(limiter.admit(STORE), String(i)).toEqual({ ok: true });
+  });
+});

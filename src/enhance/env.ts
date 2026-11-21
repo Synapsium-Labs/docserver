@@ -21,7 +21,11 @@
 //     heard, sizes read 0, media queries and lookups answer false or null, and nothing throws;
 //   - parseHtml(markup) is the reader's one HTML parse: the window's DOMParser, inert, its body's nodes answered for the
 //     caller to adopt (the diagrams feature's drawing, docserver L3 Task 8, ledger C95). It is here because DOMParser
-//     belongs to the root's window, which only this module reaches.
+//     belongs to the root's window, which only this module reaches;
+//   - rasterize(svg, w, h) is the print run's one picture (docserver parity T6): an SVG's text loaded as an image from a
+//     `data:` URL, drawn on a canvas of w by h pixels and answered as the PNG's base64 text, or null for no canvas, an
+//     image that does not load (or not within RASTER_WAIT_MS) and a canvas the image tainted. It is here for the image's
+//     `src`, a write no other module makes, and for the canvas.
 // Reads are live: each call asks the window then, so a host or a test that changes the window is seen at once.
 //
 // Import-inert: declarations only; createEnv runs when the lifecycle builds an instance.
@@ -110,6 +114,12 @@ export interface Env {
    * way rather than by innerHTML (docserver L3, Task 8; ledger C95).
    */
   parseHtml(markup: string): readonly Node[] | null;
+  /**
+   * An SVG's text (with an absolute width and height) loaded as an image from a `data:` URL, drawn on a canvas of `w` by `h`
+   * pixels, and the canvas's PNG as base64 text; null where the window has no canvas, when the image fails to load or does not
+   * within a few seconds, and when the canvas is tainted (its read throws). Never settles once the instance is not live.
+   */
+  rasterize(svg: string, w: number, h: number): Promise<string | null>;
 }
 
 /** The instance's operation: runs `fn`, or does nothing and answers undefined once not live. */
@@ -117,6 +127,12 @@ type Operate = <T>(fn: () => T) => T | undefined;
 
 /** The longest delay a timer takes. */
 const MAX_DELAY = 2 ** 31 - 1;
+
+/** How long rasterize() waits for an image to load, in milliseconds. */
+const RASTER_WAIT_MS = 5000;
+
+/** The start of a PNG data URL, which rasterize() takes off. */
+const PNG_URL = 'data:image/png;base64,';
 
 /** The faces fonts() waits for: the stylesheet's own (C43). */
 const FACES = ['1em "Docreader Serif"', '1em "Docreader Sans"'] as const;
@@ -529,6 +545,64 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
       if (view === null || typeof view.getComputedStyle !== 'function' || !root.contains(el)) return '';
       return view.getComputedStyle(el).getPropertyValue(prop).trim();
     },
+
+    rasterize: (svg, w, h) =>
+      new Promise<string | null>((resolve) => {
+        if (!live()) return; // never settles: nothing after the wait runs
+        let image: HTMLImageElement;
+        try {
+          image = doc.createElement('img');
+        } catch {
+          resolve(null);
+          return;
+        }
+        let settled = false;
+        const finish = (png: string | null): void => {
+          if (settled) return;
+          settled = true;
+          stop();
+          unhear();
+          if (live()) resolve(png);
+        };
+        const stop = timeout(() => {
+          finish(null);
+        }, RASTER_WAIT_MS);
+        const onLoad = (): void => {
+          run(() => {
+            let png: string | null = null;
+            try {
+              const c = doc.createElement('canvas');
+              c.width = w;
+              c.height = h;
+              const g = c.getContext('2d');
+              if (g !== null) {
+                g.drawImage(image, 0, 0, w, h);
+                const url = c.toDataURL('image/png'); // a tainted canvas throws here
+                if (url.startsWith(PNG_URL)) png = url.slice(PNG_URL.length);
+              }
+            } catch {
+              png = null;
+            }
+            finish(png);
+          });
+        };
+        const onError = (): void => {
+          run(() => {
+            finish(null);
+          });
+        };
+        image.addEventListener('load', onLoad);
+        image.addEventListener('error', onError);
+        const unhear = track(() => {
+          image.removeEventListener('load', onLoad);
+          image.removeEventListener('error', onError);
+        });
+        try {
+          image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        } catch {
+          finish(null);
+        }
+      }),
 
     parseHtml: (markup) => {
       const Parser = view === null ? undefined : view.DOMParser;
