@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task by task. Each task is an implementer subagent (tests first), then one held-out review over the task's diff, then one fix round. The plan is lean (C40): it holds no implementation code, only the contract each task must meet, its tests and its mutation rows.
 
-**Status:** landing A built; landing B is wave 35. Written 2026-11-20 against `main` at `bee0fd1` (the appearance contract, then the rename to `@synapsium-labs/pinax-lib`). Two sequential landings, A and B (Design §3), as the coordinator ruled on 2026-11-20: landing A (Tasks 1 to 8, print mode included) is this run; landing B (Tasks 9 to 14, all four layouts in one landing) is a run of its own once A lands. The design is the first consumer's, approved by its operator on 2026-11-19; this plan decides only how the library builds it. A sentence of the design that cannot be built as written is a stop-and-ask, never a silent departure. The package version does not change here; the release and its signed tag are the operator's. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
+**Status:** Landing A merged at `1c2120d`; Landing B1 (wave 35) is in review in [PR #89](https://github.com/Synapsium-Labs/docserver/pull/89). B1 carries Tasks 0, 9, 10, 11 and its Task 14 closeout. B2 starts from merged B1 and carries Tasks 12 and 13 and its own Task 14 closeout (Design §3). Written 2026-11-20 against `main` at `bee0fd1` (the appearance contract, then the rename to `@synapsium-labs/pinax-lib`). The design is the first consumer's, approved by its operator on 2026-11-19; this plan decides only how the library builds it. A sentence of the design that cannot be built as written is a stop-and-ask, never a silent departure. The package version does not change here; the release and its signed tag are the operator's. Runtime model of this plan's writer: Opus 5.5 (`claude-opus-5-5`).
 
 **Goal:** Everything the first consumer's parity design asks of the library: four more layouts beside `default`, each on the appearance slots and its own frame policy; Back-to-close and Back-from-a-jump through places on the existing port; item links seeded by the host; drawn figures handed to the host for print; the In short "Headlines / Full" option and a seeded comparison base; and a print mode of `render` with its own stylesheet. A host that asks for none of it gets exactly today's behaviour.
 
@@ -20,7 +20,7 @@
 
 ### In short
 
-- **Two landings, each with one `Size-Design: x2` line (proposed; §3).** Landing A carries the wire, places, item links, the In short option, the comparison base, print figures and print mode. Landing B carries the layouts and the per-layout frame policy. A changes the default layout only; B adds four layouts and changes no asset `default` inlines.
+- **Three landings, each with one `Size-Design: x2` line (§3).** Landing A carries the wire, places, item links, the In short option, the comparison base, print figures and print mode. B1 brings the per-layout frame policy, Classic and Editorial. B2 adds Review and Guided from merged B1. Neither B landing changes an asset `default` inlines.
 - **The bridge stays 1, and grows only where §6 says.** `FRAME_OPS` gains `place` and `print-figure`; `COMMAND_OPS` gains `close-overlay`, `goto` and `print-figures`; `OP_KEYS.hash` gains `push` and `from`, `OP_KEYS.command` gains `id` and `from`; `BRIDGE_KEYS` gains `places` and `printFigures`, both default false. `FRAME_ACCEPTS` does not change: every new parent-to-frame word is a `command` name. No channel, window listener, parent-DOM access or CSP source is added.
 - **Nothing new is sent to a host that did not ask.** `place`, and `push` and `from` on `hash`, are sent only under `bridge.places`; `print-figure` only under `bridge.printFigures`. `./host` sets each flag only when its adapter is given (`onPlace`, `onPrintFigure`), so a 1.1 host never counts them as refused.
 - **Print figures are capped by the host parser before any decode.** At most 64 a run, 1 MiB of PNG each, 16 MiB for the latest copy of each index and 2 x 16 MiB handed on in a run, each size computed from the base64 text's length and padding; a figure over a cap is a refusal and counts toward `refusalsToClose`. The frame draws each figure with HTML labels off, rasterises it at most 2048 px a side and sends at most 16 a second, inside the existing pacer.
@@ -37,9 +37,9 @@
 | Item values from `render`; resolved item links in the seed | render, frame | `src/render/{types,render,items}.ts`, `src/frame/{seed,document}.ts`, `src/frame-runtime/adapters.ts`, `src/enhance/editorial.ts` | 4 | A |
 | The In short "Headlines / Full" option; the comparison-base seed field | frame, reader | `src/frame/seed.ts`, `src/enhance/{editorial,since,options}.ts` | 5 | A |
 | Print mode of `render`, its stylesheet, the strip and plan marks, its fixture | render | `src/render/print/*.ts` (new), `assets/print.css` (new), `conformance/print/` (new) | 7 | A |
-| Layouts beside `default`; `frameCsp(layout)`; per-layout srcdoc cap; test 9 re-pinned per layout | build, frame, host | `scripts/build-frame.mjs`, `src/frame/{csp,document,layouts}.ts`, `src/host/mount.ts`, `conformance/frame-boundaries.json` | 9 | B |
-| Each layout on the appearance slots and the pairs' gate; conformance and contrast per layout | reader, stylesheet | `src/enhance/layouts/<name>/` (new), `assets/layouts/<name>.css` (new), `conformance/layouts/<name>/` (new) | 10 to 13 | B |
-| Test 8's rows, one per landing | repository | `conformance/size/growth.json` | 8, 14 | A, B |
+| Layouts beside `default`; `frameCsp(layout)`; per-layout srcdoc cap; test 9 re-pinned per layout | build, frame, host | `scripts/build-frame.mjs`, `src/frame/{csp,document,layouts}.ts`, `src/host/mount.ts`, `conformance/frame-boundaries.json` | 9 | B1 |
+| Each layout on the appearance slots and the pairs' gate; conformance and contrast per layout | reader, stylesheet | `src/enhance/layouts/<name>/` (new), `assets/layouts/<name>.css` (new), `conformance/layouts/<name>/` (new) | 10 to 13 | B1 (10–11), B2 (12–13) |
+| Test 8's rows, one per landing | repository | `conformance/size/growth.json` | 8, 14 | A, B1, B2 |
 
 *Table 1. §6 by layer, task and landing.*
 
@@ -62,26 +62,29 @@
 
 *Table 2. Technical choices. A product choice found while executing goes to the coordinator as a structured ask.*
 
-### 3. Two landings (ruled 2026-11-20)
+### 3. Landings A, B1 and B2
+
+The original A/B split put all four layouts in B. The revised split reviews the shared infrastructure with two complete layouts first. B2 starts only from merged B1; B1 ships no Review or Guided placeholders.
 
 ```mermaid
 flowchart LR
   M["main at bee0fd1"] --> A["Landing A<br/>wire, places, items, In short,<br/>comparison base, print figures,<br/>print mode"]
-  A --> B["Landing B<br/>frameCsp(layout), per-layout cap,<br/>classic, editorial, review, guided"]
-  A -->|"Size-Design: x2"| R1["growth row: default's frame growth"]
-  B -->|"Size-Design: x2"| R2["growth row: four layouts' assets"]
+  A --> B1["Landing B1<br/>build check, per-layout frames,<br/>Classic and Editorial"]
+  B1 --> B2["Landing B2<br/>Review and Guided"]
+  A -->|"Size-Design: x2"| R1["growth row: default frame"]
+  B1 -->|"Size-Design: x2"| R2["growth row: Classic and Editorial assets"]
+  B2 -->|"Size-Design: x2"| R3["growth row: Review and Guided assets"]
 ```
 
-*Figure 1. The two landings. Each appends one growth row under `x2`; test 8 sums them against the shares.*
+*Figure 1. Each landing appends one growth row under `x2`; test 8 sums them against the shares.*
 
 | Landing | Tasks | Frame assets it changes | Expected growth | Why it stands alone |
 |---|---|---|---|---|
 | A | 1 to 8 | bootstrap, the default enhance bundle, `reader.css` | about 71 905 on both totals (§6's estimate), within the frame share of 72 704 | Every op, seed field and command a host needs for P5.2 to P5.5; reviewable as one wire change with one threat model |
-| B | 9 to 14 | four new layout bundles and their stylesheets; `frameCsp` and the build; no asset `default` inlines | `frame` unchanged (each layout at most the default bundle); `total` up by the four layouts, within the rest of the total share | Four ports of the reference layouts; each a review of its own, measured against the default bundle that A leaves |
+| B1 | 0, 9 to 11, 14 (B1) | Classic and Editorial bundles and stylesheets; `frameCsp` and the build; no asset `default` inlines | `frame` unchanged; `total` grows by the two layouts' assets | The build and frame policy are checked against two complete layout ports |
+| B2 | 12, 13, 14 (B2) | Review and Guided bundles and stylesheets; append the per-layout records | `frame` unchanged; `total` grows by the two layouts' assets, within the remaining share | Two further layout ports on the infrastructure B1 landed |
 
-*Table 3. The split. Landing B starts from A's landing on `main`, so each layout is measured against the default bundle at that commit.*
-
-**Landing B's size.** The default layout's port took L2 twenty-four tasks. Each of B's four layouts is a smaller port over shared modules, but it still brings its own structure, its own state keys, its own stylesheet on the slots, and its own corpus snapshots. If the coordinator prefers, B can land as four landings, one per layout, each with its own `Size-Design: x2` line; Task 9 then lands with the first.
+*Table 3. B1 starts from merged A; B2 starts from merged B1. Each alternate layout is measured against the same default bundle.*
 
 ## Global Constraints
 
@@ -110,12 +113,14 @@ Carried from 1.1 and the appearance contract, binding on every task:
 | 6 | Print figures in the frame | 3 | A |
 | 7 | Print mode of `render` and its stylesheet | 4 | A |
 | 8 | Landing A's size row, README, CHANGELOG and notes | 2 to 7 | A |
-| 9 | Layout infrastructure: bundles, `frameCsp(layout)`, per-layout cap, test 9 per layout | A on `main` | B |
-| 10 | Layout `classic` | 9 | B |
-| 11 | Layout `editorial` | 9 | B |
-| 12 | Layout `review` | 9 | B |
-| 13 | Layout `guided` | 9 | B |
-| 14 | Landing B's size row, README, CHANGELOG and notes | 10 to 13 | B |
+| 0 | Compare the bootstrap's two free-global scans by names, not alias spellings | A on `main` | B1 |
+| 9 | Layout infrastructure: bundles, `frameCsp(layout)`, per-layout cap, test 9 per layout | 0 | B1 |
+| 10 | Layout `classic` | 9 | B1 |
+| 11 | Layout `editorial` | 9 | B1 |
+| 14 (B1) | B1 size row, README, CHANGELOG and notes | 10 and 11 | B1 |
+| 12 | Layout `review` | B1 on `main` | B2 |
+| 13 | Layout `guided` | B1 on `main` | B2 |
+| 14 (B2) | B2 size row, README, CHANGELOG and notes | 12 and 13 | B2 |
 
 ```mermaid
 flowchart LR
@@ -129,18 +134,19 @@ flowchart LR
   T5 --> T8
   T6 --> T8
   T7 --> T8
-  T8 -.->|"landing A merged"| T9["T9 layout infra"]
-  T9 --> T10["T10 classic"]
-  T9 --> T11["T11 editorial"]
-  T9 --> T12["T12 review"]
-  T9 --> T13["T13 guided"]
-  T10 --> T14["T14 size B"]
-  T11 --> T14
-  T12 --> T14
-  T13 --> T14
+  T8 -.->|"A merged"| T0["T0 build check"]
+  T0 --> T9["T9 layout infra"]
+  T9 --> T10["T10 Classic"]
+  T9 --> T11["T11 Editorial"]
+  T10 --> T14B1["T14 size B1"]
+  T11 --> T14B1
+  T14B1 -.->|"B1 merged"| T12["T12 Review"]
+  T14B1 -.->|"B1 merged"| T13["T13 Guided"]
+  T12 --> T14B2["T14 size B2"]
+  T13 --> T14B2
 ```
 
-*Figure 2. Task order. Landing A's tasks land in the table's order on one branch; landing B starts from A's landing.*
+*Figure 2. Task order, including the merge boundary between B1 and B2.*
 
 ---
 
@@ -230,10 +236,10 @@ flowchart LR
 
 **Goal.** §6's first row: one frame, one layout, one policy.
 **Files.** Create `src/frame/layouts.ts`, `src/enhance/layouts/` (one entry per layout), `test/frame-layouts.test.ts`, `docs/superpowers/plans/parity-mutations/task-9.md`. Modify `scripts/build-frame.mjs` (one enhance bundle per layout from its entry, each with its CSP hash, and each layout stylesheet; every layout asset marked with its layout in both manifests), `src/frame/csp.ts`, `src/frame/document.ts`, `src/frame/index.ts`, `src/host/mount.ts`, `test/frame-boundaries.test.ts`, `conformance/frame-boundaries.json`, `README.md`.
-**Produces.** `FRAME_LAYOUTS = ['default','classic','editorial','review','guided']`, `type FrameLayout`. `frameCsp(layout: FrameLayout = 'default')`: guard, bootstrap, that layout's enhance and Mermaid, in that order; `frameCsp()` equals `frameCsp('default')`, byte for byte as before this landing. `checkFrameCsp` per B12. `FrameOptions.layout?`, `HostAdapters.layout?` (unknown name: `TypeError`), each defaulting to `default`. `maxSrcdocChars(layout)`, derived from the entries that layout's frame inlines, every seed field at its cap and the faces' cap; `MAX_SRCDOC_CHARS_DEFAULT` stays `maxSrcdocChars('default')`.
+**Produces.** In B1, `FRAME_LAYOUTS = ['default','classic','editorial']`, `type FrameLayout`. B2 appends `'review'` and `'guided'`. `frameCsp(layout: FrameLayout = 'default')`: guard, bootstrap, that layout's enhance and Mermaid, in that order; `frameCsp()` equals `frameCsp('default')`, byte for byte as before this landing. `checkFrameCsp` per B12. `FrameOptions.layout?`, `HostAdapters.layout?` (unknown name: `TypeError`), each defaulting to `default`. `maxSrcdocChars(layout)`, derived from the entries that layout's frame inlines, every seed field at its cap and the faces' cap; `MAX_SRCDOC_CHARS_DEFAULT` stays `maxSrcdocChars('default')`.
 **Test 9, re-pinned per layout.** The record's entry shape gains `csp` per layout (`{layout: maskedCsp}`); the entry appended here holds `default` equal to the parent's single masked policy, and each new layout's masked policy, whose first value is this landing's review check (test 9: "a new layout has no parent entry"). Rows: each layout's masked CSP equals the parent's for the same layout; one hash source per script that layout inlines; `frameCsp()` is `default`'s; the behaviour rows run per layout.
 **Tests.** The bundle per layout exists and is marked; the srcdoc of each layout inlines only its own bundle and stylesheet (a scan of the built srcdoc for every other layout's hash and asset text: none); the per-layout cap's old-cap row (test 7) per layout; a host naming no layout gets `default`'s exact srcdoc.
-**Mutation rows.** P9a `frameCsp('review')` carries every layout's hash; P9b the srcdoc inlines two bundles; P9c the cap derived from `default` for every layout; P9d `frameCsp()` differs from `frameCsp('default')`; P9e a layout asset left unmarked (test 8 then miscounts).
+**Mutation rows.** P9a `frameCsp('classic')` carries every layout's hash; P9b the srcdoc inlines two bundles; P9c the cap derived from `default` for every layout; P9d `frameCsp()` differs from `frameCsp('default')`; P9e a layout asset left unmarked (test 8 then miscounts).
 **Verify.** `test/frame-layouts.test.ts test/frame-csp.test.ts test/frame-boundaries.test.ts test/frame-document.test.ts test/host-mount.test.ts test/size-contract.test.ts test/frame-build.test.ts`; `node scripts/build-frame.mjs --check`.
 
 ### Tasks 10 to 13: The four layouts
@@ -248,7 +254,7 @@ One task per layout, each the same contract. `classic` is the reference's layout
 
 ### Task 14: Landing B's size row, README, CHANGELOG and notes
 
-As Task 8, for landing B: one appended `x2` row; `frame` unchanged from A's row; `total` up by the four layouts' assets; the running sum of X2's rows against both shares; each layout's characters against the default bundle; the notes file extended. Mutation row P14a: a layout's stylesheet moved into `reader.css` (reds `frame`).
+As Task 8, separately for B1 and B2: one appended `x2` row per landing; `frame` unchanged from its parent row; `total` up by the assets of the two layouts added in that landing; the running sum of X2's rows against both shares; each layout's characters against the default bundle; Results and the landing notes updated. Mutation row P14a: a layout's stylesheet moved into `reader.css` (reds `frame`).
 
 ## Risks
 
@@ -266,7 +272,7 @@ As Task 8, for landing B: one appended `x2` row; `frame` unchanged from A's row;
 - The design, §6 in full, as approved by the first consumer's operator on 2026-11-19; X2's shares, 1 166 336 total and 72 704 frame, as the coordinator set them and the shares table records them.
 
 ### Waiting on you
-- Nothing. The split is ruled (2026-11-20): A then B, B's four layouts in one landing. The bootstrap's 32 768 bytes and the frame share are stops, measured at each task that changes the default layout's assets; neither budget moves here.
+- Nothing on the split: A, then B1 (Classic and Editorial), then B2 (Review and Guided). The bootstrap's 32 768 bytes and the frame share are stops, measured at each task that changes the default layout's assets; neither budget moves here.
 
 ### Later
 - The release and its signed tag; the first consumer's re-pin (its wave P5).
@@ -274,7 +280,7 @@ As Task 8, for landing B: one appended `x2` row; `frame` unchanged from A's row;
 
 ## Results
 
-Run 2026-11-20 to 2026-11-21, landing A (Tasks 1 to 8; landing B, Tasks 9 to 14, is wave 35). Each task was an implementer subagent, then a held-out review of its commits, then fix rounds until the review was clean. Mutation rows are in `parity-mutations/task-<n>.md`; every guard row is red except two equivalent mutants (P6l, P8c: each file gives its reason), one row unmeasured (B6b) and one run that was killed and gave no verdict (RG1-browser). The counts, from the JSON fences of the nine files (an entry per measured run; an entry that a later measurement replaced is "superseded, re-measured, kept" and counted in its file's total): 327 rows, 323 red, 2 equivalent, 1 unmeasured, 1 killed with no verdict (task-1 9 rows, 9 red; task-2 23, 23; task-3 14, 14; task-4 67, 67 (2 superseded by later measurements, kept); task-5 24, 24; task-6 61, 59 red, 1 equivalent (P6l), 1 unmeasured (B6b); task-7 59, 59, all red (3 superseded by round 3's measurements and 3 skipped by a filter are among them); task-8 3, 2 red, 1 equivalent (P8c); task-final 67, 66 red and 1 killed run, the RG1-browser entry (the 32 000-separator Chromium case, killed by the memory cap with no assertion mismatch, not retried: not a verdict, and RG1's own editorial case is red). Of task-final's entries 4 are superseded, re-measured and kept: RR1 to RR3 (they cite round 1's test titles, which no longer exist; RS1 to RS3 re-measured the same guards) and RF2 (re-measured as RF2-r2, so the guard is not counted twice as two distinct guards); the RC rows (RC1 to RC3, 4 entries, review 3088 F1), the RG rows (RG1 to RG6, 7 entries), RH1 (1), RI1 and RI2 (2, review 3088 F3 in WebKit), RJ1 to RJ6 (6, WebKit cycle 1) and WK1 to WK4 (4, WebKit cycle 2) are new at this round; review 3160 adds RK1 (1, F1) and RC4 and RC5 (2, F2), so the RC rows are RC1 to RC5, 6 entries.) B6b is a guard row, not an equivalent mutant, and it is recorded **unmeasured**: Chromium cannot kill it (a real canvas draws an SVG image with HTML labels without tainting). CI cannot measure it either: CI runs only the unmutated tree, so it can show the guard passing and can never turn the row red, and no WebKit build is cached on the machine that made this landing, so the mutant could not be run locally. What would measure it: apply the edit (the print configuration is the screen's unchanged, in `src/enhance/print-figures.ts`), rebuild the frame (`npm run build:frame`, because the page policy pins the enhance hash), and run `test/browser/print-figures.test.ts` under WebKit, on a machine with a WebKit build or on a throwaway branch that carries the mutant, and record whether the "three covered figures" case goes red. The jsdom rows P6a, P6a2 and P6a3 hold the same guard red meanwhile.
+Run 2026-11-20 to 2026-11-21, Landing A (Tasks 1 to 8). B1 has separate Results below. Each task was an implementer subagent, then a held-out review of its commits, then fix rounds until the review was clean. Mutation rows are in `parity-mutations/task-<n>.md`; every guard row is red except two equivalent mutants (P6l, P8c: each file gives its reason), one row unmeasured (B6b) and one run that was killed and gave no verdict (RG1-browser). The counts, from the JSON fences of the nine files (an entry per measured run; an entry that a later measurement replaced is "superseded, re-measured, kept" and counted in its file's total): 327 rows, 323 red, 2 equivalent, 1 unmeasured, 1 killed with no verdict (task-1 9 rows, 9 red; task-2 23, 23; task-3 14, 14; task-4 67, 67 (2 superseded by later measurements, kept); task-5 24, 24; task-6 61, 59 red, 1 equivalent (P6l), 1 unmeasured (B6b); task-7 59, 59, all red (3 superseded by round 3's measurements and 3 skipped by a filter are among them); task-8 3, 2 red, 1 equivalent (P8c); task-final 67, 66 red and 1 killed run, the RG1-browser entry (the 32 000-separator Chromium case, killed by the memory cap with no assertion mismatch, not retried: not a verdict, and RG1's own editorial case is red). Of task-final's entries 4 are superseded, re-measured and kept: RR1 to RR3 (they cite round 1's test titles, which no longer exist; RS1 to RS3 re-measured the same guards) and RF2 (re-measured as RF2-r2, so the guard is not counted twice as two distinct guards); the RC rows (RC1 to RC3, 4 entries, review 3088 F1), the RG rows (RG1 to RG6, 7 entries), RH1 (1), RI1 and RI2 (2, review 3088 F3 in WebKit), RJ1 to RJ6 (6, WebKit cycle 1) and WK1 to WK4 (4, WebKit cycle 2) are new at this round; review 3160 adds RK1 (1, F1) and RC4 and RC5 (2, F2), so the RC rows are RC1 to RC5, 6 entries.) B6b is a guard row, not an equivalent mutant, and it is recorded **unmeasured**: Chromium cannot kill it (a real canvas draws an SVG image with HTML labels without tainting). CI cannot measure it either: CI runs only the unmutated tree, so it can show the guard passing and can never turn the row red, and no WebKit build is cached on the machine that made this landing, so the mutant could not be run locally. What would measure it: apply the edit (the print configuration is the screen's unchanged, in `src/enhance/print-figures.ts`), rebuild the frame (`npm run build:frame`, because the page policy pins the enhance hash), and run `test/browser/print-figures.test.ts` under WebKit, on a machine with a WebKit build or on a throwaway branch that carries the mutant, and record whether the "three covered figures" case goes red. The jsdom rows P6a, P6a2 and P6a3 hold the same guard red meanwhile.
 
 ### Per task
 
@@ -425,3 +431,30 @@ DOCREADER_BROWSERS=chromium ... test/browser/<file>                             
 npm run build:frame; node scripts/build-frame.mjs --check                          after every asset change
 DOCSERVER_SIZE_HEAD=... DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x2' ... test/size-contract.test.ts
 ```
+
+### Landing B1 results
+
+B1 starts from `1c2120d`, the Landing A merge. The [B1 notes](../programs/docserver/parity-layouts-b1.md) give the checks at each checkpoint; B2 is not part of this result.
+
+| Task | Result and evidence |
+|---|---|
+| 0 — bootstrap comparison | `701431a`, `9f19ca7`: compare sorted free-global reads and writes, not alias spellings. The list, allowlist, exact-once embedding and byte cap are unchanged. [T0a–T0d](parity-mutations/task-0.md) are red on focused re-measurement; T0b showed the expected failing assertion before a memory kill, and T0c now fails on two real pairs with equal reads and different writes. The restored frame-build file passed all 49 with a bounded heap. |
+| 9 — infrastructure | `af04af9` through `a5eca0b`: build only the three shipped choices; alternate entries substitute exactly one feature-list import. Each frame validates and inlines its selected bundle and stylesheet; the default's five assets and two complete srcdoc pins still match A. The plan's new-layout boundary check is separate from the unchanged parent-policy comparison; review removed an unreachable condition, not a reachable guard. See [Task 9's 23 mutation rows](parity-mutations/task-9.md). |
+| 10 — Classic | Held-out approval at `a24df7a` after 19 Chromium interaction rows. Classic ports numbered headings, summary and standing blocks, Contents, phone chips and reveal. It keeps 54 own snapshots and shares the reader's navigation and figure services. See the [scrub audit](parity-scrub-classic.md) and [15 mutation rows](parity-mutations/task-10.md). |
+| 11 — Editorial | Port at `1a6091a`, held-out approval at `b66c242` after 19 Chromium interaction rows for each alternate. Editorial keeps the title, running head and Contents-only drawer with marks-only plans, and 54 own snapshots. See the [scrub audit](parity-scrub-editorial.md) and [mutation rows](parity-mutations/task-11.md). |
+| 14 — closeout | One `x2` row: `total` 4,885,103, `frame` 4,571,331. The five default entries are unchanged. [P14a](parity-mutations/task-14.md) keeps `total` fixed while putting Classic's 4,205 stylesheet characters in the shared asset; `frame` becomes 4,575,536, and the stale growth row is rejected. |
+
+**Budgets.** Classic is 146,708 and Editorial 167,064 against the 225,709-character per-layout limit. B1 adds 313,772 UTF-16 code units (313,799 bytes), all outside the default frame. Cumulative X2 use is 327,101 of 1,166,336 total and 13,329 of 72,704 in the largest frame. The bootstrap is 32,740 of 32,768 bytes with 118 free-global names. The default srcdoc cap stays 116,224,259, and the old-cap checks passed for all three layouts. Print is unchanged and still counted outside the frame budgets.
+
+**Verification.** The first full local Chromium run was killed by the memory limit, not a clean suite verdict. The bounded retry found a real package allowlist omission; the exact compiled stems were added and the package file passed all 15 in isolation. The first CI round found early sampling of the two WebKit 3 px waiting-callout cues; `4330023` waits for reveal to settle and keeps the pixel assertions. Two subsequent Node 22 runs failed only the existing B8.2 scroll reset. `7e0e60c` releases the initial-hash pin with reader input before the reset and preserves the original assertions. On that head [CI run 44956945495](https://github.com/Synapsium-Labs/docserver/actions/runs/44956945495) passed 7,695 tests per Node job, including both cues and B8.2 in Chromium and WebKit. Those results are for the pre-review head.
+
+**First review fixes.** Each alternate Close button now uses the hosted control-row slot only for a fine pointer. Under touch, a 56 px host slot measured 56 px before and 44 px after; fine pointers followed the 40 px and 56 px host slots. The browser suite walks each alternate's own stylesheet. The corpus requires every shipped alternate's snapshot directory. Per-layout hostile snapshots cannot be deleted; an edit must be named by its own `Layout-moved` trailer. The [Task 14 mutation record](parity-mutations/task-14.md) records the red rows for those guards. No layout snapshot, existing golden, default asset, package version or wire route changed in this fix round.
+
+**Trailers.** Classic's 54 additions (`afc4b61`) and Editorial's 54 additions (`1a6091a`) were not named; both commits said `Goldens-moved: none`. `139415d` regenerated six new Classic snapshots and still said `none`; `b66c242` regenerated twelve new rail snapshots and omitted the trailer. `8c811a5`, `9f4bee4`, `4330023` and `7e0e60c` also omitted it. Eleven subjects omitted the task tag. No golden or snapshot from Landing A moved, and history is not rewritten. Future additions and moves carry the precise trailers the plan requires.
+
+#### B1 departures and readings
+
+- **Task 0.** Landing A's whole-record comparison made alias spelling part of a build invariant. Comparing the semantic names alone removes that dependence without changing which globals the frame pins or allows. The historical synthetic writes-only record is retained; the new red rows use real scans.
+- **Task 9.** The plan's original one-step list is split as shown in §3. B1 ships only `default`, `classic` and `editorial`; B2 adds `review` and `guided` after B1 lands. The default uses no layout-substitution plugin, and neither alternate's stylesheet is added to the default or hashed as a script.
+- **Task 10.** Classic reuses the shared reader services rather than copying global boot, fixed colours or site defaults. It omits the default review/settings chrome, Index, marks and definition previews; heading numbers remain in the accessible Contents labels. Its scoped snapshots are not pixel parity with the reference.
+- **Task 11.** Editorial keeps Contents without an Index, marks without an outline, and shared jump and diagram tools without unusable definition-preview controls. It omits the default review/settings chrome and uses the shared reader's vocabulary and host adapters. Its scoped snapshots are not pixel parity with the reference.

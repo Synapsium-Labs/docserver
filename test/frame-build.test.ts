@@ -595,7 +595,13 @@ describe('L3.M17: the free-global list', () => {
     expect(a.aliases).not.toEqual(c.aliases);
     expect(sameGlobalNames(a, c)).toBe(true);
     expect(sameGlobalNames(a, scanScript('x', 'const a=window;a.bar;'))).toBe(false);
-    expect(sameGlobalNames(a, scanScript('x', 'const a=window;a.foo=1;'))).toBe(false);
+    const read = scanScript('x', 'globalThis.injected;');
+    const written = scanScript('x', 'globalThis.injected = 1;');
+    expect(read.reads).toEqual(['globalThis', 'injected']);
+    expect(written.reads).toEqual(read.reads);
+    expect(read.writes).toEqual([]);
+    expect(written.writes).toEqual(['injected']);
+    expect(sameGlobalNames(read, written)).toBe(false);
     // Build level, the final text: a bootstrap that binds one more alias of `window` (already read) gives a scan whose
     // aliases differ from the first pass's and whose reads and writes do not; the check reports no free-globals problem.
     const b = built();
@@ -626,13 +632,22 @@ describe('L3.M17: the free-global list', () => {
     expect(b.freeGlobals.names).toContain('globalThis');
     expect(b.freeGlobals.names).not.toContain('injected');
     expect(free(bundleOf(b, { bootstrap: `${text};globalThis.injected = 1;\n` }))).toEqual([second]);
-    // The first pass's record with one more name read, then with one more written: the final text and the list are untouched.
-    const withFirst = (bootstrap: { readonly reads: readonly string[]; readonly writes: readonly string[]; readonly aliases: readonly string[] }) => ({
-      ...bundleOf(b),
+    const withFirst = (bootstrap: ReturnType<typeof scanScript>, final = text): Bundle => ({
+      ...bundleOf(b, { bootstrap: final }),
       freeGlobals: { names: b.freeGlobals.names, first: { ...b.freeGlobals.first, bootstrap } },
     });
     expect(free(withFirst({ ...first, reads: [...first.reads, 'zzFirstPassRead'] }))).toEqual([second]);
-    expect(free(withFirst({ ...first, writes: ['injected'] }))).toEqual([second]);
+    // These are real scans with equal reads. Turning only the allowlisted read into a write
+    // must still make the second scan disagree, with the pinned list unchanged.
+    const readText = `${text};globalThis.injected;\n`;
+    const writeText = `${text};globalThis.injected = 1;\n`;
+    const read = scanScript('bootstrap', readText);
+    const written = scanScript('bootstrap', writeText);
+    expect(written.reads).toEqual(read.reads);
+    expect(read.writes).not.toContain('injected');
+    expect(written.writes).toContain('injected');
+    expect(free(withFirst(read, readText))).toEqual([]);
+    expect(free(withFirst(read, writeText))).toEqual([second]);
   });
 
   it("a bootstrap whose list leaves out a name the outputs read, or names one they do not, fails the build through the list comparison", () => {

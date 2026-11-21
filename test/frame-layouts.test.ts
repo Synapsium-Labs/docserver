@@ -8,7 +8,7 @@
 //  1. The layout table: the build's names, the library's, the manifest's marks and the files they name, held equal.
 //  2. The default frame, unmoved (the orchestrator's rulings R1 and the coordinator's srcdoc pin): the sha256 of the five entries
 //     the default frame inlines, frameCsp() and the default srcdoc of two fixed documents, each against a literal that was measured
-//     at landing A's code (the first parent, 9f19ca7) before this task changed anything; `layout` absent and `layout: 'default'` give
+//     at Landing A's merge (1c2120d), before B1; `layout` absent and `layout: 'default'` give
 //     that string, byte for byte.
 //  3. The bundles: one per layout, distinct, marked in both manifests, built from the default's options and entry with one plugin.
 //  4. Each layout's srcdoc inlines only its own bundle and stylesheet, in the default's element order.
@@ -226,7 +226,7 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
 // ───────── 2. the default frame, unmoved ─────────
 
 /**
- * The five entries the default frame inlines, as landing A built them (the first parent's committed manifest, 9f19ca7): the sha256 of
+ * The five entries the default frame inlines, as Landing A's merge (1c2120d) records them: the sha256 of
  * each asset's text. Literals on purpose: a layout, its plugin or any change of the build must leave every one in place (the
  * orchestrator's ruling R1), and a test that read them from the manifest it checks could not tell.
  */
@@ -303,7 +303,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(maxSrcdocChars('default'));
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
     // Its value at landing A: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
-    // the tree at 9f19ca7's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
+    // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
     expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_224_259);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);

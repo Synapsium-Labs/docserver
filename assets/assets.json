@@ -80,15 +80,15 @@
     },
     {
       "path": "frame/layout-classic.css",
-      "sha256": "6c3ab827e3dcd9508f6a0e9a3130fb07294402a161c059835c385fa1c322d79a",
-      "bytes": 4409,
+      "sha256": "90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c",
+      "bytes": 4205,
       "kind": "style",
       "layout": "classic"
     },
     {
       "path": "frame/layout-editorial.css",
-      "sha256": "1153110377a63b75abcfc49849cf723f825e7ce5450f1b71f16fac18ead45878",
-      "bytes": 4007,
+      "sha256": "c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda",
+      "bytes": 3801,
       "kind": "style",
       "layout": "editorial"
     },
@@ -100,15 +100,15 @@
     },
     {
       "path": "layouts/classic.css",
-      "sha256": "6c3ab827e3dcd9508f6a0e9a3130fb07294402a161c059835c385fa1c322d79a",
-      "bytes": 4409,
+      "sha256": "90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c",
+      "bytes": 4205,
       "kind": "style",
       "layout": "classic"
     },
     {
       "path": "layouts/editorial.css",
-      "sha256": "1153110377a63b75abcfc49849cf723f825e7ce5450f1b71f16fac18ead45878",
-      "bytes": 4007,
+      "sha256": "c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda",
+      "bytes": 3801,
       "kind": "style",
       "layout": "editorial"
     },

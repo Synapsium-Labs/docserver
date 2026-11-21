@@ -236,6 +236,22 @@ async function mark(page: Page): Promise<void> {
   }, rootSel);
 }
 
+async function controlRowRules(page: Page): Promise<{ sheet: string; selector: string; media: string }[]> {
+  return page.evaluate(() => {
+    const out: { sheet: string; selector: string; media: string }[] = [];
+    const walk = (rules: CSSRuleList, media: string, sheet: string): void => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSMediaRule) walk(rule.cssRules, rule.conditionText, sheet);
+        else if (rule instanceof CSSStyleRule && rule.style.getPropertyValue('min-height').includes('--dr-control-row')) {
+          out.push({ sheet, selector: rule.selectorText, media });
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '', new URL(sheet.href ?? '', document.baseURI).pathname);
+    return out;
+  });
+}
+
 describeBrowsers((browser) => {
   // Only register alternate layouts for cues their own features draw.
   function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial']): void {
@@ -1105,28 +1121,35 @@ describeBrowsers((browser) => {
   it('the family is sans or mono by the verdict, and controlRow is applied under a fine pointer only', async () => {
     const sans = await open(browser, { appearance: { mode: 'dark', skin: { sectionFamily: 'sans' } } });
     try {
-      const got = await sans.page.evaluate((sel) => {
+      const family = await sans.page.evaluate((sel) => {
         (document.querySelector(`${sel} .aa-btn`) as HTMLElement).click();
-        const family = getComputedStyle(document.querySelector(`${sel} .aa-menu legend`) as Element).fontFamily;
-        const walk = (rules: CSSRuleList, within: string, out: string[]): void => {
-          for (const r of Array.from(rules)) {
-            if (r instanceof CSSMediaRule) walk(r.cssRules, r.conditionText, out);
-            else if (r instanceof CSSStyleRule && r.style.getPropertyValue('min-height').includes('--dr-control-row')) out.push(within);
-          }
-        };
-        const where: string[] = [];
-        for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '', where);
-        return { family, where };
+        return getComputedStyle(document.querySelector(`${sel} .aa-menu legend`) as Element).fontFamily;
       }, rootSel);
-      expect(/^"?Docreader Host Sans"?,/.test(got.family), got.family).toBe(true);
-      expect(got.where.length).toBeGreaterThan(0);
+      const where = (await controlRowRules(sans.page)).map((row) => row.media);
+      expect(/^"?Docreader Host Sans"?,/.test(family), family).toBe(true);
+      expect(where.length).toBeGreaterThan(0);
       // the plain rule, and the drawer's own (a drawer is a narrow viewport's): both only under a fine pointer
-      expect(new Set(got.where)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+      expect(new Set(where)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
     } finally {
       await sans.close();
     }
   });
 
+
+  for (const layout of ['classic', 'editorial'] as const) {
+    it(`${layout}: every controlRow rule including its Close rule is under a fine pointer only`, async () => {
+      const doc = await open(browser, { layout });
+      try {
+        const rows = await controlRowRules(doc.page);
+        const own = rows.filter((row) => row.sheet === '/assets/layout.css');
+        const close = own.filter((row) => row.selector.includes('.toc-close'));
+        expect(close.length, JSON.stringify(own)).toBe(1);
+        expect(close[0]?.selector).toContain(`data-docreader-layout="${layout}"`);
+        expect(own.length).toBeGreaterThan(0);
+        expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+      } finally { await doc.close(); }
+    });
+  }
 
   it("Mermaid's tooltip, which sits in body outside the root, computes the verdict's surface, text and border (second review F8)", async () => {
     // The tooltip is one element per document, and its three colours are the document element's properties; the jsdom rows of

@@ -20,7 +20,7 @@ Editorial brings the reference's title block, margin numbers, plan labels, runni
 
 | Reference mechanism | Port boundary |
 |---|---|
-| Fixed palette and font choices | The scoped Editorial stylesheet uses the shared reader's colour, surface and type slots. Hosted row and type overrides apply to the drawer, not the docked rail. Coarse-pointer drawer controls keep the shared 44px floor. |
+| Fixed palette and font choices | The scoped Editorial stylesheet uses the shared reader's colour, surface and type slots. Hosted type overrides apply to the drawer, not the docked rail. The drawer's Close button and links use the hosted control-row slot only with a fine pointer. With a coarse pointer they keep the shared 44px floor without using that slot. |
 | Site IDs, qualifiers, tracker destinations and other operator vocabulary | No site defaults are copied. Shared vocabulary and item resolution are host options, with no default tracker or destinations. |
 | Global document, scroll and history, direct clipboard and remote Mermaid | The library uses root-scoped builders, the environment and navigation adapter, the host's copy adapter and host-supplied Mermaid. No layout owns network, storage or history. |
 | Page shell, footer and document loading | The host supplies the frame and its lifecycle; all layout structure and listeners are journaled, with no dependence on the reference's surrounding page. |

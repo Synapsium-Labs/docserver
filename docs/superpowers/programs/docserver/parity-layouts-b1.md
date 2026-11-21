@@ -1,6 +1,6 @@
 # X2 layout additions, landing B1: notes for the plan and ledger
 
-This note supplements the [landing A notes](parity-additions.md). Use it for Design §3 and Results of the [library plan](../../plans/2026-11-20-docserver-parity-additions.md); the existing plan and ledger are not edited by this landing.
+This note supplements the [landing A notes](parity-additions.md) and the B1 Results of the [library plan](../../plans/2026-11-20-docserver-parity-additions.md).
 
 ## Design §3: split and frame construction
 
@@ -39,26 +39,26 @@ The fix at `b66c242` leaves hidden headings linked while refreshing the spy's vi
 
 ## Task 14 size closeout
 
-The committed manifests at `b66c242` and landing A have the same five default entries. New entries are listed below; sizes are in UTF-16 code units unless marked bytes.
+Landing A's merge (`1c2120d`) and B1 have the same five default frame entries. The table gives the new entries after B1's first review fix; sizes are in UTF-16 code units unless marked bytes.
 
 | New frame asset | Characters added | Bytes added |
 |---|---:|---:|
 | Classic script | 142,503 | 142,512 |
-| Classic stylesheet | 4,409 | 4,409 |
+| Classic stylesheet | 4,205 | 4,205 |
 | Editorial script | 163,263 | 163,281 |
-| Editorial stylesheet | 4,007 | 4,007 |
-| **Total added** | **314,182** | **314,209** |
+| Editorial stylesheet | 3,801 | 3,801 |
+| **Total added** | **313,772** | **313,799** |
 
 | Measure | Landing A | Landing B1 | B1 growth | X2 cumulative use | X2 share | X2 remaining |
 |---|---:|---:|---:|---:|---:|---:|
-| All assets | 4,571,331 | 4,885,513 | 314,182 | 327,511 | 1,166,336 | 838,825 |
+| All assets | 4,571,331 | 4,885,103 | 313,772 | 327,101 | 1,166,336 | 839,235 |
 | Largest single frame | 4,571,331 | 4,571,331 | 0 | 13,329 | 72,704 | 59,375 |
 
-Classic uses 146,912 characters and Editorial 167,270, respectively 78,797 and 58,439 below the default enhance bundle's 225,709. The default frame is still the largest. The bootstrap remains at 118 global names and 32,740 of 32,768 bytes, leaving 28 bytes. Print mode is unchanged and is not part of these frame totals.
+Classic uses 146,708 characters and Editorial 167,064, respectively 79,001 and 58,645 below the default enhance bundle's 225,709. Before the review fix the total was 4,885,513; the two stylesheet corrections remove 410 characters. The default frame is still the largest. The bootstrap remains at 118 global names and 32,740 of 32,768 bytes, leaving 28 bytes. Print mode is unchanged and is not part of these frame totals.
 
 **Old-cap checks.** The 1.1.0 default cap is 114,569,828. The same fixture counts 114,554,779 at 1.1.0 asset lengths and 114,598,090 with current assets; with both maximum faces and the largest accepted appearance it is 114,949,117, below the unchanged derived cap of 116,224,259. The default row passed, and both alternate old-cap rows passed in the 47-test frame-layout run. The uncapped run of that file had 40 passes and an OOM kill with no assertion mismatch; the isolated bounded-heap retry passed. The sealed boot run passed 43 Chromium rows, with 43 WebKit rows skipped. Its wrapper also reported a slice-wide kill during an overlapping test run; the boot command itself exited zero.
 
-**P14a.** Move the Classic stylesheet's 4,409 characters into the shared stylesheet in an in-memory manifest, keeping the measured landing row. The production size judge accepts the control. It computes the same `total` of 4,885,513 but a `frame` of 4,575,740 and rejects the mutant: "the rule: the newest growth row is not the recomputation from the judged commit" (exit 1). No shipped asset or table is changed by the probe.
+**P14a.** Move the Classic stylesheet's 4,205 characters into the shared stylesheet in an in-memory manifest, keeping the measured landing row. The size judge accepts the control. It computes the same `total` of 4,885,103 but a `frame` of 4,575,536 and rejects the mutant: "the rule: the newest growth row is not the recomputation from the judged commit" (exit 1). No shipped asset or table is changed by the probe. The [Task 14 mutation record](../../plans/parity-mutations/task-14.md) holds the table and machine-readable rows.
 
 ## Whole-suite and package gate
 
@@ -103,12 +103,14 @@ The initial hash installs a temporary pin so that layout changes keep the target
 | Immediately after reset | 0 px | 5,227.71875 px |
 | After resize callbacks | 5,214 px | 13.71875 px |
 
-The original B8.2 assertion timed out at the last position. With Home sent to the focused frame before the reset, the same probe passed: the reader action releases the pin before the programmatic scroll. This reproduces the failure shape in Chromium, not the exact WebKit scheduling. The temporary padding and instrumentation were removed. The test now waits for actual window scroll position zero and keeps every previous assertion, including the target threshold and both link landing positions. No production source, style, or cue test changed in this round. WebKit verification is left to CI.
+The original B8.2 assertion timed out at the last position. With Home sent to the focused frame before the reset, the same probe passed: the reader action releases the pin before the programmatic scroll. This reproduces the failure shape in Chromium, not the exact WebKit scheduling. The temporary padding and instrumentation were removed. The test now waits for actual window scroll position zero and keeps every previous assertion, including the target threshold and both link landing positions. No production source, style, or cue test changed in that round. [CI at `7e0e60c`](https://github.com/Synapsium-Labs/docserver/actions/runs/44956945495) passed B8.2 and both exact painted cues in Chromium and WebKit on Node 22 and Node 24 (7,695 passed and five skipped on each job).
 
-## Process notes
+## B1 review fix round 1
 
-- Task 0 and Task 9 each had an edit applied through a script instead of a file-editing tool. Task 9's split cleanup repeated this on mechanical deletions in ten files before switching to the file tools. The changes were checked in the diffs. A Task 9 commit message was corrected before pushing. The pack test's allowlist and count had not been checked in the first infrastructure pass; the review fix corrected them and ran the test.
-- The graph gate initially refused a search pending one read-only graph query. The coordinator confirmed that query was the gate's own route. Later, an account guard refused an environment-listing attempt; the implementer stopped, and the call did not run. Two attempts to report it were also refused because the mail text was embedded in the shell command. On the coordinator's instruction, no command lists the environment and prose is passed from files, not embedded in shell commands.
-- A session restart stopped the first classic implementer before any edits or measurements. The replacement continued from the same checked Task 9 tip; no committed work was lost.
-- During classic's corpus pass, the role guard refused a subagent's attempt to load a worker skill. Nothing ran and the subagent stopped. The coordinator directed the work to resume with skills and mail in the main session only; the refused call was not retried.
-- A later claim-list usage error stopped locally, without a server request. The coordinator clarified that a local syntax error is not a refusal; the documented read-only list confirmed both existing claims before Editorial.
+Both alternate drawers now use the hosted Close control-row size only for a fine pointer. Chromium with a coarse pointer measured 56 px before the fix and 44 px after it; with a fine pointer the same Close button followed the hosted 40 px and 56 px values. The stylesheet walk now checks the rule in each alternate's own CSS. Neither this fix nor the stricter corpus guards changed a snapshot.
+
+The per-layout corpus no longer skips a shipped layout whose snapshot directory is missing. The ratchet refuses deletion of a per-layout hostile snapshot even with a correctly named trailer; an edit still needs its exact per-layout trailer. In the boundary check an unreachable condition was removed: the immediate parent already belongs to the set of earlier entries. The separate check for newly added layouts is unchanged.
+
+The review found earlier snapshot additions and regenerations without precise trailers. History was not rewritten; the plan's B1 Results lists the gaps. The round's changes do not move any existing golden or snapshot.
+
+The round's local gate passed 40 cue, 21 Editorial-file, 19 Classic-file and 173 corpus rows in Chromium. The corpus command exited zero, though the test wrapper also reported memory kills in the shared test slice. The frame build (49 tests), frame layouts (47), frame boundaries (22), ratchet (56), README (47), type check and frame reproducibility check passed. The full Node/WebKit matrix remains an exact-commit CI gate.

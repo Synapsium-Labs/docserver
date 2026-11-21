@@ -73,7 +73,7 @@ const isLayoutPrefix = (keys: readonly string[], layouts: readonly string[]): bo
  * layout shows that the rows stay green when a landing appends one (and a bad one shows they are not vacuous).
  * - an entry that is per layout names a prefix of `layouts`, beginning with `default`;
  * - the newest entry's masked policy of each layout it names equals the previous entry's for the same layout, when it has one;
- * - the default layout always has a parent from the second entry on, and a layout absent from every earlier entry has none;
+ * - the default layout always has a parent from the second entry on; a newly added layout is checked elsewhere in this file;
  * - every consecutive pair of entries agrees on a layout both name.
  */
 function perLayoutProblems(rec: readonly Entry[], layouts: readonly string[], masked: (layout: string) => string, firstPerLayout: number): string[] {
@@ -84,9 +84,7 @@ function perLayoutProblems(rec: readonly Entry[], layouts: readonly string[], ma
   const previous = rec.at(-2);
   for (const l of layouts) {
     const parent = cspOf(previous, l);
-    const earlier = rec.slice(0, -1).some((e) => cspOf(e, l) !== undefined);
     if (l === 'default' && parent === undefined) bad.push('the default layout has no parent');
-    if (!earlier && parent !== undefined) bad.push(`${l} is absent from every earlier entry and has a parent`);
     if (parent !== undefined && masked(l) !== parent) bad.push(`${l}: the masked policy now is not the previous entry's`);
   }
   for (let i = 1; i < rec.length; i += 1) {

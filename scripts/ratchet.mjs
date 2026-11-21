@@ -26,8 +26,8 @@
 //    those cases (a new case is added, not moved, and needs none). Each layout's own snapshot of a case,
 //    conformance/layouts/<name>/<slug>/<id>.dom.txt (docserver parity Task 9), is held the same way and named
 //    `<name>/<slug>/<id>`; the inputs stay the shared ones above. checkLayoutHostile: a case whose options file
-//    at the base says `"hostile": true` is never removed (none of its three files is deleted), and its .md and
-//    options never change; its snapshot may move, named like any other.
+//    at the base says `"hostile": true` is never removed (none of its three files or existing per-layout snapshots
+//    is deleted), and its .md and options never change; snapshots may move, named like any other.
 // The pure functions are exported for test/ratchet.test.ts; the command runs only when this file is the
 // entry point. Node built-ins only; dev tooling, never shipped.
 import { execFileSync } from 'node:child_process';
@@ -201,9 +201,15 @@ export function checkLayoutHostile(hostileIds, changes) {
   const hostile = new Set(hostileIds);
   const out = [];
   for (const id of [...hostile].sort()) {
-    const mine = changes.filter((c) => c.id === id);
+    const mine = changes.filter((c) => LAYOUT_FILE.test(c.path) && c.id === id);
     if (mine.some((c) => c.status === 'D')) out.push(`${id}: a hostile layout case was removed (a hostile case is never removed)`);
     else if (mine.some((c) => c.kind !== 'dom.txt')) out.push(`${id}: a hostile layout case's input or options changed (add a new case instead)`);
+  }
+  for (const c of changes) {
+    const per = LAYOUTS_FILE.exec(c.path);
+    if (per !== null && c.status === 'D' && hostile.has(per[1].split('/').slice(1).join('/'))) {
+      out.push(`${c.id}: a hostile layout case was removed (a hostile case is never removed)`);
+    }
   }
   return out;
 }

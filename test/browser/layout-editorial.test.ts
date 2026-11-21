@@ -7,7 +7,7 @@ afterAll(closeBrowsers);
 describeBrowsers((browser) => {
   for (const layout of ['classic', 'editorial'] as const) {
     it(`${layout}: drawer Close is accessible, trapped, and restores focus`, async () => {
-      const doc = await openDoc(DOC, { appearance: { skin: { controlRow: '48px' } } }, { browser, layout, viewport: { width: 412, height: 915 }, hasTouch: true });
+      const doc = await openDoc(DOC, { appearance: { skin: { controlRow: '56px' } } }, { browser, layout, viewport: { width: 412, height: 915 }, hasTouch: true });
       try {
         const { page } = doc;
         const opener = page.getByRole('button', { name: 'Contents' });
@@ -15,7 +15,9 @@ describeBrowsers((browser) => {
         const drawer = page.getByRole('dialog', { name: 'Contents' });
         const close = drawer.getByRole('button', { name: 'Close', exact: true });
         expect(await close.isVisible()).toBe(true);
-        expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+        const pointer = await page.evaluate(() => ({ coarse: matchMedia('(pointer: coarse)').matches, fine: matchMedia('(pointer: fine)').matches }));
+        expect(pointer).toEqual({ coarse: true, fine: false });
+        expect((await close.boundingBox())!.height, `touch ${JSON.stringify(pointer)}`).toBe(44);
         await drawer.getByRole('link').last().focus();
         await page.keyboard.press('Tab');
         expect(await drawer.evaluate((el) => el.contains(document.activeElement))).toBe(true);
@@ -29,6 +31,20 @@ describeBrowsers((browser) => {
         await page.setViewportSize({ width: 1280, height: 800 });
         expect(await page.getByRole('navigation', { name: 'Contents' }).getByRole('button', { name: 'Close' }).isVisible()).toBe(false);
       } finally { await doc.close(); }
+    });
+
+    it(`${layout}: drawer Close responds to hosted controlRow on a fine pointer`, async () => {
+      for (const height of [40, 56]) {
+        const doc = await openDoc(DOC, { appearance: { skin: { controlRow: `${height}px` } } }, { browser, layout, viewport: { width: 412, height: 915 }, hasTouch: false });
+        try {
+          const { page } = doc;
+          await page.getByRole('button', { name: 'Contents' }).click();
+          const close = page.getByRole('dialog', { name: 'Contents' }).getByRole('button', { name: 'Close', exact: true });
+          const pointer = await page.evaluate(() => ({ coarse: matchMedia('(pointer: coarse)').matches, fine: matchMedia('(pointer: fine)').matches }));
+          expect(pointer).toEqual({ coarse: false, fine: true });
+          expect((await close.boundingBox())!.height, `controlRow ${height}px ${JSON.stringify(pointer)}`).toBe(height);
+        } finally { await doc.close(); }
+      }
     });
 
     it(`${layout}: hidden headings do not become current and details changes refresh the spy`, async () => {

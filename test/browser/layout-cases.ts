@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect } from 'vitest';
-import { LAYOUT_TABLE } from '../../scripts/build-frame.mjs';
+import { LAYOUT_TABLE, type LayoutName } from '../../scripts/build-frame.mjs';
 import { SCOPE_ENTRY } from './page/snapshot.js';
 
 export const LAYOUT_DIR = fileURLToPath(new URL('../../conformance/layout/', import.meta.url));
@@ -27,18 +27,19 @@ export const LAYOUT_DIR = fileURLToPath(new URL('../../conformance/layout/', imp
 export const LAYOUTS_DIR = fileURLToPath(new URL('../../conformance/layouts/', import.meta.url));
 
 /** The layouts besides `default`, in table order. */
-export const OWN_LAYOUT_NAMES = Object.keys(LAYOUT_TABLE).filter((n) => n !== 'default') as ('classic' | 'editorial')[];
+export const OWN_LAYOUT_NAMES = (Object.keys(LAYOUT_TABLE) as LayoutName[]).filter((n) => n !== 'default');
 
 /**
- * The layouts that have a snapshot directory under `dir`, in table order; a layout with none yet is skipped by the runner, with a
- * visible note. A directory that is not a layout's name is an error, so a misspelt one is never silently skipped.
+ * Every shipped non-default layout must have a snapshot directory. Create the empty layout directory first when
+ * introducing a layout; UPDATE_LAYOUT=1 then creates its slug directories and snapshots. Stray entries are errors.
  */
-export function layoutsWithSnapshots(dir: string = LAYOUTS_DIR): string[] {
-  if (!existsSync(dir)) return [];
-  const found = readdirSync(dir).sort();
+export function layoutsWithSnapshots(dir: string = LAYOUTS_DIR): Exclude<LayoutName, 'default'>[] {
+  const found = existsSync(dir) ? readdirSync(dir).sort() : [];
   const unknown = found.filter((n) => !(OWN_LAYOUT_NAMES as string[]).includes(n) || !statSync(path.join(dir, n)).isDirectory());
   if (unknown.length > 0) throw new Error(`conformance/layouts/ holds ${JSON.stringify(unknown)}, which is no layout's directory (${OWN_LAYOUT_NAMES.join(', ')})`);
-  return OWN_LAYOUT_NAMES.filter((n) => found.includes(n));
+  const missing = OWN_LAYOUT_NAMES.filter((n) => !found.includes(n));
+  if (missing.length > 0) throw new Error(`conformance/layouts/ missing directories: ${missing.join(', ')} (create them before UPDATE_LAYOUT=1)`);
+  return [...OWN_LAYOUT_NAMES];
 }
 
 /**

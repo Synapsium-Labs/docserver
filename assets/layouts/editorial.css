@@ -18,16 +18,13 @@
   [data-docreader-root][data-docreader-layout="editorial"][data-docreader-skin~="sectionCase"].toc-open .toc-title { text-transform: var(--dr-section-case); }
   [data-docreader-root][data-docreader-layout="editorial"][data-docreader-section-family="mono"].toc-open .toc-title { font-family: var(--mono); }
 }
-@media screen and (max-width: 1239px) {
-  [data-docreader-root][data-docreader-layout="editorial"][data-docreader-skin~="controlRow"].toc-open .toc-close { min-height: var(--dr-control-row); }
-}
 @media screen and (max-width: 1239px) and (pointer: fine) {
+  [data-docreader-root][data-docreader-layout="editorial"][data-docreader-skin~="controlRow"].toc-open .toc-close { min-height: var(--dr-control-row); }
   [data-docreader-root][data-docreader-layout="editorial"][data-docreader-skin~="controlRow"].toc-open .doc-toc a { min-height: var(--dr-control-row); }
 }
 @media screen and (max-width: 1239px) and (pointer: coarse) {
   [data-docreader-root][data-docreader-layout="editorial"].toc-open .doc-toc a,
   [data-docreader-root][data-docreader-layout="editorial"].toc-open .toc-head button { min-height: 44px; }
-  [data-docreader-root][data-docreader-layout="editorial"][data-docreader-skin~="controlRow"].toc-open .toc-close { min-height: max(44px, var(--dr-control-row)); }
 }
 @media (prefers-reduced-motion: no-preference) {
   [data-docreader-root][data-docreader-layout="editorial"] .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }

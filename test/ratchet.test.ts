@@ -273,8 +273,19 @@ describe('Level 2, per layout: conformance/layouts/<name>/<slug>/<id>.dom.txt (p
     ]);
   });
 
-  it('a per-layout snapshot is never a hostile case: the hostile ids come from the shared cases\' options only', () => {
-    expect(checkLayoutHostile(['core/h'], layoutChanges(`D\t${P}classic/core/h.dom.txt`))).toEqual([]);
+  it('per-layout hostile snapshots cannot be deleted, while moves and additions remain allowed', () => {
+    const verdict = (status: string, name: string): string[] =>
+      checkLayoutHostile(['core/h'], layoutChanges(`${status}\t${P}${name}/core/h.dom.txt`));
+    expect(verdict('D', 'classic')).toEqual(['classic/core/h: a hostile layout case was removed (a hostile case is never removed)']);
+    expect(verdict('D', 'editorial')).toEqual(['editorial/core/h: a hostile layout case was removed (a hostile case is never removed)']);
+    expect(verdict('M', 'classic')).toEqual([]);
+    expect(verdict('T', 'classic')).toEqual([]);
+    expect(verdict('A', 'classic')).toEqual([]);
+    expect(checkLayoutHostile(['classic/h'], layoutChanges(`D\t${P}classic/core/h.dom.txt`))).toEqual([]);
+    expect(checkLayoutHostile(['classic/h'], layoutChanges('D\tconformance/layout/classic/h.dom.txt'))).toEqual([
+      'classic/h: a hostile layout case was removed (a hostile case is never removed)',
+    ]);
+    expect(checkLayoutHostile(['core/h'], layoutChanges(`D\t${P}classic/core/other.dom.txt`))).toEqual([]);
   });
 });
 
@@ -489,13 +500,30 @@ describe('the ratchet command', () => {
     git(dir, 'commit', '-q', '--amend', '-m', 'move a layout snapshot\n\nLayout-moved: classic/core/a');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(1));
     // A snapshot of another layout does not stand for it, and a deletion is a move.
-    rmSync(path.join(dir, 'conformance/layouts/editorial/core/a.dom.txt'));
+    git(dir, 'rm', '-q', 'conformance/layouts/editorial/core/a.dom.txt');
     git(dir, 'add', '-A');
     git(dir, 'commit', '-q', '-m', 'delete a layout snapshot');
     expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
       status: 1,
       out: '',
       err: 'ratchet: editorial/core/a: its layout snapshot changed, and no Layout-moved trailer names it\n',
+    });
+  });
+
+  it('the CLI refuses a named hostile per-layout deletion and accepts named edits and additions', () => {
+    const dir = repo();
+    commit(dir, { 'conformance/hostile.json': '[]\n', ...layoutCase(true, 'h1\n'), 'conformance/layouts/classic/core/a.dom.txt': 'c1\n' }, 'start');
+    commit(dir, { 'conformance/layouts/editorial/core/a.dom.txt': 'e1\n' }, 'add');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(0, 1));
+    commit(dir, { 'conformance/layouts/classic/core/a.dom.txt': 'c2\n' }, 'edit');
+    expect(ratchet(dir, '--base', 'HEAD^').status).toBe(1);
+    git(dir, 'commit', '-q', '--amend', '-m', 'edit\n\nLayout-moved: classic/core/a');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(1, 1));
+    git(dir, 'rm', '-q', 'conformance/layouts/classic/core/a.dom.txt');
+    git(dir, 'commit', '-q', '-m', 'delete\n\nLayout-moved: classic/core/a');
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual({
+      status: 1, out: '',
+      err: 'ratchet: classic/core/a: a hostile layout case was removed (a hostile case is never removed)\n',
     });
   });
 

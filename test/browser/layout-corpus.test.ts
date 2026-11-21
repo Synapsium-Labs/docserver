@@ -32,12 +32,8 @@ import {
 const UPDATE = updateRequested(process.env);
 const CASES = loadLayoutCases();
 const hold = snapshotHold(UPDATE);
-/** The layouts with a snapshot directory under conformance/layouts/ (parity Task 9): each runs every case below under its own bundle. */
+/** Every shipped non-default layout has a snapshot directory and runs every shared case. */
 const SNAPSHOTTED = layoutsWithSnapshots();
-const UNSNAPSHOTTED = OWN_LAYOUT_NAMES.filter((n) => !SNAPSHOTTED.includes(n));
-if (UNSNAPSHOTTED.length > 0) {
-  console.warn(`layout corpus: skipped for ${UNSNAPSHOTTED.join(', ')}: no conformance/layouts/<name>/ directory yet (write one with UPDATE_LAYOUT=1 once the layout is ported)`);
-}
 
 /** The ids the two clobbering cases give their headings and anchors. */
 const CLOBBERING = ['jump', 'keys', 'xcard', 'toc-contents', '__proto__', 'constructor', 'toString', 'data-docreader-root'];
@@ -217,7 +213,21 @@ describe('the Level 2 cases', () => {
     }
   });
 
-  it("a layout's snapshots are conformance/layouts/<name>/<slug>/<id>.dom.txt over the shared inputs; a layout with no directory is skipped, a stray name or file is an error, and an update writes the directory", () => {
+  it('a missing shipped layout snapshot directory is refused', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'layout-missing-'));
+    try {
+      const own = path.join(dir, 'layouts');
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial/i);
+      mkdirSync(path.join(own, 'classic'), { recursive: true });
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial/i);
+      mkdirSync(path.join(own, 'editorial'));
+      expect(layoutsWithSnapshots(own)).toEqual(OWN_LAYOUT_NAMES);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a layout's snapshots are conformance/layouts/<name>/<slug>/<id>.dom.txt over the shared inputs; a stray name or file is an error, and an update writes the directory", () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'docserver-layouts-'));
     try {
       const shared = path.join(dir, 'shared');
@@ -225,24 +235,17 @@ describe('the Level 2 cases', () => {
       mkdirSync(path.join(shared, 'x'), { recursive: true });
       writeFileSync(path.join(shared, 'x', 'a.md'), '# A\n');
       writeFileSync(path.join(shared, 'x', 'a.options.json'), '{"options":{},"scope":["byline"]}');
-      expect(layoutsWithSnapshots(own)).toEqual([]);
       mkdirSync(path.join(own, 'editorial'), { recursive: true });
       mkdirSync(path.join(own, 'classic'));
       expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial']);
       mkdirSync(path.join(own, 'plain'));
       expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
-      rmSync(path.join(own, 'plain'), { recursive: true });
       // The same case, a snapshot of its own under each layout; the inputs are the shared ones.
       const [c] = loadLayoutCasesFor('editorial', shared, own);
       expect(c?.id).toBe('x/a');
       expect(c?.expected).toBe(path.join(own, 'editorial', 'x', 'a.dom.txt'));
       expect(c?.markdown).toBe('# A\n');
       expect(loadLayoutCasesFor('classic', shared, own)[0]?.expected).toBe(path.join(own, 'classic', 'x', 'a.dom.txt'));
-      // A file that belongs to no shared case is an error.
-      mkdirSync(path.join(own, 'editorial', 'x'));
-      writeFileSync(path.join(own, 'editorial', 'x', 'stray.dom.txt'), '');
-      expect(() => loadLayoutCasesFor('editorial', shared, own)).toThrow('layout snapshot editorial/x/stray.dom.txt belongs to no case');
-      rmSync(path.join(own, 'editorial', 'x', 'stray.dom.txt'));
       // An update writes the file, and its directory when the layout's first snapshot of a slug makes it; no update writes nothing.
       const file = path.join(own, 'classic', 'x', 'a.dom.txt');
       expect(compareOrWrite('one\n', file, false)).toBe('missing');
@@ -256,14 +259,17 @@ describe('the Level 2 cases', () => {
       a('classic/x/a', 'one\n', file);
       b('editorial/x/a', 'two\n', other);
       expect([readFileSync(file, 'utf8'), readFileSync(other, 'utf8')]).toEqual(['one\n', 'two\n']);
+      // A file that belongs to no shared case is an error.
+      writeFileSync(path.join(own, 'editorial', 'x', 'stray.dom.txt'), '');
+      expect(() => loadLayoutCasesFor('editorial', shared, own)).toThrow('layout snapshot editorial/x/stray.dom.txt belongs to no case');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('every layout has a snapshot directory or is skipped with a note: the layouts the runner knows are the build\'s, besides the default', () => {
+  it('every shipped non-default layout has a snapshot directory', () => {
     expect(OWN_LAYOUT_NAMES).toEqual(['classic', 'editorial']);
-    expect([...SNAPSHOTTED, ...UNSNAPSHOTTED].sort()).toEqual([...OWN_LAYOUT_NAMES].sort());
+    expect(SNAPSHOTTED).toEqual(OWN_LAYOUT_NAMES);
   });
 
   it('a case page that was refused something, reached another origin or asked for an unserved file fails', () => {
@@ -334,16 +340,9 @@ describeBrowsers((browser) => {
   }
 });
 
-// Each layout besides the default, over the same cases (parity Task 9): the reader bundled for it, its snapshots under
-// conformance/layouts/<name>/. A layout with no directory yet is skipped under a title that says so (and a note on stderr above);
-// UPDATE_LAYOUT=1 writes a layout's snapshots, once its directory exists. No layout's snapshots are written by the infrastructure.
-for (const layout of OWN_LAYOUT_NAMES) {
-  if (!SNAPSHOTTED.includes(layout)) {
-    describe.skip(`${layout}: skipped, no conformance/layouts/${layout}/ directory yet`, () => {
-      it('has no snapshots to hold', () => undefined);
-    });
-    continue;
-  }
+// Each layout besides the default runs the same cases with its own snapshots. UPDATE_LAYOUT=1 writes them only
+// after the layout's directory exists; a newly shipped layout must create that directory first.
+for (const layout of SNAPSHOTTED) {
   describe(`layout ${layout}`, () => {
     const own = loadLayoutCasesFor(layout);
     const holdLayout = snapshotHold(UPDATE);
