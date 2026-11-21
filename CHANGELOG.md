@@ -18,12 +18,14 @@ Print mode (a minor when released): `render(md, { print: true })` writes the rea
 
 The appearance contract (a minor when released): a host can hand the frame one appearance (a mode, 33 base colours, ten skin values and a label) and two optional faces, at mount and while open. Bridge protocol 1 and seed schema 1 are unchanged: the wire grows by one parent-to-frame operation, `appearance`, which an older frame ignores, and the seed by two optional keys, `appearance` and `fonts`. The version and its tag are set at release. **A host that serves the frame re-pins its page policy to the release** (the `csp` fields below), and `MAX_SRCDOC_CHARS_DEFAULT` moves with the assets and the two new seed fields' caps.
 
+Print figures (a minor when released): with the host's `onPrintFigure` (the seed's `bridge.printFigures`) the reader gains the `print-figures` command. The reader draws each Mermaid figure again for print, offscreen and with HTML labels off, rasterises it to a PNG (at most 2048 px a side and 1 MiB, at most 64 figures) and sends `print-figure { i, n, png }` in document order, one at a time through the frame's pacer; a figure that fails to draw, taints the canvas or is too large is skipped, and a second command cancels the first run's remaining figures. The host's parser now also refuses a `print-figure` whose text does not start with the base64 of the PNG signature (`type`, read from the text, nothing decoded). A jump's history entry is no longer lost to a move that follows it within 100 ms: the frame's `hash` op keeps `push` and the first push's `from` when it merges. Goldens: none moved; `conformance/bridge-cases.json` gains `print-figure` fixtures and its size fixtures start with the PNG signature.
+
 The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
 
-- `assets/frame/bootstrap.js`: `30e2438cd8e31ef446081fa36a6ac28a34b4c9fce7ed466f5b79ac3f062ba640`, csp `'sha256-MOJDjNjjHvRGCB+jamrCijS0yfzn7UZvW3msPwYrpkA='`
-- `assets/frame/enhance.js`: `30b3c8aa8a9d8fa920b5649c3ad8ef09c9ad6f325ecd16b783d6ff63f1a17a90`, csp `'sha256-MLPIqoqdj6kgtWScOtjvCcmtbzJezRa3g9b/Y/GhepA='`
-- `assets/frame/reader.css`: `811bd9b312c7009ba6368599c6a2a8b2284265ec68041f22f184175f84d9cd2f`
-- `assets/reader.css`: `19011025e3f40c49f9585d7d09c6948d7c9861c2d092a2717ff5a7f5f8f2455d`
+- `assets/frame/bootstrap.js`: `47d310d29e5eb9487b66a8250ebddacbb15392cc6380b9424dd03cb33cc76d3d`, csp `'sha256-R9MQ0p5euUh7ZqglDr3ay7FTksxjgLlCTdA8szzHbT0='`
+- `assets/frame/enhance.js`: `b4bb4c5263a712998c393450af21063d930cf18dcba3fe999e0ec106fdde4fdb`, csp `'sha256-tLtMUmOnEpmMOTRQryEGPZMM8Y3Lo/6Zng7BBv3eT9s='`
+- `assets/frame/reader.css`: `367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2`
+- `assets/reader.css`: `3f6dd64e41431f9f052a4c682455728b5a872551938f7ea07708dde8667ddf9e`
 - `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`
 
 ## 1.1.0

@@ -82,6 +82,9 @@ const NO_CONTEXT: ParseContext = Object.freeze({ places: false, run: null });
 /** A canonical decimal of one to three digits: no sign, no leading zero, no point (a figure's `i` and `n`). */
 const FIGURE_NUMBER = /^(?:0|[1-9][0-9]{0,2})$/;
 
+/** The base64 text every PNG file starts with (its eight signature bytes and the zero top bits of the next byte). */
+const PNG_SIGNATURE_BASE64 = 'iVBORw0KGgo';
+
 /** The keys each frame op must carry, beside `t` (OP_KEYS lists the keys it may carry). */
 const REQUIRED_KEYS: Readonly<Record<FrameOp, readonly string[]>> = Object.freeze({
   ready: Object.freeze(['v', 'nonce']),
@@ -251,7 +254,8 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
     case 'print-figure': {
       // In this order, each failure a refusal and nothing decoded before the last: an open run (B5); the index and the
       // count, inside the grammar and the run; the text's length against the longest a figure's cap allows (so the scan
-      // below is bounded) and the text not empty; the PNG's size from its text, within its own cap; the run's total.
+      // below is bounded) and the text not empty; the text starting as a PNG's does; the PNG's size from its text, within its own
+      // cap; the run's total.
       const run = ctx.run;
       if (run === null) return refuse('unknown-op');
       const iText = str('i');
@@ -266,6 +270,9 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       // The longest base64 text a figure of at most printFigurePngMaxBytes can have: four characters per started group of three bytes.
       if (png.length > 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3)) return refuse('oversize');
       if (png.length === 0) return refuse('type');
+      // A PNG file starts with the eight bytes 89 50 4E 47 0D 0A 1A 0A, whose base64 text is this prefix (the next byte of a PNG, the
+      // first of its IHDR chunk's length, is zero, which the eleventh character requires): read from the text, nothing decoded.
+      if (!png.startsWith(PNG_SIGNATURE_BASE64)) return refuse('type');
       const bytes = pngBytesOfBase64(png);
       if (bytes === null) return refuse('type');
       if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');

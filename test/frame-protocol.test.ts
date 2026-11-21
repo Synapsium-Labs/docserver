@@ -432,6 +432,7 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context'], giv
       const text = msg['png'] as string;
       if (text.length > 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3)) return refuse('oversize');
       if (text === '') return refuse('type');
+      if (!text.startsWith('iVBORw0KGgo')) return refuse('type'); // a PNG's signature, as base64 text (docserver parity T6)
       const bytes = pngBytesOfBase64(text);
       if (bytes === null) return refuse('type');
       if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');

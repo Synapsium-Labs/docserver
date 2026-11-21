@@ -98,6 +98,14 @@
 // node goes, so none would come); one a call made after its instance was destroyed goes at once. A tooltip the page
 // already had is the page's: never changed.
 //
+// Print figures (docserver parity T6; print-figures.ts, which holds the run): with the host's `onPrintFigure` the reader
+// registers the `print-figures` command (commands.ts). Each figure is drawn again for print, apart from the screen's: in a
+// chrome container the stylesheet keeps offscreen (`div.print-stage`, a child of the root, removed with the drawing),
+// through the same queue as the screen's calls, with the screen's configuration (the host's colours for a covered figure)
+// but HTML labels off, `htmlLabels` among the secure keys and the one font an SVG image can use. The SVG text Mermaid answers
+// goes to env.rasterize and is never placed in the page, so no figure on screen changes. In 'on-request' mode the first
+// print loads Mermaid as the first tap would.
+//
 // Standard files, slug `diagrams`: test/enhance-diagrams.test.ts, test/browser/diagrams.test.ts,
 // conformance/layout/diagrams/ and scripts/demo/samples/diagrams.md. The figure rules are assets/reader.css's.
 // Registered in features.ts, whose header says where in the build order and why.
@@ -105,6 +113,7 @@ import type { Appearance } from './appearance.js';
 import { isAuthorStyled, MERMAID_HOSTED_KINDS, mermaidThemeOf } from './appearance-mermaid.js';
 import { chrome, createJournal, type JournalControl } from './journal.js';
 import type { MermaidSettings } from './options.js';
+import { createPrintRunner, FIGURES_MAX, printConfigOf } from './print-figures.js';
 import type { FigureEntry } from './registry.js';
 import type { FeatureContext } from './types.js';
 
@@ -663,6 +672,82 @@ async function call(ctx: FeatureContext, api: MermaidApi, config: Config, f: Fig
   return home;
 }
 
+/**
+ * One print drawing, inside the module's queue: the figure's source drawn in a stage the stylesheet keeps offscreen, with the
+ * screen's configuration (the host's colours for a figure of a covered kind, as call() judges it) made print's by
+ * printConfigOf. Answers the SVG text Mermaid made, or null (a throw, a rejection, no text, the error drawing, or the
+ * instance gone). Nothing it makes stays: the stage goes with the call, and no figure of the page is read or written.
+ */
+async function printCall(ctx: FeatureContext, api: MermaidApi, config: Config, f: Fig): Promise<string | null> {
+  if (!ctx.live()) return null;
+  const doc = ctx.root.ownerDocument;
+  const text = mermaidText(f.text);
+  if (ctx.state.hosted?.colour !== undefined) {
+    f.cover ??= !isAuthorStyled(text) && (await covered(ctx, api, text));
+    if (!ctx.live()) return null;
+  }
+  const paint = f.cover === false ? undefined : ctx.state.hosted?.colour;
+  const tmp = createJournal(ctx.live, (fn) => { ctx.operate(fn); });
+  const stage = chrome(doc, 'div', { className: 'print-stage', attrs: { 'aria-hidden': 'true' } });
+  let had: Element | null = null;
+  let rendering: unknown;
+  try {
+    rendering = ctx.operate(() => {
+      tmp.journal.insert(stage, ctx.root, null);
+      had = tooltipIn(doc);
+      api.initialize(printConfigOf(config(paint)));
+      if (!ctx.live()) return undefined;
+      return { out: api.render(drawingId(), text, stage) };
+    });
+  } catch {
+    tmp.undoAll();
+    return null;
+  }
+  if (rendering === undefined) {
+    tmp.undoAll();
+    return null;
+  }
+  let svg: string | null = null;
+  try {
+    const answer = (await (rendering as { out: unknown }).out) as { svg?: unknown } | null | undefined;
+    if (typeof answer === 'object' && answer !== null && typeof answer.svg === 'string') svg = answer.svg;
+  } catch {
+    // a rejection (Mermaid's error for a source it cannot draw): the figure is skipped
+  }
+  noteTip(ctx, doc, had, stage);
+  tmp.undoAll();
+  return ctx.live() ? svg : null;
+}
+
+/**
+ * Register the `print-figures` command when the host gave `onPrintFigure` (header, "Print figures"): its handler starts a run
+ * (print-figures.ts) over the document's figures, each drawn through `apiOf()` (the module, loaded as the screen's draw loads
+ * it) and the module's queue. A figure with no source here, or too long for Mermaid, has nothing to draw: skipped.
+ */
+function registerPrint(ctx: FeatureContext, settings: MermaidSettings, figs: readonly Fig[], config: Config, apiOf: () => Promise<MermaidApi | null>): void {
+  if (!ctx.host.present.has('onPrintFigure')) return;
+  const all = ctx.figures.all();
+  const max = settings.maxTextSize ?? MAX_TEXT_SIZE;
+  const runner = createPrintRunner({
+    live: () => ctx.live(),
+    figures: () =>
+      all.slice(0, FIGURES_MAX).map((entry) => {
+        const f = figs.find((x) => x.entry === entry);
+        if (f === undefined || f.text.length > max) return undefined;
+        return async (stale: () => boolean): Promise<string | null> => {
+          const api = await apiOf();
+          return api === null || stale() ? null : enqueue(api, () => (stale() ? Promise.resolve(null) : printCall(ctx, api, config, f)));
+        };
+      }),
+    rasterize: (svg, w, h) => ctx.env.rasterize(svg, w, h),
+    hand: (f) => ctx.host.onPrintFigure(f),
+  });
+  ctx.commands.register('print-figures', () => {
+    runner.start();
+    return true;
+  });
+}
+
 /** Draw one figure through the module's queue; answers how it ended, or null once the instance is not live. */
 async function draw(ctx: FeatureContext, api: MermaidApi, config: Config, settings: MermaidSettings, f: Fig): Promise<boolean | null> {
   if (f.text.length > (settings.maxTextSize ?? MAX_TEXT_SIZE)) {
@@ -740,11 +825,11 @@ function load(ctx: FeatureContext, config: Config): Promise<unknown> {
  * button busy and the figure `busy`, and draws that figure only: the first tap calls load() once (with the font wait,
  * as in 'auto'), and every draw goes through draw() and so through the module's one queue, one call at a time. Once
  * the figure is drawn or has failed (the load note when the module is not Mermaid's, the error note otherwise), its
- * Render control is hidden and its state reads `drawn` or `failed`; a later tap does nothing.
+ * Render control is hidden and its state reads `drawn` or `failed`; a later tap does nothing. Answers the lazy load a first tap
+ * (or a print run, registerPrint) makes.
  */
-function onRequest(ctx: FeatureContext, settings: MermaidSettings, figs: readonly Fig[]): void {
+function onRequest(ctx: FeatureContext, settings: MermaidSettings, figs: readonly Fig[], config: Config): () => Promise<MermaidApi | null> {
   ctx.journal.setAttribute(ctx.root, 'data-docreader-diagrams', 'on-request');
-  const config = configOf(settings, () => fontOf(ctx));
   let module: Promise<MermaidApi | null> | null = null;
   let loaded: MermaidApi | null = null;
   const api = (): Promise<MermaidApi | null> =>
@@ -793,6 +878,7 @@ function onRequest(ctx: FeatureContext, settings: MermaidSettings, figs: readonl
     }
   });
   ctx.relayout('content');
+  return api;
 }
 
 /**
@@ -804,11 +890,17 @@ export async function after(ctx: FeatureContext): Promise<void> {
   if (settings === null) return; // no mermaid option, so no load to call (normalizeOptions keeps the two together)
   const figs = drawable(ctx);
   if (figs.length === 0) return;
+  const config = configOf(settings, () => fontOf(ctx));
   if (settings.draw === 'on-request') {
-    onRequest(ctx, settings, figs);
+    registerPrint(ctx, settings, figs, config, onRequest(ctx, settings, figs, config));
     return;
   }
-  const config = configOf(settings, () => fontOf(ctx));
+  // A print run's module: settled once the load below has answered (a run asked for before then waits for it).
+  let answered: (a: MermaidApi | null) => void = () => undefined;
+  const loaded = new Promise<MermaidApi | null>((resolve) => {
+    answered = resolve;
+  });
+  registerPrint(ctx, settings, figs, config, () => loaded);
   let api: MermaidApi | null;
   if (settings.draw === 'after-ready') {
     // Ledger C107: no gate while the module is awaited, so every source stays readable text; the gate and `drawing`
@@ -837,6 +929,7 @@ export async function after(ctx: FeatureContext): Promise<void> {
     api = mermaidOf(await loading);
     if (!ctx.live()) return;
   }
+  answered(api);
   let failed = 0;
   const settle = (): void => {
     ctx.operate(() => {

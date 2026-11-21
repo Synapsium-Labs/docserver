@@ -13,6 +13,7 @@ export type {
   MermaidOptions,
   PlaceKind,
   Prefs,
+  PrintFigure,
   ReaderStorage,
   VocabularyOptions,
 } from './types.js';

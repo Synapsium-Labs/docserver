@@ -229,6 +229,12 @@ describe('docserver parity T2: a print-figure is judged against the open run, in
     return 'AAAA'.repeat(full) + (rest === 0 ? '' : rest === 1 ? 'AA==' : 'AAA=');
   };
 
+  /** Base64 text of a PNG-shaped figure of `bytes` (at least 9) decoded bytes: the signature, a zero, then zeros. */
+  const pngOf = (bytes: number): string => {
+    const rest = bytes - 9;
+    return 'iVBORw0KGgoA' + 'AAAA'.repeat(Math.floor(rest / 3)) + (rest % 3 === 0 ? '' : rest % 3 === 1 ? 'AA==' : 'AAA=');
+  };
+
   it('no open run is the first refusal, before the index, the size or the total are looked at', () => {
     expect(verdict(fig('0', '1'), { places: true, run: null })).toEqual(max('unknown-op'));
     expect(verdict(fig('x', 'y', '!'), { places: true, run: null })).toEqual(max('unknown-op'));
@@ -263,25 +269,27 @@ describe('docserver parity T2: a print-figure is judged against the open run, in
   });
 
   it('the order of the checks: the index before the text, the text before its size, the size before the total', () => {
-    const big = zeros(BRIDGE_LIMITS.printFigurePngMaxBytes + 1);
+    const big = pngOf(BRIDGE_LIMITS.printFigurePngMaxBytes + 1);
     expect(verdict(fig('0', '3', '!!!!'), open(3, [0]))).toEqual(max('type'));
     expect(verdict(fig('0', '3', big), open(3, [0]))).toEqual(max('type'));
     expect(verdict(fig('1', '3', '!!!!'), open(3, [0]))).toEqual(max('type'));
     expect(verdict(fig('1', '3', big), open(3, [0]))).toEqual(max('oversize'));
-    expect(verdict(fig('1', '3', zeros(1048576)), open(3, [0], BRIDGE_LIMITS.printFiguresTotalMaxBytes))).toEqual(max('oversize'));
+    expect(verdict(fig('1', '3', pngOf(1048576)), open(3, [0], BRIDGE_LIMITS.printFiguresTotalMaxBytes))).toEqual(max('oversize'));
+    // the signature is judged before the size: a text that is no PNG is a type refusal at any size
+    expect(verdict(fig('1', '3', zeros(BRIDGE_LIMITS.printFigurePngMaxBytes + 1)), open(3, [0]))).toEqual(max('type'));
   });
 
   it('1048575 and 1048576 decoded bytes pass, 1048577 is oversize: the size is read from the length and the padding', () => {
     for (const [bytes, ok] of [[1048575, true], [1048576, true], [1048577, false]] as const) {
-      const got = verdict(fig('0', '1', zeros(bytes)), open(null));
-      expect(got, String(bytes)).toEqual(ok ? { ok: true, msg: { t: 'print-figure', i: '0', n: '1', png: zeros(bytes) }, bytes } : max('oversize'));
+      const got = verdict(fig('0', '1', pngOf(bytes)), open(null));
+      expect(got, String(bytes)).toEqual(ok ? { ok: true, msg: { t: 'print-figure', i: '0', n: '1', png: pngOf(bytes) }, bytes } : max('oversize'));
     }
   });
 
   it('the run total: the run plus the figure may reach 16777216 and not one byte more', () => {
     const cap = BRIDGE_LIMITS.printFiguresTotalMaxBytes;
-    expect(verdict(fig('1', '2', zeros(1048576)), open(2, [0], cap - 1048576))).toMatchObject({ ok: true });
-    expect(verdict(fig('1', '2', zeros(1048576)), open(2, [0], cap - 1048575))).toEqual(max('oversize'));
+    expect(verdict(fig('1', '2', pngOf(1048576)), open(2, [0], cap - 1048576))).toMatchObject({ ok: true });
+    expect(verdict(fig('1', '2', pngOf(1048576)), open(2, [0], cap - 1048575))).toEqual(max('oversize'));
     expect(verdict(fig('1', '2', PNG), open(2, [0], cap - 8))).toMatchObject({ ok: true });
     expect(verdict(fig('1', '2', PNG), open(2, [0], cap - 7))).toEqual(max('oversize'));
   });
@@ -291,14 +299,34 @@ describe('docserver parity T2: a print-figure is judged against the open run, in
       expect(verdict(fig('0', '1', png), open(null)), JSON.stringify(png)).toEqual(max('type'));
     }
     expect(verdict({ t: 'print-figure', i: '0', n: '1', png: 1 }, open(null))).toEqual(max('type'));
-    expect(verdict(fig('0', '1', 'QQ=='), open(null))).toMatchObject({ ok: true });
+    expect(verdict(fig('0', '1', PNG), open(null))).toMatchObject({ ok: true });
+  });
+
+  it("the text must start as a PNG's does (the base64 of its eight signature bytes), judged from the text and never decoded: any other start is 'type'", () => {
+    expect(verdict(fig('0', '1', 'iVBORw0KGgo='), open(null))).toMatchObject({ ok: true });
+    expect(verdict(fig('0', '1', pngOf(9)), open(null))).toMatchObject({ ok: true });
+    for (const png of ['QQ==', 'AAAAAAAA', 'iVBORw0KGg==', 'iVBORw0KGgI=', 'IVBORw0KGgo=', '/9j/4AAQSkZJRg==', 'R0lGODlhAQABAAAAACw=', zeros(2048)]) {
+      expect(verdict(fig('0', '1', png), open(null)), png.slice(0, 20)).toEqual(max('type'));
+    }
+    // after the run and the index (a refusal there comes first), before the size
+    expect(verdict(fig('0', '1', 'QQ=='), { places: false, run: null })).toEqual(max('unknown-op'));
+    expect(verdict(fig('1', '3', 'QQ=='), open(3, [1]))).toEqual(max('type'));
+  });
+
+  it("an i or n that is not an integer, or not a canonical decimal, is 'type': a point, a fraction, a sign, an exponent, a number", () => {
+    for (const bad of ['1.5', '0.5', '2.', '.5', '1e0', '-1', '+1', '01', 'NaN', 'Infinity']) {
+      expect(verdict(fig(bad, '3'), open(null)), `i ${bad}`).toEqual(max('type'));
+      expect(verdict(fig('0', bad), open(null)), `n ${bad}`).toEqual(max('type'));
+    }
+    expect(verdict({ t: 'print-figure', i: 1.5, n: '3', png: PNG }, open(null))).toEqual(max('type'));
+    expect(verdict({ t: 'print-figure', i: '0', n: 3, png: PNG }, open(null))).toEqual(max('type'));
   });
 
   it('the text is handed on as it came: no atob, no Buffer, no decode, and the message is a fresh object', () => {
     const atob = vi.spyOn(globalThis, 'atob');
     const from = vi.spyOn(Buffer, 'from');
     try {
-      const m = fig('0', '1', zeros(300_000));
+      const m = fig('0', '1', pngOf(300_000));
       const got = verdict(m, open(null)) as { ok: true; msg: { png: string } };
       expect(got.ok).toBe(true);
       expect(got.msg.png).toBe((m as { png: string }).png);
@@ -312,7 +340,8 @@ describe('docserver parity T2: a print-figure is judged against the open run, in
   });
 
   it('an accepted figure reports its decoded size, read once from its text; no other op carries a size', () => {
-    for (const bytes of [1, 2, 3, 8, 300_000, 1048576]) expect(verdict(fig('0', '1', zeros(bytes)), open(null)), String(bytes)).toMatchObject({ ok: true, bytes });
+    for (const bytes of [9, 10, 11, 12, 300_000, 1048576]) expect(verdict(fig('0', '1', pngOf(bytes)), open(null)), String(bytes)).toMatchObject({ ok: true, bytes });
+    expect(verdict(fig('0', '1', PNG), open(null))).toMatchObject({ ok: true, bytes: 8 });
     expect(parseBridgeMessage({ t: 'hash', id: 'a' }, [], NONCE)).not.toHaveProperty('bytes');
   });
 
@@ -325,8 +354,9 @@ describe('docserver parity T2: a print-figure is judged against the open run, in
   it('a text longer than the longest a 1 MiB figure can have is oversize before its alphabet is read; up to that length it is read', () => {
     const longest = 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3);
     expect(longest).toBe(1398104);
-    expect(zeros(BRIDGE_LIMITS.printFigurePngMaxBytes)).toHaveLength(longest);
+    expect(pngOf(BRIDGE_LIMITS.printFigurePngMaxBytes)).toHaveLength(longest);
     expect(verdict(fig('0', '1', '!'.repeat(longest)), open(null))).toEqual(max('type'));
+    expect(verdict(fig('0', '1', 'iVBORw0KGgo' + '!'.repeat(longest - 11)), open(null))).toEqual(max('type'));
     expect(verdict(fig('0', '1', '!'.repeat(longest + 1)), open(null))).toEqual(max('oversize'));
     expect(verdict(fig('0', '1', 'A'.repeat(longest + 4)), open(null))).toEqual(max('oversize'));
     // the index is judged first: a text this long with a bad index is a type refusal

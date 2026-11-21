@@ -31,6 +31,13 @@ export interface Prefs {
 /** What `onPlace` reports: the full-screen figure opened or closed (the frame wire's PlaceKind, held equal by test). */
 export type PlaceKind = 'overlay' | 'overlay-closed';
 
+/** One figure of a print run (docserver parity T6): its place `i` of `n` figures (0-based; `n` at most 64) and its PNG as base64 text. */
+export interface PrintFigure {
+  readonly i: number;
+  readonly n: number;
+  readonly png: string;
+}
+
 /** The host's storage, seen through two calls. The library never touches a storage API itself. */
 export interface ReaderStorage {
   /**
@@ -264,6 +271,14 @@ export interface EnhanceOptions {
    * the keys sheet, the quick jump, settings and the rest are not. Absent: nothing is reported.
    */
   onPlace?(kind: PlaceKind): void;
+  /**
+   * With this callback the `print-figures` command exists (commands.ts): it draws each Mermaid figure again for print,
+   * offscreen and in its own pass, rasterises it to a PNG (at most 2048 px a side and 1 MiB) and hands it over here, in
+   * document order, one at a time (the reader waits for the returned promise, if any, before the next). `n` is the figure
+   * count, at most 64; a figure that does not draw, taints the canvas or is too large is skipped, its `i` never handed over.
+   * A second command cancels the first run's remaining figures. Absent: the command does nothing.
+   */
+  onPrintFigure?(f: PrintFigure): void | Promise<void>;
   /** Copy text for the reader. Absent: no Copy buttons. A throw or a rejection shows as a failed copy. */
   copy?(text: string): void | Promise<void>;
   /** The document's changes since commit `sha`, for "what changed". Absent: no comparison. */

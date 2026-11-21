@@ -2136,6 +2136,8 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
   const TOKEN = '{"line":null,"offset":0,"y":0}';
   /** `n` zero bytes as canonical base64 text. */
   const zeros = (bytes: number): string => 'AAAA'.repeat(Math.floor(bytes / 3)) + (bytes % 3 === 0 ? '' : bytes % 3 === 1 ? 'AA==' : 'AAA=');
+  /** A PNG-shaped text of `bytes` (at least 9) decoded bytes: the signature, a zero, then zeros. */
+  const pngOf = (bytes: number): string => zeros(bytes - 9).replace(/^/, 'iVBORw0KGgoA');
   const PNG = 'iVBORw0KGgo=';
   const fig = (i: number, n: number, png: string = PNG): unknown => ({ t: 'print-figure', i: String(i), n: String(n), png });
 
@@ -2439,8 +2441,8 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       const m = await ready(PLAIN, over);
       m.frame.printFigures();
       m.say(fig(0, 2));
-      m.say(fig(1, 2, 'QQ=='));
-      expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }, { i: 1, n: 2, png: 'QQ==' }]);
+      m.say(fig(1, 2, 'iVBORw0KGgoA'));
+      expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }, { i: 1, n: 2, png: 'iVBORw0KGgoA' }]);
       expect(typeof (c.figures[0] as { i: unknown }).i).toBe('number');
       // the run ended at i = n - 1: another figure has none to join
       m.say(fig(0, 2));
@@ -2500,23 +2502,23 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       const m = await ready(PLAIN, over);
       for (const bytes of [1048575, 1048576, 1048577]) {
         m.frame.printFigures();
-        m.say(fig(0, 1, zeros(bytes)));
+        m.say(fig(0, 1, pngOf(bytes)));
       }
-      expect(c.figures.map((f) => (f as { png: string }).png.length)).toEqual([zeros(1048575).length, zeros(1048576).length]);
+      expect(c.figures.map((f) => (f as { png: string }).png.length)).toEqual([pngOf(1048575).length, pngOf(1048576).length]);
     });
 
     it('sixteen figures of 1048576 bytes pass; one more byte is refused by the total while within its own cap, and is not handed on', async () => {
       const { c, over } = calls();
       const m = await ready(PLAIN, over);
       m.frame.printFigures();
-      const big = zeros(1048576);
+      const big = pngOf(1048576);
       for (let i = 0; i < 16; i += 1) m.say(fig(i, 17, big));
       expect(c.figures).toHaveLength(16);
-      m.say(fig(16, 17, 'AA=='));
+      m.say(fig(16, 17, PNG));
       expect(c.figures).toHaveLength(16);
       // the same figure fits a run that has room
       m.frame.printFigures();
-      m.say(fig(0, 17, 'AA=='));
+      m.say(fig(0, 17, PNG));
       expect(c.figures).toHaveLength(17);
     });
 
@@ -2524,11 +2526,11 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       const { c, over } = calls();
       const m = await ready(PLAIN, over);
       m.frame.printFigures();
-      for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, zeros(1048576)));
-      m.say(fig(15, 17, zeros(1048577)));
-      m.say(fig(15, 17, zeros(1048576)));
+      for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, pngOf(1048576)));
+      m.say(fig(15, 17, pngOf(1048577)));
+      m.say(fig(15, 17, pngOf(1048576)));
       expect(c.figures).toHaveLength(16);
-      m.say(fig(16, 17, 'AA=='));
+      m.say(fig(16, 17, PNG));
       expect(c.figures).toHaveLength(16);
     });
 
@@ -2554,6 +2556,95 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       expect(m.fallbacks()).toEqual([]);
       m.say(fig(64, 64));
       expect(m.fallbacks()).toEqual(['refusals']);
+    });
+
+    describe('a forged figure, posted straight down the port with no reader in front of it, is refused by the host alone (docserver parity T6)', () => {
+      /** A run opened, one good figure (i 0 of 4) handed on; `forge` is then posted; the answer is what reached the host's callback. */
+      async function forged(forge: unknown[], opts: { before?: unknown[] } = {}): Promise<{ handed: unknown[]; m: Mounted }> {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (const f of opts.before ?? []) m.say(f);
+        m.say(fig(0, 4));
+        const keep = c.figures.length;
+        for (const f of forge) m.say(f);
+        const handed = c.figures.slice(keep);
+        // refused figures take nothing from the run: a good one still goes on
+        m.say(fig(1, 4));
+        expect(c.figures).toHaveLength(keep + handed.length + 1);
+        expect(m.fallbacks()).toEqual([]);
+        return { handed, m };
+      }
+
+      it('an i equal to or above n', async () => {
+        expect((await forged([fig(4, 4), fig(5, 4), fig(99, 4), fig(64, 64)])).handed).toEqual([]);
+      });
+
+      it('an n above 64, whatever the run holds', async () => {
+        expect((await forged([fig(0, 65), fig(1, 65), fig(0, 100), fig(0, 999)])).handed).toEqual([]);
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (const n of [65, 100, 999]) m.say(fig(0, n));
+        expect(c.figures).toEqual([]);
+      });
+
+      it('a PNG over 1 MiB, however its text is long', async () => {
+        const huge = 'iVBORw0KGgo' + 'A'.repeat(1398104 + 4);
+        expect((await forged([fig(2, 4, pngOf(1048577)), fig(2, 4, huge), fig(2, 4, pngOf(2_000_000))])).handed).toEqual([]);
+      });
+
+      it('a text that is not a PNG: base64 of anything else, a cut signature, an empty text, a number', async () => {
+        const jpeg = '/9j/4AAQSkZJRg==';
+        const bad = ['QQ==', 'AAAAAAAA', 'iVBORw0KGg==', jpeg, zeros(100), zeros(1048576), zeros(1048577), '', 7, null];
+        expect((await forged(bad.map((png) => ({ t: 'print-figure', i: '2', n: '4', png })))).handed).toEqual([]);
+      });
+
+      it('an i already seen in the run', async () => {
+        expect((await forged([fig(0, 4), fig(0, 4, 'iVBORw0KGgoA')])).handed).toEqual([]);
+        expect((await forged([fig(2, 4), fig(2, 4)], { before: [] })).handed).toEqual([{ i: 2, n: 4, png: PNG }]);
+      });
+
+      it('a n that is not the run\'s', async () => {
+        expect((await forged([fig(2, 3), fig(2, 5), fig(2, 64)])).handed).toEqual([]);
+      });
+
+      it('a figure that takes the run over its total, while within its own cap', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (let i = 0; i < 16; i += 1) m.say(fig(i, 20, pngOf(1048576)));
+        expect(c.figures).toHaveLength(16);
+        m.say(fig(16, 20));
+        m.say(fig(17, 20, pngOf(9)));
+        expect(c.figures).toHaveLength(16);
+        expect(m.fallbacks()).toEqual([]);
+      });
+
+      it('an i or an n that is not an integer, or no canonical decimal: a point, a fraction, an exponent, a sign, a number', async () => {
+        const bad = [
+          { t: 'print-figure', i: '1.5', n: '4', png: PNG },
+          { t: 'print-figure', i: '2', n: '4.5', png: PNG },
+          { t: 'print-figure', i: '2.0', n: '4', png: PNG },
+          { t: 'print-figure', i: '1e0', n: '4', png: PNG },
+          { t: 'print-figure', i: '-1', n: '4', png: PNG },
+          { t: 'print-figure', i: '02', n: '4', png: PNG },
+          { t: 'print-figure', i: 2, n: '4', png: PNG },
+          { t: 'print-figure', i: '2', n: 4, png: PNG },
+        ];
+        expect((await forged(bad)).handed).toEqual([]);
+      });
+
+      it('sixteen forged figures in a row close the frame, and none of them reached the host', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        for (let i = 0; i < 15; i += 1) m.say(fig(0, 65));
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 65));
+        expect(m.fallbacks()).toEqual(['refusals']);
+        expect(c.figures).toEqual([]);
+      });
     });
 
     it('a throwing onPrintFigure is caught and logged, and the run goes on', async () => {

@@ -11,6 +11,11 @@
 //             `push: 'true'` and a `from` that isAnchorToken accepts (a move that is not a push sends neither, as scroll-spy and
 //             the section keys); without it the op is batch 1.1's, the id alone
 //   onPlace   place: only with `bridge.places`; the kind `overlay` or `overlay-closed` (the reader reports the figure only)
+//   printOption  enhance's `onPrintFigure`, as an object to spread: only with `bridge.printFigures`; print-figure `{ i, n, png }`
+//             for an `i` from 0 below an `n` of at most printFiguresMax and a text of at most a 1 MiB PNG's base64 length, else
+//             nothing (an `i` or `n` that is not an integer is no canonical decimal, which the host's parser refuses; the check
+//             stays out of the frame to keep the bootstrap in its budget); it answers a promise settled once the op is posted
+//             (or at once for a figure not sent), so the reader hands the pacer one figure at a time (docserver parity T6)
 //   copy      at most 65,536 UTF-8 bytes, and only while copy's share of the window lasts; otherwise it rejects, and L2
 //             shows a failed copy
 //   changes   only a full sha (40 or 64 lower-case hex): anything shorter resolves null locally; else the outbox's slot
@@ -89,6 +94,9 @@ function utf8Bytes(s: string): number {
 
 const parse = JSON.parse;
 
+/** The longest base64 text of a figure: a PNG of printFigurePngMaxBytes (1 MiB), four characters to three bytes, written out so the bootstrap does not compute it (test/enhance-frame-wire.test.ts holds the figure). */
+const PNG_B64_MAX = 1_398_104;
+
 /** True for an href the frame may send: 1 to hrefMaxChars code units, with no C0, DEL or C1 control. */
 export function sendableHref(href: unknown): href is string {
   return typeof href === 'string' && href.length > 0 && href.length <= BRIDGE_LIMITS.hrefMaxChars && !/[\u0000-\u001f\u007f-\u009f]/.test(href);
@@ -112,6 +120,8 @@ export interface FrameAdapters {
    * item stays text); `{}` otherwise.
    */
   readonly itemOption: { readonly itemLink?: (key: string) => string | null };
+  /** enhance's `onPrintFigure` option as an object to spread: `{ onPrintFigure }` only with the seed's `bridge.printFigures`, else `{}`. */
+  readonly printOption: { readonly onPrintFigure?: (f: { readonly i: number; readonly n: number; readonly png: string }) => Promise<void> };
   /** The guard's `docserver:link`: the same sink as onLink, dropped when links are off. */
   link(href: string): void;
 }
@@ -188,6 +198,16 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
           },
         }
       : {}),
+    printOption: b.printFigures
+      ? {
+          onPrintFigure: ({ i, n, png }): Promise<void> =>
+            new Promise<void>((done) => {
+              if (i >= 0 && i < n && n <= BRIDGE_LIMITS.printFiguresMax && typeof png === 'string' && png.length <= PNG_B64_MAX) {
+                outbox.send({ t: 'print-figure', i: String(i), n: String(n), png }, done);
+              } else done();
+            }),
+        }
+      : {},
     itemOption: items === undefined ? {} : { itemLink: (key: string): string | null => items.find((i) => i.value === key)?.href ?? null },
     link: navigate,
   };

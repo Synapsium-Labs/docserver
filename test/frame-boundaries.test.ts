@@ -190,7 +190,7 @@ describe('the port parser accepts exactly FRAME_ACCEPTS: one well-formed message
     version: { t: 'version' },
     progress: { t: 'progress', p: '500' },
     place: { t: 'place', kind: 'overlay' },
-    'print-figure': { t: 'print-figure', i: '0', n: '1', png: 'AAAA' },
+    'print-figure': { t: 'print-figure', i: '0', n: '1', png: 'iVBORw0KGgo=' },
   };
   const PLANTED = 'planted-op';
 

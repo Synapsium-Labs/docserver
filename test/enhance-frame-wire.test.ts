@@ -7,14 +7,14 @@
 // (tsconfig.enhance.json, with the DOM lib), the one place where both sides typecheck: a drift on either side is a red
 // `npm run typecheck`. The prefs' values are compared at run time as well.
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { destroyEnhancement, enhance, runEnhancementCommand } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, goToHash, runEnhancementCommand } from '../src/enhance/index.js';
 import { createOverlays, OVERLAY_ORDER } from '../src/enhance/overlays.js';
 import { PREF_VALUES } from '../src/enhance/options.js';
 import type { ChromeOptions, CommitEntry, PlaceKind as EnhancePlaceKind, Prefs, VocabularyOptions } from '../src/enhance/types.js';
 import { isAnchorToken } from '../src/frame/anchor.js';
 import { createAdapters } from '../src/frame-runtime/adapters.js';
 import type { Outbox, QueuedOp } from '../src/frame-runtime/outbox.js';
-import { FRAME_PREF_VALUES, type FramePrefValues, type PlaceKind } from '../src/frame/protocol.js';
+import { BRIDGE_LIMITS, FRAME_PREF_VALUES, type FramePrefValues, type PlaceKind } from '../src/frame/protocol.js';
 import type * as Wire from '../src/frame/wire-types.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
 
@@ -223,6 +223,21 @@ describe('the place wire: the reader reports its figure overlay (docserver parit
       expect(onPlace).toHaveBeenCalledTimes(1);
     });
 
+    it('open, a reveal (goTo a target): exactly one overlay-closed', async () => {
+      const root = fixture();
+      (root.querySelector('h2') as HTMLElement).id = 'decisions';
+      const onPlace = vi.fn();
+      await enhance(root, { copy: () => undefined, onPlace });
+      fullScreen(root);
+      expect(onPlace.mock.calls).toEqual([['overlay']]);
+      goToHash(root, 'decisions');
+      expect(root.querySelector('.fig-overlay.open')).toBeNull();
+      expect(onPlace.mock.calls).toEqual([['overlay'], ['overlay-closed']]);
+      // closed already: a second go reports nothing more
+      goToHash(root, 'decisions');
+      expect(onPlace).toHaveBeenCalledTimes(2);
+    });
+
     it('close-overlay works for a host that gave no onPlace', async () => {
       const root = fixture();
       await enhance(root, { copy: () => undefined });
@@ -240,6 +255,69 @@ describe('the place wire: the reader reports its figure overlay (docserver parit
       root.querySelector('.keys.open')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       expect(onPlace).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('the print wire: the adapter forwards a figure only under bridge.printFigures (docserver parity T6)', () => {
+  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: true } as const;
+  const PNG = 'iVBORw0KGgo=';
+
+  function printBy(bridge: typeof BRIDGE | (Omit<typeof BRIDGE, 'printFigures'> & { printFigures: boolean })): { sent: QueuedOp[]; dones: number; a: ReturnType<typeof createAdapters> } {
+    const sent: QueuedOp[] = [];
+    const out = { sent, dones: 0 };
+    const box = {
+      send: (op: QueuedOp, done?: () => void) => {
+        sent.push(op);
+        if (done !== undefined) {
+          out.dones += 1;
+          done();
+        }
+      },
+    } as unknown as Outbox;
+    const a = createAdapters(box, { snapshot: [], bridge });
+    return Object.assign(out, { a }) as { sent: QueuedOp[]; dones: number; a: ReturnType<typeof createAdapters> };
+  }
+
+  it('without bridge.printFigures there is no print option: the reader builds no print-figures command, and nothing is sent', () => {
+    const { sent, a } = printBy({ ...BRIDGE, printFigures: false });
+    expect(a.printOption).toEqual({});
+    expect(Object.keys(a.printOption)).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it('with it the option sends {t, i, n, png} with i and n as canonical decimals, and answers a promise that settles once the op is posted', async () => {
+    const sent: QueuedOp[] = [];
+    let post: (() => void) | undefined;
+    const box = { send: (op: QueuedOp, done?: () => void) => { sent.push(op); post = done; } } as unknown as Outbox;
+    const a = createAdapters(box, { snapshot: [], bridge: BRIDGE });
+    const settled = vi.fn();
+    const asked = a.printOption.onPrintFigure?.({ i: 0, n: 3, png: PNG }) as Promise<void>;
+    void asked.then(settled);
+    await Promise.resolve();
+    expect(sent).toEqual([{ t: 'print-figure', i: '0', n: '3', png: PNG }]);
+    expect(Object.keys(sent[0] as object)).toEqual(['t', 'i', 'n', 'png']);
+    expect(settled).not.toHaveBeenCalled();
+    post?.();
+    await asked;
+    expect(settled).toHaveBeenCalledTimes(1);
+  });
+
+  it('a figure the wire has no place for is not sent, and its promise settles at once: i at or above n, a negative i, n above 64, a PNG text longer than 1 MiB can be, a text that is no string', async () => {
+    const { sent, a } = printBy(BRIDGE);
+    const longest = 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3);
+    const forged: [number, number, unknown][] = [[3, 3, PNG], [4, 3, PNG], [-1, 3, PNG], [0, 65, PNG], [64, 64, PNG], [0, 1, 'A'.repeat(longest + 4)], [0, 1, 7], [0, 1, undefined], [0, 1, null]];
+    for (const [i, n, png] of forged) await a.printOption.onPrintFigure?.({ i, n, png: png as string });
+    expect(sent).toEqual([]);
+    // the edges pass
+    await a.printOption.onPrintFigure?.({ i: 63, n: 64, png: PNG });
+    await a.printOption.onPrintFigure?.({ i: 0, n: 1, png: 'A'.repeat(longest) });
+    expect(sent.map((o) => (o as { i: string }).i)).toEqual(['63', '0']);
+  });
+
+  it('an i or n that is not an integer is sent as its decimal text, which the host parser refuses: the frame does not judge it (the reader does, before it asks)', () => {
+    const { sent, a } = printBy(BRIDGE);
+    void a.printOption.onPrintFigure?.({ i: 1.5, n: 3, png: PNG });
+    expect(sent).toEqual([{ t: 'print-figure', i: '1.5', n: '3', png: PNG }]);
   });
 });
 

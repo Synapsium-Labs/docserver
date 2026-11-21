@@ -15,6 +15,10 @@
 // `goto` takes `{ id, from? }` and goes where the host's history moved (nav.goToHash: back to the place `from` names,
 // else to `id`), calling no onHash. Their arguments come through `run(name, args)`; the other commands take none.
 //
+// `print-figures` (docserver parity T6) asks for the document's Mermaid figures as PNGs, for a host that prints them: it
+// exists only with the host's `onPrintFigure` (diagrams.ts registers it; without the callback it answers false and does
+// nothing), answers true when a run starts, and a second one cancels the first run's figures not yet handed over.
+//
 // A command toggles: it closes its own overlay when that is open, and opens it only when no other overlay is open (the
 // keyboard layer refuses the same way, keys.ts); otherwise its handler answers false and changes nothing.
 //
@@ -22,11 +26,11 @@
 import type { Cancel } from './env.js';
 
 /** The command names, in the bar's own order of tools. */
-export const COMMAND_NAMES = ['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto'] as const;
+export const COMMAND_NAMES = ['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto', 'print-figures'] as const;
 
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
-/** What `goto` takes: an id, and the opaque place token the host was given as onHash's `from`, when it kept one. */
+/** What `goto` takes, and so what `runEnhancementCommand`'s `args` is: an id, and the opaque place token the host was given as onHash's `from`, when it kept one. */
 export interface CommandArgs {
   readonly id: string;
   readonly from?: string;

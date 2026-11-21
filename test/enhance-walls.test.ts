@@ -118,6 +118,8 @@ const ALLOWED_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> 
     // text goes in through this inert parse, not innerHTML (docserver L3, Task 8; ledger C95).
     DOMParser: 1,
     '.body': 1,
+    // rasterize (docserver parity T6): the print run's SVG image takes its `data:` URL through `.src`, once.
+    '.src =': 1,
   },
   // cloneSvg reads CSSOM only on its detached SVG clone; no feature gains a style escape hatch.
   'src/enhance/journal.ts': { '.style': 3 },

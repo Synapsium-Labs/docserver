@@ -514,7 +514,7 @@ export async function openFrameHost(browser: Browser, how: InitHow = {}, served:
 // ───────── the library page: `./host` as the parent (Task 10) ─────────
 
 /** The callbacks a library mount gives, each recorded. */
-export type LibCallback = 'onLink' | 'onHash' | 'copy' | 'changes' | 'openVersion' | 'onProgress';
+export type LibCallback = 'onLink' | 'onHash' | 'copy' | 'changes' | 'openVersion' | 'onProgress' | 'onPrintFigure';
 
 /** One library mount: the document, the assets and the adapters, as plain data the page turns into adapters. */
 export interface LibMountSpec {
@@ -573,6 +573,7 @@ interface LibApi {
   update(d: RenderInput): void;
   setPrefs(p: unknown): void;
   command(name: string): void;
+  printFigures(): void;
   destroy(): void;
   releaseLoader(): void;
   record(): LibRecord;
@@ -580,7 +581,7 @@ interface LibApi {
 
 declare global {
   interface Window {
-    __docHostLib?: { readonly mountDocFrame: (el: HTMLElement, o: { document: unknown; adapters: unknown }) => { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; destroy(): void } };
+    __docHostLib?: { readonly mountDocFrame: (el: HTMLElement, o: { document: unknown; adapters: unknown }) => { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; printFigures(): void; destroy(): void } };
     __libHost?: LibApi;
   }
 }
@@ -616,7 +617,7 @@ function libMain(): void {
     },
     true,
   );
-  let frame: { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; destroy(): void } | null = null;
+  let frame: { update(d: unknown): void; setPrefs(p: unknown): void; command(name: string): void; printFigures(): void; destroy(): void } | null = null;
   let release: () => void = () => undefined;
   const plain = (v: unknown): unknown => JSON.parse(JSON.stringify(v ?? null)) as unknown;
   const api = {
@@ -685,6 +686,7 @@ function libMain(): void {
       if (callbacks.includes('onLink')) adapters['onLink'] = log('onLink');
       if (callbacks.includes('onHash')) adapters['onHash'] = log('onHash');
       if (callbacks.includes('onProgress')) adapters['onProgress'] = log('onProgress');
+      if (callbacks.includes('onPrintFigure')) adapters['onPrintFigure'] = (f: { i: number; n: number; png: string }) => log('onPrintFigure')({ i: f.i, n: f.n, png: f.png });
       if (callbacks.includes('copy')) adapters['copy'] = (text: string, check: unknown) => log('copy')({ text, check });
       if (callbacks.includes('openVersion')) adapters['openVersion'] = log('openVersion');
       if (callbacks.includes('changes')) {
@@ -706,6 +708,9 @@ function libMain(): void {
     },
     command(name: string): void {
       frame?.command(name);
+    },
+    printFigures(): void {
+      frame?.printFigures();
     },
     destroy(): void {
       frame?.destroy();
@@ -781,6 +786,8 @@ export interface LibHost {
   setPrefs(p: unknown): Promise<void>;
   /** DocFrame.command, called from the page (a host button's handler runs this). */
   command(name: string): Promise<void>;
+  /** DocFrame.printFigures (docserver parity T6): opens a print run and asks the frame for its figures. */
+  printFigures(): Promise<void>;
   destroy(): Promise<void>;
   /** Settle the deferred `loadMermaid` of the latest mount (spec.loader 'deferred') with spec.mermaidText. */
   releaseLoader(): Promise<void>;
@@ -834,6 +841,7 @@ ${served.hostBar === true ? '<div class="host-bar"><button id="host-settings" da
     update: (d) => p.evaluate((x) => (window.__libHost as LibApi).update(x), d),
     setPrefs: (x) => p.evaluate((v) => (window.__libHost as LibApi).setPrefs(v), x),
     command: (name) => p.evaluate((n) => (window.__libHost as LibApi).command(n), name),
+    printFigures: () => p.evaluate(() => (window.__libHost as LibApi).printFigures()),
     destroy: () => p.evaluate(() => (window.__libHost as LibApi).destroy()),
     releaseLoader: () => p.evaluate(() => (window.__libHost as LibApi).releaseLoader()),
     lib,

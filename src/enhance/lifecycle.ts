@@ -63,7 +63,7 @@
 // the same promise until the root is enhanced again. A root never enhanced resolves at once.
 import { hostedVerdict, type Appearance } from './appearance.js';
 import { createBar } from './bar.js';
-import { createCommands } from './commands.js';
+import { createCommands, type CommandArgs } from './commands.js';
 import { createEnv } from './env.js';
 import { features, type Feature } from './features.js';
 import { createFolds } from './folds.js';
@@ -676,7 +676,7 @@ export function goToHash(root: HTMLElement, id: string | null, from?: string | n
  * its state through the host's storage, as its button did. `close-overlay` and `goto` are the host's history moving
  * (commands.ts): `goto` takes `args`, `{ id, from? }`, and answers false for arguments of another shape.
  */
-export function runEnhancementCommand(root: HTMLElement, name: string, args?: { readonly id: string; readonly from?: string }): boolean {
+export function runEnhancementCommand(root: HTMLElement, name: string, args?: CommandArgs): boolean {
   if (!isElement(root) || typeof name !== 'string') return false;
   const inst = findByRoot(root);
   const ctx = inst?.ctx ?? null;
