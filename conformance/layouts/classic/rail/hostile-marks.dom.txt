@@ -13,7 +13,7 @@ nav .doc-toc chrome aria-label="Contents"
         "constructor"
     li chrome
       a chrome
-        "Stable"
+        "3. Stable"
 h1
   "Hostile marks"
 h2 aria-label="__proto__"

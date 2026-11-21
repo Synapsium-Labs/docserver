@@ -18,9 +18,12 @@ export function build(ctx: FeatureContext): void {
   const button = chrome(doc, 'button', { className: 'toc-btn', text: 'Contents', attrs: { type: 'button', 'aria-controls': id, 'aria-expanded': 'false' } });
   const scrim = chrome(doc, 'div', { className: 'toc-scrim', attrs: { hidden: '' } });
   const chips = chrome(doc, 'nav', { className: 'chips', attrs: { 'aria-label': 'Sections' } });
-  for (const heading of headings.filter((h) => h.localName === 'h2')) {
-    chips.append(chrome(doc, 'a', { text: headingText(heading, (el) => el.hasAttribute('data-docreader-chrome')), attrs: { href: `#${heading.id}` } }));
-  }
+  // Numbered headings retain their original label when the badge and separator become chrome.
+  const link = (heading: HTMLElement): HTMLAnchorElement => chrome(doc, 'a', {
+    text: heading.getAttribute('aria-label') ?? headingText(heading, (el) => el.hasAttribute('data-docreader-chrome')),
+    attrs: { href: `#${heading.id}` },
+  });
+  for (const heading of headings.filter((h) => h.localName === 'h2')) chips.append(link(heading));
   const title = root.querySelector('h1');
   if (title !== null && title.parentNode === root) {
     const next = title.nextElementSibling;
@@ -40,7 +43,7 @@ export function build(ctx: FeatureContext): void {
       sub = chrome(doc, 'ul');
       top.append(sub);
     }
-    const anchor = chrome(doc, 'a', { text: headingText(heading, (el) => el.hasAttribute('data-docreader-chrome')), attrs: { href: `#${heading.id}` } });
+    const anchor = link(heading);
     if (heading.localName === 'h2') top!.prepend(anchor);
     else sub!.append(chrome(doc, 'li', {}, [anchor]));
     items.set(heading, { anchor, top: top! });
@@ -66,6 +69,10 @@ export function build(ctx: FeatureContext): void {
     journal.setAttribute(scrim, 'hidden', null);
     journal.setAttribute(rail, 'role', 'dialog');
     journal.setAttribute(rail, 'aria-modal', 'true');
+    if (active !== undefined) {
+      journal.toggleClass(active.top, 'open', true);
+      follow(active);
+    }
     collapse.focus({ preventScroll: true });
   };
   journal.listen(button, 'click', () => { if (opened) close(); else open(); });
@@ -76,7 +83,20 @@ export function build(ctx: FeatureContext): void {
     return true;
   });
   journal.listen(scrim, 'click', close);
-  journal.listen(rail, 'keydown', (event) => { if ((event as KeyboardEvent).key === 'Escape' && opened) { event.preventDefault(); close(); } });
+  journal.listen(rail, 'keydown', (event) => {
+    const key = event as KeyboardEvent;
+    if (!opened) return;
+    if (key.key === 'Escape') { key.preventDefault(); close(); return; }
+    if (key.key !== 'Tab') return;
+    const controls = Array.from(rail.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'))
+      .filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') && el.closest('[hidden]') === null && el.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (first === undefined || last === undefined) { key.preventDefault(); return; }
+    if (key.shiftKey && doc.activeElement === first) { key.preventDefault(); last.focus(); }
+    else if (!key.shiftKey && doc.activeElement === last) { key.preventDefault(); first.focus(); }
+  });
+  ctx.env.onResize(() => { if (opened && ctx.env.viewport().w >= 1240) close(); });
   journal.listen(rail, 'click', (event) => {
     const target = event.target as Node | null;
     const element = target?.nodeType === 1 ? target as Element : target?.parentElement;
@@ -89,6 +109,14 @@ export function build(ctx: FeatureContext): void {
   const tracked = headings.filter((heading) => items.has(heading));
   let active: { anchor: HTMLAnchorElement; top: HTMLLIElement } | undefined;
   let scheduled: Cancel | null = null;
+  function follow(item: { anchor: HTMLAnchorElement }): void {
+    if (rail.getClientRects().length === 0 || item.anchor.getClientRects().length === 0) return;
+    const panel = rail.getBoundingClientRect();
+    const link = item.anchor.getBoundingClientRect();
+    if (panel.height > 0 && (link.top < panel.top + 40 || link.bottom > panel.bottom - 20)) {
+      rail.scrollTop += link.top - panel.top - panel.height / 2;
+    }
+  }
   const spy = (): void => {
     scheduled = null;
     const line = Math.max(150, ctx.env.viewport().h * 0.3);
@@ -111,16 +139,15 @@ export function build(ctx: FeatureContext): void {
     journal.toggleClass(next.anchor, 'active', true);
     journal.setAttribute(next.anchor, 'aria-current', 'location');
     journal.toggleClass(next.top, 'open', true);
-    if (rail.getClientRects().length === 0 || next.anchor.getClientRects().length === 0) return;
-    const panel = rail.getBoundingClientRect();
-    const link = next.anchor.getBoundingClientRect();
-    if (panel.height > 0 && (link.top < panel.top + 40 || link.bottom > panel.bottom - 20)) {
-      rail.scrollTop += link.top - panel.top - panel.height / 2;
-    }
+    follow(next);
   };
   const schedule = (): void => { scheduled ??= queueFrameWork(root, 'rail', spy); };
   ctx.env.onScroll(schedule);
-  journal.defer(ctx.events.on('relayout', schedule));
+  journal.defer(ctx.events.on('relayout', () => {
+    scheduled?.();
+    scheduled = null;
+    spy();
+  }));
   journal.defer(() => { scheduled?.(); scheduled = null; });
   journal.insert(rail, root, root.firstChild);
   journal.insert(scrim, root, null);

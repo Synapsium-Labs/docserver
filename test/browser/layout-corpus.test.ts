@@ -119,9 +119,22 @@ function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
  * reader is bundled for it (the harness's layout option) and the snapshot is that layout's.
  */
 async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void, layout?: HarnessLayout): Promise<void> {
-  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout) });
+  const classicPlan = layout === 'classic' && c.id === 'rail/plan-marks';
+  // Keep the initial heading well below the Classic reading line; at 900px it straddles the line as fonts settle.
+  const viewport = classicPlan ? { viewport: { width: 1440, height: 600 } } : {};
+  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout), ...viewport });
   try {
     await waitForCues(c, doc, layout);
+    if (classicPlan) {
+      await doc.page.waitForFunction(() => {
+        const root = document.querySelector<HTMLElement>('main[data-harness-root]');
+        const heading = root?.querySelector<HTMLElement>('h2[id="1-work"]');
+        const rail = root?.querySelector('.doc-toc');
+        return heading !== null && heading !== undefined
+          && heading.getBoundingClientRect().top > 200
+          && rail !== null && rail !== undefined && rail.querySelector('a[aria-current], li.open') === null;
+      });
+    }
     const snap = await doc.snapshot(c.scope);
     holdClean(c.id, { violations: await doc.violations(), aborted: doc.aborted, missing: doc.missing });
     holdIt(c.id, snap, c.expected);

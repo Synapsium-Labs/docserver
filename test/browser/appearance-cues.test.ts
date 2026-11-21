@@ -285,6 +285,19 @@ describeBrowsers((browser) => {
     }
   });
 
+  it('classic: a real waiting callout has a painted 3px cue even when the status colours collide', async () => {
+    const doc = await open(browser, { appearance: COLLISION, layout: 'classic' });
+    try {
+      const waiting = doc.page.locator(`${rootSel}[data-docreader-layout="classic"] .callout.waiting`);
+      expect(await waiting.count()).toBe(1);
+      expect(await waiting.textContent()).toContain('Waiting on you');
+      const runs = await runsThrough(doc.page, waiting, HUE.mark);
+      expect(widths(runs), JSON.stringify(runs)).toEqual([3]);
+    } finally {
+      await doc.close();
+    }
+  });
+
   it('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async () => {
     const doc = await open(browser, { appearance: COLLISION, width: 390 });
     try {

@@ -9,13 +9,13 @@ nav .doc-toc chrome aria-label="Contents"
   ul chrome
     li .open chrome
       a .active chrome aria-current="location"
-        "Start"
+        "1. Start"
     li chrome
       a chrome
-        "Middle"
+        "2. Middle"
     li chrome
       a chrome
-        "End"
+        "3. End"
 h1
   "Drawer notes"
 h2 aria-label="1. Start"

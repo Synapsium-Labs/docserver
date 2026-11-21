@@ -7,17 +7,17 @@ nav .doc-toc chrome aria-label="Contents"
   ul chrome
     li chrome
       a chrome
-        "Work"
+        "1. Work"
       ul chrome
         li chrome
           a chrome
             "Task 1: Prepare"
     li chrome
       a chrome
-        "Notes"
+        "2. Notes"
     li chrome
       a chrome
-        "Close"
+        "3. Close"
 h1
   "Delivery plan"
 p

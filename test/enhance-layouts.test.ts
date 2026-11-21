@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { destroyEnhancement, enhance } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { features as defaultFeatures } from '../src/enhance/features.js';
 import { FRAME_LAYOUTS } from '../src/frame/layouts.js';
@@ -153,35 +153,63 @@ describe('the layout mark on the root', () => {
   });
 });
 
+it('classic: the host opens Contents without a reader bar and Escape restores the host button', async () => {
+  pick.layout = 'classic';
+  const root = mount(`${DOC}\n## Third\n\nMore words.\n`);
+  const host = document.createElement('button');
+  document.body.prepend(host);
+  await enhance(root, { chrome: { bar: false } });
+  expect(root.querySelector('.toc-btn, .topbar')).toBeNull();
+  host.focus();
+  expect(runEnhancementCommand(root, 'contents')).toBe(true);
+  const dialogue = root.querySelector('[role="dialog"][aria-modal="true"]');
+  expect(dialogue?.contains(document.activeElement)).toBe(true);
+  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(root.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(host);
+});
+
+// Use the parsed rule tree so the same scope check applies inside responsive and motion queries.
+function checkScope(text: string, layout: string): void {
+  const style = document.createElement('style');
+  style.textContent = text;
+  document.head.append(style);
+  const scope = `[data-docreader-root][data-docreader-layout="${layout}"]`;
+  const check = (rules: CSSRuleList): void => {
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of Array.from(rules)) {
+      if (rule.type === CSSRule.MEDIA_RULE) {
+        check((rule as CSSMediaRule).cssRules);
+      } else {
+        expect(rule.type, rule.cssText).toBe(CSSRule.STYLE_RULE);
+        // Keep layout selectors in flat lists: repeat the scope on each selector, including responsive rules.
+        for (const selector of (rule as CSSStyleRule).selectorText.split(',')) {
+          expect(selector.trim().startsWith(scope), selector.trim()).toBe(true);
+        }
+      }
+    }
+  };
+  try {
+    if (style.sheet === null) throw new Error(`${layout}: the stylesheet did not parse`);
+    check(style.sheet.cssRules);
+  } finally {
+    style.remove();
+  }
+}
+
 describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
   const css = (l: string): string => readFileSync(path.join(ROOT, 'assets', 'layouts', `${l}.css`), 'utf8');
+
+  it('refuses a later unscoped selector in a comma-separated rule inside a media query', () => {
+    const scope = '[data-docreader-root][data-docreader-layout="classic"]';
+    expect(() => checkScope(`@media screen { ${scope} .doc-toc a:hover, ${scope} .doc-toc a.active { color: var(--text); } }`, 'classic')).not.toThrow();
+    expect(() => checkScope(`@media screen { ${scope} .doc-toc a:hover, .doc-toc a.active { color: var(--text); } }`, 'classic')).toThrow('.doc-toc a.active');
+  });
 
   for (const layout of OWN) {
     it(`${layout}: every rule is scoped under the root's two marks, with no literal colour, no font and no url`, () => {
       const text = css(layout);
-      // Use the parsed rule tree so the same scope check applies inside responsive and motion queries.
-      const style = document.createElement('style');
-      style.textContent = text;
-      document.head.append(style);
-      const scope = `[data-docreader-root][data-docreader-layout="${layout}"]`;
-      const check = (rules: CSSRuleList): void => {
-        expect(rules.length).toBeGreaterThan(0);
-        for (const rule of Array.from(rules)) {
-          if (rule.type === CSSRule.MEDIA_RULE) {
-            check((rule as CSSMediaRule).cssRules);
-          } else {
-            expect(rule.type, rule.cssText).toBe(CSSRule.STYLE_RULE);
-            const selector = (rule as CSSStyleRule).selectorText;
-            expect(selector.startsWith(scope), selector).toBe(true);
-          }
-        }
-      };
-      try {
-        if (style.sheet === null) throw new Error(`${layout}: the stylesheet did not parse`);
-        check(style.sheet.cssRules);
-      } finally {
-        style.remove();
-      }
+      checkScope(text, layout);
       expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix)\s*\(/i);
       expect(text).not.toMatch(/url\(|@font-face|@import|<\/style/i);
       expect(text.includes('\r')).toBe(false);

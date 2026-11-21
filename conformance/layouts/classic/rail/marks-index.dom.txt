@@ -7,13 +7,13 @@ nav .doc-toc chrome aria-label="Contents"
   ul chrome
     li .open chrome
       a .active chrome aria-current="location"
-        "Read"
+        "1. Read"
     li chrome
       a chrome
-        "Definitions"
+        "2. Definitions"
     li chrome
       a chrome
-        "Later"
+        "3. Later"
 h1
   "Reading notes"
 h2 aria-label="1. Read"

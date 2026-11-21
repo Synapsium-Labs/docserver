@@ -15,6 +15,20 @@
   [data-docreader-root][data-docreader-layout="classic"] .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
   [data-docreader-root][data-docreader-layout="classic"] .chips a { max-width: 100%; padding: 5px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
 }
+@media screen and (max-width: 1239px) {
+  [data-docreader-root][data-docreader-layout="classic"][data-docreader-skin~="sectionSize"].toc-open .toc-title { font-size: var(--dr-section-size); }
+  [data-docreader-root][data-docreader-layout="classic"][data-docreader-skin~="sectionWeight"].toc-open .toc-title { font-weight: var(--dr-section-weight); }
+  [data-docreader-root][data-docreader-layout="classic"][data-docreader-skin~="sectionTracking"].toc-open .toc-title { letter-spacing: var(--dr-section-tracking); }
+  [data-docreader-root][data-docreader-layout="classic"][data-docreader-skin~="sectionCase"].toc-open .toc-title { text-transform: var(--dr-section-case); }
+  [data-docreader-root][data-docreader-layout="classic"][data-docreader-section-family="mono"].toc-open .toc-title { font-family: var(--mono); }
+}
+@media screen and (max-width: 1239px) and (pointer: fine) {
+  [data-docreader-root][data-docreader-layout="classic"][data-docreader-skin~="controlRow"].toc-open .doc-toc a { min-height: var(--dr-control-row); }
+}
+@media screen and (max-width: 1239px) and (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="classic"].toc-open .doc-toc a,
+  [data-docreader-root][data-docreader-layout="classic"].toc-open .toc-head button { min-height: 44px; }
+}
 @media (prefers-reduced-motion: no-preference) {
   [data-docreader-root][data-docreader-layout="classic"] .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
   [data-docreader-root][data-docreader-layout="classic"] .reveal.in { opacity: 1; transform: none; }
