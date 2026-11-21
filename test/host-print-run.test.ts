@@ -3,12 +3,11 @@
 // adapter and the reader's real runner, posting into the real `./host` mount over a fake port, so the host's own parser and its run judge every
 // figure. What this holds that no unit file does: a second `print-figures` command leaves at most one stale figure in the host's new run, so
 // a reprint costs the host at most one refusal and never the sixteen that close the frame; and a frame whose seed did not ask for print figures
-// sends none. The mount's harness is the small half of test/host-mount.test.ts's, with the frame's assets read from the files the build wrote
-// (assets/frame), so a mutation of the frame's source changes what the frame side does and nothing else.
-import { readFileSync } from 'node:fs';
+// sends none. The mount's harness is the small half of test/host-mount.test.ts's, with the frame's assets from an in-memory build of the
+// frame's sources, so a mutation of the source still changes what the frame side does and nothing else.
 import { createRequire } from 'node:module';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildFrame } from '../scripts/build-frame.mjs';
 import { createPrintRunner } from '../src/enhance/print-figures.js';
 import type { FrameAssets, RenderInput } from '../src/frame/document.js';
 import { BRIDGE_LIMITS } from '../src/frame/protocol.js';
@@ -17,9 +16,11 @@ import { createOutbox } from '../src/frame-runtime/outbox.js';
 import { mountDocFrame, type FallbackReason } from '../src/host/index.js';
 import { render } from '../src/render/index.js';
 
-const ROOT = path.join(import.meta.dirname, '..');
-const read = (f: string): string => readFileSync(path.join(ROOT, 'assets', 'frame', f), 'utf8');
-const assets: FrameAssets = { guard: read('guard.js'), bootstrap: read('bootstrap.js'), enhance: read('enhance.js'), css: read('reader.css') };
+let assets: FrameAssets;
+beforeAll(async () => {
+  const built = await buildFrame();
+  assets = { guard: built.files.guard.text, bootstrap: built.files.bootstrap.text, enhance: built.files.enhance.text, css: built.files.css.text };
+}, 300_000);
 
 const { JSDOM } = createRequire(import.meta.url)('jsdom') as { JSDOM: new (html: string) => { readonly window: unknown } };
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>');
