@@ -1,0 +1,47 @@
+nav .doc-toc chrome aria-label="Contents"
+  div .toc-head chrome
+    span .toc-title chrome
+      "Contents"
+    button chrome
+      "Collapse"
+  ul chrome
+    li .open chrome
+      a .active chrome aria-current="location"
+        "Read"
+    li chrome
+      a chrome
+        "Definitions"
+    li chrome
+      a chrome
+        "Later"
+h1
+  "Reading notes"
+h2 aria-label="1. Read"
+  "1. Read"
+p
+  "This section is remembered."
+h2 aria-label="2. Definitions"
+  "2. Definitions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "D1"
+        td
+          "A small decision"
+      tr
+        td
+          "D2"
+        td
+          "A second decision"
+h2 aria-label="3. Later"
+  "3. Later"
+p
+  "This section changed after the earlier v"…

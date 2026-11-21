@@ -1,0 +1,41 @@
+h1
+  "Names"
+p
+  strong
+    "Guide"
+  "· 2026-10-20 · Status: Draft"
+h2
+  "__proto__"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to __proto__"
+      "#"
+p
+  "A heading whose id is a prototype key."
+h2
+  "constructor"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to constructor"
+      "#"
+p
+  "Another."
+h2
+  "jump"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to jump"
+      "#"
+p
+  "Named like the quick jump."
+h2
+  "toc-contents"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to toc-contents"
+      "#"
+p
+  "Named like the contents rail."
+h2
+  "toString"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to toString"
+      "#"
+p
+  "Named like an inherited method."

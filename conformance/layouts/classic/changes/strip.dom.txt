@@ -1,0 +1,219 @@
+h1
+  "Example review"
+p
+  strong
+    "Spec"
+  "· 2026-10-20 · Status: Draft ·"
+  strong
+    "Owner:"
+  "project-a team"
+h2
+  "In short"
+ul
+  li
+    "A small tool reads one folder and writes"…
+  li
+    "Two decisions are still open, and three "…
+h2
+  "1. Decisions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Decision"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "D1"
+        td
+          "Read the folder once, at the start"
+        td
+          "Agreed"
+      tr
+        td
+          "D2"
+        td
+          "Write the report as Markdown"
+        td
+          "Agreed"
+      tr
+        td
+          "D3"
+        td
+          "Keep a cache between runs"
+        td
+          "Pending, see below"
+      tr
+        td
+          "D4"
+        td
+          "Name the output after the folder"
+        td
+          "In review"
+      tr
+        td
+          "D5"
+        td
+          "Drop the old flag"
+        td
+          "Rejected"
+      tr
+        td
+          "D6"
+        td
+          "Print a summary line at the end"
+        td
+          "Agreed"
+p
+  "D3 waits on a measurement of the cache's"…
+h2
+  "2. Design"
+p
+  "The tool walks the folder once and keeps"…
+p
+  "A file the tool cannot read is listed wi"…
+p
+  "The report is one Markdown file. Its fir"…
+h2
+  "3. Tasks"
+h3
+  "Task 1: Set up the project"
+ul
+  li
+    input
+    strong
+      "Step 1: Make the folder"
+    "with a readme in it."
+  li
+    input
+    strong
+      "Step 2 (you): Pick a name"
+    "for the tool."
+  li
+    input
+    strong
+      "Step 3: Add the test runner"
+    "and one empty test."
+  li
+    input
+    strong
+      "Step 4: Write the first case"
+    "for an empty folder."
+  li
+    input
+    strong
+      "Step 5: Read one file"
+    "and print its size."
+  li
+    input
+    strong
+      "Step 6: Read a folder"
+    "of three files."
+  li
+    input
+    strong
+      "Step 7: Count by kind"
+    "and print the counts."
+  li
+    input
+    strong
+      "Step 8: List the largest"
+    "five files."
+  li
+    input
+    strong
+      "Step 9 (you): Review the output"
+    "on a real folder."
+  li
+    input
+    strong
+      "Step 10: Keep the failures"
+    "in a list of their own."
+h3
+  "Task 2: Ship it"
+ul
+  li
+    input
+    strong
+      "Step 1: Write the report"
+    "to a file."
+  li
+    input
+    strong
+      "Step 2: Add the summary line"
+    "at the end."
+  li
+    input
+    strong
+      "Step 3: Measure the cache"
+    "on a large folder."
+  li
+    input
+    strong
+      "Step 4 (you): Decide on the cache"
+    "from the measurement."
+  li
+    input
+    strong
+      "Step 5: Drop the old flag"
+    "and its tests."
+  li
+    input
+    strong
+      "Step 6: Update the readme"
+    "with an example."
+  li
+    input
+    strong
+      "Step 7: Tag a release"
+    "and note what changed."
+  li
+    input
+    strong
+      "Step 8: Run it on three folders"
+    "and keep the reports."
+  li
+    input
+    strong
+      "Step 9: Fix what the runs show"
+    "in a second release."
+  li
+    input
+    strong
+      "Step 10: Close the project"
+    "with a short note."
+h2
+  "Where things stand"
+h3
+  "Agreed"
+ul
+  li
+    "Read once, write Markdown, print a summa"…
+h3
+  "Waiting on you"
+ul
+  li
+    "Pick a name for the tool and for its out"…
+  li
+    "Decide on the cache once it is measured "…
+h2
+  "4. Notes"
+p
+  "The walk reads each file's first line on"…
+p
+  "A folder of ten thousand files took unde"…
+p
+  "The kinds are read from the file names, "…
+p
+  "The report lists at most five of the lar"…
+p
+  "A file the tool cannot read is not retri"…
+p
+  "The summary line repeats the counts of t"…
+p
+  "Nothing here depends on the operating sy"…

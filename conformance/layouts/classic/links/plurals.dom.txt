@@ -1,0 +1,55 @@
+h1
+  "Plurals"
+p
+  strong
+    "Spec"
+  "· 2026-10-20 · Status: Draft"
+h2
+  "Glossary"
+div
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "Box"
+        td
+          "A container"
+      tr
+        td
+          "Read mark"
+        td
+          "A mark on a section"
+      tr
+        td
+          "Read"
+        td
+          "To take in"
+      tr
+        td
+          "Lamp, Wick"
+        td
+          "Two names, each matched as spelled"
+h2
+  "1. Endings"
+p
+  "Two BOXES: a plural in es links, in any "…
+p
+  "The READ MARKS: a plural in s links, and"…
+p
+  "In lower case, lamps do not link: an exa"…
+h2
+  "2. Word edges"
+p
+  "An unboxed thing, a box-shaped one and a"…
+p
+  "A box links. A second box does not: a te"…
+h2
+  "3. Longest first"
+p
+  "A read mark links as one name, the longe"…
