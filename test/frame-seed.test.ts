@@ -187,9 +187,9 @@ describe('L3.M4 validateSeed: the shape', () => {
     for (const s of [base(), full()]) expect(validateSeed(s)).toEqual({ ok: true, seed: s });
   });
 
-  it("SEED_KEYS is schema 1's fourteen keys and the three optional ones the appearance contract and the parity additions add", () => {
-    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'items', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
-    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'fonts', 'items']);
+  it("SEED_KEYS is schema 1's fourteen keys and the four optional ones the appearance contract and the parity additions add", () => {
+    expect([...SEED_KEYS]).toEqual(['appearance', 'bridge', 'changesBase', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'items', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version']);
+    expect([...OPTIONAL_SEED_KEYS]).toEqual(['appearance', 'changesBase', 'fonts', 'items']);
     expect(Object.keys(base()).sort()).toEqual(SEED_KEYS.filter((k) => !OPTIONAL_SEED_KEYS.includes(k)));
     expect(Object.isFrozen(SEED_KEYS) && Object.isFrozen(OPTIONAL_SEED_KEYS)).toBe(true);
   });
@@ -439,12 +439,26 @@ const BAD: readonly Row[] = [
   ['features', { rules: 'yes' }, 'features.rules'],
   ['features', { folds: 1 }, 'features.folds'],
   ['features', { keyboard: null }, 'features.keyboard'],
+  ['features', { inShort: 'yes' }, 'features.inShort'],
+  ['features', { inShort: 1 }, 'features.inShort'],
   ['features', { chrome: { bar: 1 } }, 'features.chrome'],
   ['features', { chrome: { menu: true } }, 'features.chrome'],
   ['features', { chrome: [] }, 'features.chrome'],
   ['features', { vocabulary: [] }, 'features.vocabulary'],
   ['features', { vocabulary: 'annex' }, 'features.vocabulary'],
   ['features', { vocabulary: null }, 'features.vocabulary'],
+  ['changesBase', 'abc1234', 'changesBase'],
+  ['changesBase', 'a'.repeat(39), 'changesBase'],
+  ['changesBase', 'a'.repeat(41), 'changesBase'],
+  ['changesBase', 'a'.repeat(63), 'changesBase'],
+  ['changesBase', 'a'.repeat(65), 'changesBase'],
+  ['changesBase', 'A'.repeat(40), 'changesBase'],
+  ['changesBase', `${'a'.repeat(39)}g`, 'changesBase'],
+  ['changesBase', '', 'changesBase'],
+  ['changesBase', null, 'changesBase'],
+  ['changesBase', 40, 'changesBase'],
+  ['changesBase', ['a'.repeat(40)], 'changesBase'],
+  ['changesBase', { sha: 'a'.repeat(40) }, 'changesBase'],
   ['mermaid', [], 'mermaid'],
   ['mermaid', {}, 'mermaid'],
   ['mermaid', { secure: [] }, 'mermaid'],
@@ -902,6 +916,8 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       fonts: { sans: 'A'.repeat(SEED_LIMITS.fontFaceMaxChars), mono: `${'A'.repeat(SEED_LIMITS.fontFaceMaxChars - 1)}=` },
       // 50 links, each a value of 100 and an href of 4096 code units of the character that escapes longest (the outer check lets them in).
       items: Array.from({ length: 50 }, () => ({ value: lt(100), href: lt(BRIDGE_LIMITS.hrefMaxChars) })),
+      // The comparison base (parity Task 5): the longest full sha, 64 hex digits.
+      changesBase: 'f'.repeat(64),
     };
   }
 
@@ -919,7 +935,8 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
 
   it("the two fields' share of SEED_FIELDS_MAX_CHARS is both faces at their cap, the appearance's longest text and their keys: 2 x 174764 + the appearance + the key overhead", () => {
     const s = maximalSeed();
-    const { appearance, fonts, items, ...rest } = s;
+    const { appearance, fonts, items, changesBase, ...rest } = s;
+    expect(changesBase).toHaveLength(64);
     expect(appearance).toBeDefined();
     expect(fonts).toBeDefined();
     expect(items).toBeDefined();
@@ -932,8 +949,10 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
     // The items (parity Task 4) are the third optional field: `,"items":` and their text.
     const itemsText = JSON.stringify(items).replace(/</g, '\\u003c').length;
     const itemsOverhead = `,"items":`.length;
-    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead + itemsText + itemsOverhead);
-    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead + itemsText + itemsOverhead);
+    // The comparison base (parity Task 5) is the fourth: `,"changesBase":"` and 64 hex digits and the closing quote.
+    const baseText = `,"changesBase":"${'f'.repeat(64)}"`.length;
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * SEED_LIMITS.fontFaceMaxChars + appearanceText + overhead + itemsText + itemsOverhead + baseText);
+    expect(SEED_FIELDS_MAX_CHARS - old).toBe(2 * 174764 + appearanceText + overhead + itemsText + itemsOverhead + baseText);
   });
 
   it("each string field's worst case is six characters per code point: no character escapes longer", () => {
@@ -1016,5 +1035,19 @@ describe('the seed carries chrome.topSpace (B6.5)', () => {
     expect(why(loose({ features: f }))).toBe('ok');
     expect(normalizeOptions(f).chrome.topSpace).toBe(false);
     expect(why(loose({ features: { chrome: { topSpace: 1 } } }))).toBe('features.chrome');
+  });
+});
+
+describe('the seed carries changesBase (docserver parity, Task 5): a full sha, optional', () => {
+  it('is optional: absent passes, a full sha of 40 or 64 lower-case hex digits passes, and the seed with it is the seed text without it plus the key', () => {
+    expect(why(base())).toBe('ok');
+    for (const sha of [SHA40, SHA64, '0123456789abcdef0123456789abcdef01234567']) expect(why(loose({ changesBase: sha })), sha).toBe('ok');
+    expect(serializeSeed({ ...base(), changesBase: SHA40 }).length - serializeSeed(base()).length).toBe(`,"changesBase":"${SHA40}"`.length);
+  });
+
+  it('refuses a short sha and any value that is not a full sha, naming changesBase and keeping the nonce', () => {
+    for (const bad of ['abc1234', SHA40.slice(1), `${SHA40}a`, SHA40.toUpperCase(), 7, null, true, [SHA40], { sha: SHA40 }, '']) {
+      expect(validateSeed(loose({ changesBase: bad })), JSON.stringify(bad)).toEqual({ ok: false, nonce: NONCE, why: 'changesBase' });
+    }
   });
 });

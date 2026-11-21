@@ -2717,3 +2717,40 @@ describe('docserver parity T4: the items adapter resolves the document\'s item v
     expect(Object.hasOwn(seedOf(m.iframe.getAttribute('srcdoc') ?? ''), 'items')).toBe(false);
   });
 });
+
+describe('docserver parity T5: adapters.changesBase seeds the comparison base', () => {
+  const SHA = 'c'.repeat(40);
+  const seedBase = (m: Mounted): unknown => seedOf(m.iframe.getAttribute('srcdoc') ?? '')['changesBase'];
+
+  it('seeds a full sha, in every mount, and a host with none seeds no key (the seed 1.1 wrote)', () => {
+    const m = mount(PLAIN, { changesBase: SHA });
+    expect(m.fallbacks()).toEqual([]);
+    expect(seedBase(m)).toBe(SHA);
+    const none = mount(PLAIN, {});
+    expect(Object.hasOwn(seedOf(none.iframe.getAttribute('srcdoc') ?? ''), 'changesBase')).toBe(false);
+    const sha64 = mount(PLAIN, { changesBase: 'd'.repeat(64) });
+    expect(seedBase(sha64)).toBe('d'.repeat(64));
+  });
+
+  it('a value that is not a string is a TypeError at step 1, before any iframe', () => {
+    for (const bad of [7, null, true, {}, [SHA]]) {
+      const before = container.querySelectorAll('iframe').length;
+      expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { changesBase: bad } as never) }), String(bad)).toThrow(TypeError);
+      expect(container.querySelectorAll('iframe').length, String(bad)).toBe(before);
+    }
+  });
+
+  it('a string that is not a full sha is logged once and not seeded: the document still mounts', () => {
+    for (const bad of ['abc1234', SHA.toUpperCase(), `${SHA}0`, '']) {
+      warn.mockClear();
+      const seen: Seen = { events: [] };
+      mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor(seen, { changesBase: bad } as never) });
+      expect(seen.events.filter(([n]) => n === 'fallback'), bad).toEqual([]);
+      const frames = container.querySelectorAll('iframe');
+      expect(Object.hasOwn(seedOf((frames[frames.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? ''), 'changesBase'), bad).toBe(false);
+      const ours = warn.mock.calls.filter((c: unknown[]) => String(c[0]).includes('adapters.changesBase is not a full sha'));
+      expect(ours, bad).toHaveLength(1);
+      expect(JSON.stringify(ours[0]), bad).not.toContain(bad === '' ? '\u0000' : bad);
+    }
+  });
+});

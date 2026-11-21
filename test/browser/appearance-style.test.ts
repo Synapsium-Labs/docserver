@@ -386,6 +386,8 @@ interface State {
   readonly name: string;
   readonly chromiumOnly?: true;
   readonly variants?: readonly Variant[];
+  /** A state of the In short switch (parity Task 5): read by (b) and (c), which open each document with `inShort` on; (a) opens none that way. */
+  readonly needsSwitch?: true;
   /** Put the page in the state; true when it is in it (the trigger exists and the thing is shown). */
   apply(page: Page): Promise<boolean>;
   clear(page: Page): Promise<void>;
@@ -572,6 +574,28 @@ const STATES: readonly State[] = [
       await frames(page);
     },
   },
+  {
+    name: 'short-headlines',
+    needsSwitch: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const b = document.querySelector('.short-view button');
+        if (!(b instanceof HTMLElement)) return false;
+        b.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.short.headlines .rest') !== null && document.querySelector('.short-view button[aria-pressed="true"]')?.textContent === 'Headlines');
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        const b = document.querySelectorAll('.short-view button')[1];
+        if (b instanceof HTMLElement) b.click();
+      });
+      await frames(page);
+    },
+  },
   forced('hover', ['hover']),
   forced('focus-visible', ['focus', 'focus-visible']),
   {
@@ -675,6 +699,7 @@ async function compareDoc(doc: Doc, browser: BrowserName, other: string, count =
     await inMode(b, mode, doc.id);
     for (const st of STATES) {
       if (st.chromiumOnly === true && browser !== 'chromium') continue;
+      if (st.needsSwitch === true) continue;
       if (only !== null && !only.includes(st.name)) continue;
       const began = Date.now();
       const ok = [await st.apply(a.page), await st.apply(b.page)];
@@ -918,7 +943,7 @@ describeBrowsers((browser) => {
 
     it('every state was reached by some document', () => {
       if (reached.size === 0) return; // this row was run alone
-      const missing = STATES.filter((s) => (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
+      const missing = STATES.filter((s) => s.needsSwitch !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
       expect(missing).toEqual([]);
     });
   });
@@ -1065,7 +1090,7 @@ describeBrowsers((browser) => {
         else e.count += 1;
       };
       for (const doc of docs) {
-        const d = await open(doc, browser, { options: { ...doc.options, appearance: { mode: fixture.mode, colour: fixture.colour } } });
+        const d = await open(doc, browser, { options: { ...doc.options, inShort: true, appearance: { mode: fixture.mode, colour: fixture.colour } } });
         try {
           const hosted = await d.page.evaluate(() => {
             const r = document.querySelector('[data-docreader-root]');
@@ -1156,6 +1181,12 @@ describeBrowsers((browser) => {
     it('the representative documents all exist', () => {
       expect(reps.map((d) => d.id).sort()).toEqual([...REPRESENTATIVE].sort());
     });
+
+    it('the In short switch\'s states are read: some representative document is in Headlines, and some with the switch at rest (Full)', async () => {
+      const got = await collect(FIXTURES[0] as Fixture, reps);
+      expect(got.stats.states['short-headlines'] ?? 0).toBeGreaterThan(0);
+      expect(got.stats.states['rest'] ?? 0).toBeGreaterThan(0);
+    }, 1_200_000);
 
     const fail = (f: Fixture, got: Collected, what: string): void => {
       expect(got.notHosted, 'the appearance applies to every document').toEqual([]);

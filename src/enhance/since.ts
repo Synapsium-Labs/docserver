@@ -419,6 +419,39 @@ function attachPicker(ctx: FeatureContext, state: SinceState): void {
   strip.place();
 }
 
+/** The label of a seeded comparison: "Since" the base commit's subject when `info.commits` names it, else "Since your comparison". */
+function baseLabel(ctx: FeatureContext, base: string): string {
+  const entry = (ctx.info.commits ?? []).find((commit) => commit.sha === base.toLowerCase() || (base.length >= 7 && commit.sha.startsWith(base.toLowerCase())));
+  if (entry === undefined) return 'Since your comparison';
+  const subject = ctx.text.clip(entry.subject.replace(ctx.vocab.commitPrefix, '').trim() || entry.sha.slice(0, 7), SUBJECT_MAX);
+  return `Since ${subject}`;
+}
+
+/**
+ * The comparison the host seeded (`options.changesBase`, with the host's `changes` and a commit version): asked of the host
+ * once, here, and shown as the menu shows one, without a jump (a reader who opens a document is not moved). The picker's own
+ * state, when it exists, shows it as chosen. No other source sets it.
+ */
+function showBase(ctx: FeatureContext, state: SinceState | null): void {
+  const base = ctx.options.changesBase;
+  if (base === null || !ctx.host.present.has('changes')) return;
+  const what = baseLabel(ctx, base);
+  const selected = { key: 'base', what };
+  if (state !== null) {
+    state.selected = selected;
+    sync(state);
+  }
+  void showChanges(ctx, base, { what, jump: false, onHide: () => {
+    if (state === null) return;
+    if (state.selected === selected) state.selected = null;
+    sync(state);
+  } }).then((outcome) => {
+    if (state === null || !ctx.live()) return;
+    if ('skipped' in outcome && state.selected === selected) state.selected = null;
+    sync(state);
+  });
+}
+
 /** Build this feature during startup: the day menu and either the normal seen state or a day-version banner. */
 export function build(ctx: FeatureContext): void {
   const commits = ctx.info.commits ?? [];
@@ -457,7 +490,10 @@ export function build(ctx: FeatureContext): void {
   const groups = groupsOf(ctx);
   const hasPrior = prior !== null && prior.sha !== ctx.info.sha;
   const onlyActions = ctx.host.present.has('openVersion') && groups.some((group) => group.base !== null);
-  if ((!comparisons && !onlyActions) || (groups.length === 0 && !hasPrior && !onlyActions) || (commits.length < 2 && groups.length < 2 && !hasPrior && !onlyActions)) return;
+  if ((!comparisons && !onlyActions) || (groups.length === 0 && !hasPrior && !onlyActions) || (commits.length < 2 && groups.length < 2 && !hasPrior && !onlyActions)) {
+    showBase(ctx, null);
+    return;
+  }
   const doc = ctx.root.ownerDocument;
   const menuId = ctx.chromeId('changes-menu');
   const wrap = chrome(doc, 'span', { className: 'fact chg-pick' });
@@ -476,6 +512,7 @@ export function build(ctx: FeatureContext): void {
   if (hasPrior) {
     addNotice(ctx, state, prior as { sha: string; at: number });
   }
+  showBase(ctx, state);
 }
 
 /** The second phase follows changes.ts's initial day view and gives the banner the winning show ticket. */

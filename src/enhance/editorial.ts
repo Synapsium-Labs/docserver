@@ -48,13 +48,19 @@
 // data-docreader-chrome. Class names are the reference's, so assets/reader.css applies.
 //
 // Departures from the reference, on purpose: no address of an issue tracker (the host's itemLink answers the link),
-// no rules index in the facts panel, no document kinds of one product, no "Headlines | Full" switch in "In short", no
-// ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
+// no rules index in the facts panel, no document kinds of one product, no ids written on the document's nodes, and no parsing of front matter that a Markdown renderer left as paragraphs
 // (render() parses it, and the host passes it as info.frontList). The item link leaves an author's own link alone
 // (the reference re-pointed one that was not https), keeps a key's code element in the link (the reference replaced
 // it with the bare key), writes at most
 // ITEM_LINKS.links links (the reference linked every occurrence), and takes the neutral class `item-link` (the
 // reference's named one tracker; no rule of the stylesheet reads either).
+//
+// The "Headlines | Full" switch of "In short" (parity Task 5; `features.inShort`, default off, so a host that asks for nothing
+// gets the box as it always was): a `div.short-view` of two buttons, "Headlines" and "Full", `aria-pressed` on the chosen
+// one. Headlines shows the lead of each item of the box's lists, the first strong run, else the first sentence, and hides the
+// rest (a `span.rest` the box's `headlines` class and the `hidden` attribute both hide, so it is out of view and out of the
+// accessibility tree); an item with no lead to cut at keeps all its text. The rest is wrapped, never re-typed (journal.wrap,
+// journal.split). The choice is the reader-wide UI memory's `inshort` field ('headlines' or 'full'; Full by default).
 //
 // It publishes what later features read of the title block (docserver L2, Task 7b): `ctx.page` (registry.ts), once,
 // at the end of its build: the byline (or null), the items of the first "Waiting" box of "Where things stand" and that
@@ -96,7 +102,88 @@ const txt = (n: Node): string => (n.textContent ?? '').replace(/\s+/g, ' ').trim
 
 const isBlank = (n: Node): boolean => n.nodeType === 3 && (n as Text).data.trim() === '';
 
+/** A sentence's end: `.`, `!`, `?` or `…`, closing quotes and brackets, then white space or the end of the text. */
+const SENTENCE_END = /[.!?\u2026][\u0022\u0027\u201d\u2019)\]]*(?=\s|$)/;
+
+/** The blocks that end an item's lead: a nested list or a block of its own. */
+const BLOCKS: readonly string[] = ['ul', 'ol', 'p', 'div', 'pre', 'blockquote', 'table', 'dl', 'figure', 'details'];
+
+/** The UI memory field of the switch's choice. */
+const SHORT_VIEW = 'inshort';
+
 const isStrong = (n: Node | null): n is Element => n !== null && n.nodeType === 1 && (n as Element).localName === 'strong';
+
+/**
+ * The nodes of an item that follow its lead (adjacent siblings, in order, to the item's last child), or null when it has
+ * none. The lead is the first strong run (the child of the item that holds the first `strong` or `b` outside a nested list,
+ * to its end), else the first sentence: the text up to the first sentence end, the node split there when text follows, or the
+ * inline nodes before the first block. An item whose lead is all of it has no rest.
+ */
+function restOf(li: Element, journal: Journal): Node[] | null {
+  const kids = Array.from(li.childNodes);
+  const strongIn = (n: Node): boolean =>
+    n.nodeType === 1 && !['ul', 'ol'].includes((n as Element).localName) && ((n as Element).matches('strong, b') || (n as Element).querySelector('strong, b') !== null);
+  const holder = kids.find(strongIn);
+  let from: Node | null = null;
+  if (holder !== undefined) from = holder.nextSibling;
+  else {
+    for (const n of kids) {
+      if (n.nodeType === 1 && BLOCKS.includes((n as Element).localName)) {
+        from = n;
+        break;
+      }
+      if (n.nodeType !== 3) continue;
+      const text = n as Text;
+      const m = SENTENCE_END.exec(text.data);
+      if (m === null) continue;
+      const end = m.index + m[0].length;
+      from = end < text.data.length && text.data.slice(end).trim() !== '' ? journal.split(text, end) : text.nextSibling;
+      break;
+    }
+  }
+  if (from === null) return null;
+  const rest: Node[] = [];
+  for (let n: Node | null = from; n !== null; n = n.nextSibling) rest.push(n);
+  return rest.every(isBlank) ? null : rest;
+}
+
+/**
+ * The "Headlines | Full" switch of the "In short" box (`features.inShort`): its two buttons after the heading, each item's rest
+ * wrapped in a `span.rest`, and the choice kept in the UI memory.
+ */
+function shortSwitch(ctx: FeatureContext, box: HTMLElement, heading: Element): void {
+  const { journal } = ctx;
+  const doc = ctx.root.ownerDocument;
+  const items: Element[] = [];
+  for (const list of Array.from(box.children)) {
+    if (list.localName === 'ul' || list.localName === 'ol') items.push(...Array.from(list.children).filter((li) => li.localName === 'li'));
+  }
+  const rests: HTMLElement[] = [];
+  for (const li of items) {
+    const rest = restOf(li, journal);
+    if (rest === null) continue;
+    const wrapper = chrome(doc, 'span', { className: 'rest' });
+    journal.wrap(rest, wrapper);
+    rests.push(wrapper);
+  }
+  const buttons = new Map<string, HTMLButtonElement>();
+  const view = chrome(doc, 'div', { className: 'short-view', attrs: { role: 'group', 'aria-label': 'In short view' } });
+  for (const [name, text] of [['headlines', 'Headlines'], ['full', 'Full']] as const) {
+    const button = chrome(doc, 'button', { text, attrs: { type: 'button', 'aria-pressed': 'false' } });
+    buttons.set(name, button);
+    view.appendChild(button);
+  }
+  const choose = (name: string, remember: boolean): void => {
+    const headlines = name === 'headlines';
+    journal.toggleClass(box, 'headlines', headlines);
+    for (const rest of rests) journal.setAttribute(rest, 'hidden', headlines ? '' : null);
+    for (const [key, button] of buttons) journal.setAttribute(button, 'aria-pressed', String(key === name));
+    if (remember) ctx.state.writeUi(SHORT_VIEW, name);
+  };
+  for (const [name, button] of buttons) journal.listen(button, 'click', () => choose(name, true));
+  journal.insert(view, box, heading.nextSibling);
+  choose(ctx.state.readUi(SHORT_VIEW) === 'headlines' ? 'headlines' : 'full', false);
+}
 
 /** A byline separator: a middle dot with white space on both sides. */
 const SEP = /\s+·\s+/;
@@ -655,7 +742,10 @@ export function buildEditorial(ctx: FeatureContext): void {
     return wrapper;
   };
   const short = h2s.find((h) => ctx.vocab.box.short.test(labelOf(h)));
-  if (short !== undefined) box(short, 'short', ['h1', 'h2', 'hr']);
+  if (short !== undefined) {
+    const shortBox = box(short, 'short', ['h1', 'h2', 'hr']);
+    if (ctx.options.inShort) shortSwitch(ctx, shortBox, short);
+  }
 
   const stand = h2s.find((h) => ctx.vocab.box.stand.test(labelOf(h)));
   if (stand !== undefined) {

@@ -6,7 +6,7 @@
 // Schema 1 has closed keys: s, nonce, html, title, frontList, version, images, initialHash, lang, prefs, snapshot,
 // features, mermaid and bridge, and two optional ones the appearance contract adds (OPTIONAL_SEED_KEYS, absent from a
 // mount with neither): `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
-// base64 text, and (the parity additions) `items`, the host's resolved item links. The validator here checks their
+// base64 text, and (the parity additions) `items`, the host's resolved item links, and `changesBase`, the comparison base (a full sha, judged whole here). The validator here checks their
 // outer shape only, the bootstrap being small, and `features.vocabulary` likewise (a plain object; its words are judged by
 // frameDocument, src/frame/vocabulary.ts, and by the reader's normalizeOptions): the reader script runs parseAppearance on the appearance, the faces'
 // signature and size are checked by frameDocument and again in the reader script, and an item's href (an absolute
@@ -120,7 +120,7 @@ export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'v
  * The same lists as L2's normalizeOptions reads (src/enhance/options.ts; held equal by test/frame-seed.test.ts).
  */
 export const FEATURE_KEYS = Object.freeze({
-  flags: Object.freeze(['rules', 'folds', 'keyboard'] as const),
+  flags: Object.freeze(['rules', 'folds', 'keyboard', 'inShort'] as const),
   chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),
   groups: Object.freeze({
     status: Object.freeze(['ok', 'wait', 'no', 'info'] as const),
@@ -159,6 +159,7 @@ export interface SeedFeatures {
   readonly rules?: boolean;
   readonly folds?: boolean;
   readonly keyboard?: boolean;
+  readonly inShort?: boolean;
   readonly chrome?: ChromeOptions;
   readonly vocabulary?: VocabularyOptions;
 }
@@ -197,6 +198,8 @@ export interface Seed {
   readonly fonts?: SeedFonts;
   /** The resolved item links (parity Task 4); absent unless the host resolved some. Full checks are the host side's (src/frame/items.ts). */
   readonly items?: readonly SeedItem[];
+  /** The comparison base (parity Task 5): a full sha; absent unless the host seeded one. The reader asks `changes` for it once. */
+  readonly changesBase?: string;
 }
 
 /** A nonce: 128 bits as 32 lower-case hex digits. */
@@ -397,6 +400,7 @@ function seedFieldsMaxChars(): number {
     member('appearance', appearanceMaxChars()),
     member('fonts', fontsMaxChars()),
     member('items', itemsMaxChars()),
+    member('changesBase', raw(64)),
   ]);
   return fields + imagePadding;
 }
@@ -613,7 +617,7 @@ const itemsOk = (v: unknown): boolean => listOf(v, 50, (i) => isPlain(i) && same
  * The optional keys of the seed, each with its outer check (a refusal names the key). One table, so each key is written once:
  * OPTIONAL_SEED_KEYS and SEED_KEYS are derived from it, and validateSeed reads it. Defined here, after the checks it names.
  */
-const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['fonts', fontsOk], ['items', itemsOk]] as const;
+const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['changesBase', isFullSha], ['fonts', fontsOk], ['items', itemsOk]] as const;
 
 /** The keys a seed may leave out: a mount with no appearance and no faces writes the 1.1.0 seed, byte for byte. */
 export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(OPTIONAL_CHECKS.map((c) => c[0]));

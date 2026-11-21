@@ -121,6 +121,13 @@ export interface HostAdapters {
    * parseAppearance, so a bad slot never throws. Any value that is not a plain object is a TypeError.
    */
   readonly appearance?: Appearance;
+  /**
+   * The comparison base (parity Task 5): the commit the host recorded when the frame asked `changes` for it (a full sha, 40 or 64
+   * lower-case hex digits), handed back so the frame asks for it once at its start and shows the comparison as "Changes since"
+   * shows one. Seeded into every mount, and used only when `changes` is given. A value that is not a string is a TypeError; a
+   * string that is not a full sha is logged once and not seeded (the document still mounts). The host sets it, and nothing else does.
+   */
+  readonly changesBase?: string;
   /** ./host never navigates or opens a window: the host decides. */
   onLink?(link: HostLink): void;
   /**
@@ -213,7 +220,7 @@ export type ToolCommand = (typeof TOOL_COMMANDS)[number];
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
   'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
-  'onPlace', 'onPrintFigure', 'items',
+  'onPlace', 'onPrintFigure', 'items', 'changesBase',
 ]);
 
 /** The callbacks, each a function when given. */
@@ -341,6 +348,8 @@ interface Checked {
   readonly prefs: Partial<FramePrefs>;
   /** The verdict of the adapters' `appearance`; undefined when none was given. */
   readonly appearance: Appearance | undefined;
+  /** The seeded comparison base: a full sha; undefined when none was given or the one given is not a full sha. */
+  readonly changesBase: string | undefined;
   readonly features: unknown;
   readonly gate: MermaidGateCaps;
   readonly draw: 'auto' | 'on-request' | 'after-ready';
@@ -393,6 +402,9 @@ function check(adapters: unknown): Checked {
     if (!isPlain(a['appearance'])) throw new TypeError('pinax-lib host: adapters.appearance must be a plain object');
     appearance = parseAppearance(a['appearance']).appearance;
   }
+  const base = a['changesBase'];
+  if (base !== undefined && typeof base !== 'string') throw new TypeError('pinax-lib host: adapters.changesBase must be a string');
+  if (base !== undefined && !isFullSha(base)) console.warn('pinax-lib host: adapters.changesBase is not a full sha (40 or 64 lower-case hex digits), so no comparison is seeded');
   // A malformed `fonts` is a host's programming error: it throws here, at mount time, and never as a fallback.
   const checkedAssets = assetsOf(a['assets']);
   let store: HostStore | null = null;
@@ -407,7 +419,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('pinax-lib host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('pinax-lib host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
+  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, changesBase: base !== undefined && isFullSha(base) ? base : undefined, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -633,6 +645,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         mermaid: gated !== null && gated.inline ? { maxTextSize: gated.maxTextSize, draw: c.draw } : null,
         ...(c.features === undefined ? {} : { features: c.features as FrameFeatures }),
         ...(links === undefined ? {} : { items: links as NonNullable<FrameOptions['items']> }),
+        ...(c.changesBase === undefined ? {} : { changesBase: c.changesBase }),
         bridge: {
           links: c.callbacks.onLink !== undefined,
           hash: c.callbacks.onHash !== undefined,

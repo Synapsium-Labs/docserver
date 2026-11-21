@@ -43,7 +43,7 @@ import { FRAME_MANIFEST } from './manifest.generated.js';
 import { isFragmentId } from './fragment.js';
 import { ITEM_LIMITS, itemsWhy, type ItemLink } from './items.js';
 import { vocabularyOk } from './vocabulary.js';
-import { FRAME_PREF_VALUES, type BridgeStoreKey } from './protocol.js';
+import { FRAME_PREF_VALUES, isFullSha, type BridgeStoreKey } from './protocol.js';
 import {
   BASE64_FACE,
   BRIDGE_KEYS,
@@ -140,6 +140,8 @@ export interface FrameFeatures {
   readonly rules?: boolean;
   readonly folds?: boolean;
   readonly keyboard?: boolean;
+  /** The "Headlines | Full" switch of the "In short" box (parity Task 5); default false: the box as it always was. */
+  readonly inShort?: boolean;
   readonly chrome?: ChromeOptions;
   readonly vocabulary?: VocabularyOptions;
 }
@@ -192,6 +194,13 @@ export interface FrameOptions {
    * (`navigate`, the host decides). Anything else is refused as invalid-input. Absent or empty: no `items` key in the seed.
    */
   readonly items?: readonly ItemLink[];
+  /**
+   * The comparison base (parity Task 5): a full sha (40 or 64 lower-case hex), the commit the host recorded when the frame asked
+   * it, through `changes`, for what changed since. With the bridge's `changes` on, the reader asks `changes` for it once when it
+   * starts and shows the comparison as "Changes since" shows one, labelled by that commit when `commits` names it, else "Since
+   * your comparison". Anything else than a full sha is refused as invalid-input. Absent: no `changesBase` key in the seed.
+   */
+  readonly changesBase?: string;
   /** Default MAX_SRCDOC_CHARS_DEFAULT; a host may only lower it. */
   readonly maxSrcdocChars?: number;
 }
@@ -495,6 +504,8 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   // The faces are seeded whenever a host gives them; the frame loads them, and its stylesheet uses them only while hosted.
   const fonts = typeof assetsRaw === 'object' && assetsRaw !== null ? fontsOf((assetsRaw as FrameAssets).fonts) : undefined;
   const items = itemsOf(b, o.items);
+  const changesBase: unknown = o.changesBase;
+  if (changesBase !== undefined && !isFullSha(changesBase)) invalid('changesBase must be a full sha: 40 or 64 lower-case hex digits');
   const appearance = o.appearance === undefined ? undefined : (parseAppearance(o.appearance).appearance as SeedAppearance);
   const fields: Seed = {
     s: 1,
@@ -519,6 +530,7 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
     ...(appearance === undefined ? {} : { appearance }),
     ...(fonts === undefined ? {} : { fonts }),
     ...(items === undefined ? {} : { items }),
+    ...(changesBase === undefined ? {} : { changesBase }),
   };
   // The vocabulary's words, judged here in full: the bootstrap's validator holds the field to a plain object (src/frame/vocabulary.ts).
   // The refusal reads as the validator's own, which named this field before the split.

@@ -1197,13 +1197,15 @@ describe('the appearance contract: the derived srcdoc cap rises by both fields a
   /** SEED_FIELDS_MAX_CHARS at 1.1.0 (the commit aceb346's src/frame/seed.ts, evaluated): neither field was counted. */
   const SEED_FIELDS_MAX_CHARS_1_1_0 = 45768624;
 
-  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters (the two bridge members of the parity wire among them)', () => {
+  it('SEED_FIELDS_MAX_CHARS, and so MAX_SRCDOC_CHARS_DEFAULT, is 1.1.0\'s plus 2 x 174764 + the largest appearance text + the keys\' own characters (the two bridge members of the parity wire, the In short flag and the comparison base among them)', () => {
     const faces = 2 * 174764;
     expect(faces).toBe(349528);
     // `,"appearance":V` and `,"fonts":{"sans":"F","mono":"F"}`, the parity wire's two bridge members (the cap counts a switch as `false`),
     // and the items (Task 4): `,"items":` and 50 links of a 100-unit value and a 4096-unit href, each character of the six `\u003c` writes.
     const items = JSON.stringify(Array.from({ length: 50 }, () => ({ value: '<'.repeat(100), href: '<'.repeat(4096) }))).replace(/</g, '\\u003c');
-    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length + `,"places":false`.length + `,"printFigures":false`.length + `,"items":`.length + items.length;
+    // Task 5 adds the `inShort` flag (counted `false`) and the comparison base, a 64-digit sha: `,"changesBase":"` and the digits and the closing quote.
+    const keys = `,"appearance":`.length + `,"fonts":{"sans":"","mono":""}`.length + `,"places":false`.length + `,"printFigures":false`.length + `,"items":`.length + items.length
+      + `,"inShort":false`.length + `,"changesBase":"${'f'.repeat(64)}"`.length;
     const rise = faces + MAXIMAL_APPEARANCE_TEXT().length + keys;
     expect(SEED_FIELDS_MAX_CHARS - SEED_FIELDS_MAX_CHARS_1_1_0).toBe(rise);
     const assetChars = Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0);
@@ -1574,5 +1576,44 @@ describe('features.vocabulary: judged in full on the host side before the bootst
     expect(message({ qualifiers: ['w'.repeat(64)] })).toBe('no refusal');
     expect(message({})).toBe('no refusal');
     expect(refusal(() => frame(plain(), { features: {} }))).toBe('no refusal');
+  });
+});
+
+describe('the comparison base and the In short flag (docserver parity, Task 5): FrameOptions.changesBase, FrameFeatures.inShort', () => {
+  const SHA40 = 'a'.repeat(40);
+  const SHA64 = 'b'.repeat(64);
+  const bad = (changesBase: unknown): string => refusal(() => frame(plain(), { changesBase: changesBase as string }));
+
+  it('seeds a full sha as given, and with none the srcdoc is the one without the option, byte for byte', () => {
+    for (const sha of [SHA40, SHA64]) expect(seedOf(frame(plain(), { changesBase: sha }))['changesBase'], sha).toBe(sha);
+    const without = frame(plain());
+    expect(Object.hasOwn(seedOf(without), 'changesBase')).toBe(false);
+    expect(frame(plain(), { changesBase: undefined } as unknown as Partial<FrameOptions>)).toBe(without);
+  });
+
+  it('refuses anything but a full sha as invalid-input: a short sha, upper case, a non-string, null, empty', () => {
+    for (const v of ['abc1234', SHA40.slice(1), `${SHA40}a`, SHA40.toUpperCase(), '', null, 40, [SHA40], { sha: SHA40 }, true]) expect(bad(v), JSON.stringify(v)).toBe('invalid-input');
+    expect(bad(SHA40)).toBe('no refusal');
+  });
+
+  it('refuses it by its own check, before the bootstrap\'s validator: the message names the option and the grammar', () => {
+    for (const v of ['abc1234', SHA40.toUpperCase(), null, 40]) {
+      let message = 'no refusal';
+      try {
+        frame(plain(), { changesBase: v as unknown as string });
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+      }
+      expect(message, JSON.stringify(v)).toBe('frameDocument: changesBase must be a full sha: 40 or 64 lower-case hex digits');
+    }
+  });
+
+  it('the seed with the base is judged by the bootstrap\'s own validator, whose check it passes', () => {
+    expect(validateSeed({ ...seedOf(frame(plain(), { changesBase: SHA40 })) })).toMatchObject({ ok: true });
+  });
+
+  it('seeds features.inShort as given: true and false are kept, anything else is refused', () => {
+    for (const v of [true, false]) expect(seedOf(frame(plain(), { features: { inShort: v } }))['features'], String(v)).toEqual({ inShort: v });
+    for (const v of ['yes', 1, null]) expect(refusal(() => frame(plain(), { features: { inShort: v } as unknown as FrameFeatures })), String(v)).toBe('invalid-input');
   });
 });

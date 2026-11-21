@@ -231,6 +231,19 @@ export interface EnhanceOptions {
   chrome?: ChromeOptions;
   /** Rule paragraphs and the rules index; default false. */
   rules?: boolean;
+  /**
+   * The "Headlines | Full" switch of the "In short" box; default false (the box as it always was). On, the box carries two
+   * buttons: Full shows every item, Headlines only each item's lead (its first strong run, else its first sentence), the
+   * rest out of view and out of the accessibility tree. The choice is kept in the reader-wide UI memory.
+   */
+  inShort?: boolean;
+  /**
+   * A commit to compare the document with, shown as "Changes since" shows a comparison, asked of `changes` once when the
+   * reader starts (a sha of 7 to 40 hex characters, or 64). Used only with `changes` and a commit version; the host
+   * records a base when `changes` is asked for it and hands it back here. Labelled by the base's commit when
+   * `info.commits` names it, else "Since your comparison".
+   */
+  changesBase?: string;
   /** The id to open the document at, without '#' (a heading id or a defined ID); empty or null for none. */
   initialHash?: string | null;
   /** A link the reader was asked to follow. Absent: the browser follows it. */
