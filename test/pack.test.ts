@@ -116,10 +116,9 @@ const ALLOWED = [
   /^assets\/assets\.json$/,
   /^assets\/frame\/(?:guard|bootstrap|enhance)\.js$|^assets\/frame\/reader\.css$/,
   /^assets\/mermaid\/mermaid\.frame\.js$/,
-  // The layouts (docserver parity T9): each one's enhance bundle and stylesheet as a frame file, its tracked stylesheet source, and
-  // its feature list and the shared mark (modules of dist/enhance/layouts/).
+  // The alternate layout bundles, stylesheet sources, and their internal compiled modules.
   /^assets\/frame\/enhance-[a-z]+\.js$|^assets\/frame\/layout-[a-z]+\.css$|^assets\/layouts\/[a-z]+\.css$/,
-  /^dist\/enhance\/layouts\/(?:mark|[a-z]+\/features)\.(?:js|d\.ts)$/,
+  /^dist\/enhance\/layouts\/(?:contents|mark|reveal|classic\/(?:editorial|features)|editorial\/(?:features|plans))\.(?:js|d\.ts)$/,
   /^(?:package\.json|README\.md|LICENSE|THIRD-PARTY-NOTICES)$/,
 ];
 

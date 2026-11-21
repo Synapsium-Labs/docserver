@@ -60,6 +60,14 @@ Classic uses 146,912 characters and Editorial 167,270, respectively 78,797 and 5
 
 **P14a.** Move the Classic stylesheet's 4,409 characters into the shared stylesheet in an in-memory manifest, keeping the measured landing row. The production size judge accepts the control. It computes the same `total` of 4,885,513 but a `frame` of 4,575,740 and rejects the mutant: "the rule: the newest growth row is not the recomputation from the judged commit" (exit 1). No shipped asset or table is changed by the probe.
 
+## Whole-suite and package gate
+
+- First full local Chromium run: exit 137 after the test slice hit its memory cap, with no reported assertion mismatch. This landing's first-suite signal is `red`; the run gave no complete suite verdict.
+- The single bounded-heap retry also exited nonzero: 6,642 passed, one assertion failed, 805 skipped, eleven worker errors, and a failed frame-items setup (`esbuild` EPIPE). The wrapper reported memory kills and a worker also exhausted its bounded heap. No third full local run was attempted.
+- The assertion failure was `test/pack.test.ts` → “holds nothing else: no references, scripts, sources, tests, CI files or working papers”. The list permitted the alternate feature graphs and mark but not eight compiled files for the implemented layout modules. The fix names the files' exact module stems; it makes no change to build output or public exports. All 15 isolated package and installed-consumer tests passed after the fix. The first-suite signal remains `red`.
+- The measured growth row passed all five size-contract checks against landing A. The conformance ratchet kept all 47 verdicts and 18 hostile layout cases, with no golden or existing layout snapshot moves. Type checking and frame build reproduction passed after the review fix.
+- Final isolated Chromium checks passed: frame items 3 (no setup error), selected sealed frame boot 3, corpus read-back 172, hosted appearances 24 across Classic and Editorial, and non-colour cues 38. WebKit remains a CI check.
+
 ## Process notes
 
 - Task 0 and Task 9 each had an edit applied through a script instead of a file-editing tool. Task 9's split cleanup repeated this on mechanical deletions in ten files before switching to the file tools. The changes were checked in the diffs. A Task 9 commit message was corrected before pushing. The pack test's allowlist and count had not been checked in the first infrastructure pass; the review fix corrected them and ran the test.
