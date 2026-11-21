@@ -76,9 +76,17 @@ function cueState(): CueState | null {
   })();
 }
 
-async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>): Promise<void> {
+async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>, layout?: HarnessLayout): Promise<void> {
   const expected = CUE_SCOPES[c.id];
   if (expected === undefined) return;
+  if (layout === 'classic') {
+    // Classic draws and controls the same figures, but has no ID index or definition previews.
+    // Wait for its tool wiring before asserting the intentional absence; don't accept an undrawn source.
+    await doc.page.locator('figure.drawn svg').first().waitFor();
+    await doc.page.locator('figure.drawn .tools[data-diagram-tools="true"]').getByRole('button', { name: 'Full screen' }).first().waitFor();
+    expect(await doc.page.evaluate(cueState), c.id).toEqual({ targets: 0, boxes: [], rings: [], dots: [] });
+    return;
+  }
   try {
     await doc.page.waitForFunction((count) => {
       const targets = Array.from(document.querySelectorAll<SVGGElement>('main[data-harness-root] figure svg g.dnode'));
@@ -113,7 +121,7 @@ function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
 async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void, layout?: HarnessLayout): Promise<void> {
   const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout) });
   try {
-    await waitForCues(c, doc);
+    await waitForCues(c, doc, layout);
     const snap = await doc.snapshot(c.scope);
     holdClean(c.id, { violations: await doc.violations(), aborted: doc.aborted, missing: doc.missing });
     holdIt(c.id, snap, c.expected);

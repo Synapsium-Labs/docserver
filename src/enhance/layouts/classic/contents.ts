@@ -77,8 +77,10 @@ export function build(ctx: FeatureContext): void {
   journal.listen(scrim, 'click', close);
   journal.listen(rail, 'keydown', (event) => { if ((event as KeyboardEvent).key === 'Escape' && opened) { event.preventDefault(); close(); } });
   journal.listen(rail, 'click', (event) => {
-    const link = (event.target as Element).closest('a[href^="#"]');
-    if (link !== null && ctx.nav.byId((link.getAttribute('href') ?? '').slice(1)) !== null) close();
+    const target = event.target as Node | null;
+    const element = target?.nodeType === 1 ? target as Element : target?.parentElement;
+    const href = element?.closest('a[href]')?.getAttribute('href');
+    if (href?.startsWith('#') === true && ctx.nav.byId(href.slice(1)) !== null) close();
   });
   journal.listen(collapse, 'click', () => { for (const item of items.values()) journal.toggleClass(item.top, 'open', false); });
   journal.defer(ctx.overlays.register('drawer', { isOpen: () => opened, close }));

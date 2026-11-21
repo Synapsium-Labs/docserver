@@ -1,4 +1,5 @@
 /* Classic contents and reading cues use the host's reader slots. */
+[data-docreader-root][data-docreader-layout="classic"] { --docreader-layout: classic; }
 [data-docreader-root][data-docreader-layout="classic"] .doc-toc { overflow-y: auto; border-right: 1px solid var(--border); }
 [data-docreader-root][data-docreader-layout="classic"] .toc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 8px 10px; }
 [data-docreader-root][data-docreader-layout="classic"] .toc-title { color: var(--text-muted); font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
