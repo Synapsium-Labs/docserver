@@ -39,7 +39,7 @@
 // set by that adapter alone) and is handed each as `Number(p) / 1000`; `DocFrame.command(name)` posts a `command` op after
 // focusing the iframe, once this mount is ready, and does nothing before it, after a fallback or after destroy().
 //
-// The parity additions (docserver parity T2): `onPlace` asks the frame to report its overlay (the seed's `bridge.places`,
+// The parity additions (docserver parity T2): `onPlace` asks the frame to report its full-screen figure (the seed's `bridge.places`,
 // set by that adapter alone) and, with it, `onHash` is handed a second argument, `{ push, from }`; `onPrintFigure` asks
 // for print figures (`bridge.printFigures`, by that adapter alone). A run of figures belongs to one `printFigures()` call
 // (plan choice B5): the parser refuses a `print-figure` with no open run, and each figure is checked against the run's
@@ -137,7 +137,7 @@ export interface HostAdapters {
    * came from (hand it back to `goto`), or null. Without `onPlace` it is called with the id alone, as before.
    */
   onHash?(id: string, entry?: { readonly push: boolean; readonly from: string | null }): void;
-  /** Giving it asks the frame to report its overlay: `'overlay'` when one opened, `'overlay-closed'` when it closed. */
+  /** Giving it asks the frame to report its full-screen figure: `'overlay'` when it opened, `'overlay-closed'` when it closed. */
   onPlace?(kind: PlaceKind): void;
   /**
    * Giving it asks the frame for print figures after `DocFrame.printFigures()`: one call per figure, `i` of `n`, `png` the
@@ -192,7 +192,7 @@ export interface DocFrame {
    */
   command(name: ToolCommand): void;
   /**
-   * Closes the frame's overlay, if one is open (needs `onPlace`, else a TypeError, whatever the state). Posted once ready;
+   * Closes the full-screen figure, if one is open (needs `onPlace`, else a TypeError, whatever the state). Posted once ready;
    * before it, after destroy() and after a fallback it does nothing.
    */
   closeOverlay(): void;
@@ -794,7 +794,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           return;
         case 'hash':
           // The entry only under bridge.places: a 1.1-shaped host's onHash is called with the id alone.
-          if (places) call('onHash', msg.id, { push: msg.push === 'true', from: msg.from ?? null });
+          if (places) call('onHash', msg.id, Object.freeze({ push: msg.push === 'true', from: msg.from ?? null }));
           else call('onHash', msg.id);
           return;
         case 'place':
@@ -809,7 +809,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
             run.seen.add(i);
             run.bytes += figureBytes;
           }
-          call('onPrintFigure', { i, n, png: msg.png });
+          call('onPrintFigure', Object.freeze({ i, n, png: msg.png }));
           return;
         }
         case 'progress':

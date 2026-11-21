@@ -33,7 +33,7 @@ const REQUIRED_CHROME_CLASSES = [
   'toc-tabs', 'tools', 'topbar', 'topbar-inner', 'vb-long', 'vb-short', 'ver-back',
   'ver-banner', 'ver-show', 'what', 'who', 'wide', 'xcard', 'xc-body', 'xc-def',
   'xc-foot', 'xc-go', 'xc-head', 'xc-id', 'xc-k', 'xc-row', 'xc-src', 'xc-term',
-  'xc-title', 'xc-v', 'xref', 'rest', 'short-view',
+  'xc-title', 'xc-v', 'xref', 'rest', 'short-view', 'print-stage',
   'sw', 'k-nav', 'k-term', 'k-id', 'k-wait', 'k-chg', 'k-no', 'k-ok', 'k-info', 'k-code',
   'b', 'cell-line', 'cols-2', 'lvl', 'cm-row', 'yours',
   'short', 'callout', 'agreed', 'waiting', 'later', 'other', 'fo-out', 'fo-in', 'fo-fit', 'fo-close',

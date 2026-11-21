@@ -299,12 +299,12 @@ Measured from the committed `src/frame/manifest.generated.ts` at the final state
 |---|---|---|---|
 | guard | 3 643 | 3 643 | 0 |
 | bootstrap | 31 161 | 32 740 | +1 579 |
-| enhance (the default layout) | 214 215 | 223 989 | +9 774 |
+| enhance (the default layout) | 214 215 | 224 058 | +9 843 |
 | stylesheet | 562 043 | 562 299 | +256 |
 | Mermaid | 3 746 940 | 3 746 940 | 0 |
-| **total, and frame** | **4 558 002** | **4 569 611** | **+11 609** |
+| **total, and frame** | **4 558 002** | **4 569 680** | **+11 678** |
 
-With the default layout only, `frame` equals `total`: the row is `{"design":"x2","total":4569611,"frame":4569611}`. X2's shares are 1 166 336 on the total and 72 704 on the frame, so the landing uses 11 609 of 72 704 on both and 61 095 are left for landing B. (The running sum against the two shares is the same number, since no layout asset exists yet.)
+With the default layout only, `frame` equals `total`: the row is `{"design":"x2","total":4569680,"frame":4569680}`. X2's shares are 1 166 336 on the total and 72 704 on the frame, so the landing uses 11 678 of 72 704 on both and 61 026 are left for landing B. (The running sum against the two shares is the same number, since no layout asset exists yet.)
 
 `test/size-contract.test.ts` was run with `DOCSERVER_SIZE_TEXT='Size-Design: x2'`, the judged commit pointed at a commit made from the landing's tree in a throwaway index (never a second worktree and never a repository copy), against `origin/main` and against the branch's tip before the landing: 5 of 5 passed each time. Two mutants of the row are red (`parity-mutations/task-8.md`: P8a the row names `x1`, P8b two `Size-Design:` lines). The commands:
 
@@ -317,7 +317,7 @@ On any commit whose message carries no `Size-Design:` line, and which does not a
 
 **Print mode's size, beside test 8 and not in it:** `src/render/print/*.ts` is 11 files, 58 176 characters, with `src/render/reader.ts` (the whole-option check, 6 041 characters) shared with the item values; `assets/print.css` is 4 254 bytes (`2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`). Neither is a frame asset; the bootstrap and `frame` budgets do not count them.
 
-**Test 7's old-cap row at the new assets.** The document it builds has a fixed part of 110 026 723 characters; at this landing's assets (4 569 611) it is 114 596 334, over 1.1.0's default cap of 114 569 828 only because the assets and the seed's new keys grew, and `MAX_SRCDOC_CHARS_DEFAULT` is now 116 222 539 (it rose by the items, the comparison base, the two bridge switches and the flag at their caps, and by the assets). The row's assertions (at 1.1.0's asset lengths the document is within 1.1.0's cap; the derived cap equals its formula) are held in `test/frame-document.test.ts`. The browser old-cap row stays a release-gate item, as the appearance landing left it.
+**Test 7's old-cap row at the new assets.** The document it builds has a fixed part of 110 026 723 characters; at this landing's assets (4 569 680) it is 114 596 403, over 1.1.0's default cap of 114 569 828 only because the assets and the seed's new keys grew, and `MAX_SRCDOC_CHARS_DEFAULT` is now 116 222 608 (it rose by the items, the comparison base, the two bridge switches and the flag at their caps, and by the assets). The row's assertions (at 1.1.0's asset lengths the document is within 1.1.0's cap; the derived cap equals its formula) are held in `test/frame-document.test.ts`. The browser old-cap row stays a release-gate item, as the appearance landing left it.
 
 ### The bootstrap (budget 32 768 bytes)
 
@@ -380,7 +380,7 @@ About 0 bytes if the layouts' state maps onto the existing `DOC_FIELDS` (`outlin
 ### Commands
 
 ```text
-ccrc test -- ./node_modules/.bin/vitest run --maxWorkers=2 <one file>              per task, one file per call
+./node_modules/.bin/vitest run --maxWorkers=2 <one file>                           per task, one file per call
 DOCREADER_BROWSERS=chromium ... test/browser/<file>                                 browser rows (WebKit is CI's)
 npm run build:frame; node scripts/build-frame.mjs --check                          after every asset change
 DOCSERVER_SIZE_HEAD=... DOCSERVER_SIZE_BASE=origin/main DOCSERVER_SIZE_TEXT='Size-Design: x2' ... test/size-contract.test.ts

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { render } from '../src/render/index.js';
-import { all, attr, el, KEPT_ATTRS, insert, KEPT_IMG_ATTRS, nextEl, nextSibling, parse, prevEl, serialize, setAttr, text, wrap, type ElN, type N } from '../src/render/print/tree.js';
+import { all, attr, detachAll, el, KEPT_ATTRS, insert, KEPT_IMG_ATTRS, nextEl, nextSibling, parse, prevEl, serialize, setAttr, text, wrap, type ElN, type N } from '../src/render/print/tree.js';
 import { emitted, FAMILIES, fixture, fixtureNames, highlightSubScopeClasses, inFamily, inputs, PRINT, registeredLanguages, ROOT } from './print-vocabulary.js';
 
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -302,6 +302,18 @@ describe('the cost of print mode is linear in the document', () => {
     for (const k of parent.kids) k.at += 3;
     expect(walk()).toBe(3 * total);
     expect(reads, `reads for ${String(total)} children`).toBeLessThan(60 * N);
+  });
+
+  it('detachAll takes a set of siblings out in one pass: the others stay in order and know their positions, the taken have no parent, a node already out is skipped (final review I1)', () => {
+    const kids = Array.from({ length: 10 }, (_, i) => el('i', String(i)));
+    const parent = el('div', undefined, kids);
+    const out = el('b');
+    detachAll([kids[1] as N, kids[4] as N, kids[5] as N, kids[9] as N, out]);
+    expect(parent.kids.map((k) => attr(k as ElN, 'class'))).toEqual(['0', '2', '3', '6', '7', '8']);
+    parent.kids.forEach((k, i) => expect(k.at).toBe(i));
+    for (const k of [1, 4, 5, 9]) expect((kids[k] as N).up).toBeNull();
+    expect(nextSibling(parent.kids[2] as N)).toBe(kids[6]);
+    expect(prevEl(parent.kids[3] as N)).toBe(kids[3]);
   });
 
   it('searches no long array for a node\'s position: print adds few such searches to a render, however many blocks (P7am, P7ax)', () => {

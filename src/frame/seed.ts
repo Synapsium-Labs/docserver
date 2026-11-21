@@ -4,8 +4,8 @@
 // own pure files (never manifest.generated.ts or document.ts, Reference 3) and holds no import of render() or L2.
 //
 // Schema 1 has closed keys: s, nonce, html, title, frontList, version, images, initialHash, lang, prefs, snapshot,
-// features, mermaid and bridge, and two optional ones the appearance contract adds (OPTIONAL_SEED_KEYS, absent from a
-// mount with neither): `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
+// features, mermaid and bridge, and four optional ones (OPTIONAL_SEED_KEYS, absent from a mount that gives none of them), two of
+// them the appearance contract's: `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
 // base64 text, and (the parity additions) `items`, the host's resolved item links, and `changesBase`, the comparison base (a full sha, judged whole here). The validator here checks their
 // outer shape only, the bootstrap being small, and `features.vocabulary` likewise (a plain object; its words are judged by
 // frameDocument, src/frame/vocabulary.ts, and by the reader's normalizeOptions): the reader script runs parseAppearance on the appearance, the faces'
@@ -619,7 +619,7 @@ const itemsOk = (v: unknown): boolean => listOf(v, 50, (i) => isPlain(i) && same
  */
 const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['changesBase', isFullSha], ['fonts', fontsOk], ['items', itemsOk]] as const;
 
-/** The keys a seed may leave out: a mount with no appearance and no faces writes the 1.1.0 seed, byte for byte. */
+/** The keys a seed may leave out: the appearance, the comparison base, the faces and the item links. A mount that gives none of them writes a seed with none of these four keys (its `bridge` still carries all 8 of its own keys). */
 export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(OPTIONAL_CHECKS.map((c) => c[0]));
 
 /** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */

@@ -204,6 +204,31 @@ export function detach(n: N): void {
   }
   n.up = null;
 }
+/**
+ * Take every node of `nodes` out of its parent in one pass over each parent (compact the children in place, once), not one splice
+ * and one renumber per node: a paragraph of k joins costs O(k), not O(k^2). A node already detached is skipped.
+ */
+export function detachAll(nodes: readonly N[]): void {
+  const byParent = new Map<ElN, Set<N>>();
+  for (const n of nodes) {
+    const p = n.up;
+    if (p === null) continue;
+    const set = byParent.get(p);
+    if (set === undefined) byParent.set(p, new Set([n]));
+    else set.add(n);
+  }
+  for (const [p, gone] of byParent) {
+    let w = 0;
+    for (const c of p.kids) {
+      if (gone.has(c)) continue;
+      p.kids[w] = c;
+      c.at = w;
+      w += 1;
+    }
+    p.kids.length = w;
+    for (const c of gone) c.up = null;
+  }
+}
 export function append(p: ElN, n: N): void {
   detach(n);
   n.up = p;

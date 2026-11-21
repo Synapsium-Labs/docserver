@@ -117,7 +117,9 @@ const isStrong = (n: Node | null): n is Element => n !== null && n.nodeType === 
  * The nodes of an item that follow its lead (adjacent siblings, in order, to the item's last child), or null when it has
  * none. The lead is the first strong run (the child of the item that holds the first `strong` or `b` outside a nested list,
  * to its end), else the first sentence: the text up to the first sentence end, the node split there when text follows, or the
- * inline nodes before the first block. An item whose lead is all of it has no rest.
+ * inline nodes before the first block. An item whose lead is all of it has no rest. In a loose list the item's first child is a
+ * `p`: when it is the first thing in the item (white space aside), that whole paragraph is the lead and the rest starts after it,
+ * so a loose item shows its first paragraph, not nothing.
  */
 function restOf(li: Element, journal: Journal): Node[] | null {
   const kids = Array.from(li.childNodes);
@@ -127,13 +129,18 @@ function restOf(li: Element, journal: Journal): Node[] | null {
   let from: Node | null = null;
   if (holder !== undefined) from = holder.nextSibling;
   else {
+    let leading = true;
     for (const n of kids) {
       if (n.nodeType === 1 && BLOCKS.includes((n as Element).localName)) {
-        from = n;
+        from = leading && (n as Element).localName === 'p' ? n.nextSibling : n;
         break;
       }
-      if (n.nodeType !== 3) continue;
+      if (n.nodeType !== 3) {
+        leading = false;
+        continue;
+      }
       const text = n as Text;
+      if (!isBlank(n)) leading = false;
       const m = SENTENCE_END.exec(text.data);
       if (m === null) continue;
       const end = m.index + m[0].length;

@@ -2246,6 +2246,16 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       ]);
     });
 
+    it('the { push, from } entry and the { i, n, png } figure handed to a host adapter are frozen, as ./enhance\'s are (final review M7)', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.say({ t: 'hash', id: 'title', push: 'true', from: TOKEN });
+      m.frame.printFigures();
+      m.say(fig(0, 1));
+      expect(Object.isFrozen(c.hash[0]?.[1])).toBe(true);
+      expect(Object.isFrozen(c.figures[0])).toBe(true);
+    });
+
     it('a push or a from that is not valid is refused, never handed on', async () => {
       const { c, over } = calls();
       const m = await ready(PLAIN, over);

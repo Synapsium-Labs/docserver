@@ -52,7 +52,8 @@ function sources(dir: string): string[] {
 describe('the scan: what it finds', () => {
   it('finds every well-known tracker host and issue URL shape, in any case, and not the tests\' placeholder host', () => {
     for (const planted of [
-      'https://linear.app/team/issue/AB-1', 'https://acme.atlassian.net/browse/AB-12', 'https://JIRA.example.org/', 'https://x.youtrack.cloud/issue/AB-1',
+      // The first sample is built from parts, so no full tracker URL stands in a tracked file.
+      ['https://linear', '.app/', 'x', '/issue/AB-1'].join(''), 'https://acme.atlassian.net/browse/AB-12', 'https://JIRA.example.org/', 'https://x.youtrack.cloud/issue/AB-1',
       'api.clubhouse.io', 'app.shortcut.com', 'app.asana.com/0/1', 'trello.com/c/x', 'x.monday.com', 'notion.so/x', 'dev.azure.com/org/_workitems',
       'org.visualstudio.com', 'bitbucket.org/a/b', 'gitlab.com/a/b', 'https://github.com/o/r/issues/1', 'https://github.com/o/r/pull/2',
       'https://host.example/issues/12', 'https://host.example/browse/AB-12', 'https://host.example/tickets/7', '`${base}/browse/${key}`', '`${base}/issues/${n}`',

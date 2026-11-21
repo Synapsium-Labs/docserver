@@ -144,6 +144,32 @@ describe('the two views', () => {
     expect(third.querySelector('.rest')).toBeNull();
   });
 
+  it('a loose list (items in paragraphs) with no bold shows each item\'s first paragraph in Headlines and hides only the paragraphs after it (final review I2)', async () => {
+    const md = ['# Loose', '', '**Spec** · 2026-10-19 · Status: Draft', '', '## In short', '', '- First point. More text.', '', '  A second paragraph of the first.', '', '- Second point.', '', '- **Bold.** A third, with a lead.', '', '## 1. Scope', '', 'Scope text.', ''].join('\n');
+    const root = mount(md);
+    await enhance(root, { inShort: true });
+    buttons(root)[0]?.click();
+    expect(items(root).map((li) => norm(shown(li)))).toEqual(['First point. More text.', 'Second point.', 'Bold. A third, with a lead.']);
+    // Only the first item's later paragraph is a rest: the second has none, and the third's strong run is in its one paragraph (the child that holds it is the lead).
+    expect(norm(items(root)[0]?.querySelector('.rest')?.textContent)).toBe('A second paragraph of the first.');
+    expect(items(root)[1]?.querySelector('.rest')).toBeNull();
+    expect(box(root).querySelectorAll('.rest')).toHaveLength(1);
+    buttons(root)[1]?.click();
+    expect(items(root).map((li) => norm(shown(li)))).toEqual(['First point. More text. A second paragraph of the first.', 'Second point.', 'Bold. A third, with a lead.']);
+  });
+
+  it('a paragraph that follows inline text is a block of the rest, not the lead (the first paragraph is the lead only when it opens the item)', async () => {
+    // render() never writes inline text before a paragraph in one item, so the DOM is built from render()'s own output by hand.
+    const root = mount();
+    const li = root.querySelector('ul li') as HTMLElement;
+    li.replaceChildren(document.createTextNode('Opening words with no end'), Object.assign(document.createElement('p'), { textContent: 'A paragraph after them.' }));
+    await enhance(root, { inShort: true });
+    buttons(root)[0]?.click();
+    const first = items(root)[0] as HTMLElement;
+    expect(norm(shown(first))).toBe('Opening words with no end');
+    expect(norm(first.querySelector('.rest')?.textContent)).toBe('A paragraph after them.');
+  });
+
   it('is undone whole by destroyEnhancement: the box is the document\'s again, node for node', async () => {
     const before = mount();
     const snapshot = before.innerHTML;

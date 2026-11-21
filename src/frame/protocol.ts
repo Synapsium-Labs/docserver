@@ -110,7 +110,7 @@ export const FRAME_PREF_VALUES = Object.freeze({
   font: Object.freeze(['serif', 'sans'] as const),
 });
 
-/** The kinds of a `place` op: the frame's overlay (the quick jump, settings, contents or outline) opened, or closed. */
+/** The kinds of a `place` op: the full-screen figure opened, or closed (the only place: the keys sheet, the quick jump, the settings and the like are not). */
 export const PLACE_KINDS = Object.freeze(['overlay', 'overlay-closed'] as const);
 export type PlaceKind = (typeof PLACE_KINDS)[number];
 
@@ -177,7 +177,7 @@ export type FrameToParent =
   | { t: 'version'; sha?: string; only?: string }
   /** How far the document has been read, in thousandths (isProgressThousandths); sent only when the seed's bridge asks for it. */
   | { t: 'progress'; p: string }
-  /** The frame's overlay opened or closed; sent only when the seed's bridge asks for places. */
+  /** The frame's full-screen figure opened or closed; sent only when the seed's bridge asks for places. */
   | { t: 'place'; kind: PlaceKind }
   /** One figure of a print run as a PNG, in base64: `i` of `n`, both canonical decimal strings; sent only when the seed's bridge asks for print figures. */
   | { t: 'print-figure'; i: string; n: string; png: string };

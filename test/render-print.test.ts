@@ -320,3 +320,40 @@ describe("the patterns are the reader's own", () => {
     expect(q(plain, 'span.tmeta.yours, li.attn, span.pill')).toHaveLength(0);
   });
 });
+
+describe('a rule paragraph of very many IDs costs work in proportion to its length (final review I1)', () => {
+  /** The calls of Array's `splice` on an array longer than 500 during `fn` (a plain patch, restored in `finally`): a deterministic bound on the tree's moves, not a clock. */
+  function longSplices(fn: () => void): { calls: number; moved: number } {
+    const out = { calls: 0, moved: 0 };
+    const proto = Array.prototype as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const original = proto.splice as (...a: unknown[]) => unknown;
+    proto.splice = function (this: unknown[], ...a: unknown[]): unknown {
+      if (this.length > 500) {
+        out.calls += 1;
+        out.moved += this.length;
+      }
+      return original.apply(this, a);
+    };
+    try {
+      fn();
+    } finally {
+      proto.splice = original;
+    }
+    return out;
+  }
+
+  it('20000 comma-separated rule IDs in one paragraph move the head\'s children a few times, not once per join (I1)', () => {
+    const K = 20000;
+    const ids = Array.from({ length: K }, (_, i) => `\`AB-${String(i + 1)}\``).join(', ');
+    const md = `# T\n\n## 1. Rules\n\n${ids} — **Hostile rule.** The body.\n`;
+    let html = '';
+    const work = longSplices(() => {
+      html = render(md, PRINT).html;
+    });
+    // The paragraph was built as a rule: the joins are gone and every ID is a code in its head.
+    const d = dom(html);
+    expect(q(d, 'p.rule > span.rule-head > code')).toHaveLength(K);
+    expect(sq(q(d, 'p.rule > span.rule-head')[0]?.textContent)).not.toContain(',');
+    expect(work.calls, `long splices (${String(work.moved)} children moved)`).toBeLessThan(50);
+  });
+});

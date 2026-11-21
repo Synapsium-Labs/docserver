@@ -7,7 +7,7 @@
 // ID, title and status the paragraph gave).
 import type { PrintCtx } from './context.js';
 import { statusOf } from './status.js';
-import { addClass, all, detach, el, insert, isEl, isText, named, nextSibling, run, split, textOf, txt, wrap, append, type ElN, type N, type TextN } from './tree.js';
+import { addClass, all, detach, detachAll, el, insert, isEl, isText, named, nextSibling, run, split, textOf, txt, wrap, append, type ElN, type N, type TextN } from './tree.js';
 import type { StatusRole } from './vocab.js';
 
 const TITLE_MAX = 120;
@@ -95,7 +95,7 @@ function buildRule(ctx: PrintCtx, p: ElN, rules: Map<string, Rule>): void {
     }
   }
   // Everything the reader hides, the joins and the dash with what follows, goes.
-  for (const j of joins) detach(j);
+  detachAll(joins);
   for (const x of run(dash, null)) {
     if (x.up === head) detach(x);
   }
