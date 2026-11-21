@@ -3,9 +3,9 @@
 // raw tag in the Markdown source (it stays text: B10's guarantee); and the stylesheet, every rule scoped.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render } from '../src/render/index.js';
-import { all, attr, el, KEPT_ATTRS, KEPT_IMG_ATTRS, parse, serialize, setAttr, text, wrap, type ElN, type N } from '../src/render/print/tree.js';
+import { all, attr, el, KEPT_ATTRS, insert, KEPT_IMG_ATTRS, nextEl, nextSibling, parse, prevEl, serialize, setAttr, text, wrap, type ElN, type N } from '../src/render/print/tree.js';
 import { emitted, FAMILIES, fixture, fixtureNames, highlightSubScopeClasses, inFamily, inputs, PRINT, registeredLanguages, ROOT } from './print-vocabulary.js';
 
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -236,34 +236,72 @@ describe('the cost of print mode is linear in the document', () => {
     return lines.join('\n');
   };
 
-  /** The calls of Array's position searches on a long array during `fn`, by the array's length. */
+  /** The calls of Array's position searches on an array longer than 500 during `fn`: a plain patch of the three methods, restored in `finally`. */
   function longSearches(fn: () => void): number {
     let long = 0;
-    const spies = (['indexOf', 'lastIndexOf', 'findIndex'] as const).map((name) => {
-      const original = Array.prototype[name] as (...a: unknown[]) => number;
-      return vi.spyOn(Array.prototype, name).mockImplementation(function (this: unknown[], ...a: unknown[]): number {
+    const proto = Array.prototype as unknown as Record<string, (...a: unknown[]) => unknown>;
+    const names = ['indexOf', 'lastIndexOf', 'findIndex'] as const;
+    const originals = names.map((n) => proto[n] as (...a: unknown[]) => unknown);
+    names.forEach((n, i) => {
+      proto[n] = function (this: unknown[], ...a: unknown[]): unknown {
         if (this.length > 500) long += 1;
-        return original.apply(this, a);
-      } as never);
+        return (originals[i] as (...b: unknown[]) => unknown).apply(this, a);
+      };
     });
     try {
       fn();
     } finally {
-      for (const s of spies) s.mockRestore();
+      names.forEach((n, i) => {
+        proto[n] = originals[i] as (...a: unknown[]) => unknown;
+      });
     }
     return long;
   }
 
-  it('costs time in proportion to the document, not its square: 20000 blocks print in a few times the plain render\'s time (P7bb)', () => {
-    const md = `# Big\n\n## In short\n\n${Array.from({ length: 20000 }, (_, i) => `Paragraph ${String(i)}.`).join('\n\n')}\n\n## Where things stand\n\n### Waiting on you\n\n- one\n`;
+  /** A coarse backstop only: the reads guard below is the deterministic one. It also holds that the big document renders and gets its strip. */
+  it('backstop: 20000 blocks print within 10 times the plain render\'s time plus 1.5 s, and print\'s strip is there', () => {
+    const md = `# Big\n\n## In short\n\n${Array.from({ length: 20000 }, (_, i) => `Paragraph ${String(i)}.`).join('\n\n')}\n\n## 1. A\n\nx\n\n## 2. B\n\nx\n\n## Where things stand\n\n### Waiting on you\n\n- one\n`;
     const time = (fn: () => void): number => {
       const t = performance.now();
       fn();
       return performance.now() - t;
     };
     const plain = time(() => void render(md));
-    const printed = time(() => void render(md, PRINT));
+    let result: ReturnType<typeof render> | null = null;
+    const printed = time(() => {
+      result = render(md, PRINT);
+    });
+    expect((result as unknown as ReturnType<typeof render>).outcome).toBe('rendered');
+    expect((result as unknown as ReturnType<typeof render>).html).toContain('class="review-strip"');
     expect(printed, `plain ${plain.toFixed(0)} ms`).toBeLessThan(10 * plain + 1500);
+  });
+
+  it('reads the children of a parent of 5000 a few times each, not in proportion to their positions: next, previous, after insert and wrap, with stale hints (P7am2, P7ax, P7bb)', () => {
+    const N = 5000;
+    const parent = el('div', undefined, Array.from({ length: N }, () => el('i')));
+    let reads = 0;
+    parent.kids = new Proxy(parent.kids, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) reads += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const walk = (): number => {
+      let seen = 0;
+      for (let n: N | null = parent.kids[0] ?? null; n !== null; n = nextSibling(n)) seen += 1;
+      for (let n: ElN | null = parent.kids[0] as ElN; n !== null; n = nextEl(n)) seen += 1;
+      for (let n: ElN | null = parent.kids[parent.kids.length - 1] as ElN; n !== null; n = prevEl(n)) seen += 1;
+      return seen;
+    };
+    // Exact hints, as parse leaves them.
+    expect(walk()).toBe(3 * N);
+    // After an insert and a wrap (each renumbers what follows), then with hints three positions out, so the outward search runs.
+    insert(parent, el('b'), parent.kids[10] as N);
+    wrap(parent.kids.slice(100, 200), el('w'));
+    const total = parent.kids.length;
+    for (const k of parent.kids) k.at += 3;
+    expect(walk()).toBe(3 * total);
+    expect(reads, `reads for ${String(total)} children`).toBeLessThan(60 * N);
   });
 
   it('searches no long array for a node\'s position: print adds few such searches to a render, however many blocks (P7am, P7ax)', () => {

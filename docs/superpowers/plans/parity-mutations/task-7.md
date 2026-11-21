@@ -813,13 +813,13 @@ Measured the same way, in place, at the state of the round-1 commit (the files o
 
 ## Review round 2 (docserver parity T7)
 
-The probe counter is removed from `src/render/print/tree.ts`; the quadratic guard now spies on `Array.prototype.indexOf`, `lastIndexOf` and `findIndex` and holds print's added long-array searches under 50, with a time case (20 000 blocks print within 10 times the plain render's time plus 1.5 s). Row P7am of round 1 (the hint ignored, judged by the removed counter) is replaced: its edit is now P7bb, red through the time case, and P7am2 (nextEl through `indexOf`) and P7ax (idx through `indexOf`) are red through the spy. Measured the same way, in place. The sha256 of each file as restored: `src/render/print/tree.ts` `e36d64aca536f85cea2082789846ae3517df6816cfc3e0901dbb3f9cdc93f33e`, `test/print-vocabulary.ts` `17804aaafd497441094fce40ee26bd0df497434bc8a40b71d4a95eebcca9f216`.
+The probe counter is removed from `src/render/print/tree.ts`; the quadratic guard now spies on `Array.prototype.indexOf`, `lastIndexOf` and `findIndex` and holds print's added long-array searches under 50, with a time case (20 000 blocks print within 10 times the plain render's time plus 1.5 s). Row P7am of round 1 (the hint ignored, judged by the removed counter) is replaced: its edit is now P7bb, and P7bb, P7am2 (nextEl through `indexOf`) and P7ax (idx through `indexOf`) were re-measured in round 3 below, which withdraws this round's records of them. Measured the same way, in place. The sha256 of each file as restored: `src/render/print/tree.ts` `e36d64aca536f85cea2082789846ae3517df6816cfc3e0901dbb3f9cdc93f33e`, `test/print-vocabulary.ts` `17804aaafd497441094fce40ee26bd0df497434bc8a40b71d4a95eebcca9f216`.
 
 | Row | Guard | Edit | File | Result |
 |---|---|---|---|---|
-| P7am2 | print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex) | nextEl finds its node with p.kids.indexOf again | `src/render/print/tree.ts` | red: 1 failed \| 19 passed (20). the cost of print mode is linear in the document searches no long array for a node's position: print adds few  |
-| P7ax | print searches no long array for a node's position | idx answers through indexOf | `src/render/print/tree.ts` | red: 1 failed \| 19 passed (20). the cost of print mode is linear in the document searches no long array for a node's position: print adds few  |
-| P7bb | print's time is in proportion to the document | the position hint ignored (each walk step scans from the start, with no indexOf) | `src/render/print/tree.ts` | red: 3 failed \| 2 passed (20). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
+| P7am2 | print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex) | nextEl finds its node with p.kids.indexOf again | `src/render/print/tree.ts` | superseded: re-measured in round 3 below (the round 2 record was not a clean red of the guard it named) |
+| P7ax | print searches no long array for a node's position | idx answers through indexOf | `src/render/print/tree.ts` | superseded: re-measured in round 3 below (the round 2 record was not a clean red of the guard it named) |
+| P7bb | print's time is in proportion to the document | the position hint ignored (each walk step scans from the start, with no indexOf) | `src/render/print/tree.ts` | superseded: re-measured in round 3 below (the round 2 record was not a clean red of the guard it named) |
 | P7ay | a numbered capture names a scope (inherited__ is listed) | the scope key's regex without digits | `test/print-vocabulary.ts` | red: 1 failed \| 19 passed (20). conformance/print/vocabulary.json declares two open families, hljs- and language-, and no other: no listed cla |
 | P7az | a label is never a class (def_ is not listed) | the label exclusion removed | `test/print-vocabulary.ts` | red: 2 failed \| 18 passed (20). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
 | P7bc | the registered languages are read from highlight.ts | only the first five languages read | `test/print-vocabulary.ts` | red: 1 failed \| 0 passed (20). conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtu |
@@ -827,50 +827,6 @@ The probe counter is removed from `src/render/print/tree.ts`; the quadratic guar
 
 ```json
 [
-  {
-    "id": "P7am2",
-    "guard": "print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex)",
-    "edit": "nextEl finds its node with p.kids.indexOf again",
-    "file": "src/render/print/tree.ts",
-    "tests": "test/print-surface.test.ts",
-    "rc": 1,
-    "failed": 1,
-    "passed": 19,
-    "total": 20,
-    "red": [
-      "the cost of print mode is linear in the document searches no long array for a node's position: print adds few such searches to a render, however many blocks (P7am, P7ax)"
-    ]
-  },
-  {
-    "id": "P7ax",
-    "guard": "print searches no long array for a node's position",
-    "edit": "idx answers through indexOf",
-    "file": "src/render/print/tree.ts",
-    "tests": "test/print-surface.test.ts",
-    "rc": 1,
-    "failed": 1,
-    "passed": 19,
-    "total": 20,
-    "red": [
-      "the cost of print mode is linear in the document searches no long array for a node's position: print adds few such searches to a render, however many blocks (P7am, P7ax)"
-    ]
-  },
-  {
-    "id": "P7bb",
-    "guard": "print's time is in proportion to the document",
-    "edit": "the position hint ignored (each walk step scans from the start, with no indexOf)",
-    "file": "src/render/print/tree.ts",
-    "tests": "test/print-surface.test.ts",
-    "rc": 1,
-    "failed": 3,
-    "passed": 2,
-    "total": 20,
-    "red": [
-      "conformance/print/vocabulary.json lists every element and class print mode emits over the corpus and the fixtures, with rules on, and no other (P7h)",
-      "conformance/print/vocabulary.json is complete for what the consumer derives from it: every alert kind, every heading level, and every class print emits is listed or in a family (P7an)",
-      "the attributes and the elements writes no attribute but class, id, data-line, open, colspan, rowspan, align, alt, title and href, and an img's src, over the corpus"
-    ]
-  },
   {
     "id": "P7ay",
     "guard": "a numbered capture names a scope (inherited__ is listed)",
@@ -927,6 +883,72 @@ The probe counter is removed from `src/render/print/tree.ts`; the quadratic guar
     "red": [
       "wrap takes adjacent siblings of one parent, in order, and throws on anything else (P7ba)"
     ]
+  }
+]
+```
+
+## Review round 3 (docserver parity T7)
+
+Round 2 recorded P7bb red 'through the time case' from a run of 3 failed and 2 passed of 20: 15 tests never finished, the three reds came from corpus-walking tests (their timeouts under the quadratic walk), and the time case was not among them. That record is withdrawn, and so are the round 2 records of P7am2 and P7ax (marked above). The guard is now `test/print-surface.test.ts` 'reads the children of a parent of 5000 a few times each…': a parent of 5000 children built with the tree's own constructors, its `kids` replaced by a test-side Proxy that counts numeric-key reads, walked with `nextSibling`, `nextEl` and `prevEl`, then again after an `insert` and a `wrap` with every hint moved three positions (so the outward search runs); the reads of the correct code stay under 60 N = 300 000. Each row was run on that case alone (`-t children`, so 20 tests are skipped by the filter and the one case is the whole run), with `src/render/print/tree.ts` saved, edited, restored from the saved bytes and its sha256 compared; it ends byte-equal to HEAD: `src/render/print/tree.ts` `e36d64aca536f85cea2082789846ae3517df6816cfc3e0901dbb3f9cdc93f33e`. The time case is kept only as a coarse backstop (it asserts `outcome === 'rendered'`, the `review-strip` and a bound of 10 times the plain render's time plus 1.5 s) and is no row's guard.
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| P7am2 | print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex) | nextEl finds its node with p.kids.indexOf again | `src/render/print/tree.ts` | red: 1 failed of the 1 case run (20 skipped by the filter); the reads: 24,618,564 against the bound 300,000 |
+| P7ax | print searches no long array for a node's position | idx answers through indexOf | `src/render/print/tree.ts` | red: 1 failed of the 1 case run (20 skipped by the filter); the reads: 61,665,881 against the bound 300,000 |
+| P7bb | print's time is in proportion to the document | the position hint ignored (each walk step scans from the start, with no indexOf) | `src/render/print/tree.ts` | red: 1 failed of the 1 case run (20 skipped by the filter); the reads: 73,628,816 against the bound 300,000 |
+
+```json
+[
+  {
+    "id": "P7am2",
+    "guard": "print searches no long array for a node's position (the spy on indexOf, lastIndexOf and findIndex)",
+    "edit": "nextEl finds its node with p.kids.indexOf again",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts -t children",
+    "rc": 1,
+    "failed": 1,
+    "passed": 0,
+    "skipped_by_filter": 20,
+    "total": 21,
+    "red": [
+      "the cost of print mode is linear in the document reads the children of a parent of 5000 a few times each, not in proportion to their positions: next, previous, after insert and wrap, with stale hints (P7am2, P7ax, P7bb)"
+    ],
+    "reads": 24618564,
+    "bound": 300000
+  },
+  {
+    "id": "P7ax",
+    "guard": "print searches no long array for a node's position",
+    "edit": "idx answers through indexOf",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts -t children",
+    "rc": 1,
+    "failed": 1,
+    "passed": 0,
+    "skipped_by_filter": 20,
+    "total": 21,
+    "red": [
+      "the cost of print mode is linear in the document reads the children of a parent of 5000 a few times each, not in proportion to their positions: next, previous, after insert and wrap, with stale hints (P7am2, P7ax, P7bb)"
+    ],
+    "reads": 61665881,
+    "bound": 300000
+  },
+  {
+    "id": "P7bb",
+    "guard": "print's time is in proportion to the document",
+    "edit": "the position hint ignored (each walk step scans from the start, with no indexOf)",
+    "file": "src/render/print/tree.ts",
+    "tests": "test/print-surface.test.ts -t children",
+    "rc": 1,
+    "failed": 1,
+    "passed": 0,
+    "skipped_by_filter": 20,
+    "total": 21,
+    "red": [
+      "the cost of print mode is linear in the document reads the children of a parent of 5000 a few times each, not in proportion to their positions: next, previous, after insert and wrap, with stale hints (P7am2, P7ax, P7bb)"
+    ],
+    "reads": 73628816,
+    "bound": 300000
   }
 ]
 ```
