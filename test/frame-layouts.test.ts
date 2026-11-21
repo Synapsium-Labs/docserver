@@ -59,6 +59,7 @@ import { IMAGE_BUDGET_CHARS, SEED_FIELDS_MAX_CHARS, SEED_HTML_MAX_CHARS } from '
 import { render } from '../src/render/index.js';
 import { oldCapDocument } from './frame-old-cap.js';
 import { attr, isElement, SCANS, textOf, tree, type Element } from './frame-scans.js';
+import { layoutSizes, parseManifest, sizesOf } from './size-rules.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const OWN = FRAME_LAYOUTS.filter((l): l is Exclude<FrameLayout, 'default'> => l !== 'default');
@@ -161,6 +162,28 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
       ['bootstrap', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'enhanceGuided', 'enhanceReview', 'guard', 'mermaid'],
     );
     for (const l of OWN) expect(FRAME_MANIFEST[LAYOUT_ENTRIES[l].css as 'cssClassic'].csp).toBeNull();
+  });
+
+  it("the size rules (test 8, test/size-rules.ts) read each layout's assets by the mark: a layout is its bundle and its stylesheet, `frame` is the default frame's, and an unmarked layout asset is seen", () => {
+    const text = readFileSync(path.join(ROOT, 'src', 'frame', 'manifest.generated.ts'), 'utf8');
+    const manifest = parseManifest(text);
+    const sizes = layoutSizes(manifest);
+    expect(Object.keys(sizes).sort()).toEqual([...FRAME_LAYOUTS].sort());
+    expect(sizes['default']).toBe(FRAME_MANIFEST.enhance.chars);
+    for (const l of OWN) {
+      const e = LAYOUT_ENTRIES[l];
+      expect(sizes[l], l).toBe(FRAME_MANIFEST[e.enhance].chars + FRAME_MANIFEST[e.css as 'cssClassic'].chars);
+    }
+    // `frame` is the entries no layout owns plus the largest layout, the default's bundle: what landing A's frame was, so test 8's
+    // `frame` does not move for the layouts, while `total` is every entry.
+    const { total, frame } = sizesOf(manifest);
+    expect(frame).toBe(FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars + FRAME_MANIFEST.enhance.chars);
+    expect(total).toBe(Object.values(FRAME_MANIFEST).reduce((n, a) => n + a.chars, 0));
+    // A layout asset left unmarked in the text is no layout's: its layout's size drops by its characters, and a layout row of the
+    // contract that reads the sizes would see the miscount.
+    const unmarked = text.replace(/(enhanceReview: \{[^\n]*layout: )"review"/, '$1null');
+    expect(unmarked).not.toBe(text);
+    expect(layoutSizes(parseManifest(unmarked))['review']).toBe(FRAME_MANIFEST.cssReview.chars);
   });
 
   it('assets.json marks every layout asset with its layout in the same way: the bundles, the stylesheets and the tracked sources', () => {

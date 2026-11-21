@@ -3217,6 +3217,9 @@ describe('docserver parity T9: HostAdapters.layout', () => {
     for (const bad of ['', 'Default', 'classic ', 'plain', '__proto__', 'constructor', null, 0, true, {}, ['classic']]) {
       const before = iframes();
       expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { layout: bad } as never) }), String(bad)).toThrow(TypeError);
+      // The adapter's own check refuses it, with its own words, before the policy is built (frameCsp refuses a bad name too, and
+      // would be the only guard if this one went).
+      expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { layout: bad } as never) }), String(bad)).toThrow(/adapters\.layout must be one of the frame layouts/);
       expect(iframes(), String(bad)).toBe(before);
     }
   });

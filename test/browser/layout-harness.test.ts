@@ -2,7 +2,7 @@
 // same page script, built with the plugin the frame build uses, so a layout's feature list runs in a real browser; the layout's own
 // stylesheet is served beside reader.css. This file proves the infrastructure the four layout tasks build on; the corpus per layout
 // is test/browser/layout-corpus.test.ts's, once a layout has a snapshot directory.
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, expect, it } from 'vitest';
 import { LAYOUT_TABLE } from '../../scripts/build-frame.mjs';
 import { closeBrowsers, describeBrowsers, openDoc } from './harness.js';
 import { holdClean } from './layout-cases.js';
