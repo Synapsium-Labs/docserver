@@ -7,14 +7,18 @@
 // test/enhance-editorial.test.ts holds the same counts at 500.
 //
 // The number of text children is the engine's to decide, so it is measured in the page before enhance, never assumed to be
-// one: WebKit's parser cuts a long text into nodes of at most 65 536 code units (Blink's does not), so the same 32 000-
-// separator paragraph came out as five text nodes there and `createRange` was called five times (CI, review 3088 F3). The
-// second case makes that shape on every engine: the text is cut into five nodes at separators before enhance runs.
+// one: WebKit's parser cuts a long text into nodes of at most 65 536 code units (Blink's does not; this limit is read from
+// WebKit's source and has not been run, until CI confirms it), so the same 32 000-separator paragraph came out as five text
+// nodes there and `createRange` was called five times (CI, review 3088 F3). The second case makes that shape on every
+// engine: the text is cut into five nodes at separators before enhance runs. The WebKit large case is sized over the limit
+// (10 000 separators, about 78 900 code units) and asserts at least two text nodes, which a red there would disprove.
 //
-// The size is per engine, for a stated reason: Chromium runs 32 000 separators in about 0.6 s here (linear: 4 000 to 32 000
-// took 0.09 s to 0.58 s), while the one WebKit run in CI at 32 000 timed out at 120 s on one leg. WebKit could not be run
-// where this was written, so its scaling is unmeasured and its case is 8 000 (a quarter), with a longer clock backstop.
-// The counts do not depend on the size.
+// The size is per engine, for a stated reason. Chromium runs 32 000 separators in about 0.6 s here (linear: 4 000 to 32 000
+// took 0.09 s to 0.58 s). CI's run of this case at 32 000 in WebKit took 53 695 ms on the Node 22 leg (it failed only on
+// the range count) while Chromium took 3 207 ms and 2 126 ms on the same runners; only the Node 24 leg reached the 120 s
+// timeout, so it was the same work at about twice the runner variance, not a hang. WebKit could not be run where this was
+// written, so its scaling is unmeasured and its case is 10 000, with a longer clock backstop. Each case prints one
+// `console.info` line (texts, build and undo ms) so the next CI log splits WebKit's time. The counts do not depend on size.
 import { afterAll, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName } from './harness.js';
 
@@ -23,7 +27,7 @@ afterAll(closeBrowsers);
 /** The separators of the large case per engine, and the clock backstop for the build and for the undo, in ms. */
 const LARGE: Record<BrowserName, { k: number; backstopMs: number }> = {
   chromium: { k: 32000, backstopMs: 20000 },
-  webkit: { k: 8000, backstopMs: 60000 },
+  webkit: { k: 10000, backstopMs: 60000 },
 };
 /** The separators of the case whose text is cut into FRAGMENTS nodes first. */
 const FRAGMENT_K = 4000;
@@ -110,11 +114,17 @@ function expectBounded(out: Awaited<ReturnType<typeof measure>>, k: number, back
 describeBrowsers((name: BrowserName) => {
   const { k, backstopMs } = LARGE[name];
   it(`${name}: ${String(k)} separators are cut and joined with a bounded count of DOM operations, and destroy restores the html`, async () => {
-    expectBounded(await measure(name, k, 1), k, backstopMs);
+    const out = await measure(name, k, 1);
+    console.info(`byline-many ${name} k=${String(k)} fragments=1: texts=${String(out.texts)} enhanceMs=${out.enhanceMs.toFixed(0)} destroyMs=${out.destroyMs.toFixed(0)}`);
+    // WebKit only: the case is over its 65 536-unit text-node limit, so the paragraph is at least two nodes there. A red here
+    // disproves the diagnosis of the five ranges (the limit is read from WebKit's source, not run).
+    if (name === 'webkit') expect(out.texts).toBeGreaterThanOrEqual(2);
+    expectBounded(out, k, backstopMs);
   }, 120000);
 
   it(`${name}: a byline text of ${String(FRAGMENTS)} nodes is undone with one range per node, and destroy restores the html`, async () => {
     const out = await measure(name, FRAGMENT_K, FRAGMENTS);
+    console.info(`byline-many ${name} k=${String(FRAGMENT_K)} fragments=${String(FRAGMENTS)}: texts=${String(out.texts)} enhanceMs=${out.enhanceMs.toFixed(0)} destroyMs=${out.destroyMs.toFixed(0)}`);
     expect(out.texts).toBeGreaterThanOrEqual(FRAGMENTS);
     expectBounded(out, FRAGMENT_K, backstopMs);
     // Every node had separators, so every node was joined by a range of its own: the count is the nodes, here, exactly.
