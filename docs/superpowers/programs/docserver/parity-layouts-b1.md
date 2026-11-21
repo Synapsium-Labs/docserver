@@ -87,7 +87,23 @@ Only the two alternate-layout assertions now scroll the callout into view and wa
 | Settled reveal, narrow the border to 2 px | 2 px; red at `[3]` | 2 px; red at `[3]` |
 | Unchanged border with settle wait | 3 px; green | 3 px; green |
 
-With the wait restored, both cases also passed with the five-second reveal. Both temporary mutations were removed. The unchanged Chromium file selection passed all 38 tests; WebKit still needs CI verification.
+With the wait restored, both cases also passed with the five-second reveal. Both temporary mutations were removed. The Chromium file selection passed all 38 tests. On `4330023`, all 76 cue tests passed in both browser engines on Node 22 and Node 24, and passed again in the Node 22 rerun.
+
+## Task 14 CI fix round: B8.2 scroll reset
+
+The [first CI attempt on `4330023`](https://github.com/Synapsium-Labs/docserver/actions/runs/44948883424/attempts/1) passed Node 24 (7,695 passed, five skipped), but Node 22 failed WebKit B8.2 in `test/browser/frame-one-bar.test.ts`. The [unchanged-head Node 22 rerun](https://github.com/Synapsium-Labs/docserver/actions/runs/44948883424/attempts/2) had the same sole failure (7,694 passed, five skipped). In both attempts, after the initial hash landed, `scrollTo` was supposed to put the target more than 300 px below the top before the test clicked its link. Instead the wait timed out after 30 seconds at `top: 13.828125` with `barH: 0px`. The test had also failed intermittently in the rename's main-line run and Landing A at `3268fcd`.
+
+The cue file completed before the frame file in both Node 22 attempts and in the passing Node 24 job. The two files passed in that order in local Chromium (38 and 14 tests, respectively, on local Node 24). The cue harness opens and closes a fresh browser context for every document; each B8.2 mount has its own fresh context too. The settle wait adds no listener and does not change `scroll-behavior`. The measured order and those isolation boundaries do not support a scroll-state leak between the files.
+
+The initial hash installs a temporary pin so that layout changes keep the target aligned. The test's programmatic scroll does not release this pin, so a resize or relayout can reapply the hash landing. In a controlled Chromium run, temporarily adding 100 px of bottom padding to the reader root just after the reset triggered this sequence:
+
+| Sample | Window scroll Y | Target top |
+|---|---:|---:|
+| Initial hash landing | 5,214 px | 13.71875 px |
+| Immediately after reset | 0 px | 5,227.71875 px |
+| After resize callbacks | 5,214 px | 13.71875 px |
+
+The original B8.2 assertion timed out at the last position. With Home sent to the focused frame before the reset, the same probe passed: the reader action releases the pin before the programmatic scroll. This reproduces the failure shape in Chromium, not the exact WebKit scheduling. The temporary padding and instrumentation were removed. The test now waits for actual window scroll position zero and keeps every previous assertion, including the target threshold and both link landing positions. No production source, style, or cue test changed in this round. WebKit verification is left to CI.
 
 ## Process notes
 
