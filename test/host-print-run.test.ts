@@ -5,7 +5,7 @@
 // the host's port (an asynchronous port, the frame's `done` firing when a figure is posted and not when the host has handled it), costs the host
 // no refusal and never the sixteen that close the frame: the host's reopened run takes each stale copy under its index and the new run's own
 // copy replaces it (the latest copy of an index wins, as a consumer that keeps figures by index sees it). The edges it does not cover: a skipped index
-// keeps its stale copy, and near the 16 MiB total a stale copy larger than the new one can make the new copy's index refused as oversize, counted
+// keeps its stale copy, and near the 16 MiB total stale copies of later indexes still count until replaced, so an earlier index's new copy can be refused as oversize, counted
 // (test/host-mount.test.ts holds the byte-total cases). It also holds that a frame whose seed did not ask
 // for print figures sends none. The mount's harness is the small half of test/host-mount.test.ts's, with the frame's assets from an in-memory build of the
 // frame's sources, so a mutation of the source still changes what the frame side does and nothing else.

@@ -50,8 +50,9 @@
 // replaces the earlier copy (handed to `onPrintFigure` again, the run's total adjusted before the 16 MiB check, no refusal) and a
 // second repeat is refused; once a mount's run was reopened, every later run is too, and a run after a complete ordinary run is
 // ordinary. Two edges: if the new run skips an index it could not draw, the stale copy of it stays, as its own never arrives; and
-// near the 16 MiB total a stale copy larger than the new one (drawn before an appearance change, say) can make the new copy's
-// index refused as oversize, counted, with the stale copy staying.
+// near the 16 MiB total stale copies of later indexes still count until their replacements arrive, so when they are larger than
+// their replacements an earlier index's new copy can be refused as oversize and counted, the consumer keeping its earlier copy
+// (several can be, and in an extreme skew enough to close the frame).
 // `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
 // after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
 //
