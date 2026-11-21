@@ -11,7 +11,8 @@
 //   2. give the SVG an absolute size (sizedSvg) and draw it on a canvas scaled to fit SIDE_MAX px a side at PRINT_SCALE
 //      (printSize), as a PNG in base64 (env.rasterize);
 //   3. hand it over, `{ i, n, png }` (only for a place the wire has: figurePlace; only for a PNG within its cap: isPrintPng; the
-//      frame's adapter and the host's parser judge both again), and wait for the host's callback (its promise, if any) before the next figure: so the
+//      frame's adapter and the host's parser judge both again; and only while the run's PNGs together stay within RUN_MAX_BYTES,
+//      a figure that would pass it being skipped and adding nothing), and wait for the host's callback (its promise, if any) before the next figure: so the
 //      frame's pacer holds at most one figure at a time and a cancelled run leaves at most that one behind.
 // A figure that does not draw (no source, a source too long for Mermaid, an error), whose SVG has no size, whose canvas is
 // tainted or unavailable, or whose PNG is over PNG_MAX_BYTES, is skipped: its `i` is never handed over, and the figures after
@@ -27,6 +28,9 @@ import type { PrintFigure } from './types.js';
 
 /** The most figures one run carries, and so the largest `n` (the wire's printFiguresMax). */
 export const FIGURES_MAX = 64;
+
+/** The most the PNGs of one run may decode to, together (the wire's printFiguresTotalMaxBytes). */
+export const RUN_MAX_BYTES = 16_777_216;
 
 /** The longest side of a figure's PNG, in px (the wire's printFigureSideMaxPx). */
 export const SIDE_MAX = 2048;
@@ -155,6 +159,8 @@ export function createPrintRunner(d: PrintDeps): PrintRunner {
     const stale = (): boolean => latest !== mine || !d.live();
     const list = d.figures().slice(0, FIGURES_MAX);
     const n = list.length;
+    /** What the figures handed over so far decode to: a figure that would take it past RUN_MAX_BYTES is skipped and adds nothing. */
+    let total = 0;
     for (let i = 0; i < n; i++) {
       const draw = list[i];
       if (draw === undefined || !figurePlace(i, n)) continue;
@@ -176,6 +182,9 @@ export function createPrintRunner(d: PrintDeps): PrintRunner {
       }
       if (stale()) return;
       if (png === null || !isPrintPng(png)) continue;
+      const bytes = base64Bytes(png);
+      if (total + bytes > RUN_MAX_BYTES) continue;
+      total += bytes;
       await d.hand({ i, n, png });
     }
   };

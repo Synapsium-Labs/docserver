@@ -105,8 +105,8 @@ function readyHost(asksForFigures = true): Mounted {
   return { say, figures, fallbacks, frame };
 }
 
-/** The frame's side over a mount: the runner of 30 figures, handing to the adapter, which posts through the outbox (the pacer) into the mount. */
-function frameOver(m: Mounted, printFigures = true): { posted: unknown[]; start: () => void; adapters: ReturnType<typeof createAdapters> } {
+/** The frame's side over a mount: the runner of `count` figures of `bytes` each, handing to the adapter, which posts through the outbox (the pacer) into the mount. */
+function frameOver(m: Mounted, printFigures = true, count = 30, bytes = 100): { posted: unknown[]; start: () => void; adapters: ReturnType<typeof createAdapters> } {
   const posted: unknown[] = [];
   const outbox = createOutbox({
     clock: { now: () => performance.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) },
@@ -121,8 +121,8 @@ function frameOver(m: Mounted, printFigures = true): { posted: unknown[]; start:
   const draw = (): Promise<string | null> => Promise.resolve('<svg viewBox="0 0 10 10"></svg>');
   const runner = createPrintRunner({
     live: () => true,
-    figures: () => Array.from({ length: 30 }, () => draw),
-    rasterize: () => Promise.resolve(pngOf(100)),
+    figures: () => Array.from({ length: count }, () => draw),
+    rasterize: () => Promise.resolve(pngOf(bytes)),
     hand: (f) => adapters.printOption.onPrintFigure?.(f) ?? Promise.resolve(),
   });
   return { posted, start: () => runner.start(), adapters };
@@ -149,6 +149,54 @@ describe('a second print-figures command, with the frame\'s real outbox, adapter
     const lastRun = m.figures.slice(12);
     expect([...new Set(lastRun.map((f) => f.i))].sort((a, b) => a - b)).toEqual(Array.from({ length: 30 }, (_, i) => i));
     expect(lastRun.every((f) => f.n === 30)).toBe(true);
+  });
+
+  it('a reprint while the last index waits in the pacer (n = 25, i = 24 in the line): the new run is not closed by it, and every one of its figures is handed to the host (review I1)', async () => {
+    const m = readyHost();
+    const frame = frameOver(m, true, 25);
+    m.frame.printFigures();
+    frame.start();
+    await vi.advanceTimersByTimeAsync(1500);
+    // 24 figures are out (two pacer windows) and the last, i = 24, waits in the pacer's line
+    expect(frame.posted).toHaveLength(24);
+    m.frame.printFigures();
+    frame.start();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(m.fallbacks).toEqual([]);
+    // the new run: the stale 24 first, then every index 0 to 23 once; its own 24 is the one refusal
+    const second = m.figures.slice(24);
+    expect(second.map((f) => f.i)).toEqual([24, ...Array.from({ length: 24 }, (_, i) => i)]);
+    expect(second.every((f) => f.n === 25)).toBe(true);
+    expect(new Set(second.map((f) => f.i)).size).toBe(25);
+  });
+
+  it('an interrupted reprint costs exactly one refusal: the copy of the stale index that the new run sends (review I1)', async () => {
+    const m = readyHost();
+    const frame = frameOver(m, true, 25);
+    m.frame.printFigures();
+    frame.start();
+    await vi.advanceTimersByTimeAsync(1500);
+    m.frame.printFigures();
+    frame.start();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(frame.posted).toHaveLength(24 + 1 + 25);
+    expect(frame.posted.length - m.figures.length).toBe(1);
+    // the refused one is the new run's own i = 24, sent after the stale one was accepted
+    expect(frame.posted.filter((f) => (f as { i: string }).i === '24')).toHaveLength(2);
+    expect(m.figures.filter((f) => f.i === 24)).toHaveLength(1);
+  });
+
+  it('a figure the runner skips for the 16 MiB total is never sent, so the host refuses nothing for it (review I2)', async () => {
+    const m = readyHost();
+    const frame = frameOver(m, true, 17, 1_048_576);
+    m.frame.printFigures();
+    frame.start();
+    await vi.advanceTimersByTimeAsync(30_000);
+    // sixteen figures of 1 MiB make 16 MiB; the seventeenth is skipped in the frame: no i = 16 on the wire, no refusal, no fallback
+    expect(frame.posted).toHaveLength(16);
+    expect(m.figures.map((f) => f.i)).toEqual(Array.from({ length: 16 }, (_, i) => i));
+    expect(frame.posted.length - m.figures.length).toBe(0);
+    expect(m.fallbacks).toEqual([]);
   });
 
   it('a single run is accepted whole, at the pacer\'s rate: 30 figures, no refusal, every index once', async () => {

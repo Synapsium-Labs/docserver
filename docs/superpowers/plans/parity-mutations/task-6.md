@@ -1,6 +1,6 @@
 # Parity Task 6: mutation rows (print figures in the frame, the host parser's walls, the lost jump push)
 
-Each row was measured in place on this wave's branch: the bytes of the file saved with their sha256, one edit applied, the tests named in the row run through the fleet test wrapper as `./node_modules/.bin/vitest run --reporter=json` (with `--maxWorkers=1` or `2`), then the file restored from the saved bytes (`cp`) and its sha256 compared (each matched). The sha256 of each file as restored: `src/enhance/diagrams.ts` `762f61950974ed0caf14dbb3e4d092ac274371ffc82963223ca503eeb29b66bd`; `src/enhance/env.ts` `618a82d7c5001e669069a5e61e9b18ee9a4f8215485ef82d4d6dc10adc42d413`; `src/enhance/print-figures.ts` `aeba6be5884d8aebda2c5fa7ec0d1f539909c11249e3fb4d4d60292246681a47`; `src/frame-runtime/adapters.ts` `419cfaf44812f3bbf1a5328844b3553cb1b01ad7898e7ffdcbe6a95c642e178b`; `src/frame-runtime/outbox.ts` `30bd7285d73955121f67cf2fcd9d52b031165a63490e5dedb419219663f52dba`; `src/host/parse.ts` `b70e659255da7493daf660c6bcafa60d36b98869681cdc07727c2a36d9b9b6b8`. Every row exited 1 except the two recorded as equivalent mutants (P6l, B6b), which exited 0, each with its reason. Rows J6a to J6e are the lost jump push (commit 1c52e5f); H6a to H6h are the host parser's own walls, each judged with no reader in front of it; R6a to R6g and P6a to P6n are the reader's; F6a to F6h are the frame adapter's and O6a to O6e the outbox's; B6a and B6b run in Chromium. The brief's P6a to P6f are P6a (HTML labels), P6b (side cap), P6c (a skipped figure sent empty), P6d (no cancel), O6a (sends bypass the pacer) and F6a (sent without the flag). Notes on method: the rows of `src/host/parse.ts` run `test/host-parse.test.ts` and `test/host-mount.test.ts` (412 tests); the frame-side rows (F, O) run `test/enhance-frame-wire.test.ts`, `test/frame-outbox.test.ts` and `test/host-print-run.test.ts`, whose host reads the frame's assets from the files the build wrote, so a mutation of the frame's source changes what the frame side does and nothing else (the first measurement of F6a and F6b through `test/host-mount.test.ts` broke the build of the frame under test and was discarded); the two Chromium rows rebuilt the frame (`npm run build:frame`) after the edit, because the page's policy pins the enhance script's hash, and rebuilt it again after the restore (the generated files were byte-equal to their saved copies). Rows P6d2 and P6d3 first stayed green and got a new case (a runner whose instance stops being live; a call still queued behind another when the run is cancelled); they were measured again, and the later rows ran on that file (34 tests), the earlier rows on 33.
+Each row was measured in place on this wave's branch: the bytes of the file saved with their sha256, one edit applied, the tests named in the row run through the fleet test wrapper as `./node_modules/.bin/vitest run --reporter=json` (with `--maxWorkers=1` or `2`), then the file restored from the saved bytes (`cp`) and its sha256 compared (each matched). The sha256 of each file as restored: `src/enhance/diagrams.ts` `762f61950974ed0caf14dbb3e4d092ac274371ffc82963223ca503eeb29b66bd`; `src/enhance/env.ts` `618a82d7c5001e669069a5e61e9b18ee9a4f8215485ef82d4d6dc10adc42d413`; `src/enhance/print-figures.ts` `2914ed43ad874b1875789a04a464edd287fe3e0295b0f49b4817bb2b2b0e3f92`; `src/frame-runtime/adapters.ts` `419cfaf44812f3bbf1a5328844b3553cb1b01ad7898e7ffdcbe6a95c642e178b`; `src/frame-runtime/outbox.ts` `664c9fb404e5555aebb8497648d534798388a1d5d6e4b333f5aa23cbcb746177`; `src/host/mount.ts` `bc5762efa4a53a5446f7833078f19eff49d1d26e171d85a9efbd459b362ed79d`; `src/host/parse.ts` `b70e659255da7493daf660c6bcafa60d36b98869681cdc07727c2a36d9b9b6b8`. Every row exited 1 except two that stay green, each with its reason: P6l, an equivalent mutant, and B6b, a mutant Chromium cannot kill (its red cases are named in its row). Rows J6a to J6e are the lost jump push (commit 1c52e5f); H6a to H6h are the host parser's own walls, each judged with no reader in front of it; R6a to R6g and P6a to P6n are the reader's; F6a to F6h are the frame adapter's and O6a to O6e the outbox's; B6a and B6b run in Chromium; I1 and R6h to R6k are review round 1 (the run's end, and the reader's 16 MiB total). The brief's P6a to P6f are P6a (HTML labels), P6b (side cap), P6c (a skipped figure sent empty), P6d (no cancel), O6a (sends bypass the pacer) and F6a (sent without the flag). Notes on method: the rows of `src/host/parse.ts` run `test/host-parse.test.ts` and `test/host-mount.test.ts` (412 tests); the frame-side rows (F, O) run `test/enhance-frame-wire.test.ts`, `test/frame-outbox.test.ts` and `test/host-print-run.test.ts`, whose host reads the frame's assets from the files the build wrote, so a mutation of the frame's source changes what the frame side does and nothing else (the first measurement of F6a and F6b through `test/host-mount.test.ts` broke the build of the frame under test and was discarded); the two Chromium rows rebuilt the frame (`npm run build:frame`) after the edit, because the page's policy pins the enhance script's hash, and rebuilt it again after the restore (the generated files were byte-equal to their saved copies). Rows P6d2 and P6d3 first stayed green and got a new case (a runner whose instance stops being live; a call still queued behind another when the run is cancelled); they were measured again, and the later rows ran on that file (34 tests), the earlier rows on 33.
 
 | Row | Guard | Edit | File | Result |
 |---|---|---|---|---|
@@ -58,8 +58,13 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 | O6c | a stale run leaves at most one figure (done when posted) | done is called when the op is queued, not when it is posted | `src/frame-runtime/outbox.ts` | red: 3 failed \| 59 passed (62). print-figure ops (docserver parity T6): through the pacer, never coalesced, and `done` when posted calls `done` once the op is posted, not before: a figure waiting in the pacer's line is not done ; print-figure ops (docserver parity T6): through the pacer, never coalesced, and `done` when posted after dispose() an op is not posted and its `done` is never called ; a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser leaves at most one stale figure in the host's second run: one refusal, never the sixteen that close the frame |
 | O6d | a figure sent before ready does not break open() | open() sends a queued print-figure to a coalescing lane that does not exist for it | `src/frame-runtime/outbox.ts` | red: 1 failed \| 61 passed (62). print-figure ops (docserver parity T6): through the pacer, never coalesced, and `done` when posted a figure sent before ready is posted by open() and then done |
 | O6e | a figure sent before ready keeps its done | the pre-ready queue forgets done | `src/frame-runtime/outbox.ts` | red: 1 failed \| 61 passed (62). print-figure ops (docserver parity T6): through the pacer, never coalesced, and `done` when posted a figure sent before ready is posted by open() and then done |
-| B6b | HTML labels are off in a real drawing (Chromium) | the print configuration is the screen's unchanged | `src/enhance/print-figures.ts` | stays green (2 passed of 4): an equivalent mutant. in Chromium: a real canvas draws a data: SVG image with HTML labels (foreignObject) without tainting, so the real-browser case cannot tell the two configurations apart; the guard is held by rows P6a, P6a2 and P6a3 on the configuration itself, and its engine-level effect (WebKit taints a canvas that drew foreignObject) is CI's WebKit run, unmeasured locally |
+| B6b | HTML labels are off in a real drawing (Chromium) | the print configuration is the screen's unchanged | `src/enhance/print-figures.ts` | stays green in Chromium (2 passed of 4): not an equivalent mutant: Chromium cannot kill it. A real canvas draws an SVG image with HTML labels (foreignObject) without tainting, so the real-browser case cannot tell the two configurations apart. Its red cases are rows P6a, P6a2 and P6a3 (the configuration itself) and the WebKit run in CI, where a canvas that drew foreignObject taints and the figure is skipped (unmeasured locally) |
 | B6a | the print drawing is the hosted one for a covered figure (Chromium) | a print drawing ignores the host's colours | `src/enhance/diagrams.ts` | red: 1 failed \| 1 passed (4). chromium a figure drawn hosted prints in the host's colours; the same document without colours prints in 1.1's |
+| I1 | a run ends only at the next printFigures() or at unmount | a run ends at i = n - 1 again | `src/host/mount.ts` | red: 3 failed \| 189 passed (192). docserver parity T2: the adapters, the seed and the three commands printFigures() and the run the last index may come first, and the run goes on: a stale figure with i = n - 1 closes nothing (review I1) ; a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser a reprint while the last index waits in the pacer (n = 25, i = 24 in the line): the new run is not closed by it, and every one of its figures is handed to the host (review I1) ; a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser an interrupted reprint costs exactly one refusal: the copy of the stale index that the new run sends (review I1) |
+| R6h | the run's PNGs together stay within 16 MiB (review I2) | the running total is not checked | `src/enhance/print-figures.ts` | red: 2 failed \| 40 passed (42). the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2) ; a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser a figure the runner skips for the 16 MiB total is never sent, so the host refuses nothing for it (review I2) |
+| R6i | a skipped figure adds nothing to the run's total | the total counts a figure before it is judged | `src/enhance/print-figures.ts` | red: 1 failed \| 35 passed (36). the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2) |
+| R6j | a figure that brings the run to exactly 16 MiB is sent | the total test is >= instead of > | `src/enhance/print-figures.ts` | red: 2 failed \| 34 passed (36). the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2) ; the runner on its own a new run starts its total again |
+| R6k | the reader's copy of the run cap is the wire's | the cap is one byte over | `src/enhance/print-figures.ts` | red: 2 failed \| 34 passed (36). the constants are the wire's FIGURES_MAX, SIDE_MAX and PNG_MAX_BYTES equal BRIDGE_LIMITS ; the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2) |
 
 ## Choices
 
@@ -68,9 +73,12 @@ Each row was measured in place on this wave's branch: the bytes of the file save
 - **`done`.** `send(op, done)` takes an optional callback the outbox calls once the op is posted; the adapter returns a promise that settles then, and the reader waits for it before it draws the next figure. A cancelled run leaves at most one figure in the pacer (`test/host-print-run.test.ts`: a reprint costs the host one refusal, not sixteen; rows O6b and O6c). Without it up to 63 queued PNGs would arrive in the host's second run.
 - **A defect found on the way, in my own first draft.** A figure sent before ready crashed `open()` (it reached a lane it has none for). `open()` now enqueues it, and the pre-ready queue keeps its `done` (rows O6d and O6e).
 - **The host parser's signature test.** `png` must start with `iVBORw0KGgo` (a PNG's eight signature bytes and the zero top bits of the next), read from the text and refused as `type`, after the empty-text test and before the size (so a non-PNG of any size is `type`). The size fixtures of `conformance/bridge-cases.json` now start with the signature; it gains seven fixtures (a PNG with more after the signature, base64 that is no PNG, a cut signature, a JPEG's start, an oversize non-PNG, a fractional `i` and a fractional `n`). `test/frame-protocol.test.ts`'s reference parser got the same test.
-- **Chromium and HTML labels (B6b).** In Chromium the real canvas draws an SVG image with HTML labels (`foreignObject`) without tainting, so the real-browser case does not separate the two configurations; the guard is held on the configuration (P6a, P6a2, P6a3) and its effect on a tainting engine is CI's WebKit run, unmeasured here.
+- **Chromium and HTML labels (B6b), a mutant Chromium cannot kill.** In Chromium the real canvas draws an SVG image with HTML labels (`foreignObject`) without tainting, so the real-browser case does not separate the two configurations; the guard is killed by the configuration rows (P6a, P6a2, P6a3) and, on an engine that taints, by CI's WebKit run, unmeasured here.
 - **Double guards.** The runner's slice to 64 and `registerPrint`'s slice to 64 guard one thing twice (a run of 64): removing either alone stays green, so R6e removes the runner's and is red through the runner's own test, which hands it 80 draws directly. The data-URL prefix test of `env.rasterize` and `isPrintPng` guard one case twice (P6l, recorded as equivalent).
 - **Not measured locally.** `test/frame-build.test.ts` and `test/frame-document.test.ts` are killed by the shared test slice's memory cap when run whole; run in parts they pass (frame-build: 16 and 29 of 45; frame-document: 130 and 88 of 269, with the 44 cases of "each code at its boundary", of which 7 ran before the kill, unmeasured). `test/size-contract.test.ts` judges a landing's message and growth tables and reads no `Size-Design` line on a task commit.
+
+- **A run ends only at the next `printFigures()` or at unmount (review I1; plan choice B5 revised).** The parser's run no longer closes at `i = n - 1`, so a stale figure of a cancelled run lands in the new run as its index and the real copy of that index is the one refusal (row I1 restores the old end and reds both cases: `test/host-print-run.test.ts`, n = 25 with i = 24 waiting in the pacer, and the exact-one-refusal case; `test/host-mount.test.ts`).
+- **The reader keeps the run's total (review I2; rows R6h to R6k).** A figure that would take the run's PNGs past 16 MiB is skipped and adds nothing; its `i` is never sent, so the host prints its source with its missing note and counts no refusal (`test/host-print-run.test.ts`: 17 figures of 1 MiB, sixteen sent, none refused).
 
 ```json
 
@@ -919,7 +927,7 @@ Each row was measured in place on this wave's branch: the bytes of the file save
     "passed": 2,
     "total": 4,
     "red": [],
-    "equivalent": "in Chromium: a real canvas draws a data: SVG image with HTML labels (foreignObject) without tainting, so the real-browser case cannot tell the two configurations apart; the guard is held by rows P6a, P6a2 and P6a3 on the configuration itself, and its engine-level effect (WebKit taints a canvas that drew foreignObject) is CI's WebKit run, unmeasured locally"
+    "unkillable": "not an equivalent mutant: Chromium cannot kill it. A real canvas draws an SVG image with HTML labels (foreignObject) without tainting, so the real-browser case cannot tell the two configurations apart. Its red cases are rows P6a, P6a2 and P6a3 (the configuration itself) and the WebKit run in CI, where a canvas that drew foreignObject taints and the figure is skipped (unmeasured locally)"
   },
   {
     "id": "B6a",
@@ -933,6 +941,81 @@ Each row was measured in place on this wave's branch: the bytes of the file save
     "total": 4,
     "red": [
       "chromium a figure drawn hosted prints in the host's colours; the same document without colours prints in 1.1's"
+    ]
+  },
+  {
+    "id": "I1",
+    "guard": "a run ends only at the next printFigures() or at unmount",
+    "edit": "a run ends at i = n - 1 again",
+    "file": "src/host/mount.ts",
+    "tests": "test/host-print-run.test.ts, test/host-mount.test.ts",
+    "rc": 1,
+    "failed": 3,
+    "passed": 189,
+    "total": 192,
+    "red": [
+      "docserver parity T2: the adapters, the seed and the three commands printFigures() and the run the last index may come first, and the run goes on: a stale figure with i = n - 1 closes nothing (review I1)",
+      "a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser a reprint while the last index waits in the pacer (n = 25, i = 24 in the line): the new run is not closed by it, and every one of its figures is handed to the host (review I1)",
+      "a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser an interrupted reprint costs exactly one refusal: the copy of the stale index that the new run sends (review I1)"
+    ]
+  },
+  {
+    "id": "R6h",
+    "guard": "the run's PNGs together stay within 16 MiB (review I2)",
+    "edit": "the running total is not checked",
+    "file": "src/enhance/print-figures.ts",
+    "tests": "test/enhance-print-figures.test.ts, test/host-print-run.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 40,
+    "total": 42,
+    "red": [
+      "the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2)",
+      "a second print-figures command, with the frame's real outbox, adapter and runner in front of the host's real parser a figure the runner skips for the 16 MiB total is never sent, so the host refuses nothing for it (review I2)"
+    ]
+  },
+  {
+    "id": "R6i",
+    "guard": "a skipped figure adds nothing to the run's total",
+    "edit": "the total counts a figure before it is judged",
+    "file": "src/enhance/print-figures.ts",
+    "tests": "test/enhance-print-figures.test.ts",
+    "rc": 1,
+    "failed": 1,
+    "passed": 35,
+    "total": 36,
+    "red": [
+      "the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2)"
+    ]
+  },
+  {
+    "id": "R6j",
+    "guard": "a figure that brings the run to exactly 16 MiB is sent",
+    "edit": "the total test is >= instead of >",
+    "file": "src/enhance/print-figures.ts",
+    "tests": "test/enhance-print-figures.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 34,
+    "total": 36,
+    "red": [
+      "the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2)",
+      "the runner on its own a new run starts its total again"
+    ]
+  },
+  {
+    "id": "R6k",
+    "guard": "the reader's copy of the run cap is the wire's",
+    "edit": "the cap is one byte over",
+    "file": "src/enhance/print-figures.ts",
+    "tests": "test/enhance-print-figures.test.ts",
+    "rc": 1,
+    "failed": 2,
+    "passed": 34,
+    "total": 36,
+    "red": [
+      "the constants are the wire's FIGURES_MAX, SIDE_MAX and PNG_MAX_BYTES equal BRIDGE_LIMITS",
+      "the runner on its own keeps the run's total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2)"
     ]
   }
 ]

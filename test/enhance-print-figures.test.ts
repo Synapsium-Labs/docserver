@@ -16,6 +16,7 @@ import {
   isPrintPng,
   PNG_MAX_BYTES,
   PRINT_FONT,
+  RUN_MAX_BYTES,
   printConfigOf,
   printSize,
   SIDE_MAX,
@@ -218,6 +219,7 @@ describe('the constants are the wire\'s', () => {
     expect(FIGURES_MAX).toBe(BRIDGE_LIMITS.printFiguresMax);
     expect(SIDE_MAX).toBe(BRIDGE_LIMITS.printFigureSideMaxPx);
     expect(PNG_MAX_BYTES).toBe(BRIDGE_LIMITS.printFigurePngMaxBytes);
+    expect(RUN_MAX_BYTES).toBe(BRIDGE_LIMITS.printFiguresTotalMaxBytes);
   });
 
   it('print-figures is a command the reader knows', () => {
@@ -669,6 +671,44 @@ describe('the runner on its own', () => {
     expect(got.map((f) => f.i)).toEqual([0]);
     expect(drawn).toEqual([0, 1]);
     expect(rasterized).toHaveLength(1);
+  });
+
+  it('keeps the run\'s total at or under 16 MiB: a figure that would pass it is skipped and adds nothing, and a later smaller one is still sent (review I2)', async () => {
+    const got: PrintFigure[] = [];
+    const sizes = [...Array.from({ length: 15 }, () => PNG_MAX_BYTES), PNG_MAX_BYTES - 100, PNG_MAX_BYTES, 100, 9];
+    let k = 0;
+    createPrintRunner({
+      live: () => true,
+      figures: () => sizes.map(() => () => Promise.resolve('<svg viewBox="0 0 10 10"></svg>')),
+      rasterize: () => Promise.resolve(pngOf(sizes[k++] ?? 9)),
+      hand: (f) => Promise.resolve(void got.push(f)),
+    }).start();
+    await vi.waitFor(() => {
+      expect(got.length).toBeGreaterThanOrEqual(17);
+    });
+    await settled(30);
+    // 15 MiB, then 1 MiB - 100 (16 MiB - 100), then 1 MiB (over: skipped, adds nothing), then 100 bytes (exactly 16 MiB), then 9 bytes (over)
+    expect(got.map((f) => f.i)).toEqual([...Array.from({ length: 16 }, (_, i) => i), 17]);
+    const total = got.reduce((sum, f) => sum + base64Bytes(f.png), 0);
+    expect(total).toBe(RUN_MAX_BYTES);
+  });
+
+  it('a new run starts its total again', async () => {
+    const got: PrintFigure[] = [];
+    const runner = createPrintRunner({
+      live: () => true,
+      figures: () => Array.from({ length: 16 }, () => () => Promise.resolve('<svg viewBox="0 0 10 10"></svg>')),
+      rasterize: () => Promise.resolve(pngOf(PNG_MAX_BYTES)),
+      hand: (f) => Promise.resolve(void got.push(f)),
+    });
+    runner.start();
+    await vi.waitFor(() => {
+      expect(got).toHaveLength(16);
+    });
+    runner.start();
+    await vi.waitFor(() => {
+      expect(got).toHaveLength(32);
+    });
   });
 
   it('skips a drawing whose SVG has no size, and Mermaid\'s error drawing', async () => {

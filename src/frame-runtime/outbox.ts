@@ -261,7 +261,11 @@ export function createOutbox(o: OutboxOptions): Outbox {
     }, HASH_MS);
   };
 
-  /** Into the pre-ready queue, with its coalescing and its bound. */
+  /**
+   * Into the pre-ready queue, with its coalescing and its bound. A `print-figure` never reaches the coalescing below: the reader
+   * prints only on the host's command, which the frame accepts after ready, so no two figures are ever queued here (and a figure
+   * dropped by the coalescing would lose its `done`).
+   */
   const queueEarly = (e: Entry): void => {
     if (e.kind === 'op') {
       const op = e.op;

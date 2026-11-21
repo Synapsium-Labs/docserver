@@ -2436,7 +2436,7 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       expect(c.figures).toEqual([]);
     });
 
-    it('a figure reaches onPrintFigure as {i, n, png}: i and n numbers, the text unchanged; the run ends at its last index', async () => {
+    it('a figure reaches onPrintFigure as {i, n, png}: i and n numbers, the text unchanged; the run stays open after its last index', async () => {
       const { c, over } = calls();
       const m = await ready(PLAIN, over);
       m.frame.printFigures();
@@ -2444,9 +2444,26 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       m.say(fig(1, 2, 'iVBORw0KGgoA'));
       expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }, { i: 1, n: 2, png: 'iVBORw0KGgoA' }]);
       expect(typeof (c.figures[0] as { i: unknown }).i).toBe('number');
-      // the run ended at i = n - 1: another figure has none to join
+      // the run does not end at i = n - 1 (review I1): a figure of it is judged against the run, and a repeated index is refused
       m.say(fig(0, 2));
       expect(c.figures).toHaveLength(2);
+    });
+
+    it('the last index may come first, and the run goes on: a stale figure with i = n - 1 closes nothing (review I1)', async () => {
+      const { c, over } = calls();
+      const m = await ready(PLAIN, over);
+      m.frame.printFigures();
+      m.say(fig(24, 25));
+      m.say(fig(0, 25));
+      m.say(fig(1, 25));
+      m.say(fig(24, 25));
+      m.say(fig(2, 25));
+      expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([24, 0, 1, 2]);
+      // a new call is what ends it: its indexes are free again
+      m.frame.printFigures();
+      m.say(fig(24, 25));
+      expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([24, 0, 1, 2, 24]);
+      expect(m.fallbacks()).toEqual([]);
     });
 
     it('an index seen in the run, an n that changes and an index at or above n are refused and never handed on', async () => {
@@ -2487,7 +2504,7 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       expect(c.figures).toEqual([{ i: 0, n: 2, png: PNG }]);
     });
 
-    it('a host that calls printFigures() from onPrintFigure opens a fresh run at the last index', async () => {
+    it('a host that calls printFigures() from onPrintFigure opens a fresh run, even from its last figure', async () => {
       const seenFigures: unknown[] = [];
       let m!: Mounted;
       m = await ready(PLAIN, { onPrintFigure: (f: unknown) => { seenFigures.push(f); if (seenFigures.length === 1) m.frame.printFigures(); } });
