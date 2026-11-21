@@ -263,6 +263,40 @@ describe('the outbox after ready: the pacer', () => {
     clock.advance(100);
     expect(posted).toEqual([{ at: 100, msg: { t: 'hash', id: 'b' } }]);
   });
+
+  it('a push followed within the window by a move that is not a push still posts one hash with push, and the place the reader left (docserver parity T6)', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'hash', id: 'target', push: 'true', from: 'left-1' });
+    clock.advance(30);
+    box.send({ t: 'hash', id: 'next' });
+    clock.advance(200);
+    expect(posted).toEqual([{ at: 100, msg: { t: 'hash', id: 'next', push: 'true', from: 'left-1' } }]);
+  });
+
+  it('two pushes in one window post one hash: the latest id, the first from', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'hash', id: 'one', push: 'true', from: 'left-1' });
+    box.send({ t: 'hash', id: 'two', push: 'true', from: 'left-2' });
+    clock.advance(200);
+    expect(posted).toEqual([{ at: 100, msg: { t: 'hash', id: 'two', push: 'true', from: 'left-1' } }]);
+  });
+
+  it('a first push with no from stays a push with none, a later push\'s from is not borrowed; moves alone stay moves', () => {
+    const { clock, box, posted } = setup();
+    box.open();
+    box.send({ t: 'hash', id: 'one', push: 'true' });
+    box.send({ t: 'hash', id: 'two', push: 'true', from: 'left-2' });
+    clock.advance(200);
+    box.send({ t: 'hash', id: 'a' });
+    box.send({ t: 'hash', id: 'b' });
+    clock.advance(400);
+    expect(posted.map((p) => p.msg)).toEqual([
+      { t: 'hash', id: 'two', push: 'true' },
+      { t: 'hash', id: 'b' },
+    ]);
+  });
 });
 
 describe('B7.3 progress: at most one per 250 ms window, the first at once and the last at the end (batch 1.1, C108)', () => {

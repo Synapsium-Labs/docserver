@@ -24,7 +24,8 @@
 // ms, batch 1.1): the first value at once, the window's latest at its end, so the final value always arrives, at most
 // four a second. A progress still waiting in the pacer's line takes the newer value in place (as store.set does for its
 // key), so at most one progress ever waits there and a navigate asked for later is never queued behind stale values
-// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends.
+// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends, with `push` and the `from` of the
+// first push of the window when it held one (a jump is not lost to a `j` or `k` that follows it, docserver parity T6).
 //
 // The changes slot: one request in flight, one queued. A request is in flight from the instant it is posted; its
 // answer (answer(), matched by sha) or 35 s without one (frameChangesTimeoutMs, longer than the parent's own 30 s)
@@ -237,9 +238,14 @@ export function createOutbox(o: OutboxOptions): Outbox {
     enqueue({ kind: 'op', op });
   };
 
-  /** hash: the latest of the 100 ms the first opened. */
-  const trail = (op: QueuedOp): void => {
-    hashLane.held = op;
+  /**
+   * hash: the latest of the 100 ms the first opened. A push is not lost to a move that follows it within the window (the
+   * `j` and `k` keys, the changes stepper): the one op posted keeps `push` and the `from` of the first push, with the
+   * latest id (docserver parity T6).
+   */
+  const trail = (op: Extract<QueuedOp, { t: 'hash' }>): void => {
+    const h = hashLane.held as Extract<QueuedOp, { t: 'hash' }> | null;
+    hashLane.held = h?.push === undefined ? op : { t: 'hash', id: op.id, push: 'true', ...(h.from === undefined ? {} : { from: h.from }) };
     if (hashLane.active) return;
     hashLane.active = true;
     hashLane.timer = clock.setTimeout(() => {
