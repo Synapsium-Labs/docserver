@@ -22,6 +22,7 @@ import { buildFrame } from '../scripts/build-frame.mjs';
 import { frameCsp } from '../src/frame/csp.js';
 import { frameDocument, type FrameAssets, type RenderInput } from '../src/frame/document.js';
 import { MERMAID_GATE_DEFAULTS } from '../src/frame/gate.js';
+import { FRAME_LAYOUTS } from '../src/frame/layouts.js';
 import { SEED_HTML_MAX_CHARS } from '../src/frame/seed.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES } from '../src/frame-runtime/inbound.js';
 import { mountDocFrame, type DocFrame, type FallbackReason, type HostAdapters } from '../src/host/index.js';
@@ -2122,18 +2123,23 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'dark' });
   });
 
-  it("test 9: the srcdoc's CSP meta and the iframe's csp attribute of a mount with an appearance and both faces equal those of the same mount without them", () => {
-    const plain = mount();
-    const hosted = mount(PLAIN, { appearance: COLOUR, assets: { ...assets, fonts: { sans: GOOD, mono: OTHER } } });
-    const meta = (srcdoc: string): string => /^<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(srcdoc)?.[1] ?? '';
-    const plainDoc = plain.iframe.getAttribute('srcdoc') ?? '';
-    const hostedDoc = hosted.iframe.getAttribute('srcdoc') ?? '';
-    expect(seedOf(hostedDoc)['fonts']).toEqual({ sans: GOOD, mono: OTHER });
-    expect(meta(hostedDoc)).not.toBe('');
-    expect(meta(hostedDoc)).toBe(meta(plainDoc));
-    expect(hosted.iframe.getAttribute('csp')).toBe(plain.iframe.getAttribute('csp'));
-    expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp());
-  });
+  for (const layout of FRAME_LAYOUTS) {
+    it(`test 9, ${layout}: the srcdoc's CSP meta and the iframe's csp attribute of a mount with an appearance and both faces equal those of the same mount without them`, () => {
+      const base = layout === 'default' ? assets : { ...assets, ...layoutAssets[layout] };
+      const plain = mount(PLAIN, { layout, assets: base });
+      const hosted = mount(PLAIN, { layout, appearance: COLOUR, assets: { ...base, fonts: { sans: GOOD, mono: OTHER } } });
+      const meta = (srcdoc: string): string => /^<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(srcdoc)?.[1] ?? '';
+      const plainDoc = plain.iframe.getAttribute('srcdoc') ?? '';
+      const hostedDoc = hosted.iframe.getAttribute('srcdoc') ?? '';
+      expect(plain.fallbacks()).toEqual([]);
+      expect(hosted.fallbacks()).toEqual([]);
+      expect(seedOf(hostedDoc)['fonts']).toEqual({ sans: GOOD, mono: OTHER });
+      expect(meta(hostedDoc)).not.toBe('');
+      expect(meta(hostedDoc)).toBe(meta(plainDoc));
+      expect(hosted.iframe.getAttribute('csp')).toBe(plain.iframe.getAttribute('csp'));
+      expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp(layout));
+    });
+  }
 });
 
 // ───────── docserver parity T2: places, goto, close-overlay and print figures ─────────

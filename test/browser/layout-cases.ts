@@ -9,7 +9,7 @@
 // `scope` is the snapshot's (a non-empty list of class names, `[attribute]` and `tag[attribute]` entries). The
 // ratchet (scripts/ratchet.mjs) holds every case: a changed .dom.txt is named in a `Layout-moved:` trailer, and a
 // hostile case is never removed and its .md and options never change. `UPDATE_LAYOUT=1` writes the expected files
-// (updateRequested); CI never sets it, and fails when a run leaves conformance/layout/ changed.
+// (updateRequested); CI never sets it, and fails when a run leaves conformance/layout/ or conformance/layouts/ changed.
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

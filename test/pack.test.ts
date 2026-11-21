@@ -67,7 +67,7 @@ const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'M
 const INERT_LINE =
   'consumer-smoke: @synapsium-labs/pinax-lib/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
 const ASSETS_LINE =
-  'consumer-smoke: every one of the 26 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
+  'consumer-smoke: every one of the 20 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
 const SCANS_LINE =
   "consumer-smoke: the M8.3, M8.4 and M8.8 scans pass on both srcdocs and on the clean template, and each of the 16 labelled frame mutants fails its own row's scan";
 
@@ -116,6 +116,10 @@ const ALLOWED = [
   /^assets\/assets\.json$/,
   /^assets\/frame\/(?:guard|bootstrap|enhance)\.js$|^assets\/frame\/reader\.css$/,
   /^assets\/mermaid\/mermaid\.frame\.js$/,
+  // The layouts (docserver parity T9): each one's enhance bundle and stylesheet as a frame file, its tracked stylesheet source, and
+  // its feature list and the shared mark (modules of dist/enhance/layouts/).
+  /^assets\/frame\/enhance-[a-z]+\.js$|^assets\/frame\/layout-[a-z]+\.css$|^assets\/layouts\/[a-z]+\.css$/,
+  /^dist\/enhance\/layouts\/(?:mark|[a-z]+\/features)\.(?:js|d\.ts)$/,
   /^(?:package\.json|README\.md|LICENSE|THIRD-PARTY-NOTICES)$/,
 ];
 
@@ -300,6 +304,13 @@ describe('npm pack', () => {
       'assets/frame/enhance.js',
       'assets/frame/reader.css',
       'assets/mermaid/mermaid.frame.js',
+      // each layout's bundle, stylesheet and tracked source (parity T9)
+      'assets/frame/enhance-classic.js',
+      'assets/frame/layout-classic.css',
+      'assets/layouts/classic.css',
+      'assets/frame/enhance-editorial.js',
+      'assets/frame/layout-editorial.css',
+      'assets/layouts/editorial.css',
       'THIRD-PARTY-NOTICES',
     ]) {
       expect(packed.files).toContain(must);

@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect } from 'vitest';
 import { buildFrame } from '../../scripts/build-frame.mjs';
-import { FRAME_MANIFEST, frameCsp, frameDocument, type FrameAssets, type FrameOptions, type RenderInput } from '../../src/frame/index.js';
+import { FRAME_MANIFEST, frameCsp, frameDocument, type FrameAssets, type FrameLayout, type FrameOptions, type RenderInput } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import type { FrameHost, HostRecord } from './frame-host-page.js';
 import type { BrowserName } from './harness.js';
@@ -29,12 +29,23 @@ export interface BuiltFrame {
   readonly mermaid: string;
   /** The free-global list the built bootstrap carries (DOCSERVER_FREE_GLOBALS). */
   readonly freeGlobals: readonly string[];
+  /** Each layout besides `default`: the enhance bundle and the stylesheet its frame inlines in place of the default's (parity Task 9). */
+  readonly layouts: Readonly<Record<Exclude<FrameLayout, 'default'>, { readonly enhance: string; readonly layoutCss: string }>>;
 }
+
+/** The layouts' assets of the last frame loaded, which `srcdocFor` reads for a layout (it throws until `loadFrame` has run). */
+let layoutAssetsLoaded: BuiltFrame['layouts'] | undefined;
 
 /** Build the frame in memory, exactly as `node scripts/build-frame.mjs` writes it. */
 export async function loadFrame(): Promise<BuiltFrame> {
   const built = await buildFrame();
+  const layouts = {
+    classic: { enhance: built.files.enhanceClassic.text, layoutCss: built.files.cssClassic.text },
+    editorial: { enhance: built.files.enhanceEditorial.text, layoutCss: built.files.cssEditorial.text },
+  };
+  layoutAssetsLoaded = layouts;
   return {
+    layouts,
     assets: { guard: built.files.guard.text, bootstrap: built.files.bootstrap.text, enhance: built.files.enhance.text, css: built.files.css.text },
     mermaid: built.files.mermaid.text,
     freeGlobals: built.freeGlobals.names,
@@ -83,9 +94,15 @@ export function corpusDocuments(): { id: string; markdown: string }[] {
   return manifest.filter((e) => e.kind !== 'generated').map((e) => ({ id: e.id, markdown: readFileSync(path.join(CORPUS, `${e.id}.md`), 'utf8') }));
 }
 
-/** A srcdoc for `markdown` under frameCsp(), with the given assets and options (Mermaid off unless `options` says). */
-export function srcdocFor(assets: FrameAssets, markdown: string, nonce: string, options: Partial<FrameOptions> = {}): string {
-  return frameDocument(input(markdown), { csp: frameCsp(), nonce, assets, ...options });
+/**
+ * A srcdoc for `markdown` under frameCsp(layout), with the given assets and options (Mermaid off unless `options` says). For a
+ * layout besides `default` the layout's own bundle and stylesheet replace `assets.enhance` and are added as `assets.layoutCss`
+ * (the policy of that layout is the one its frame is sealed under: hash-only, with its bundle's hash and no other layout's).
+ */
+export function srcdocFor(assets: FrameAssets, markdown: string, nonce: string, options: Partial<FrameOptions> = {}, layout: FrameLayout = 'default'): string {
+  if (layout === 'default') return frameDocument(input(markdown), { csp: frameCsp(), nonce, assets, ...options });
+  if (layoutAssetsLoaded === undefined) throw new Error('srcdocFor: loadFrame() has not run, so no layout has assets');
+  return frameDocument(input(markdown), { csp: frameCsp(layout), nonce, layout, assets: { ...assets, ...layoutAssetsLoaded[layout] }, ...options });
 }
 
 /** The data of every port message on `port`, in order. */

@@ -18,7 +18,8 @@
 // The policy's rows are test/frame-csp.test.ts's and test/frame-boundaries.test.ts's, the host's are test/host-mount.test.ts's, the
 // feature lists' are test/enhance-layouts.test.ts's, and the size contract's layout row is test/size-rules.test.ts's.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, stop } from 'esbuild';
@@ -383,6 +384,25 @@ describe('one enhance bundle per layout, from the default\'s entry, with the fea
     expect(ok.errors).toEqual([]);
     await stop();
   }, 120_000);
+
+  it("the plugin fails the build when it replaced the lifecycle's import more than once (a lifecycle that imports ./features.js statically and again dynamically), and not when it replaced it once", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pinax-layout-plugin-'));
+    try {
+      mkdirSync(path.join(dir, 'src', 'enhance'), { recursive: true });
+      writeFileSync(path.join(dir, 'src', 'enhance', 'features.ts'), 'export const a = 1;\nexport const b = 2;\n');
+      const lifecycle = path.join(dir, 'src', 'enhance', 'lifecycle.ts');
+      const probe = (source: string): Promise<unknown> => {
+        writeFileSync(lifecycle, source);
+        return build({ entryPoints: [lifecycle], bundle: true, write: false, format: 'iife', platform: 'browser', logLevel: 'silent', plugins: [layoutPlugin(dir, 'src/enhance/features.ts')] });
+      };
+      await expect(probe("import { a } from './features.js';\nconsole.log(a);\n")).resolves.toBeDefined();
+      // esbuild resolves one import record once per kind, so the second import is a dynamic one.
+      await expect(probe("import { a } from './features.js';\nconsole.log(a, import('./features.js'));\n")).rejects.toThrow(/replaced 2 times, not once/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      await stop();
+    }
+  }, 120_000);
 });
 
 // ───────── 4. each layout's srcdoc ─────────
@@ -432,10 +452,11 @@ describe('each layout\'s srcdoc inlines only its own bundle and stylesheet', () 
   });
 
   it('the policy meta of a srcdoc is the layout\'s own, with an appearance and both faces as without', () => {
+    // A face the seed accepts (the woff2 signature, then bytes), for both roles.
+    const face = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(200)]).toString('base64');
     for (const layout of FRAME_LAYOUTS) {
       const without = tree(frameOf(layout)).head.childNodes.filter(isElement);
-      const withBoth = tree(frameOf(layout, { appearance: { mode: 'dark' } })).head.childNodes.filter(isElement);
-      expect(attr(withBoth[0] as Element, 'content'), layout).toBe(attr(without[0] as Element, 'content'));
+      const withBoth = tree(frameOf(layout, { appearance: { mode: 'dark' }, assets: { ...assetsFor(layout), fonts: { sans: face, mono: face } } as FrameAssets })).head.childNodes.filter(isElement);      expect(attr(withBoth[0] as Element, 'content'), layout).toBe(attr(without[0] as Element, 'content'));
       expect(attr(without[0] as Element, 'content'), layout).toBe(frameCsp(layout));
     }
   });
