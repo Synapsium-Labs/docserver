@@ -195,3 +195,19 @@ F3: the screen's byline is cut by one `journal.splitAll` per text child (`src/en
   {"id": "RH1", "guard": "a piece is cut from an empty copy of the text, never from a copy of the whole text (F3)", "edit": "each piece is text.cloneNode(false), a copy of the whole text, instead of blank.cloneNode(false)", "file": "src/enhance/journal.ts", "tests": "test/enhance-editorial.test.ts", "rc": 1, "failed": 1, "passed": 29, "total": 30, "red": ["the data of every text node cloned to cut 1 000 pieces stays under the length of the text itself plus a constant (never a copy of the whole text per piece)"]}
 ]
 ```
+
+## Review 3088 round 2, F3 in WebKit
+
+CI ran `test/browser/byline-many.test.ts` in WebKit and found `createRange` called 5 times where the case allowed 4 (and a timeout on the other Node leg). WebKit could not be run where this was fixed (its build downloads, but needs dozens of system libraries that need a package manager and root). The count is explained from Chromium's own measurement: the byline's text there is one node of 276 890 code units; WebKit's parser cuts a long text into nodes of at most 65 536 code units (a fact of WebKit read from its source, not measured here), which is 5 nodes for 276 890, and `splitAll` runs once per text child, one range each. The bound is now one range per text child of the paragraph, counted in the page before enhance, and a second case cuts the text into 5 nodes on every engine so the shape is held in Chromium too. Rows measured in place as above (each file saved with its sha256, one edit, the file run through the fleet test wrapper with `DOCREADER_BROWSERS=chromium`, the file restored from the saved bytes and its sha256 compared). Restored hashes: `src/enhance/journal.ts` `e000c341751e64a7bfecf238fd8e16ccf7e06e016a5cc51ceabf3650318091d8`, `test/browser/byline-many.test.ts` `b81984ebb59ee3a20adb8a3ca10c44b85d837857c2467691559944c2e48336a5`.
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| RI1 | the range count follows the text nodes of the paragraph, never a fixed 4 (F3, WebKit) | the bound is `toBeLessThanOrEqual(4)` again, as CI had it | `test/browser/byline-many.test.ts` | red: 1 failed \| 1 passed \| 2 skipped (WebKit) in the file with `DOCREADER_BROWSERS=chromium`: the 5-node case, `expected 5 to be less than or equal to 4`, the CI message exactly. The 32 000 case (one node) stays green, so the fixed bound passes in Chromium and fails only where the text has five nodes |
+| RI2 | the undo deletes the pieces with one range per text child, not one per piece (F3) | the undo makes a range per tail (`createRange`, `selectNode`, `deleteContents`) | `src/enhance/journal.ts` | red: 2 failed \| 2 skipped in `test/browser/byline-many.test.ts` with `DOCREADER_BROWSERS=chromium`: the 32 000 case (expected 63999 to be less than or equal to 1) and the 5-node case (expected 7995 to be less than or equal to 5) |
+
+```json
+[
+  {"id": "RI1", "guard": "the range count follows the text nodes of the paragraph, never a fixed 4", "edit": "the createRange bound is toBeLessThanOrEqual(4) again", "file": "test/browser/byline-many.test.ts", "tests": "test/browser/byline-many.test.ts", "rc": 1, "failed": 1, "passed": 1, "total": 2, "red": ["a byline text of 5 nodes is undone with one range per node, and destroy restores the html"]},
+  {"id": "RI2", "guard": "the undo deletes the pieces with one range per text child", "edit": "the undo makes one range per tail", "file": "src/enhance/journal.ts", "tests": "test/browser/byline-many.test.ts", "rc": 1, "failed": 2, "passed": 0, "total": 2, "red": ["32000 separators are cut and joined with a bounded count of DOM operations, and destroy restores the html", "a byline text of 5 nodes is undone with one range per node, and destroy restores the html"]}
+]
+```

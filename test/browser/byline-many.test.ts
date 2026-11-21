@@ -1,24 +1,57 @@
-// A byline of 32 000 separators in a real browser (review 3088 F3). The screen used to cut the meta line's text with two
+// A byline of many separators in a real browser (review 3088 F3). The screen used to cut the meta line's text with two
 // `journal.split`s per separator and to undo each with an `appendData` (quadratic: 32 000 took seconds, 64 000 minutes). One
 // `journal.splitAll` per text child cuts at every separator and undoes with one write and one range deletion. The bound is a
 // count of DOM operations in the page, never a clock: `splitText` and `appendData` are not called at all, `removeChild`
-// only for the handful of chrome nodes, and destroy restores the root's html exactly. jsdom is quadratic in a parent's
-// children, so the 32 000 case lives here and test/enhance-editorial.test.ts holds the same counts at 500.
+// only for the handful of chrome nodes, `createRange` once per text child of the paragraph (never per separator), and
+// destroy restores the root's html exactly. jsdom is quadratic in a parent's children, so the large cases live here and
+// test/enhance-editorial.test.ts holds the same counts at 500.
+//
+// The number of text children is the engine's to decide, so it is measured in the page before enhance, never assumed to be
+// one: WebKit's parser cuts a long text into nodes of at most 65 536 code units (Blink's does not), so the same 32 000-
+// separator paragraph came out as five text nodes there and `createRange` was called five times (CI, review 3088 F3). The
+// second case makes that shape on every engine: the text is cut into five nodes at separators before enhance runs.
+//
+// The size is per engine, for a stated reason: Chromium runs 32 000 separators in about 0.6 s here (linear: 4 000 to 32 000
+// took 0.09 s to 0.58 s), while the one WebKit run in CI at 32 000 timed out at 120 s on one leg. WebKit could not be run
+// where this was written, so its scaling is unmeasured and its case is 8 000 (a quarter), with a longer clock backstop.
+// The counts do not depend on the size.
 import { afterAll, expect, it } from 'vitest';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName } from './harness.js';
 
 afterAll(closeBrowsers);
 
-const K = 32000;
-const MD = `# T\n\n**Spec** · ${Array.from({ length: K }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
+/** The separators of the large case per engine, and the clock backstop for the build and for the undo, in ms. */
+const LARGE: Record<BrowserName, { k: number; backstopMs: number }> = {
+  chromium: { k: 32000, backstopMs: 20000 },
+  webkit: { k: 8000, backstopMs: 60000 },
+};
+/** The separators of the case whose text is cut into FRAGMENTS nodes first. */
+const FRAGMENT_K = 4000;
+const FRAGMENTS = 5;
 
-describeBrowsers((name: BrowserName) => {
-  it(`${name}: ${String(K)} separators are cut and joined with a bounded count of DOM operations, and destroy restores the html`, async () => {
-    const doc = await openDoc(MD, {}, { browser: name, enhance: false });
-    try {
-      const out = await doc.page.evaluate(async () => {
+function markdown(k: number): string {
+  return `# T\n\n**Spec** · ${Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
+}
+
+async function measure(name: BrowserName, k: number, fragments: number) {
+  const doc = await openDoc(markdown(k), {}, { browser: name, enhance: false });
+  try {
+    return await doc.page.evaluate(
+      async (cut: number) => {
         const api = window.__docreaderHarness;
         if (api === undefined) throw new Error('no harness');
+        const byline = Array.from(api.root.querySelectorAll('p')).find((p) => (p.textContent ?? '').includes(' · '));
+        if (byline === undefined) throw new Error('no byline paragraph');
+        if (cut > 1) {
+          // Cut the one text into `cut` nodes, each cut at the start of a separator so none is split across two nodes.
+          const text = Array.from(byline.childNodes).find((n): n is Text => n.nodeType === 3);
+          if (text === undefined) throw new Error('no text in the byline paragraph');
+          const data = text.data;
+          const offsets: number[] = [];
+          for (let i = 1; i < cut; i += 1) offsets.push(data.indexOf(' · ', Math.floor((data.length * i) / cut)));
+          for (const o of offsets.reverse()) text.splitText(o);
+        }
+        const texts = Array.from(byline.childNodes).filter((n) => n.nodeType === 3).length;
         const calls: Record<string, number> = { splitText: 0, appendData: 0, removeChild: 0, createRange: 0 };
         const targets: [string, object][] = [
           ['splitText', Text.prototype],
@@ -49,21 +82,42 @@ describeBrowsers((name: BrowserName) => {
         const destroyMs = performance.now() - t1;
         const undone = { ...calls };
         for (const restore of originals) restore();
-        return { outcome, enhanced, undone, facts, restored: api.root.innerHTML === before, enhanceMs, destroyMs };
-      });
-      expect(out.outcome).toEqual({ ok: true });
-      expect(out.facts).toBeGreaterThanOrEqual(K);
-      expect(out.enhanced['splitText']).toBeLessThanOrEqual(4);
-      expect(out.undone['appendData']).toBeLessThanOrEqual(4);
-      expect(out.undone['removeChild']).toBeLessThanOrEqual(40);
-      expect(out.undone['createRange']).toBeGreaterThanOrEqual(1);
-      expect(out.undone['createRange']).toBeLessThanOrEqual(4);
-      expect(out.restored).toBe(true);
-      // A backstop, not the bound: the old loop took many seconds here.
-      expect(out.enhanceMs).toBeLessThan(20000);
-      expect(out.destroyMs).toBeLessThan(20000);
-    } finally {
-      await doc.close();
-    }
+        return { texts, outcome, enhanced, undone, facts, restored: api.root.innerHTML === before, enhanceMs, destroyMs };
+      },
+      fragments,
+    );
+  } finally {
+    await doc.close();
+  }
+}
+
+function expectBounded(out: Awaited<ReturnType<typeof measure>>, k: number, backstopMs: number): void {
+  expect(out.outcome).toEqual({ ok: true });
+  // One item per separator and one for the Spec; a separator an engine's own cut falls inside is not one (one item per cut).
+  expect(out.facts).toBeGreaterThanOrEqual(k - out.texts);
+  expect(out.enhanced['splitText']).toBeLessThanOrEqual(4);
+  expect(out.undone['appendData']).toBeLessThanOrEqual(4);
+  expect(out.undone['removeChild']).toBeLessThanOrEqual(40);
+  // One range deletion per text child of the paragraph, however many separators: a count that follows the nodes, not k.
+  expect(out.undone['createRange']).toBeGreaterThanOrEqual(1);
+  expect(out.undone['createRange']).toBeLessThanOrEqual(out.texts);
+  expect(out.restored).toBe(true);
+  // A backstop, not the bound: the old loop took many seconds here.
+  expect(out.enhanceMs).toBeLessThan(backstopMs);
+  expect(out.destroyMs).toBeLessThan(backstopMs);
+}
+
+describeBrowsers((name: BrowserName) => {
+  const { k, backstopMs } = LARGE[name];
+  it(`${name}: ${String(k)} separators are cut and joined with a bounded count of DOM operations, and destroy restores the html`, async () => {
+    expectBounded(await measure(name, k, 1), k, backstopMs);
+  }, 120000);
+
+  it(`${name}: a byline text of ${String(FRAGMENTS)} nodes is undone with one range per node, and destroy restores the html`, async () => {
+    const out = await measure(name, FRAGMENT_K, FRAGMENTS);
+    expect(out.texts).toBeGreaterThanOrEqual(FRAGMENTS);
+    expectBounded(out, FRAGMENT_K, backstopMs);
+    // Every node had separators, so every node was joined by a range of its own: the count is the nodes, here, exactly.
+    expect(out.undone['createRange']).toBe(out.texts);
   }, 120000);
 });
