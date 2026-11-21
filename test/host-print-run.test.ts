@@ -1,9 +1,11 @@
 // @vitest-environment node
 // A print run, the frame's side and the host's together (docserver parity T6): the frame's real outbox (its pacer and its `done`), its real
 // adapter and the reader's real runner, posting into the real `./host` mount over a fake port, so the host's own parser and its run judge every
-// figure. What this holds that no unit file does: a second `print-figures` command leaves at most one stale figure in the host's new run, so
-// a reprint costs the host at most one refusal and never the sixteen that close the frame; and a frame whose seed did not ask for print figures
-// sends none. The mount's harness is the small half of test/host-mount.test.ts's, with the frame's assets from an in-memory build of the
+// figure. What this holds that no unit file does: a second `print-figures` command, with any number of the first run's figures still queued in
+// the host's port (an asynchronous port, the frame's `done` firing when a figure is posted and not when the host has handled it), costs the host
+// no refusal and never the sixteen that close the frame: the host's reopened run takes each stale copy under its index and the new run's own
+// copy replaces it (the latest copy of an index wins, as a consumer that keeps figures by index sees it); and a frame whose seed did not ask
+// for print figures sends none. The mount's harness is the small half of test/host-mount.test.ts's, with the frame's assets from an in-memory build of the
 // frame's sources, so a mutation of the source still changes what the frame side does and nothing else.
 import { createRequire } from 'node:module';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -107,13 +109,20 @@ function readyHost(asksForFigures = true): Mounted {
 }
 
 /** The frame's side over a mount: the runner of `count` figures of `bytes` each, handing to the adapter, which posts through the outbox (the pacer) into the mount. */
-function frameOver(m: Mounted, printFigures = true, count = 30, bytes = 100): { posted: unknown[]; start: () => void; adapters: ReturnType<typeof createAdapters> } {
+function frameOver(
+  m: Mounted,
+  printFigures = true,
+  count = 30,
+  bytes = 100,
+  route: (msg: unknown, say: (data: unknown) => void) => void = (msg, say) => say(msg),
+): { posted: unknown[]; start: () => void; adapters: ReturnType<typeof createAdapters>; setBytes: (b: number) => void } {
   const posted: unknown[] = [];
+  let figureBytes = bytes;
   const outbox = createOutbox({
     clock: { now: () => performance.now(), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) },
     post: (msg) => {
       posted.push(msg);
-      m.say(msg);
+      route(msg, m.say);
     },
     limits: BRIDGE_LIMITS,
   });
@@ -123,14 +132,14 @@ function frameOver(m: Mounted, printFigures = true, count = 30, bytes = 100): { 
   const runner = createPrintRunner({
     live: () => true,
     figures: () => Array.from({ length: count }, () => draw),
-    rasterize: () => Promise.resolve(pngOf(bytes)),
+    rasterize: () => Promise.resolve(pngOf(figureBytes)),
     hand: (f) => adapters.printOption.onPrintFigure?.(f) ?? Promise.resolve(),
   });
-  return { posted, start: () => runner.start(), adapters };
+  return { posted, start: () => runner.start(), adapters, setBytes: (b) => void (figureBytes = b) };
 }
 
 describe('a second print-figures command, with the frame\'s real outbox, adapter and runner in front of the host\'s real parser', () => {
-  it('leaves at most one stale figure in the host\'s second run: one refusal, never the sixteen that close the frame', async () => {
+  it('leaves at most one stale figure in the host\'s second run (the pacer\'s): no refusal, never the sixteen that close the frame', async () => {
     const m = readyHost();
     const frame = frameOver(m);
     m.frame.printFigures();
@@ -143,8 +152,8 @@ describe('a second print-figures command, with the frame\'s real outbox, adapter
     frame.start();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(m.fallbacks).toEqual([]);
-    const refused = frame.posted.length - m.figures.length;
-    expect(refused).toBeLessThanOrEqual(1);
+    // every figure posted was handed on: the stale one's copy was replaced by the new run's own, and nothing was refused
+    expect(frame.posted.length - m.figures.length).toBe(0);
     expect(frame.posted).toHaveLength(12 + 30 + 1);
     // run 2 got every index once, in the end
     const lastRun = m.figures.slice(12);
@@ -164,14 +173,14 @@ describe('a second print-figures command, with the frame\'s real outbox, adapter
     frame.start();
     await vi.advanceTimersByTimeAsync(20_000);
     expect(m.fallbacks).toEqual([]);
-    // the new run: the stale 24 first, then every index 0 to 23 once; its own 24 is the one refusal
+    // the new run: the stale 24 first, then every index 0 to 23 once; its own 24 replaces the stale copy
     const second = m.figures.slice(24);
-    expect(second.map((f) => f.i)).toEqual([24, ...Array.from({ length: 24 }, (_, i) => i)]);
+    expect(second.map((f) => f.i)).toEqual([24, ...Array.from({ length: 24 }, (_, i) => i), 24]);
     expect(second.every((f) => f.n === 25)).toBe(true);
     expect(new Set(second.map((f) => f.i)).size).toBe(25);
   });
 
-  it('an interrupted reprint costs exactly one refusal: the copy of the stale index that the new run sends (review I1)', async () => {
+  it('an interrupted reprint costs no refusal: the new run\'s copy of the stale index replaces the stale one and is handed on (review I1, review 3081 F2)', async () => {
     const m = readyHost();
     const frame = frameOver(m, true, 25);
     m.frame.printFigures();
@@ -181,10 +190,10 @@ describe('a second print-figures command, with the frame\'s real outbox, adapter
     frame.start();
     await vi.advanceTimersByTimeAsync(20_000);
     expect(frame.posted).toHaveLength(24 + 1 + 25);
-    expect(frame.posted.length - m.figures.length).toBe(1);
-    // the refused one is the new run's own i = 24, sent after the stale one was accepted
+    expect(frame.posted.length - m.figures.length).toBe(0);
+    // i = 24 was posted twice, the stale copy and the new run's own, and handed on twice: the later one is the one that stays
     expect(frame.posted.filter((f) => (f as { i: string }).i === '24')).toHaveLength(2);
-    expect(m.figures.filter((f) => f.i === 24)).toHaveLength(1);
+    expect(m.figures.filter((f) => f.i === 24)).toHaveLength(2);
   });
 
   it('a figure the runner skips for the 16 MiB total is never sent, so the host refuses nothing for it (review I2)', async () => {
@@ -219,4 +228,38 @@ describe('a second print-figures command, with the frame\'s real outbox, adapter
     expect(frame.posted).toEqual([]);
     expect(m.figures).toEqual([]);
   });
+});
+
+describe('a reprint with k figures of the first run still queued in the host\'s port (an asynchronous port; review 3081 F2)', () => {
+  for (const k of [1, 4, 16]) {
+    it(`k = ${k}: the queued copies are absorbed, no refusal and no fallback, and every figure the consumer keeps is the new run's copy`, async () => {
+      const m = readyHost();
+      const queue: unknown[] = [];
+      // Run 1 figures leave the frame at once, but the host handles an index from `holdFrom` on only when the queue is flushed.
+      let holdFrom: number | null = null;
+      const frame = frameOver(m, true, 30, 100, (msg, say) => (holdFrom !== null && Number((msg as { i: string }).i) >= holdFrom ? void queue.push(msg) : say(msg)));
+      m.frame.printFigures();
+      frame.start();
+      holdFrom = 24 - k;
+      await vi.advanceTimersByTimeAsync(1500);
+      // 24 figures are out, i = 0..23; the last k are in the host's queue, not yet handled
+      expect(frame.posted).toHaveLength(24);
+      expect(queue).toHaveLength(k);
+      // the host reopens (its run swaps now), then handles the queued copies of run 1, then the frame sees the command and draws run 2
+      m.frame.printFigures();
+      for (const msg of queue.splice(0)) m.say(msg);
+      holdFrom = null;
+      frame.setBytes(200);
+      frame.start();
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(m.fallbacks).toEqual([]);
+      // no refusal: everything the frame posted was handed on (the queued copies, then run 2's, replacing them)
+      expect(frame.posted.length - m.figures.length).toBe(0);
+      // the consumer's map, latest copy of an index wins: 30 indexes, every one a run 2 copy
+      const kept = new Map<number, string>();
+      for (const f of m.figures) kept.set(f.i, f.png);
+      expect([...kept.keys()].sort((a, b) => a - b)).toEqual(Array.from({ length: 30 }, (_, i) => i));
+      expect([...kept.values()].every((png) => png === pngOf(200))).toBe(true);
+    });
+  }
 });

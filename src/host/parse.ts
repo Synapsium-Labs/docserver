@@ -62,12 +62,15 @@ type FrameOp = FrameToParent['t'];
 
 /**
  * What the mount holds of one print run (plan choice B5): `n` is the run's figure count, set by its first accepted figure
- * (null before it); `seen` the indexes accepted; `bytes` what they decode to, together.
+ * (null before it); `seen` the indexes accepted; `bytes` what they decode to, together. `replaceable` is held only by a reopened
+ * run (one `printFigures()` opened while the previous run was unfinished): each index it accepted once and may still replace
+ * once, mapped to the bytes of the copy a replacement would drop; absent or empty, a repeated index is refused.
  */
 export interface PrintRunView {
   readonly n: number | null;
   readonly seen: ReadonlySet<number>;
   readonly bytes: number;
+  readonly replaceable?: ReadonlyMap<number, number>;
 }
 
 /** The mount's state a verdict may depend on: `bridge.places` as seeded, and the open print run (null: none is open). */
@@ -265,7 +268,14 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       const n = Number(nText);
       if (!(i < n && n <= BRIDGE_LIMITS.printFiguresMax)) return refuse('type');
       if (run.n !== null && n !== run.n) return refuse('type');
-      if (run.seen.has(i)) return refuse('type');
+      // A repeated index is refused, but for the first repeat in a reopened run, which replaces the earlier copy (that copy's
+      // bytes leave the run's total below, before the cap is checked).
+      let replaced = 0;
+      if (run.seen.has(i)) {
+        const held = run.replaceable?.get(i);
+        if (held === undefined) return refuse('type');
+        replaced = held;
+      }
       const png = str('png');
       // The longest base64 text a figure of at most printFigurePngMaxBytes can have: four characters per started group of three bytes.
       if (png.length > 4 * Math.ceil(BRIDGE_LIMITS.printFigurePngMaxBytes / 3)) return refuse('oversize');
@@ -276,7 +286,7 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       const bytes = pngBytesOfBase64(png);
       if (bytes === null) return refuse('type');
       if (bytes > BRIDGE_LIMITS.printFigurePngMaxBytes) return refuse('oversize');
-      if (run.bytes + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes) return refuse('oversize');
+      if (run.bytes - replaced + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes) return refuse('oversize');
       return { ok: true, msg: { t: 'print-figure', i: iText, n: nText, png }, bytes };
     }
     case 'progress': {

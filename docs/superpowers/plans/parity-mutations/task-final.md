@@ -79,3 +79,29 @@ The new cases were run first against the unfixed code and were red: the three lo
   {"id": "RR9", "guard": "an item href holds no tag character (F7)", "edit": "the range U+E0000 to U+E007F removed from both classes", "file": "src/frame/items.ts", "tests": "test/host-links.test.ts", "rc": 1, "failed": 2, "passed": 23, "total": 25, "red": ["the bidi controls, directional marks and zero-width characters are refused by both", "over every code point, in each place, isItemHref admits exactly what classifyLink admits"]}
 ]
 ```
+
+## Review 3081 round 1, F2 (a reprint absorbs the previous run's figures in flight)
+
+The new cases were run first against the unfixed `src/host/mount.ts` and `src/host/parse.ts` (restored from `HEAD`) and were red: in `test/host-print-run.test.ts` 6 failed \| 3 passed (9) (the asynchronous cases for k = 1, 4 and 16 saw 2, 5 and a fallback with `refusals` where none is expected, and the three older reprint cases now expect no refusal), and in `test/host-mount.test.ts` 5 failed \| 190 passed (195) (the reopened-run cases). After the fix both are green. Each row below was measured in place: the file's bytes saved with their sha256, one edit applied, the named file run through the fleet test wrapper, then the saved bytes restored and the sha256 compared (`src/host/mount.ts` `2b6caaafca2a319c7e217636852b5a25d37be95154a5f151e6d8fb42dc7daddc`, `src/host/parse.ts` `d785b205ea92bac8d43da1f8eebe7b7308f873fd92a8b785bee1149d4535fb94`).
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| RF1 | the first repeat in a reopened run replaces the earlier copy (F2) | a repeated index is refused whatever the run (`if (held === undefined) return refuse('type');` is `return refuse('type');`) | `src/host/parse.ts` | red: 5 failed \| 190 passed (195) in `test/host-mount.test.ts` (the replacement, per-index, no-figure and two byte-total cases), and 6 failed \| 3 passed (9) in `test/host-print-run.test.ts` (k = 1, 4, 16 and the three older reprint cases) |
+| RF2 | a replacement counts no refusal (F2) | the mount's effect calls `refused()` for a replaced copy | `src/host/mount.ts` | red: 1 failed \| 194 passed (195). the first repeat replaces: sixteen refusals close the frame one early; and 1 failed \| 8 passed (9) in `test/host-print-run.test.ts`, k = 16: the frame fell back with `refusals` |
+| RF3 | a replacement drops the earlier copy's bytes from the run total (F2) | the `run.bytes -= earlier;` line removed | `src/host/mount.ts` | red: 1 failed \| 194 passed (195). a smaller replacement frees its bytes for the next figure |
+| RF4 | the cap is checked on the adjusted total (F2) | `run.bytes - replaced + bytes` is `run.bytes + bytes` | `src/host/parse.ts` | red: 2 failed \| 193 passed (195). the run total is adjusted by the replacement before the cap, and a smaller replacement frees its bytes |
+| RF5 | an index is replaced once (F2) | the replaced index is put back in `replaceable` instead of deleted | `src/host/mount.ts` | red: 3 failed \| 192 passed (195). the first repeat replaces and a second is refused and counted, each index has its own one replacement, and the byte-total case |
+| RF6 | a run opened after a complete run is ordinary (F2) | the run is reopened whenever a run came before (`const unfinished = run !== null;`) | `src/host/mount.ts` | red: 1 failed \| 194 passed (195). a previous run that was complete leaves the next one ordinary: a repeat is refused and counted |
+| RF7 | a run opened after a run that received nothing is reopened (F2) | `run.n === null \|\|` becomes `run.n !== null &&` | `src/host/mount.ts` | red: 4 failed \| 191 passed (195). the no-figure case, each index, and both byte-total cases |
+
+```json
+[
+  {"id": "RF1", "guard": "the first repeat in a reopened run replaces the earlier copy", "edit": "a repeated index is refused whatever the run", "file": "src/host/parse.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 5, "passed": 190, "total": 195, "also": {"tests": "test/host-print-run.test.ts", "failed": 6, "passed": 3, "total": 9}},
+  {"id": "RF2", "guard": "a replacement counts no refusal", "edit": "refused() called for a replaced copy", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 1, "passed": 194, "total": 195, "also": {"tests": "test/host-print-run.test.ts", "failed": 1, "passed": 8, "total": 9}},
+  {"id": "RF3", "guard": "a replacement drops the earlier copy's bytes from the run total", "edit": "run.bytes -= earlier removed", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 1, "passed": 194, "total": 195},
+  {"id": "RF4", "guard": "the cap is checked on the adjusted total", "edit": "run.bytes - replaced + bytes is run.bytes + bytes", "file": "src/host/parse.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 2, "passed": 193, "total": 195},
+  {"id": "RF5", "guard": "an index is replaced once", "edit": "the replaced index put back in replaceable", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 3, "passed": 192, "total": 195},
+  {"id": "RF6", "guard": "a run opened after a complete run is ordinary", "edit": "const unfinished = run !== null", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 1, "passed": 194, "total": 195},
+  {"id": "RF7", "guard": "a run opened after a run that received nothing is reopened", "edit": "run.n === null || becomes run.n !== null &&", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 4, "passed": 191, "total": 195}
+]
+```

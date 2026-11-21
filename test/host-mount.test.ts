@@ -2499,6 +2499,142 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       expect(frameBound(m)).toEqual([{ t: 'command', name: 'print-figures' }, { t: 'command', name: 'print-figures' }]);
     });
 
+    describe('a reopened run: printFigures() while the previous run is unfinished (review 3081 F2)', () => {
+      const sizeOf = (f: unknown): number => (f as { png: string }).png.length;
+
+      it('the first repeat of an index replaces the earlier copy: handed on again, no refusal counted; a second repeat is refused and counted', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        // the previous run is unfinished (one of three): the next run is reopened
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        m.say(fig(0, 3, pngOf(100)));
+        expect(c.figures).toHaveLength(3);
+        expect(sizeOf(c.figures[2])).toBe(pngOf(100).length);
+        // the second repeat of 0 is refused and never handed on; with it, fifteen refusals leave the frame open and the sixteenth closes it,
+        // so the replacement above counted none
+        for (let k = 0; k < 15; k += 1) m.say(fig(0, 3));
+        expect(c.figures).toHaveLength(3);
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 3));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('each index has its own one replacement: 1 replaced, 2 still replaceable', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        m.say(fig(1, 3));
+        m.say(fig(0, 3, pngOf(100)));
+        m.say(fig(1, 3, pngOf(100)));
+        m.say(fig(0, 3, pngOf(200)));
+        m.say(fig(2, 3));
+        m.say(fig(2, 3, pngOf(100)));
+        expect(c.figures.map((f) => (f as { i: number }).i)).toEqual([0, 1, 0, 1, 2, 2]);
+      });
+
+      it('a previous run that received no figure at all leaves the next one reopened', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        m.say(fig(0, 2, pngOf(100)));
+        expect(c.figures).toHaveLength(2);
+      });
+
+      it('a previous run that was complete leaves the next one ordinary: a repeat is refused and counted', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        m.say(fig(1, 2));
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        m.say(fig(0, 2, pngOf(100)));
+        expect(c.figures).toHaveLength(3);
+        for (let k = 0; k < 14; k += 1) m.say(fig(0, 2));
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 2));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('the first run of a mount is ordinary: a repeat is refused and counted (unchanged)', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.say(fig(0, 2));
+        for (let k = 0; k < 15; k += 1) m.say(fig(0, 2, pngOf(100)));
+        expect(c.figures).toHaveLength(1);
+        expect(m.fallbacks()).toEqual([]);
+        m.say(fig(0, 2));
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('an n that differs from the run\'s is still refused, and a repeat of an index at or above n too', async () => {
+        const { c, over } = calls();
+        const m = await ready(PLAIN, over);
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.say(fig(0, 3));
+        m.say(fig(0, 4, pngOf(100)));
+        m.say(fig(3, 3));
+        expect(c.figures).toHaveLength(1);
+      });
+
+      it('the run total is adjusted by the replacement before the cap: a replacement is refused or passes by exactly the adjusted total', async () => {
+        const { c, over } = calls();
+        const m = readyFake(over);
+        const say = m.say;
+        m.say = (data: unknown): void => {
+          say(data);
+          vi.advanceTimersByTime(63);
+        };
+        m.frame.printFigures();
+        m.frame.printFigures();
+        // 15 figures of 1 MiB and two of half a MiB make exactly 16 MiB
+        for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, pngOf(1048576)));
+        m.say(fig(15, 17, pngOf(524288)));
+        m.say(fig(16, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(17);
+        // one byte more than the copy it replaces: 16 MiB + 1, refused, handed on to nothing, and it leaves the earlier copy replaceable
+        m.say(fig(15, 17, pngOf(524289)));
+        expect(c.figures).toHaveLength(17);
+        // as large as the copy it replaces: the adjusted total is 16 MiB, and it passes (an unadjusted total would refuse it)
+        m.say(fig(15, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(18);
+        // a second repeat of index 15 is refused, whatever its size
+        m.say(fig(15, 17, pngOf(100)));
+        expect(c.figures).toHaveLength(18);
+      });
+
+      it('a smaller replacement frees its bytes for the next figure', async () => {
+        const { c, over } = calls();
+        const m = readyFake(over);
+        const say = m.say;
+        m.say = (data: unknown): void => {
+          say(data);
+          vi.advanceTimersByTime(63);
+        };
+        m.frame.printFigures();
+        m.frame.printFigures();
+        for (let i = 0; i < 15; i += 1) m.say(fig(i, 17, pngOf(1048576)));
+        m.say(fig(15, 17, pngOf(1048576)));
+        expect(c.figures).toHaveLength(16);
+        // the run is full: fig 16 does not fit; replacing index 15 by a figure of 8 bytes frees 1 MiB - 8 for it
+        m.say(fig(16, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(16);
+        m.say(fig(15, 17, PNG));
+        expect(c.figures).toHaveLength(17);
+        m.say(fig(16, 17, pngOf(524288)));
+        expect(c.figures).toHaveLength(18);
+      });
+    });
+
     it('the run belongs to its mount: after update() a figure with no new call is refused', async () => {
       const { c, over } = calls();
       const m = await ready(PLAIN, over);
