@@ -34,7 +34,7 @@ Print figures (a minor when released): with the host's `onPrintFigure` (the seed
 The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
 
 - `assets/frame/bootstrap.js`: `47d310d29e5eb9487b66a8250ebddacbb15392cc6380b9424dd03cb33cc76d3d`, csp `'sha256-R9MQ0p5euUh7ZqglDr3ay7FTksxjgLlCTdA8szzHbT0='`
-- `assets/frame/enhance.js`: `d301cf4ce2123d0fe701b6277217c3689d1e4314618df689f37eda1f30f1043c`, csp `'sha256-0wHPTOISPQ/nAbYnchfDaJ0eQxRhjfaJ837aHzDxBDw='`
+- `assets/frame/enhance.js`: `51fff7ce427c811a8db1c1ef25d8eb89b69c0cacbef1f128e8fccc99e9f27691`, csp `'sha256-Uf/3zkJ8gRqNscHvJdjribacDKy+8fEo6PzMmenydpE='`
 - `assets/frame/reader.css`: `367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2`
 - `assets/reader.css`: `3f6dd64e41431f9f052a4c682455728b5a872551938f7ea07708dde8667ddf9e`
 - `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`

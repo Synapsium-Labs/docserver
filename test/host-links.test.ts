@@ -179,12 +179,14 @@ describe('the frame\'s item-href grammar and the host\'s agree on characters (re
     expect(isItemHref('https://tracker.example/AB-1\u202e')).toBe(false);
   });
 
-  it('over every code point, in each place, isItemHref admits exactly what classifyLink admits', () => {
+  it('over every code point, in each place, isItemHref admits exactly what classifyLink reads as an external https link', () => {
     const differ: string[] = [];
     for (let code = 0; code <= 0x10ffff; code += 1) {
       if (code >= 0xd800 && code <= 0xdfff) continue;
       for (const href of places(String.fromCodePoint(code))) {
-        if (isItemHref(href) !== (classifyLink(href) !== null)) differ.push(`${code.toString(16)}: ${href.slice(0, 22)}`);
+        const link = classifyLink(href);
+        const host = link !== null && link.kind === 'external' && link.scheme === 'https';
+        if (isItemHref(href) !== host) differ.push(`${code.toString(16)}: ${href.slice(0, 22)}`);
       }
     }
     expect(differ).toEqual([]);
@@ -195,5 +197,18 @@ describe('the frame\'s item-href grammar and the host\'s agree on characters (re
       expect(isItemHref(href), href).toBe(true);
       expect(classifyLink(href), href).not.toBeNull();
     }
+  });
+
+  it('the scheme is read as the host reads it, with no Unicode case folding: HTTPS is admitted, a long s is not (review 3081 round 2, I1)', () => {
+    const LONG_S = String.fromCharCode(0x17f);
+    for (const href of ['HTTPS://tracker.example/AB-1', 'Https://tracker.example/AB-1', 'hTtPs://tracker.example/AB-1']) {
+      expect(isItemHref(href), href).toBe(true);
+      expect(classifyLink(href), href).toMatchObject({ kind: 'external', scheme: 'https' });
+    }
+    for (const href of [`http${LONG_S}://tracker.example/AB-1`, `HTTP${LONG_S}://tracker.example/AB-1`, `http${LONG_S}://tracker.example/`, 'http://tracker.example/AB-1', 'ftp://tracker.example/AB-1', 'https:/tracker.example/AB-1']) {
+      expect(isItemHref(href), href).toBe(false);
+    }
+    // The long s is relative to the host: it is no external link at all.
+    expect(classifyLink(`http${LONG_S}://tracker.example/AB-1`)?.kind).not.toBe('external');
   });
 });

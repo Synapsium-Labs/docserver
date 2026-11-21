@@ -6,7 +6,7 @@
 // this file runs in jsdom, where the corpus loader's file URLs do not.)
 // The equality with the reader compares sets (both sides sorted): the reader asks its host in its own order and for at most 16
 // keys, so a document with more than 16 distinct keys is out of that comparison's scope.
-import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { destroyEnhancement, enhance } from '../src/enhance/index.js';
@@ -17,7 +17,13 @@ import { collectItems, ITEM_KEY_SOURCE, ITEM_LINE, ITEM_VALUE_MAX_CODE_UNITS, MA
 import { EMPTY_META } from '../src/render/render.js';
 import { render } from '../src/render/index.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
-import { boundMs, bylineWith, RUN_SIZES, timed } from './long-space.js';
+import { boundMs, bylinesWith, RUN_SIZES, timed } from './long-space.js';
+
+const sepCalls = vi.hoisted(() => ({ n: 0 }));
+vi.mock('../src/render/separator.js', async (original) => {
+  const real = await original<typeof import('../src/render/separator.js')>();
+  return { ...real, findSeparator: (text: string) => ((sepCalls.n += 1), real.findSeparator(text)) };
+});
 
 /** A vocabulary that names fields and headings, as a host's would. */
 const READER: ReaderVocabulary = {
@@ -455,12 +461,18 @@ describe('meta.items equals the keys the enhance step asks itemLink for', () => 
 });
 
 describe('a long run of white space in the byline (review 3081 F1)', () => {
-  it('costs the item route no more than a short gap, up to 1 MiB: the separator is found by a scan, not a backtracking pattern', () => {
+  it('the item route finds the separator with the scan helper, called a bounded number of times, and a 1 MiB run costs about what plain render costs', () => {
     const opts = { reader: { itemFields: ['Tracker'] } };
-    const plain = timed(() => render(bylineWith(1), opts));
     for (const n of RUN_SIZES) {
-      const ms = timed(() => render(bylineWith(n), opts));
-      expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (short gap ${plain.toFixed(1)} ms)`).toBeLessThan(boundMs(plain));
+      for (const md of bylinesWith(n)) {
+        const base = timed(() => render(md));
+        sepCalls.n = 0;
+        const ms = timed(() => render(md, opts));
+        // Zero calls means a pattern was used instead of the helper; a handful is the scan of the meta line's pieces.
+        expect(sepCalls.n, `${String(n)} spaces: calls of the separator helper`).toBeGreaterThanOrEqual(1);
+        expect(sepCalls.n, `${String(n)} spaces: calls of the separator helper`).toBeLessThanOrEqual(4);
+        expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (plain render of the same input ${base.toFixed(1)} ms)`).toBeLessThan(boundMs(base));
+      }
     }
   });
 });

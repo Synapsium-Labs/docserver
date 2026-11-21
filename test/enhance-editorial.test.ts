@@ -5,11 +5,17 @@
 // real render() output of neutral synthetic Markdown. Every feature is undone by destroyEnhancement: the round trip
 // compares the subtree's serialization AND its nodes (the same node objects, with the same text, in the same
 // order), because a text node split in two serializes exactly like the one it came from.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR, createJournal } from '../src/enhance/journal.js';
 import { render } from '../src/render/index.js';
-import { bylineWith, RUN_SIZES } from './long-space.js';
+import { bylinesWith, RUN_SIZES } from './long-space.js';
+
+const sepCalls = vi.hoisted(() => ({ n: 0 }));
+vi.mock('../src/enhance/separator.js', async (original) => {
+  const real = await original<typeof import('../src/enhance/separator.js')>();
+  return { ...real, findSeparator: (text: string) => ((sepCalls.n += 1), real.findSeparator(text)) };
+});
 
 const LONG = Array.from({ length: 700 }, (_, i) => `word${String(i)}`).join(' ');
 const NOTE = 'A note that runs on well past seventy characters, so that the byline sets it across the whole width.';
@@ -433,7 +439,7 @@ describe('the journal\'s move and split', () => {
 });
 
 describe('a long run of white space in the byline (review 3081 F1)', () => {
-  it('costs the screen no more than the same run in a paragraph with no byline, up to 1 MiB: the separator is found by a scan', async () => {
+  it('the screen finds the separator with the scan helper, called a bounded number of times, and a 1 MiB run costs about what the same run outside the byline costs', async () => {
     // The control holds the very same run in the body, where no separator is looked for, so what else enhance does with a
     // long text is in the baseline and only the byline's scan is measured.
     const control = (n: number): string => `# T\n\n**Spec** · a b\n\n## Body\n\nText a${' '.repeat(n)}b\n`;
@@ -445,8 +451,13 @@ describe('a long run of white space in the byline (review 3081 F1)', () => {
     };
     for (const n of RUN_SIZES) {
       const base = await run(control(n));
-      const ms = await run(bylineWith(n));
-      expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (the same run outside the byline ${base.toFixed(0)} ms)`).toBeLessThan(Math.max(600, 20 * base));
+      for (const md of bylinesWith(n)) {
+        sepCalls.n = 0;
+        const ms = await run(md);
+        expect(sepCalls.n, `${String(n)} spaces: calls of the separator helper`).toBeGreaterThanOrEqual(1);
+        expect(sepCalls.n, `${String(n)} spaces: calls of the separator helper`).toBeLessThanOrEqual(4);
+        expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (the same run outside the byline ${base.toFixed(0)} ms)`).toBeLessThan(Math.max(600, 20 * base));
+      }
     }
   }, 120000);
 });

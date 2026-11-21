@@ -5,7 +5,7 @@
 import { findSeparator } from '../separator.js';
 import type { PrintCtx } from './context.js';
 import { buildFacts, formatLong, noFacts } from './facts.js';
-import { addClass, append, detach, el, first, hasClass, insertAfter, insert, isEl, isText, named, nextEl, setAttr, attr, split, textOf, txt, type ElN, type N, type TextN } from './tree.js';
+import { addClass, append, detach, detachAll, el, first, hasClass, insertAfter, insert, isEl, isText, named, nextEl, setAttr, attr, text, textOf, txt, type ElN, type N } from './tree.js';
 
 const isBlank = (n: N): boolean => n.k === 't' && n.data.trim() === '';
 const isStrong = (n: N | undefined): n is ElN => n !== undefined && isEl(n) && n.name === 'strong';
@@ -20,26 +20,30 @@ function metaParagraph(h1: ElN): ElN | null {
   return null;
 }
 
-/** Split every text child of `p` at its separators, and return the runs of nodes between them. */
+/**
+ * Split every text child of `p` at its separators, and return the runs of nodes between them, in one pass: the tree is not
+ * touched (a text child is read, and its pieces are new text nodes), so a paragraph of k separators costs O(k), not one splice
+ * and one renumber per piece. The nodes that are not text are the runs' own, still children of `p` until the caller takes them.
+ */
 function segments(p: ElN): N[][] {
-  const seps = new Set<N>();
-  for (const child of [...p.kids]) {
-    if (!isText(child)) continue;
-    let t: TextN = child;
-    for (;;) {
-      const m = findSeparator(t.data);
-      if (m === null) break;
-      const sep = m.index > 0 ? split(t, m.index) : t;
-      const rest = m.length < sep.data.length ? split(sep, m.length) : null;
-      seps.add(sep);
-      if (rest === null) break;
-      t = rest;
-    }
-  }
   const segs: N[][] = [[]];
-  for (const n of p.kids) {
-    if (seps.has(n)) segs.push([]);
-    else segs[segs.length - 1]?.push(n);
+  const last = (): N[] => segs[segs.length - 1] as N[];
+  for (const child of p.kids) {
+    if (!isText(child)) {
+      last().push(child);
+      continue;
+    }
+    let rest = child.data;
+    for (;;) {
+      const m = findSeparator(rest);
+      if (m === null) {
+        if (rest !== '') last().push(text(rest));
+        break;
+      }
+      if (m.index > 0) last().push(text(rest.slice(0, m.index)));
+      segs.push([]);
+      rest = rest.slice(m.index + m.length);
+    }
   }
   return segs;
 }
@@ -61,6 +65,9 @@ function buildByline(metaP: ElN | null, minutes: number): { readonly byline: ElN
   };
   if (metaP !== null) {
     const segs = segments(metaP);
+    // The runs now own every node of the meta line: take them all out of it in one pass, so that moving each into a fact
+    // below is no splice of the paragraph's children.
+    detachAll(metaP.kids);
     const lead = (segs[0] ?? []).filter((n) => !isBlank(n));
     const lone = lead[0];
     if (lead.length === 1 && isStrong(lone) && !/:\s*$/.test(textOf(lone))) {
@@ -80,7 +87,7 @@ function buildByline(metaP: ElN | null, minutes: number): { readonly byline: ElN
         const m = /^\s*([A-Z][A-Za-z ]{0,18}):\s*/.exec(f.data);
         if (m !== null) {
           dt = m[1] ?? '';
-          const rest = m[0].length < f.data.length ? split(f, m[0].length) : null;
+          const rest = m[0].length < f.data.length ? text(f.data.slice(m[0].length)) : null;
           moved = rest === null ? seg.slice(at + 1) : [rest, ...seg.slice(at + 1)];
         } else if (/^\s*\d{4}-\d{2}-\d{2}/.test(f.data)) dt = 'Date';
         else if (!keys.has('Status')) dt = 'Status';

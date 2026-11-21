@@ -18,10 +18,15 @@ export const ITEM_LIMITS = Object.freeze({ max: 50, valueMax: 100, hrefMax: 4096
  * equal over every code point): white space of any kind (`\s`, which takes U+2028, U+2029 and U+FEFF), the C0 controls, DEL and
  * the C1 controls, the Arabic letter mark, the zero-width characters and directional marks U+200B to U+200F, the bidi controls
  * U+202A to U+202E and U+2066 to U+2069, the word joiner U+2060, and the tag characters U+E0000 to U+E007F; and a backslash.
- * This file imports nothing, so the table is a copy of `./host`'s hidden-character table (src/host/copy.ts).
+ * This file imports nothing, so the table is a copy of `./host`'s hidden-character table (src/host/copy.ts). The equality is of
+ * these character classes in the path, the query and the fragment, and nothing more: the host part's own grammar (a bad percent
+ * escape, say) is `classifyLink`'s alone, and its click is dropped there.
+ *
+ * The scheme is spelled `[Hh][Tt][Tt][Pp][Ss]` and the pattern has no `i` flag: with `u` beside `i` the engine folds U+017F (long
+ * s) to `s`, so `http` + U+017F + `://` would pass here while `classifyLink` reads it as a relative path (review 3081 round 2, I1).
  */
 const HTTPS_URL =
-  /^https:\/\/[^\s\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\u{e0000}-\u{e007f}\\/?#@]+(?:[/?#][^\s\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\u{e0000}-\u{e007f}\\]*)?$/iu;
+  /^[Hh][Tt][Tt][Pp][Ss]:\/\/[^\s\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\u{e0000}-\u{e007f}\\/?#@]+(?:[/?#][^\s\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\u{e0000}-\u{e007f}\\]*)?$/u;
 
 /** True for an href a frame may draw: 1 to ITEM_LIMITS.hrefMax code units and an absolute `https:` URL. */
 export function isItemHref(href: unknown): href is string {

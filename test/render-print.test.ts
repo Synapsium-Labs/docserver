@@ -5,7 +5,7 @@
 // test/print-agreement.test.ts; the vocabulary file, the stylesheet and the hostile cases are test/print-surface.test.ts.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { normalizeOptions } from '../src/enhance/options.js';
 import { WAIT_CLIP } from '../src/enhance/strip.js';
 import { compileVocab, defaultVocabulary, mergeVocabulary } from '../src/enhance/vocab.js';
@@ -14,8 +14,14 @@ import { PLAN_FACT_MIN_STEPS } from '../src/render/print/strip.js';
 import { printVocab } from '../src/render/print/vocab.js';
 import { checkReader } from '../src/render/reader.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
-import { boundMs, bylineWith, RUN_SIZES, timed } from './long-space.js';
+import { boundMs, bylinesWith, longSplices, manyFacts, manySeparators, RUN_SIZES, timed } from './long-space.js';
 import { pinned } from './print-vocabulary.js';
+
+const sepCalls = vi.hoisted(() => ({ n: 0 }));
+vi.mock('../src/render/separator.js', async (original) => {
+  const real = await original<typeof import('../src/render/separator.js')>();
+  return { ...real, findSeparator: (text: string) => ((sepCalls.n += 1), real.findSeparator(text)) };
+});
 
 const ROOT = process.cwd();
 const read = (rel: string): string => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -323,26 +329,6 @@ describe("the patterns are the reader's own", () => {
 });
 
 describe('a rule paragraph of very many IDs costs work in proportion to its length (final review I1)', () => {
-  /** The calls of Array's `splice` on an array longer than 500 during `fn` (a plain patch, restored in `finally`): a deterministic bound on the tree's moves, not a clock. */
-  function longSplices(fn: () => void): { calls: number; moved: number } {
-    const out = { calls: 0, moved: 0 };
-    const proto = Array.prototype as unknown as Record<string, (...a: unknown[]) => unknown>;
-    const original = proto.splice as (...a: unknown[]) => unknown;
-    proto.splice = function (this: unknown[], ...a: unknown[]): unknown {
-      if (this.length > 500) {
-        out.calls += 1;
-        out.moved += this.length;
-      }
-      return original.apply(this, a);
-    };
-    try {
-      fn();
-    } finally {
-      proto.splice = original;
-    }
-    return out;
-  }
-
   it('20000 comma-separated rule IDs in one paragraph move the head\'s children a few times, not once per join (I1)', () => {
     const K = 20000;
     const ids = Array.from({ length: K }, (_, i) => `\`AB-${String(i + 1)}\``).join(', ');
@@ -360,12 +346,43 @@ describe('a rule paragraph of very many IDs costs work in proportion to its leng
 });
 
 describe('a long run of white space in the byline (review 3081 F1)', () => {
-  it('costs print mode no more than a short gap, up to 1 MiB: the separator is found by a scan, not a backtracking pattern', () => {
+  it('print mode finds the separator with the scan helper, called a bounded number of times, and a 1 MiB run costs about what plain render costs', () => {
     const opts = { print: true, reader: { rules: true } } as const;
-    const plain = timed(() => render(bylineWith(1), opts));
     for (const n of RUN_SIZES) {
-      const ms = timed(() => render(bylineWith(n), opts));
-      expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (short gap ${plain.toFixed(1)} ms)`).toBeLessThan(boundMs(plain));
+      for (const md of bylinesWith(n)) {
+        const base = timed(() => render(md));
+        sepCalls.n = 0;
+        const ms = timed(() => render(md, opts));
+        // Zero calls means a pattern was used instead of the helper; a handful is the scan of the meta line's pieces.
+        expect(sepCalls.n, `${String(n)} spaces: calls of the separator helper`).toBeGreaterThanOrEqual(1);
+        expect(sepCalls.n, `${String(n)} spaces: calls of the separator helper`).toBeLessThanOrEqual(4);
+        expect(ms, `${String(n)} spaces took ${ms.toFixed(0)} ms (plain render of the same input ${base.toFixed(1)} ms)`).toBeLessThan(boundMs(base));
+      }
+    }
+  });
+});
+
+describe('a byline of very many separators costs work in proportion to its length (review 3081 I2)', () => {
+  it('building the byline moves the tree\'s long arrays a few times, not once per separator, up to 1 MiB', () => {
+    for (const k of [20000, 1 << 18]) {
+      let html = '';
+      const work = longSplices(() => {
+        html = render(manySeparators(k), PRINT).html;
+      });
+      // Every fact is there: k + 1 "a" facts and the last "z" (the kind is the bold lead).
+      expect(html.split('<dd>').length - 1, `${String(k)} separators: the facts built`).toBeGreaterThanOrEqual(k);
+      expect(work.calls, `${String(k)} separators: long splices (${String(work.moved)} children moved)`).toBeLessThan(50);
+    }
+  });
+
+  it('a byline of very many facts with bold values moves the meta paragraph\'s children out in one pass, not one splice each', () => {
+    for (const k of [20000, 1 << 17]) {
+      let html = '';
+      const work = longSplices(() => {
+        html = render(manyFacts(k), PRINT).html;
+      });
+      expect(html.split('<strong>a</strong>').length - 1, `${String(k)} facts: the facts built`).toBeGreaterThanOrEqual(k);
+      expect(work.calls, `${String(k)} facts: long splices (${String(work.moved)} children moved)`).toBeLessThan(50);
     }
   });
 });

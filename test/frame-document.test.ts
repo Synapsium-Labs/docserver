@@ -1478,6 +1478,7 @@ describe('the resolved item links (docserver parity, Task 4): FrameOptions.items
       'javascript:alert(1)',
       'data:text/html,x',
       'ftp://tracker.example/',
+      `http${String.fromCharCode(0x17f)}://tracker.example/AB-1`,
       '//tracker.example/AB-1',
       '/AB-1',
       'AB-1',
