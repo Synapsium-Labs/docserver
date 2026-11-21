@@ -11,7 +11,7 @@ import { after as afterChanges, build as buildChanges } from '../../changes.js';
 import { build as buildCode } from '../../code.js';
 import { build as buildDiagramTools } from '../../diagram-tools.js';
 import { after as afterDiagrams, build as buildDiagrams } from '../../diagrams.js';
-import { buildEditorial } from '../../editorial.js';
+import { build as buildEditorial } from './editorial.js';
 import type { Feature } from '../../features.js';
 import { build as buildFigures } from '../../figures.js';
 import { buildFolds } from '../../folds.js';
