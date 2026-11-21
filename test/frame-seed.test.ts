@@ -442,20 +442,9 @@ const BAD: readonly Row[] = [
   ['features', { chrome: { bar: 1 } }, 'features.chrome'],
   ['features', { chrome: { menu: true } }, 'features.chrome'],
   ['features', { chrome: [] }, 'features.chrome'],
-  ['features', { vocabulary: { unknown: [] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: [''] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: [' a'] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: ['a\u00a0'] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: ['w'.repeat(65)] } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: words(201) } }, 'features.vocabulary'],
-  ['features', { vocabulary: { qualifiers: 'annex' } }, 'features.vocabulary'],
-  ['features', { vocabulary: { ids: true } }, 'features.vocabulary'],
-  ['features', { vocabulary: { ruleIds: false } }, 'features.vocabulary'],
-  ['features', { vocabulary: { ids: { prefixes: ['R'], extra: [] } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { status: { ok: 'done' } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { status: { good: ['done'] } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { plan: { owner: ['x'] } } }, 'features.vocabulary'],
-  ['features', { vocabulary: { attention: { status: [1] } } }, 'features.vocabulary'],
+  ['features', { vocabulary: [] }, 'features.vocabulary'],
+  ['features', { vocabulary: 'annex' }, 'features.vocabulary'],
+  ['features', { vocabulary: null }, 'features.vocabulary'],
   ['mermaid', [], 'mermaid'],
   ['mermaid', {}, 'mermaid'],
   ['mermaid', { secure: [] }, 'mermaid'],
@@ -581,6 +570,14 @@ describe('L3.M4 validateSeed: each bad field refused by its own name, with the n
   it('features: every key the seed knows, filled, passes; ids may be false', () => {
     expect(why(loose({ features: maximalFeatures(1, () => 'w') }))).toBe('ok');
     expect(why(loose({ features: { vocabulary: { ids: false } } }))).toBe('ok');
+  });
+
+  it('features.vocabulary: the bundled check holds the outer shape only (a plain object); the words are judged by the host side (src/frame/vocabulary.ts) and by the reader', () => {
+    // Held to a plain object to keep the bootstrap in its 32 KiB: a list of the wrong kind, an unknown key and a word of the
+    // wrong size all pass here, and frameDocument (test/frame-document.test.ts) and the reader's normalizeOptions refuse them.
+    for (const vocabulary of [{ unknown: [] }, { qualifiers: 'annex' }, { qualifiers: [' a'] }, { ids: true }, { status: { good: ['done'] } }]) {
+      expect(why(loose({ features: { vocabulary } })), JSON.stringify(vocabulary)).toBe('ok');
+    }
   });
 
   it('mermaid: secure and draw alone pass; the caps at their maxima pass', () => {

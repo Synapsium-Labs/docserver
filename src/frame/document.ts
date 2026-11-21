@@ -42,6 +42,7 @@ import { MERMAID_LIMIT_CEILINGS } from './gate.js';
 import { FRAME_MANIFEST } from './manifest.generated.js';
 import { isFragmentId } from './fragment.js';
 import { ITEM_LIMITS, itemsWhy, type ItemLink } from './items.js';
+import { vocabularyOk } from './vocabulary.js';
 import { FRAME_PREF_VALUES, type BridgeStoreKey } from './protocol.js';
 import {
   BASE64_FACE,
@@ -519,6 +520,9 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
     ...(fonts === undefined ? {} : { fonts }),
     ...(items === undefined ? {} : { items }),
   };
+  // The vocabulary's words, judged here in full: the bootstrap's validator holds the field to a plain object (src/frame/vocabulary.ts).
+  // The refusal reads as the validator's own, which named this field before the split.
+  if (fields.features.vocabulary !== undefined && !vocabularyOk(fields.features.vocabulary)) invalid('the seed is refused (features.vocabulary)');
   // Every field but the html (judged above, by its own cap) through the bootstrap's own validator.
   const check = validateSeed(fields);
   if (!check.ok) invalid(`the seed is refused (${check.why})`);

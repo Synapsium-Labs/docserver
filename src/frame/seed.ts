@@ -7,7 +7,8 @@
 // features, mermaid and bridge, and two optional ones the appearance contract adds (OPTIONAL_SEED_KEYS, absent from a
 // mount with neither): `appearance`, the host's verdict (src/enhance/appearance.ts), and `fonts`, up to two host faces as
 // base64 text, and (the parity additions) `items`, the host's resolved item links. The validator here checks their
-// outer shape only, the bootstrap being small: the reader script runs parseAppearance on the appearance, the faces'
+// outer shape only, the bootstrap being small, and `features.vocabulary` likewise (a plain object; its words are judged by
+// frameDocument, src/frame/vocabulary.ts, and by the reader's normalizeOptions): the reader script runs parseAppearance on the appearance, the faces'
 // signature and size are checked by frameDocument and again in the reader script, and an item's href (an absolute
 // `https:` URL) is judged by frameDocument (src/frame/items.ts) and again by the reader before it draws a link.
 // Records (images, snapshot) are [key, value] pair arrays, so no `__proto__` key can exist.
@@ -204,14 +205,6 @@ const NONCE = new RegExp(NONCE_SOURCE);
 
 /** A language tag, loosely BCP 47: a 2 to 8 letter primary tag, then subtags of 1 to 8 letters or digits. */
 export const LANG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/;
-
-/** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */
-export const SEED_KEYS: readonly string[] = Object.freeze([
-  'appearance', 'bridge', 'features', 'fonts', 'frontList', 'html', 'images', 'initialHash', 'items', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version',
-]);
-
-/** The keys a seed may leave out: a mount with no appearance and no faces writes the 1.1.0 seed, byte for byte. */
-export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(['appearance', 'fonts', 'items']);
 
 /** Keys refused at any depth: they could reach a prototype through a careless merge. */
 const PROTO_KEYS: readonly string[] = ['__proto__', 'constructor', 'prototype'];
@@ -583,29 +576,6 @@ function snapshotOk(v: unknown): boolean {
   return total <= BRIDGE_LIMITS.storeBudgetBytes;
 }
 
-/** A vocabulary word list: L2's wordList (src/enhance/options.ts), duplicates kept (L2 drops them). */
-const isWordList = (v: unknown): boolean =>
-  listOf(v, SEED_LIMITS.words, (w) => isString(w, SEED_LIMITS.wordMaxCodeUnits, 1) && w.trim() === w);
-
-/** An object of own word lists, only these keys. */
-const isWordGroup = (v: unknown, keys: readonly string[]): boolean => isPlain(v) && onlyKeys(v, keys) && Object.values(v).every(isWordList);
-
-function vocabularyOk(v: unknown): boolean {
-  if (!isPlain(v)) return false;
-  const groups: Readonly<Record<string, readonly string[]>> = FEATURE_KEYS.groups;
-  const known = [...Object.keys(groups), ...FEATURE_KEYS.grammars, ...FEATURE_KEYS.lists];
-  if (!onlyKeys(v, known)) return false;
-  for (const [k, x] of Object.entries(v)) {
-    const group = Object.hasOwn(groups, k) ? groups[k] : undefined;
-    if (group !== undefined) {
-      if (!isWordGroup(x, group)) return false;
-    } else if ((FEATURE_KEYS.grammars as readonly string[]).includes(k)) {
-      if (!(k === 'ids' && x === false) && !isWordGroup(x, ['prefixes'])) return false;
-    } else if (!isWordList(x)) return false;
-  }
-  return true;
-}
-
 /** The features' own failure: its key set, then each key by name. */
 function featuresWhy(v: unknown): string | null {
   if (!isPlain(v) || !onlyKeys(v, [...FEATURE_KEYS.flags, 'chrome', 'vocabulary'])) return 'features';
@@ -613,7 +583,8 @@ function featuresWhy(v: unknown): string | null {
   const chrome = v['chrome'];
   if (chrome !== undefined && !(isPlain(chrome) && onlyKeys(chrome, FEATURE_KEYS.chrome) && Object.values(chrome).every(isBool))) return 'features.chrome';
   const vocabulary = v['vocabulary'];
-  if (vocabulary !== undefined && !vocabularyOk(vocabulary)) return 'features.vocabulary';
+  // The words are the host side's (src/frame/vocabulary.ts) and the reader's (normalizeOptions) to judge: only the outer shape here.
+  if (vocabulary !== undefined && !isPlain(vocabulary)) return 'features.vocabulary';
   return null;
 }
 
@@ -637,6 +608,20 @@ const fontsOk = (v: unknown): boolean =>
  * in the bootstrap's 32 KiB; test/frame-seed.test.ts holds them equal.
  */
 const itemsOk = (v: unknown): boolean => listOf(v, 50, (i) => isPlain(i) && sameKeys(i, ['value', 'href']) && isString(i['value'], 100, 1) && isString(i['href'], 4096, 1));
+
+/**
+ * The optional keys of the seed, each with its outer check (a refusal names the key). One table, so each key is written once:
+ * OPTIONAL_SEED_KEYS and SEED_KEYS are derived from it, and validateSeed reads it. Defined here, after the checks it names.
+ */
+const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['fonts', fontsOk], ['items', itemsOk]] as const;
+
+/** The keys a seed may leave out: a mount with no appearance and no faces writes the 1.1.0 seed, byte for byte. */
+export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(OPTIONAL_CHECKS.map((c) => c[0]));
+
+/** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */
+export const SEED_KEYS: readonly string[] = Object.freeze(
+  ['bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version', ...OPTIONAL_SEED_KEYS].sort(),
+);
 
 const capOk = (v: unknown, max: number): boolean => v === undefined || (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= max);
 
@@ -704,6 +689,6 @@ export function validateSeed(v: unknown): SeedCheck {
   const bridge = v['bridge'];
   if (!isPlain(bridge) || !sameKeys(bridge, BRIDGE_KEYS) || !Object.values(bridge).every(isBool)) return fail('bridge');
   // The optional fields, each by its own outer check (a refusal names the field).
-  for (const [k, ok] of [['appearance', appearanceOk], ['fonts', fontsOk], ['items', itemsOk]] as const) if (Object.hasOwn(v, k) && !ok(v[k])) return fail(k);
+  for (const [k, ok] of OPTIONAL_CHECKS) if (Object.hasOwn(v, k) && !ok(v[k])) return fail(k);
   return { ok: true, seed: v as unknown as Seed };
 }

@@ -1532,3 +1532,47 @@ describe('the resolved item links (docserver parity, Task 4): FrameOptions.items
     expect(check.ok).toBe(true);
   });
 });
+
+describe('features.vocabulary: judged in full on the host side before the bootstrap\'s own check (docserver parity, Task 5, the bootstrap split)', () => {
+  const words = (n: number): string[] => Array.from({ length: n }, (_, i) => `w${String(i)}`);
+  /** The refusal's message, or 'no refusal'. */
+  const message = (vocabulary: unknown): string => {
+    try {
+      frame(plain(), { features: { vocabulary } as unknown as FrameFeatures });
+    } catch (e) {
+      return e instanceof FrameError ? `${e.code}: ${e.message}` : `not a FrameError: ${String(e)}`;
+    }
+    return 'no refusal';
+  };
+  const REFUSED = 'invalid-input: frameDocument: the seed is refused (features.vocabulary)';
+  const cases: readonly (readonly [string, unknown])[] = [
+    ['a key the vocabulary does not have', { unknown: [] }],
+    ['an empty word', { qualifiers: [''] }],
+    ['a word with a leading space', { qualifiers: [' a'] }],
+    ['a word with a trailing no-break space', { qualifiers: ['a '] }],
+    ['a word of 65 code units', { qualifiers: ['w'.repeat(65)] }],
+    ['a list of 201 words', { qualifiers: words(201) }],
+    ['a list that is a string', { qualifiers: 'annex' }],
+    ['ids: true', { ids: true }],
+    ['ruleIds: false', { ruleIds: false }],
+    ['an id grammar with an extra key', { ids: { prefixes: ['R'], extra: [] } }],
+    ['a status group member that is a string', { status: { ok: 'done' } }],
+    ['an unknown status group member', { status: { good: ['done'] } }],
+    ['an unknown plan group member', { plan: { owner: ['x'] } }],
+    ['a non-string word', { attention: { status: [1] } }],
+    ['a vocabulary that is an array', []],
+    ['a vocabulary that is a string', 'annex'],
+  ];
+
+  it.each(cases)('refuses %s, naming features.vocabulary, as invalid-input', (_name, vocabulary) => {
+    expect(message(vocabulary)).toBe(REFUSED);
+  });
+
+  it('passes a vocabulary the reader takes: every list full, ids false, and none at all', () => {
+    expect(message({ ids: false, qualifiers: ['annex'], status: { ok: ['done'] }, ruleIds: { prefixes: ['R'] } })).toBe('no refusal');
+    expect(message({ qualifiers: words(200) })).toBe('no refusal');
+    expect(message({ qualifiers: ['w'.repeat(64)] })).toBe('no refusal');
+    expect(message({})).toBe('no refusal');
+    expect(refusal(() => frame(plain(), { features: {} }))).toBe('no refusal');
+  });
+});
