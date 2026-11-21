@@ -302,8 +302,9 @@ describe('the reader option', () => {
 
 describe('one vocabulary for the screen and for render()', () => {
   it('ReaderVocabulary is the frame\'s VocabularyOptions and the reader\'s own', () => {
-    expectTypeOf<ReaderVocabulary>().toEqualTypeOf<WireVocabularyOptions>();
-    expectTypeOf<ReaderVocabulary>().toEqualTypeOf<VocabularyOptions>();
+    // `rules` is print mode's own (the reader's `rules` is a feature option, not a vocabulary list).
+    expectTypeOf<Omit<ReaderVocabulary, 'rules'>>().toEqualTypeOf<WireVocabularyOptions>();
+    expectTypeOf<Omit<ReaderVocabulary, 'rules'>>().toEqualTypeOf<VocabularyOptions>();
   });
 
   it("each pattern here is the vocabulary's own: the field, the heading, the key, its scan and the item line", () => {

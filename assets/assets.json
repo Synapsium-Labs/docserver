@@ -81,6 +81,12 @@
       "kind": "module"
     },
     {
+      "path": "print.css",
+      "sha256": "2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113",
+      "bytes": 4254,
+      "kind": "style"
+    },
+    {
       "path": "reader.css",
       "sha256": "19011025e3f40c49f9585d7d09c6948d7c9861c2d092a2717ff5a7f5f8f2455d",
       "bytes": 150809,

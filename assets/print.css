@@ -1,0 +1,201 @@
+/*
+ * Print stylesheet for render()'s print mode (RenderOptions.print). Every rule is scoped under .docreader-print, the one root
+ * print mode writes, so it styles nothing else on a page. It forces the light palette and 11 pt text, unfolds every section
+ * (a details prints open), keeps figures, code blocks and table rows whole, and prints the strip's separators in the muted
+ * text colour, never an edge colour. The colours are properties of the root, so a host may override them there.
+ */
+.docreader-print {
+  --p-text: #111111;
+  --p-muted: #555555;
+  --p-edge: #bbbbbb;
+  --p-ok: #1d5c2e;
+  --p-wait: #7a4b00;
+  --p-no: #8a1f1f;
+  --p-info: #2b4f7a;
+  color-scheme: light;
+  background: #ffffff;
+  color: var(--p-text);
+  font: 11pt/1.45 "Source Serif 4", Georgia, "Times New Roman", serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.docreader-print h1,
+.docreader-print h2,
+.docreader-print h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.docreader-print figure,
+.docreader-print pre,
+.docreader-print blockquote,
+.docreader-print tr,
+.docreader-print img,
+.docreader-print .callout,
+.docreader-print .review-strip,
+.docreader-print .rule {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.docreader-print table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+
+.docreader-print th,
+.docreader-print td {
+  border: 1px solid var(--p-edge);
+  padding: 0.2em 0.5em;
+  vertical-align: top;
+}
+
+.docreader-print pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Every section unfolds: nothing is behind a toggle on paper. */
+.docreader-print details > summary {
+  list-style: none;
+  font-weight: 600;
+}
+.docreader-print details > summary::-webkit-details-marker {
+  display: none;
+}
+.docreader-print details:not([open]) > :not(summary) {
+  display: block;
+}
+
+.docreader-print .eyebrow {
+  color: var(--p-muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.docreader-print .eyebrow span + span::before {
+  content: " · ";
+}
+
+.docreader-print .byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2em 1.5em;
+  margin: 0.5em 0;
+}
+.docreader-print .byline > div {
+  display: flex;
+  gap: 0.4em;
+}
+.docreader-print .byline > .wide {
+  flex-basis: 100%;
+}
+.docreader-print .byline dt {
+  color: var(--p-muted);
+}
+.docreader-print .byline dd {
+  margin: 0;
+}
+
+.docreader-print .sec-no {
+  color: var(--p-muted);
+  margin-right: 0.4em;
+}
+.docreader-print .sec-no::before {
+  content: "\00a7";
+}
+
+.docreader-print .review-strip {
+  border: 1px solid var(--p-edge);
+  padding: 0.4em 0.8em;
+  margin: 0.8em 0;
+  font-size: 0.95em;
+}
+.docreader-print .rs-label {
+  font-weight: 600;
+  margin: 0 0 0.2em;
+}
+.docreader-print .rs-wait ol {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.docreader-print .rs-facts {
+  margin: 0.3em 0 0;
+}
+.docreader-print .sep {
+  color: var(--p-muted);
+  margin: 0 0.4em;
+}
+.docreader-print .cnt {
+  margin-left: 0.5em;
+  font-weight: 600;
+}
+
+.docreader-print .short,
+.docreader-print .callout {
+  border-left: 3px solid var(--p-edge);
+  padding-left: 0.8em;
+  margin: 0.8em 0;
+}
+
+.docreader-print .pill,
+.docreader-print .cnt {
+  color: var(--p-text);
+}
+.docreader-print .pill {
+  border: 1px solid currentColor;
+  border-radius: 0.6em;
+  padding: 0 0.45em;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.docreader-print .ok {
+  color: var(--p-ok);
+}
+.docreader-print .wait {
+  color: var(--p-wait);
+}
+.docreader-print .no {
+  color: var(--p-no);
+}
+.docreader-print .info {
+  color: var(--p-info);
+}
+
+.docreader-print .task-id,
+.docreader-print .step-no {
+  display: inline-block;
+  border: 1px solid var(--p-edge);
+  border-radius: 0.3em;
+  padding: 0 0.4em;
+  margin-right: 0.5em;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.docreader-print .tmeta,
+.docreader-print .who {
+  margin-left: 0.5em;
+  font-weight: 400;
+  color: var(--p-muted);
+}
+.docreader-print .tmeta.yours,
+.docreader-print li.attn .who {
+  color: var(--p-wait);
+  font-weight: 600;
+}
+.docreader-print .task-check {
+  font-family: sans-serif;
+}
+
+.docreader-print .rule-head {
+  margin-right: 0.5em;
+}
+.docreader-print .rule-head code + code {
+  margin-left: 0.4em;
+}
+.docreader-print .rlink .rid {
+  font-family: monospace;
+  margin-right: 0.5em;
+}

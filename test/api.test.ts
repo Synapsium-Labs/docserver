@@ -60,7 +60,7 @@ describe('./render: signatures (ruling C2)', () => {
 
   it('render(markdown, options?) returns a RenderResult', () => {
     expectTypeOf(render).toEqualTypeOf<(markdown: string, o?: RenderOptions) => RenderResult>();
-    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs' | 'highlight' | 'reader'>();
+    expectTypeOf<keyof RenderOptions>().toEqualTypeOf<'maxBytes' | 'maxHtmlBytes' | 'lineAttrs' | 'highlight' | 'reader' | 'print'>();
     expectTypeOf<RenderOptions['highlight']>().toEqualTypeOf<boolean | undefined>();
   });
 

@@ -27,13 +27,13 @@
 // words, never as patterns); test/render-items.test.ts holds each copy equal to its original. Everything the reader would
 // not see stays unread: a key in the body, in a heading or in a table is no item.
 
+import { checkReader } from './reader.js';
+import type { ReaderVocabulary } from './types.js';
+
 /** The most item values `meta.items` lists. */
 export const MAX_ITEMS = 50;
 /** The longest item value, in code units; a longer key is left out, never cut. */
 export const ITEM_VALUE_MAX_CODE_UNITS = 100;
-/** The most words in a vocabulary list, and the longest word: src/enhance/options.ts's LIMITS.words and LIMITS.word. */
-const LIST_MAX = 200;
-const WORD_MAX = 64;
 
 /** An item key: a capital, 1 to 9 capitals or digits, a dash, a number (src/enhance/vocab.ts's ITEM_KEY). */
 export const ITEM_KEY_SOURCE = '[A-Z][A-Z0-9]{1,9}-\\d+';
@@ -44,11 +44,6 @@ export const itemKeyScan = (): RegExp => new RegExp(`(?<![\\w-])(${ITEM_KEY_SOUR
 
 /** A delta block's item line, the whole line (src/enhance/vocab.ts's itemLine). */
 export const ITEM_LINE = /^item:\s*(\S+)$/;
-
-/** The keys a vocabulary may hold: the shape of ReaderVocabulary. */
-const VOCABULARY_KEYS: readonly string[] = [
-  'status', 'statusHeaders', 'rulingHeaders', 'attention', 'ids', 'ruleIds', 'qualifiers', 'plan', 'addressees', 'itemFields', 'itemHeadings',
-];
 
 /** A word with every pattern metacharacter escaped, so it matches itself and nothing else. */
 const literal = (word: string): string => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -73,33 +68,10 @@ export function itemPatterns(fields: readonly string[], headings: readonly strin
   };
 }
 
-/** The item lists of a `reader` option, checked: a TypeError for a shape that is not one, else the two lists (empty when absent). */
-export function readerItemWords(reader: unknown): { readonly fields: readonly string[]; readonly headings: readonly string[] } {
-  if (reader === undefined) return { fields: [], headings: [] };
-  const proto: unknown = typeof reader === 'object' && reader !== null && !Array.isArray(reader) ? Object.getPrototypeOf(reader) : undefined;
-  if (typeof reader !== 'object' || reader === null || (proto !== Object.prototype && proto !== null)) {
-    throw new TypeError('render: reader must be a plain object');
-  }
-  const lists: Record<string, readonly string[]> = { itemFields: [], itemHeadings: [] };
-  for (const k of Object.getOwnPropertyNames(reader)) {
-    if (!VOCABULARY_KEYS.includes(k)) throw new TypeError(`render: reader has an unknown key ${k}`);
-    const d = Object.getOwnPropertyDescriptor(reader, k);
-    if (d === undefined || !('value' in d)) throw new TypeError(`render: reader.${k} must be a plain value, not a getter`);
-    if (k !== 'itemFields' && k !== 'itemHeadings') continue;
-    const v: unknown = d.value;
-    if (v === undefined) continue;
-    if (!Array.isArray(v) || v.length > LIST_MAX) throw new TypeError(`render: reader.${k} must be a list of at most ${String(LIST_MAX)} words`);
-    const words: string[] = [];
-    for (let i = 0; i < v.length; i += 1) {
-      const w: unknown = Object.getOwnPropertyDescriptor(v, String(i))?.value;
-      if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX || w.trim() !== w) {
-        throw new TypeError(`render: reader.${k} holds a word that is not 1 to ${String(WORD_MAX)} code units without outer white space`);
-      }
-      words.push(w);
-    }
-    lists[k] = words;
-  }
-  return { fields: lists['itemFields'] ?? [], headings: lists['itemHeadings'] ?? [] };
+/** The item lists of a `reader` option, checked (reader.ts): a TypeError for a shape that is not one, else the two lists (empty when absent). */
+export function readerItemWords(reader: ReaderVocabulary | undefined): { readonly fields: readonly string[]; readonly headings: readonly string[] } {
+  const c = checkReader(reader);
+  return { fields: c.itemFields ?? [], headings: c.itemHeadings ?? [] };
 }
 
 // ── a small tree of the html, as the browser's parser would make it from render()'s own output

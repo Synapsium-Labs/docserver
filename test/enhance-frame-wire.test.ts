@@ -26,8 +26,9 @@ describe("src/frame/wire-types.ts: exactly L2's shapes, with no DOM (finding C1)
   });
 
   it("render()'s ReaderVocabulary is the same vocabulary: one shape for the screen's reader and the render that lists its items (docserver parity T4, B7)", () => {
-    expectTypeOf<ReaderVocabulary>().toEqualTypeOf<VocabularyOptions>();
-    expectTypeOf<ReaderVocabulary>().toEqualTypeOf<Wire.VocabularyOptions>();
+    // `rules` is print mode's own flag (docserver parity T7), not a vocabulary list of the reader.
+    expectTypeOf<Omit<ReaderVocabulary, 'rules'>>().toEqualTypeOf<VocabularyOptions>();
+    expectTypeOf<Omit<ReaderVocabulary, 'rules'>>().toEqualTypeOf<Wire.VocabularyOptions>();
   });
 
   it("the prefs the bridge carries are L2's theme, width and font", () => {

@@ -81,6 +81,11 @@ export interface ReaderVocabulary {
    * `item:` line, for `itemLink`. Default: none.
    */
   readonly itemHeadings?: readonly string[];
+  /**
+   * Print mode (RenderOptions.print) prints rule paragraphs, with their heads and status pills, and the rules index in the
+   * facts panel only when this is true, as the reader builds them only with its `rules` option. Default false.
+   */
+  readonly rules?: boolean;
 }
 
 export interface RenderOptions {
@@ -106,9 +111,18 @@ export interface RenderOptions {
    * The reader's vocabulary (ReaderVocabulary), for `meta.items`: with `itemFields` or `itemHeadings` named, the item values
    * the document names are listed there. Default none: `meta.items` is empty and nothing else changes. A value that is not a
    * plain object, a key the vocabulary does not have, or an item list that is not up to 200 words of 1 to 64 code units with
-   * no white space at either end is a TypeError. The other lists are read by print mode and checked there.
+   * no white space at either end is a TypeError, and so is any other list, group or grammar of the vocabulary that the reader's own
+   * `features.vocabulary` would refuse (print mode reads them), or a `rules` that is not a boolean.
    */
   reader?: ReaderVocabulary;
+  /**
+   * Print mode: the same blocks the reader builds on the page's DOM, written statically, for a host that prints a document
+   * without the browser reader. The html is one `div.docreader-print` holding the document with its eyebrow, byline, facts
+   * panel, review strip, section numbers, boxes, status labels, plan marks and (with `reader.rules`) rule paragraphs; every
+   * `details` is open, nothing is hidden, a figure stays its source, and no attribute but class, id, data-line, open,
+   * colspan, rowspan, align, alt, title and href is written. Default false: the html is what it was. Not a boolean: a TypeError.
+   */
+  print?: boolean;
 }
 
 export interface Heading {
