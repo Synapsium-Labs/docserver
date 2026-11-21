@@ -4,7 +4,7 @@
 // tightenings that pass; then the command itself, run with this Node against throwaway git repositories made in the
 // system temp directory (git's global and system configuration are ignored there, and nothing is pushed or fetched).
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -145,6 +145,31 @@ describe('parseTrailerIds and expectedIds', () => {
     expect(parseTrailerIds('\0\n\0')).toEqual([]);
   });
 
+  it('none, exactly and in lower case, names no case; beside real ids it is dropped and they stay', () => {
+    expect(parseTrailerIds('none\0')).toEqual([]);
+    expect(parseTrailerIds(' none \n\0none\0')).toEqual([]);
+    expect(parseTrailerIds('none, a\0')).toEqual(['a']);
+    expect(parseTrailerIds('a\nnone\n b/c\0')).toEqual(['a', 'b/c']);
+    // Only the exact word is reserved: another spelling is an id like any other, and refused as one when nothing moved.
+    expect(parseTrailerIds('None, NONE, nonex, none/x\0')).toEqual(['None', 'NONE', 'nonex', 'none/x']);
+  });
+
+  it('a none trailer passes when nothing moved; a move is still named by its own id', () => {
+    expect(checkGoldenMoves([], parseTrailerIds('none\0'))).toEqual([]);
+    expect(checkLayoutMoves([], parseTrailerIds('none\0'))).toEqual([]);
+    expect(checkGoldenMoves(['a'], parseTrailerIds('none\0'))).toEqual([
+      'a: its expected files changed, and no Goldens-moved trailer names it',
+    ]);
+    expect(checkLayoutMoves(['core/a'], parseTrailerIds('none\0'))).toEqual([
+      'core/a: its layout snapshot changed, and no Layout-moved trailer names it',
+    ]);
+    expect(checkGoldenMoves(['a'], parseTrailerIds('none, a\0'))).toEqual([]);
+    expect(checkLayoutMoves(['core/a'], parseTrailerIds('none, core/a\0'))).toEqual([]);
+    expect(checkGoldenMoves(['a', 'b'], parseTrailerIds('none, a\0'))).toEqual([
+      'b: its expected files changed, and no Goldens-moved trailer names it',
+    ]);
+  });
+
   it('changed paths become case ids', () => {
     expect(
       expectedIds([
@@ -205,6 +230,32 @@ describe('Level 2: layout moves and hostile layout cases', () => {
       expect(verdict(at('D', file))).toEqual(['core/h: a hostile layout case was removed (a hostile case is never removed)']);
     }
     expect(checkLayoutHostile(['core/h'], layoutChanges(`M\t${L}core/p.md`))).toEqual([]);
+  });
+});
+
+describe('the reserved word none', () => {
+  const ROOT = fileURLToPath(new URL('../conformance/', import.meta.url));
+  /** Every file under a conformance/ subdirectory, relative to it with '/' separators. */
+  const filesUnder = (dir: string): string[] =>
+    readdirSync(path.join(ROOT, dir), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => path.relative(path.join(ROOT, dir), path.join(e.parentPath, e.name)).split(path.sep).join('/'));
+  const idsOf = (rels: string[]): string[] => [...new Set(rels.map((r) => r.replace(/\.(meta\.json|html|md|options\.json|dom\.txt)$/, '')))];
+
+  it('no conformance case is called none, so the reserved word of the moved-trailers can never hide one', () => {
+    const manifest = (JSON.parse(readFileSync(path.join(ROOT, 'manifest.json'), 'utf8')) as { id: string }[]).map((e) => e.id);
+    const hostile = (JSON.parse(readFileSync(path.join(ROOT, 'hostile.json'), 'utf8')) as { id: string }[]).map((e) => e.id);
+    const expected = idsOf(filesUnder('expected'));
+    const corpus = idsOf(filesUnder('corpus'));
+    const layout = idsOf(filesUnder('layout'));
+    expect(manifest.length).toBeGreaterThan(0);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(layout.length).toBeGreaterThan(0);
+    // The ids a trailer would name: a corpus case id, or a layout case's <slug>/<id>. A case may not be called none
+    // in any directory, nor under a directory called none, so the word never reads as part of a name either.
+    for (const id of [...manifest, ...hostile, ...expected, ...corpus, ...layout]) {
+      expect(id.split('/'), id).not.toContain('none');
+    }
   });
 });
 
@@ -404,6 +455,61 @@ describe('the ratchet command', () => {
       out: '',
       err: 'ratchet: core/a: a hostile layout case was removed (a hostile case is never removed)\n',
     });
+  });
+
+  const trailered = (subject: string, trailer: string): string =>
+    `${subject}\n\n${trailer}\nCo-Authored-By: Test <noreply@example.invalid>`;
+  const goldenMoved = (n: number): { status: number; out: string; err: string } => ({
+    status: 0,
+    out: `ratchet: 0 verdicts kept, ${String(n)} golden moves named, 0 hostile layout cases kept, 0 layout moves named\n`,
+    err: '',
+  });
+
+  it('a none trailer names no case: it passes when nothing moved, in either trailer', () => {
+    const dir = repo();
+    commit(dir, { 'conformance/hostile.json': '[]\n', 'conformance/expected/a.html': '<p>1</p>\n', ...layoutCase(false, 'h1\n') }, 'start');
+    commit(dir, { 'README.md': 'x\n' }, trailered('a pushed commit', 'Goldens-moved: none'));
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(goldenMoved(0));
+    commit(dir, { 'README.md': 'y\n' }, trailered('another', 'Layout-moved: none'));
+    expect(ratchet(dir, '--base', 'HEAD^')).toEqual(moved(0));
+    commit(dir, { 'README.md': 'z\n' }, trailered('both', 'Goldens-moved: none\nLayout-moved: none'));
+    expect(ratchet(dir, '--base', 'HEAD~3')).toEqual(moved(0));
+  });
+
+  it('a move no trailer names is refused, also when the only trailer is none', () => {
+    const golden = repo();
+    commit(golden, { 'conformance/hostile.json': '[]\n', 'conformance/expected/a.html': '<p>1</p>\n' }, 'start');
+    commit(golden, { 'conformance/expected/a.html': '<p>2</p>\n' }, trailered('move a golden', 'Goldens-moved: none'));
+    expect(ratchet(golden, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: a: its expected files changed, and no Goldens-moved trailer names it\n',
+    });
+    const layout = repo();
+    commit(layout, { 'conformance/hostile.json': '[]\n', ...layoutCase(false, 'h1\n') }, 'start');
+    commit(layout, { 'conformance/layout/core/a.dom.txt': 'h2\n' }, trailered('move a snapshot', 'Layout-moved: none'));
+    expect(ratchet(layout, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: core/a: its layout snapshot changed, and no Layout-moved trailer names it\n',
+    });
+  });
+
+  it('none beside a real move does not hide it: the move is named by its own id, and only by it', () => {
+    const golden = repo();
+    commit(golden, { 'conformance/hostile.json': '[]\n', 'conformance/expected/a.html': '<p>1</p>\n', 'conformance/expected/b.html': '<p>1</p>\n' }, 'start');
+    commit(golden, { 'conformance/expected/a.html': '<p>2</p>\n', 'conformance/expected/b.html': '<p>2</p>\n' }, trailered('move two', 'Goldens-moved: none, a'));
+    expect(ratchet(golden, '--base', 'HEAD^')).toEqual({
+      status: 1,
+      out: '',
+      err: 'ratchet: b: its expected files changed, and no Goldens-moved trailer names it\n',
+    });
+    commit(golden, { 'conformance/expected/a.html': '<p>3</p>\n' }, trailered('move a', 'Goldens-moved: none, a'));
+    expect(ratchet(golden, '--base', 'HEAD^')).toEqual(goldenMoved(1));
+    const layout = repo();
+    commit(layout, { 'conformance/hostile.json': '[]\n', ...layoutCase(false, 'h1\n') }, 'start');
+    commit(layout, { 'conformance/layout/core/a.dom.txt': 'h2\n' }, trailered('move a snapshot', 'Layout-moved: none, core/a'));
+    expect(ratchet(layout, '--base', 'HEAD^')).toEqual(moved(1));
   });
 
   it('usage errors exit 2', () => {

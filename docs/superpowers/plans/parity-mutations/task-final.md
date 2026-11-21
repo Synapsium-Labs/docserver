@@ -31,3 +31,21 @@ Each row was measured in place on this wave's branch: the bytes of the file save
   {"id": "FR11", "guard": "the onPrintFigure figure is frozen", "edit": "Object.freeze removed from the figure", "file": "src/host/mount.ts", "tests": "test/host-mount.test.ts", "rc": 1, "failed": 1, "passed": 186, "total": 187, "red": ["the { push, from } entry and the { i, n, png } figure handed to a host adapter are frozen"]}
 ]
 ```
+
+## CI fix: the ratchet's reserved word `none` (the coordinator's ruling of 2026-11-21)
+
+Six pushed commits carry `Goldens-moved: none`, and history is never rewritten, so `scripts/ratchet.mjs` now reads the exact lower-case word `none` in a `Goldens-moved` or `Layout-moved` trailer as naming no case (`parseTrailerIds` drops it). The new cases in `test/ratchet.test.ts` were run first against the unchanged script: 5 failed \| 45 passed (50), the pure `parseTrailerIds` and check cases and the three command cases (a `none` trailer with nothing moved exits 1 with "a Goldens-moved trailer names it, and its expected files did not change"). Each row below was measured in place: the bytes of `scripts/ratchet.mjs` saved with their sha256 `861ecea8a90e85cd2a811f94fa42d8fc58220fc38bcec66e6ee37ceda50c4db7`, one edit applied, `test/ratchet.test.ts` run through the fleet test wrapper, then the file restored from the saved bytes and its sha256 compared (equal); `test/ratchet.test.ts` stayed `8ca120dd934b6be2f406ae93c01da3a9accdc3b591a56b84438c5d902fd35555`. Row RN3 adds a corpus file, `conformance/expected/none.html` (a copy of another golden), and removes it by its literal path.
+
+| Row | Guard | Edit | File | Result |
+|---|---|---|---|---|
+| RN1 | `none` names no case | the reserved-word filter removed from `parseTrailerIds` (`&& s !== NO_CASE`) | `scripts/ratchet.mjs` | red: 5 failed \| 45 passed (50) in `test/ratchet.test.ts`. the two pure cases and the three command cases: `none` stays an id, so a `none` trailer with nothing moved is refused |
+| RN2 | `none` beside a real id does not hide it | `parseTrailerIds` drops every trailer line that contains `none`, instead of the word alone | `scripts/ratchet.mjs` | red: 3 failed \| 47 passed (50). `none, a` names nothing: the pure case of `none` beside ids, the pure check case and the command case "none beside a real move" |
+| RN3 | no conformance case is called `none` | a golden named `none` added under `conformance/expected/` | `conformance/expected/none.html` | red: 1 failed \| 49 passed (50). no conformance case is called none: expected [ 'none' ] to not include 'none' |
+
+```json
+[
+  {"id": "RN1", "guard": "none names no case", "edit": "the reserved-word filter removed from parseTrailerIds", "file": "scripts/ratchet.mjs", "tests": "test/ratchet.test.ts", "rc": 1, "failed": 5, "passed": 45, "total": 50, "red": ["none, exactly and in lower case, names no case; beside real ids it is dropped and they stay", "a none trailer passes when nothing moved; a move is still named by its own id", "a none trailer names no case: it passes when nothing moved, in either trailer", "a move no trailer names is refused, also when the only trailer is none", "none beside a real move does not hide it: the move is named by its own id, and only by it"]},
+  {"id": "RN2", "guard": "none beside a real id does not hide it", "edit": "every trailer line that contains none is dropped", "file": "scripts/ratchet.mjs", "tests": "test/ratchet.test.ts", "rc": 1, "failed": 3, "passed": 47, "total": 50, "red": ["none, exactly and in lower case, names no case; beside real ids it is dropped and they stay", "a none trailer passes when nothing moved; a move is still named by its own id", "none beside a real move does not hide it: the move is named by its own id, and only by it"]},
+  {"id": "RN3", "guard": "no conformance case is called none", "edit": "a golden named none added under conformance/expected", "file": "conformance/expected/none.html", "tests": "test/ratchet.test.ts", "rc": 1, "failed": 1, "passed": 49, "total": 50, "red": ["no conformance case is called none, so the reserved word of the moved-trailers can never hide one"]}
+]
+```

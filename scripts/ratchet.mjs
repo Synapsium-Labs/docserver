@@ -13,6 +13,10 @@
 //    cannot slip past it: teach VERDICT_KEYS and compareVerdicts first.
 // 2. checkGoldenMoves: if a file under conformance/expected/ changed between the merge base and HEAD, the
 //    commits in <base>..HEAD carry `Goldens-moved: <id>, <id>` trailers naming exactly those case ids.
+//    The word `none` (exact, lower case) is reserved in both moved-trailers (here and in 4.): it names no case and
+//    is dropped before the checks, so `Goldens-moved: none` stands for "nothing moved" and `none, <id>` still
+//    names <id>. It exists because commits already pushed carry `Goldens-moved: none` and history is never
+//    rewritten; a move is still named only by its own id, and test/ratchet.test.ts refuses any case called none.
 // 3. checkHostileInputs: the input of a hostile case of the base (conformance/corpus/<id>.md, for an entry
 //    with no input spec) does not change between the merge base and HEAD. A verdict guards its input, so an
 //    edited input is a weakened verdict in disguise, as a changed input spec is: add a new case instead.
@@ -36,6 +40,8 @@ export const VERDICT_KEYS = Object.freeze([
   'scan', 'nullPrototypeFront',
 ]);
 
+// The reserved word of the two moved-trailers: `Goldens-moved: none` and `Layout-moved: none` name no case.
+const NO_CASE = 'none';
 const HOSTILE = 'conformance/hostile.json';
 const EXPECTED = 'conformance/expected/';
 const CORPUS = 'conformance/corpus/';
@@ -117,9 +123,13 @@ export function checkHostileInputs(base, changedPaths) {
     .map((e) => `${e.id}: its input changed (add a new case instead)`);
 }
 
-/** The ids in `git log --format=%(trailers:key=Goldens-moved,valueonly,unfold)` output: comma or line separated. */
+/**
+ * The ids in `git log --format=%(trailers:key=Goldens-moved,valueonly,unfold)` output: comma or line separated.
+ * The word `none` (exact, lower case, after trimming) is reserved: it names no case and is dropped, so a `none, <id>`
+ * trailer still names <id>. test/ratchet.test.ts keeps every case id from ever being `none`.
+ */
 export function parseTrailerIds(log) {
-  return [...new Set(log.split(/[,\n\0]/).map((s) => s.trim()).filter((s) => s !== ''))];
+  return [...new Set(log.split(/[,\n\0]/).map((s) => s.trim()).filter((s) => s !== '' && s !== NO_CASE))];
 }
 
 /** The case ids of changed paths under conformance/expected/ (<id>.html or <id>.meta.json), each once, sorted. */
