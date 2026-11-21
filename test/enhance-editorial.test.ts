@@ -9,12 +9,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance, type EnhanceOptions } from '../src/enhance/index.js';
 import { CHROME_ATTR, createJournal } from '../src/enhance/journal.js';
 import { render } from '../src/render/index.js';
-import { bylinesWith, RUN_SIZES } from './long-space.js';
+import { bylinesWith, LONG_CUT_FACTOR, RUN_SIZES, sliceWorkAsync } from './long-space.js';
 
 const sepCalls = vi.hoisted(() => ({ n: 0 }));
 vi.mock('../src/enhance/separator.js', async (original) => {
   const real = await original<typeof import('../src/enhance/separator.js')>();
-  return { ...real, findSeparator: (text: string) => ((sepCalls.n += 1), real.findSeparator(text)) };
+  return { ...real, findSeparator: (text: string, from?: number) => ((sepCalls.n += 1), real.findSeparator(text, from)) };
 });
 
 const LONG = Array.from({ length: 700 }, (_, i) => `word${String(i)}`).join(' ');
@@ -521,6 +521,23 @@ describe('many separators in the byline (review 3088 F3)', () => {
     expect(big.undone['createRange']).toBe(small.undone['createRange']);
     expect(big.undone['createRange']).toBeGreaterThanOrEqual(1);
     expect(big.undone['createRange']).toBeLessThanOrEqual(4);
+  }, 120000);
+
+  it('the screen cuts no text left once per separator: the long cuts of the whole enhance return about the byline, for 1 000 separators and for 2 000 (review 3088 F3, WebKit cycle 1)', async () => {
+    // As in test/render-print.test.ts: the code units returned by slice/substring/substr on a receiver of 4096 or more are
+    // counted, whatever the engine does with a cut (JavaScriptCore may copy one that V8 shares). The pieces are cut once each and
+    // make the text, so the total is a small multiple of the document (measured 5.0 times it for 1 000 separators: the journal's
+    // own pieces and jsdom's data reads); the text left cut at every separator returns k times half of it (measured 3 529 900
+    // code units, 64 times the bound). The bound is LONG_CUT_FACTOR (8) times the document, the same for both sizes.
+    for (const k of [1000, 2000]) {
+      const md = byline(k);
+      const root = mount(md);
+      const work = await sliceWorkAsync(async () => {
+        await enhance(root, infoOf(md));
+      });
+      expect(root.querySelectorAll('dl.byline > div').length, `${String(k)} separators: every fact built`).toBeGreaterThanOrEqual(k);
+      expect(work.returned, `${String(k)} separators: ${String(work.calls)} long cuts returned ${String(work.returned)} code units of a ${String(md.length)}-unit document`).toBeLessThanOrEqual(LONG_CUT_FACTOR * md.length);
+    }
   }, 120000);
 
   it('the byline of a text with separators is the one the per-separator splits made: a label, a date, adjacent and edge separators', async () => {

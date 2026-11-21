@@ -33,16 +33,19 @@ function segments(p: ElN): N[][] {
       last().push(child);
       continue;
     }
-    let rest = child.data;
+    // `at` is where the text left starts: the scan takes it as its start, so the text left is never cut once per separator
+    // (review 3088 F3, WebKit cycle 1); a piece is cut from the text once, to be a node of its own.
+    const data = child.data;
+    let at = 0;
     for (;;) {
-      const m = findSeparator(rest);
+      const m = findSeparator(data, at);
       if (m === null) {
-        if (rest !== '') last().push(text(rest));
+        if (at < data.length) last().push(text(at === 0 ? data : data.slice(at)));
         break;
       }
-      if (m.index > 0) last().push(text(rest.slice(0, m.index)));
+      if (m.index > at) last().push(text(data.slice(at, m.index)));
       segs.push([]);
-      rest = rest.slice(m.index + m.length);
+      at = m.index + m.length;
     }
   }
   return segs;

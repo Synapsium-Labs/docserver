@@ -225,18 +225,19 @@ function segments(p: ElNode): Node[][] {
       last().push(c);
       continue;
     }
-    let rest = c.data;
+    // `base` is where the text left starts, and the scan's start: the text left is never cut once per separator (review 3088
+    // F3, WebKit cycle 1); a piece is cut from the text once, to be a node of its own.
+    const data = c.data;
     let base = 0;
     for (;;) {
-      const m = findSeparator(rest);
+      const m = findSeparator(data, base);
       if (m === null) {
-        if (rest !== '') last().push({ k: 't', data: rest, at: c.at, off: base });
+        if (base < data.length) last().push({ k: 't', data: base === 0 ? data : data.slice(base), at: c.at, off: base });
         break;
       }
-      if (m.index > 0) last().push({ k: 't', data: rest.slice(0, m.index), at: c.at, off: base });
+      if (m.index > base) last().push({ k: 't', data: data.slice(base, m.index), at: c.at, off: base });
       segs.push([]);
-      rest = rest.slice(m.index + m.length);
-      base += m.index + m.length;
+      base = m.index + m.length;
     }
   }
   return segs;

@@ -17,12 +17,12 @@ import { collectItems, ITEM_KEY_SOURCE, ITEM_LINE, ITEM_VALUE_MAX_CODE_UNITS, MA
 import { EMPTY_META } from '../src/render/render.js';
 import { render } from '../src/render/index.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
-import { boundMs, bylinesWith, RUN_SIZES, timed } from './long-space.js';
+import { boundMs, bylinesWith, LONG_CUT_FACTOR, manySeparators, RUN_SIZES, sliceWork, timed } from './long-space.js';
 
 const sepCalls = vi.hoisted(() => ({ n: 0 }));
 vi.mock('../src/render/separator.js', async (original) => {
   const real = await original<typeof import('../src/render/separator.js')>();
-  return { ...real, findSeparator: (text: string) => ((sepCalls.n += 1), real.findSeparator(text)) };
+  return { ...real, findSeparator: (text: string, from?: number) => ((sepCalls.n += 1), real.findSeparator(text, from)) };
 });
 
 /** A vocabulary that names fields and headings, as a host's would. */
@@ -456,6 +456,26 @@ describe('meta.items equals the keys the enhance step asks itemLink for', () => 
         const keys = await asked(md, reader);
         expect([name, [...render(md, { reader }).meta.items].sort()]).toEqual([name, [...keys].sort()]);
       }
+    }
+  });
+});
+
+describe('a byline of very many separators (review 3088 F3, WebKit cycle 1)', () => {
+  it('the item route cuts no text left once per separator: the long cuts of a collect return about the document, for 2 000 separators and for 16 000', () => {
+    // As in test/render-print.test.ts: the code units returned by slice/substring/substr on a receiver of 4096 or more are
+    // counted (the same on every engine, where JavaScriptCore may copy a cut that V8 shares). The html is rendered first, outside
+    // the count, so only collectItems is measured: each piece is cut once and the pieces make the text, so the total is about
+    // the byline's length (measured 1.24 times the page's, for 2 000 separators), bounded at 8 times (LONG_CUT_FACTOR); the text
+    // left cut at every separator returns k times half of it (measured 8 024 148 code units for 2 000, 123 times the bound).
+    for (const k of [2000, 16000]) {
+      const md = manySeparators(k);
+      const html = render(md).html;
+      let got: readonly string[] = [];
+      const work = sliceWork(() => {
+        got = collectItems(html, ['Tracker'], []);
+      });
+      expect(got, `${String(k)} separators: nothing to list, but every fact built`).toEqual([]);
+      expect(work.returned, `${String(k)} separators: ${String(work.calls)} long cuts returned ${String(work.returned)} code units of a ${String(html.length)}-unit page`).toBeLessThanOrEqual(LONG_CUT_FACTOR * html.length);
     }
   });
 });

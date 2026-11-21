@@ -205,6 +205,40 @@ describe('the byline separator scan (review 3081 F1)', () => {
     expect(checked).toBe(Array.from({ length: 7 }, (_c, i) => 9 ** i).reduce((a, b) => a + b, 0));
   });
 
+  it('from a start index it finds what the pattern finds in the text cut there: its index in the whole text, and no white space read before the start (review 3088 F3, WebKit cycle 1)', () => {
+    const SEP = /\s+·\s+/;
+    const alphabet = ['·', ' ', '\t', ' ', ' ', '﻿', '​', 'a', ':'];
+    const differ: string[] = [];
+    let checked = 0;
+    // Every string of up to six of the alphabet, from every start index from 0 to one past its end (9 416 470
+    // checks, both twins, each compared without `expect` and the differences gathered, so a failure names the first few).
+    const walk = (prefix: string, depth: number): void => {
+      for (let from = 0; from <= prefix.length + 1; from += 1) {
+        const m = SEP.exec(prefix.slice(from));
+        const want = m === null ? null : { index: m.index + from, length: m[0].length };
+        for (const got of [findSeparator(prefix, from), screenSeparator(prefix, from)]) {
+          checked += 1;
+          const same = got === null || want === null ? got === want : got.index === want.index && got.length === want.length;
+          if (!same && differ.length < 10) differ.push(`${JSON.stringify(prefix)} from ${String(from)}: want ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
+        }
+      }
+      if (depth === 0) return;
+      for (const c of alphabet) walk(prefix + c, depth - 1);
+    };
+    walk('', 6);
+    expect(differ).toEqual([]);
+    expect(checked).toBe(9_416_470);
+  }, 120_000);
+
+  it('a start index leaves the text alone: the same string, with white space before the start never taken into the match', () => {
+    expect(findSeparator('a  ·  b', 0)).toEqual({ index: 1, length: 5 });
+    expect(findSeparator('a  ·  b', 2)).toEqual({ index: 2, length: 4 });
+    expect(findSeparator('a  ·  b', 3)).toBeNull(); // the dot is the first character left: it has no white space before it
+    expect(screenSeparator('a  ·  b', 2)).toEqual({ index: 2, length: 4 });
+    expect(findSeparator('a · b · c', 4)).toEqual({ index: 5, length: 3 });
+    expect(findSeparator('a · b', 99)).toBeNull();
+  });
+
   it('reads white space as the pattern class does, over every UTF-16 code unit', () => {
     const differ: string[] = [];
     for (let c = 0; c < 0x10000; c += 1) {

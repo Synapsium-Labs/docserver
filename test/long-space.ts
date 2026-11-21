@@ -48,6 +48,64 @@ export function longSplices(fn: () => void): { calls: number; moved: number } {
   return out;
 }
 
+/** What `sliceWork` counts: the calls of a string cut on a receiver of at least `LONG_TEXT` code units, and the code units those calls returned. */
+export const LONG_TEXT = 4096;
+
+/** The most the long cuts of a build may return, as a multiple of the document's length: see each case for how it was chosen. */
+export const LONG_CUT_FACTOR = 8;
+
+/**
+ * The cuts of long strings during `fn`, by a plain patch of `String.prototype.slice`, `substring` and `substr` (restored in
+ * `finally`): the number of calls whose receiver is at least LONG_TEXT code units, and the total length they return. A build that
+ * cuts the text left once per separator returns about k times half the text; one that cuts each piece once returns about the text
+ * (review 3088 F3, WebKit cycle 1: V8 shares the bytes of a cut, JavaScriptCore may copy them, so the count is what is held,
+ * not a clock). A structural bound, equal on every engine.
+ */
+export function sliceWork(fn: () => void): { calls: number; returned: number } {
+  const { out, restore } = patchSlices();
+  try {
+    fn();
+  } finally {
+    restore();
+  }
+  return out;
+}
+
+/** `sliceWork` for a build that awaits (the screen's enhance). */
+export async function sliceWorkAsync(fn: () => Promise<void>): Promise<{ calls: number; returned: number }> {
+  const { out, restore } = patchSlices();
+  try {
+    await fn();
+  } finally {
+    restore();
+  }
+  return out;
+}
+
+function patchSlices(): { out: { calls: number; returned: number }; restore: () => void } {
+  const out = { calls: 0, returned: 0 };
+  const proto = String.prototype as unknown as Record<string, (...a: unknown[]) => string>;
+  const saved: Record<string, (...a: unknown[]) => string> = {};
+  for (const name of ['slice', 'substring', 'substr'] as const) {
+    const original = proto[name] as (...a: unknown[]) => string;
+    saved[name] = original;
+    proto[name] = function (this: string, ...a: unknown[]): string {
+      const r = original.apply(this, a);
+      if (this.length >= LONG_TEXT) {
+        out.calls += 1;
+        out.returned += r.length;
+      }
+      return r;
+    };
+  }
+  return {
+    out,
+    restore: () => {
+      for (const name of ['slice', 'substring', 'substr'] as const) proto[name] = saved[name] as (...a: unknown[]) => string;
+    },
+  };
+}
+
 /** A byline of `k` separators: "**Spec** · a · a · …", about 4 code units each. */
 export const manySeparators = (k: number): string => `# T\n\n**Spec** · ${'a · '.repeat(k)}z\n\n## Body\n\nText.\n`;
 

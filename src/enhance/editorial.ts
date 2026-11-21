@@ -229,9 +229,9 @@ function segments(p: Element, journal: Journal): Node[][] {
     };
     let at = 0;
     for (;;) {
-      const m = findSeparator(at === 0 ? data : data.slice(at));
+      const m = findSeparator(data, at); // from `at`, never a cut of the text left (review 3088 F3, WebKit cycle 1)
       if (m === null) break;
-      const start = at + m.index;
+      const start = m.index;
       if (start > at) piece(at, false);
       piece(start, true);
       at = start + m.length;

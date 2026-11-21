@@ -14,13 +14,13 @@ import { PLAN_FACT_MIN_STEPS } from '../src/render/print/strip.js';
 import { printVocab } from '../src/render/print/vocab.js';
 import { checkReader } from '../src/render/reader.js';
 import type { ReaderVocabulary } from '../src/render/types.js';
-import { boundMs, bylinesWith, longSplices, manyFacts, manySeparators, RUN_SIZES, timed } from './long-space.js';
+import { boundMs, bylinesWith, LONG_CUT_FACTOR, longSplices, manyFacts, manySeparators, RUN_SIZES, sliceWork, timed } from './long-space.js';
 import { pinned } from './print-vocabulary.js';
 
 const sepCalls = vi.hoisted(() => ({ n: 0 }));
 vi.mock('../src/render/separator.js', async (original) => {
   const real = await original<typeof import('../src/render/separator.js')>();
-  return { ...real, findSeparator: (text: string) => ((sepCalls.n += 1), real.findSeparator(text)) };
+  return { ...real, findSeparator: (text: string, from?: number) => ((sepCalls.n += 1), real.findSeparator(text, from)) };
 });
 
 const ROOT = process.cwd();
@@ -372,6 +372,23 @@ describe('a byline of very many separators costs work in proportion to its lengt
       // Every fact is there: k + 1 "a" facts and the last "z" (the kind is the bold lead).
       expect(html.split('<dd>').length - 1, `${String(k)} separators: the facts built`).toBeGreaterThanOrEqual(k);
       expect(work.calls, `${String(k)} separators: long splices (${String(work.moved)} children moved)`).toBeLessThan(50);
+    }
+  });
+
+  it('building the byline cuts no text left once per separator: the long cuts of a build return about the document, for 2 000 separators and for 16 000 (review 3088 F3, WebKit cycle 1)', () => {
+    // JavaScriptCore may copy a cut of a string where V8 shares it, so a build that cuts the text left at every separator is
+    // quadratic there and linear here. The count is structural, the same on every engine: the code units returned by
+    // slice/substring/substr on a receiver of 4096 or more, whatever the engine does with them. A piece cut once returns its own
+    // length and the pieces make the text, so the total is linear in the document: measured 5.25 times its length for both sizes
+    // (the pieces, and the markdown parser's own cuts of its source), bounded at 8 times (LONG_CUT_FACTOR). The text left cut
+    // once per separator returns k times half of it, which grows with k: 16 000 separators of a 64 000-unit text would return
+    // about 500 million, 1 000 times the bound.
+    for (const k of [2000, 16000]) {
+      const md = manySeparators(k);
+      const work = sliceWork(() => {
+        render(md, PRINT);
+      });
+      expect(work.returned, `${String(k)} separators: ${String(work.calls)} long cuts returned ${String(work.returned)} code units of a ${String(md.length)}-unit document`).toBeLessThanOrEqual(LONG_CUT_FACTOR * md.length);
     }
   });
 
