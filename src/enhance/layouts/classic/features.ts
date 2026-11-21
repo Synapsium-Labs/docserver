@@ -22,7 +22,7 @@ import { build as buildKeysheet } from '../../keysheet.js';
 import { build as buildMarks } from '../../marks.js';
 import { build as buildPlans } from '../../plans.js';
 import { build as buildPosition } from '../../position.js';
-import { build as buildRail } from '../../rail.js';
+import { build as buildRail } from './contents.js';
 import { build as buildRules } from '../../rules.js';
 import { build as buildScroll } from '../../scroll.js';
 import { build as buildSettings } from '../../settings.js';

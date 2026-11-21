@@ -5,6 +5,7 @@ import type { FeatureContext } from '../../types.js';
 /** Classic's boxes and section numbers, without the editorial title block. */
 export function build(ctx: FeatureContext): void {
   const { root, journal } = ctx;
+  journal.setAttribute(root, 'data-docreader-root', '');
   const doc = root.ownerDocument;
   const headings = Array.from(root.querySelectorAll('h2[id]'));
   const label = (h: Element): string => (h.textContent ?? '').trim();

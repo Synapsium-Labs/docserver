@@ -5,9 +5,17 @@ const DOC = '# Title\n\n**Spec** · 2026-01-01 · Status: Draft\n\n## In short\n
 
 afterAll(closeBrowsers);
 describeBrowsers((browser) => {
+  it('classic contents has no tab interface', async () => {
+    const doc = await openDoc(DOC, {}, { browser, layout: 'classic' });
+    try {
+      expect(await doc.page.getByRole('tab', { name: /contents/i }).count()).toBe(0);
+    } finally { await doc.close(); }
+  });
+
   it('classic keeps the original header without editorial byline or facts', async () => {
     const doc = await openDoc(DOC, {}, { browser, layout: 'classic' });
     try {
+      expect(await doc.page.locator('[data-docreader-root]').count()).toBe(1);
       expect(await doc.page.locator('.byline, .facts').count()).toBe(0);
       expect(await doc.page.locator('.short').count()).toBe(1);
     } finally { await doc.close(); }
