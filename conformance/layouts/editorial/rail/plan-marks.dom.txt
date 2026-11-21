@@ -4,6 +4,8 @@ nav .doc-toc chrome aria-label="Contents"
       "Contents"
     button chrome
       "Collapse"
+    button .toc-close chrome hidden=""
+      "Close"
   ul chrome
     li chrome
       a chrome

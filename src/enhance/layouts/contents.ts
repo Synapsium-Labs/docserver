@@ -12,7 +12,8 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
   if (headings.length === 0) return;
   const id = ctx.chromeId('toc');
   const collapse = chrome(doc, 'button', { text: 'Collapse', attrs: { type: 'button' } });
-  const head = chrome(doc, 'div', { className: 'toc-head' }, [chrome(doc, 'span', { className: 'toc-title', text: 'Contents' }), collapse]);
+  const closeButton = chrome(doc, 'button', { className: 'toc-close', text: 'Close', attrs: { type: 'button', hidden: '' } });
+  const head = chrome(doc, 'div', { className: 'toc-head' }, [chrome(doc, 'span', { className: 'toc-title', text: 'Contents' }), collapse, closeButton]);
   const list = chrome(doc, 'ul');
   const rail = chrome(doc, 'nav', { className: 'doc-toc', attrs: { id, 'aria-label': 'Contents' } }, [head, list]);
   const button = chrome(doc, 'button', { className: 'toc-btn', text: 'Contents', attrs: { type: 'button', 'aria-controls': id, 'aria-expanded': 'false' } });
@@ -60,6 +61,7 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
     journal.setAttribute(scrim, 'hidden', '');
     journal.setAttribute(rail, 'role', null);
     journal.setAttribute(rail, 'aria-modal', null);
+    journal.setAttribute(closeButton, 'hidden', '');
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   };
   const open = (trigger: HTMLElement | null): void => {
@@ -71,6 +73,7 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
     journal.setAttribute(scrim, 'hidden', null);
     journal.setAttribute(rail, 'role', 'dialog');
     journal.setAttribute(rail, 'aria-modal', 'true');
+    journal.setAttribute(closeButton, 'hidden', null);
     if (active !== undefined) {
       journal.toggleClass(active.top, 'open', true);
       follow(active);
@@ -85,6 +88,7 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
     return true;
   });
   journal.listen(scrim, 'click', close);
+  journal.listen(closeButton, 'click', close);
   journal.listen(rail, 'keydown', (event) => {
     const key = event as KeyboardEvent;
     if (!opened) return;
@@ -100,15 +104,33 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
   });
   ctx.env.onResize(() => { if (opened && ctx.env.viewport().w >= 1240) close(); });
   journal.listen(rail, 'click', (event) => {
+    const click = event as MouseEvent;
+    if (click.defaultPrevented || click.button !== 0 || click.ctrlKey || click.metaKey || click.shiftKey || click.altKey) return;
     const target = event.target as Node | null;
     const element = target?.nodeType === 1 ? target as Element : target?.parentElement;
     const href = element?.closest('a[href]')?.getAttribute('href');
-    if (href?.startsWith('#') === true && ctx.nav.byId(href.slice(1)) !== null) close();
+    if (href?.startsWith('#') !== true) return;
+    let id = href.slice(1);
+    try { id = decodeURIComponent(id); } catch { /* Match navigation's fallback for malformed escapes. */ }
+    if (ctx.nav.byId(id) !== null) close();
   });
   journal.listen(collapse, 'click', () => { for (const item of items.values()) journal.toggleClass(item.top, 'open', false); });
   journal.defer(ctx.overlays.register('drawer', { isOpen: () => opened, close }));
   journal.defer(close);
-  const tracked = headings.filter((heading) => items.has(heading));
+  let tracked: HTMLElement[] = [];
+  const measureHeadings = (): void => {
+    tracked = headings.filter((heading) => {
+      if (!items.has(heading) || heading.getClientRects().length === 0) return false;
+      // Some engines report rectangles for descendants of closed details despite not displaying them.
+      for (let child: Element = heading, parent = child.parentElement; parent !== null && parent !== root; child = parent, parent = parent.parentElement) {
+        if (parent.localName === 'details' && !parent.hasAttribute('open') && (child.localName !== 'summary' || parent.querySelector('summary') !== child)) return false;
+      }
+      return true;
+    });
+  };
+  journal.listen(root, 'toggle', (event) => {
+    if ((event.target as Element | null)?.localName === 'details') ctx.relayout('content');
+  }, true);
   let active: { anchor: HTMLAnchorElement; top: HTMLLIElement } | undefined;
   let scheduled: Cancel | null = null;
   function follow(item: { anchor: HTMLAnchorElement }): void {
@@ -148,6 +170,7 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
   journal.defer(ctx.events.on('relayout', () => {
     scheduled?.();
     scheduled = null;
+    measureHeadings();
     spy();
   }));
   journal.defer(() => { scheduled?.(); scheduled = null; });
@@ -155,5 +178,6 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
   journal.insert(scrim, root, null);
   if (ctx.slots !== null) ctx.slots.tool('contents', button);
   journal.toggleClass(root, 'has-toc', true);
+  measureHeadings();
   spy();
 }

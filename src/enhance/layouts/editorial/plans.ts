@@ -22,7 +22,7 @@ export function build(ctx: FeatureContext): void {
     for (let node = heading.nextElementSibling; node !== null && !/^h[1-3]$/.test(node.localName); node = node.nextElementSibling) {
       if (node.classList.contains('short') && node.querySelector('h1, h2, h3') !== null) break;
       siblings.push(node);
-      if (node.localName === 'ul') steps += Array.from(node.children).filter((li) => li.classList.contains('task-list-item')).length;
+      if (node.localName === 'ul' || node.localName === 'ol') steps += Array.from(node.children).filter((li) => li.classList.contains('task-list-item')).length;
       if (owner === '' && node.localName === 'p') owner = vocab.plan.who.exec((node.textContent ?? '').replace(/\s+/g, ' ').trim())?.[1] ?? '';
     }
     let source = heading.textContent ?? '';
