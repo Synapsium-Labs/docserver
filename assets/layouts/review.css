@@ -31,7 +31,7 @@
 [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td .cc { max-height: 4.9em; overflow: hidden; }
 [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-clipped:not(.rv-open) td .cc.over { -webkit-mask-image: linear-gradient(var(--bg) 55%, transparent); mask-image: linear-gradient(var(--bg) 55%, transparent); }
 [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-open td .cc { max-height: none; }
-[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-open td { background: var(--surface); }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-open td { background: var(--surface) !important; }
 [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td:first-child { position: relative; padding-left: 1.9em; }
 [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx { display: none; position: absolute; left: 2px; top: .4em; min-width: 24px; min-height: 24px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; }
 [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tr.rv-clipped .rx { display: inline-block; }
@@ -42,12 +42,15 @@
 [data-docreader-root][data-docreader-layout="review"] .rv-all[aria-pressed="true"] { border-color: var(--accent); }
 @media screen and (max-width: 700px) {
   [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td .cc { max-height: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-hint { display: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-all { display: none; }
 }
 @media (pointer: fine) {
   [data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-all { min-height: var(--dr-control-row); }
   [data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .table-wrapper.rv-compact .rx { min-height: var(--dr-control-row); }
 }
 @media (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td:first-child { padding-left: 48px; }
   [data-docreader-root][data-docreader-layout="review"] .rv-all { min-height: 44px; }
   [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx { min-height: 44px; min-width: 44px; }
 }
@@ -69,6 +72,9 @@
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-index a.ix { min-height: 44px; }
 }
 @media print {
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td .cc { max-height: none; overflow: visible; -webkit-mask-image: none !important; mask-image: none !important; }
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx { display: none !important; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-hint, [data-docreader-root][data-docreader-layout="review"] .rv-all { display: none; }
   [data-docreader-root][data-docreader-layout="review"] .rv-read, [data-docreader-root][data-docreader-layout="review"] .rv-mark { display: none; }
   [data-docreader-root][data-docreader-layout="review"] .rv-card { border: 0; padding: 0; background: none; }
 }

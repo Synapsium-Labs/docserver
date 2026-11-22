@@ -147,6 +147,103 @@ Text.
     } finally { await doc.close(); }
   });
 
+  it('a relayout while the root is hidden leaves the clip marks and the buttons in place', async () => {
+    const doc = await openCompact();
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      // The resize is debounced by a timer: a fake clock runs it, and the frame after it, at once.
+      await page.clock.install();
+      await page.evaluate(() => {
+        (document.querySelector('main[data-harness-root]') as HTMLElement).style.display = 'none';
+        window.dispatchEvent(new Event('resize'));
+      });
+      await page.clock.runFor(1000);
+      await page.evaluate(() => { (document.querySelector('main[data-harness-root]') as HTMLElement).style.display = ''; });
+      expect(await page.locator('tbody tr.rv-clipped').count()).toBe(7);
+      expect(await page.locator('tbody tr.rv-clipped button.rx').first().isVisible()).toBe(true);
+    } finally { await doc.close(); }
+  });
+
+  it('prints the whole row: no clip, no fade, no row button, no hint', async () => {
+    const doc = await openCompact();
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      // The cell and its button are held before the media change: a relayout in print may take their marks off, and the rules must hold for the marked state.
+      const clipped = await page.locator('tbody tr.rv-clipped td .cc.over').first().elementHandle();
+      const button = await page.locator('tbody tr.rv-clipped button.rx').first().elementHandle();
+      await page.emulateMedia({ media: 'print' });
+      const got = await page.evaluate(([cell, rx]) => {
+        const cc = getComputedStyle(cell as Element);
+        const display = (e: Element | string): string => getComputedStyle(typeof e === 'string' ? (document.querySelector(e) as Element) : e).display;
+        return { max: cc.maxHeight, mask: cc.maskImage === '' ? cc.webkitMaskImage : cc.maskImage, rx: display(rx as Element), hint: display('.rv-hint'), all: display('.rv-all') };
+      }, [clipped, button] as const);
+      expect(got.max).toBe('none');
+      expect(got.mask).toBe('none');
+      expect([got.rx, got.hint, got.all]).toEqual(['none', 'none', 'none']);
+    } finally { await doc.close(); }
+  });
+
+  it('an open row has the surface for its ground, whatever the shared table rule says', async () => {
+    const doc = await openCompact();
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      await page.locator('tbody tr button.rx').first().click();
+      await page.mouse.move(2, 2);
+      // The shared table rule fades a row's ground over a tenth of a second: read it once those transitions have finished.
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)).then(() => undefined));
+      const got = await page.evaluate(() => {
+        const probe = document.createElement('div');
+        probe.style.background = 'var(--surface)';
+        (document.querySelector('main[data-harness-root]') as HTMLElement).append(probe);
+        const want = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { want, open: getComputedStyle(document.querySelector('tbody tr.rv-open td') as Element).backgroundColor };
+      });
+      expect(got.open).toBe(got.want);
+    } finally { await doc.close(); }
+  });
+
+  it('an open row keeps its button across a phone width and back, and a row closed after its clip was never measured is measured', async () => {
+    const doc = await openCompact();
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      const first = page.locator('tbody tr').first();
+      await first.locator('button.rx').click();
+      await page.setViewportSize({ width: 412, height: 900 });
+      await expect.poll(() => first.locator('button.rx').isVisible()).toBe(false);
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await expect.poll(() => first.locator('button.rx').isVisible()).toBe(true);
+      await first.locator('button.rx').click();
+      expect(await first.evaluate((el) => el.classList.contains('rv-clipped'))).toBe(true);
+      // Opened at a phone width (the button is hidden there, so by script), then widened: nothing marked it, and closing measures it.
+      await page.setViewportSize({ width: 412, height: 900 });
+      await expect.poll(() => page.locator('tr.rv-clipped').count()).toBe(0);
+      await page.evaluate(() => (document.querySelector('button.rv-all') as HTMLElement).click());
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.evaluate(() => (document.querySelector('button.rv-all') as HTMLElement).click());
+      await expect.poll(() => page.locator('tbody tr.rv-clipped').count()).toBe(7);
+      expect(await page.locator('tbody tr.rv-clipped button.rx').first().isVisible()).toBe(true);
+    } finally { await doc.close(); }
+  });
+
+  it('keeps the first cell clear of the 44 px row button under touch, and hides the hint and Open all on a phone', async () => {
+    const touch = await openCompact(1280, true);
+    try {
+      await touch.page.locator('tr.rv-clipped').first().waitFor();
+      expect(await touch.page.locator('tbody tr td:first-child').first().evaluate((el) => getComputedStyle(el).paddingLeft)).toBe('48px');
+    } finally { await touch.close(); }
+    const phone = await openCompact(412);
+    try {
+      await phone.page.locator('.table-wrapper.rv-compact').waitFor();
+      expect(await phone.page.locator('.rv-hint').evaluate((el) => getComputedStyle(el).display)).toBe('none');
+      expect(await phone.page.locator('.rv-all').evaluate((el) => getComputedStyle(el).display)).toBe('none');
+    } finally { await phone.close(); }
+  });
+
   it('the filter still matches text a clip hides, and a preview card still copies the cell', async () => {
     const doc = await openCompact(1280, undefined, {}, 12, 'zebra');
     try {

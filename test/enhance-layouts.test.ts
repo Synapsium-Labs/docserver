@@ -447,6 +447,14 @@ describe('review: the header card and the context tool', () => {
     expect(row.querySelectorAll('td > .cc').length).toBe(2);
   });
 
+  it('names the row button "row" when the first cell is empty', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(6, 320).replace('| D1 |', '|  |'));
+    await enhance(root);
+    expect(root.querySelector('tbody tr button.rx')?.getAttribute('aria-label')).toBe('Open row row');
+    expect(root.querySelectorAll('tbody tr')[1]?.querySelector('button.rx')?.getAttribute('aria-label')).toBe('Open row D2');
+  });
+
   it('takes the compact rows off again at teardown, the document as it was', async () => {
     pick.layout = 'review';
     const root = mount(TABLE(7, 260));
