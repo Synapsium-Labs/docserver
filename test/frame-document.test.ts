@@ -47,7 +47,7 @@ import { HOST_VALUES_MAX } from '../src/frame/document.js';
 import { escapedHtmlLength, FEATURE_KEYS, IMAGE_BUDGET_CHARS, OPTIONAL_SEED_KEYS, SEED_FIELDS_MAX_CHARS, SEED_KEYS, SEED_LIMITS, validateSeed } from '../src/frame/seed.js';
 import { base64, cspHash, hex, hexToBase64, sha256Text } from '../src/frame/sha256.js';
 import { render } from '../src/render/index.js';
-import { ASSET_CHARS_1_1_0, ASSET_CHARS_NOW, oldCapDocument, oldDefaultCap } from './frame-old-cap.js';
+import { ASSET_CHARS_1_1_0, ASSET_CHARS_NOW, htmlAtCap, oldCapDocument, oldDefaultCap } from './frame-old-cap.js';
 import {
   attr,
   expand,
@@ -620,6 +620,27 @@ describe('L3.M7 each code at its boundary', () => {
     // Its control: one character under that length the refusal is too-large, so the cap the row sits under is the one in force.
     expect(refusal(() => lengthOf({ ...both, maxSrcdocChars: bothLength - 1 }))).toBe('too-large');
   }, 600_000);
+
+  it("test 7's old-cap html is text inside paragraphs only: with every <p> and </p> taken out, no `<` is followed by an ASCII letter, `/`, `!` or `?` (a letter after a `<` opens a tag the frame refuses)", () => {
+    // test/frame-old-cap.ts: the html's padding letters once followed the last paragraph's `<` run, so the HTML tokenizer read
+    // `<aaa..a</p>` as a start tag outside the frame's closed vocabulary and the browser mount fell back (the measured row).
+    // The counts are the ones the rows use: oldCapDocument()'s 2000 paragraphs, and 1.
+    for (const paragraphs of [2000, 1]) {
+      const html = htmlAtCap(paragraphs);
+      expect(escapedHtmlLength(html)).toBe(SEED_HTML_MAX_CHARS);
+      // Each tag is replaced by a space, not deleted: deleting `</p><p>` would join one paragraph's last `<` to the next paragraph's
+      // first letter, which no tokenizer reads as adjacent.
+      const rest = html.replaceAll('<p>', ' ').replaceAll('</p>', ' ');
+      const tagOpen = /<[A-Za-z/!?]/.exec(rest);
+      expect(tagOpen === null ? 'no tag open' : `a tag open at ${String(tagOpen.index)}: ${JSON.stringify(rest.slice(tagOpen.index, tagOpen.index + 12))}`).toBe('no tag open');
+      // The control: the paragraphs are the whole document, and the text between them is `<` and the padding letters only.
+      expect(html.startsWith('<p>') && html.endsWith('</p>')).toBe(true);
+      expect(/^[<a ]*$/.test(rest)).toBe(true);
+    }
+    // The guard sees the hazard: a letter after a `<` run, as the padding once stood, is a tag open.
+    expect(/<[A-Za-z/!?]/.test('<p><<<aaa</p>'.replaceAll('<p>', ' ').replaceAll('</p>', ' '))).toBe(true);
+    expect(/<[A-Za-z/!?]/.test('<p>aaa<<<</p>'.replaceAll('<p>', ' ').replaceAll('</p>', ' '))).toBe(false);
+  }, 300_000);
 
   it('SEED_HTML_MAX_CHARS: an html longer than the cap before escaping is refused too-large without being measured', () => {
     // Escaping only lengthens, so such a string is over the cap whatever it holds; measuring it would cost up to six

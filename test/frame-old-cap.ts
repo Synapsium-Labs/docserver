@@ -37,14 +37,17 @@ const lt = (n: number): string => '<'.repeat(n);
 
 /**
  * An html whose escaped length as the seed carries it is exactly SEED_HTML_MAX_CHARS: `paragraphs` paragraphs of `<`
- * (`<` takes six seed characters, `<p>` thirteen and `</p>` fourteen) with plain letters making up the remainder.
+ * (`<` takes six seed characters, `<p>` thirteen and `</p>` fourteen) with plain letters making up the remainder. The
+ * letters go in front of the last paragraph's `<` run, never behind it: a letter right after a `<` opens a start tag in
+ * the HTML tokenizer (the tag's name would swallow the `</p`), and the frame refuses an element outside its closed
+ * vocabulary. Every `<` here is followed by a `<` or by the `/` of `</p>`, so it stays text.
  */
 export function htmlAtCap(paragraphs: number): string {
   const frame = 13 + 14; // `<p>` and `</p>`, escaped
   const per = Math.floor((SEED_HTML_MAX_CHARS - paragraphs * frame) / (6 * paragraphs));
   const remainder = SEED_HTML_MAX_CHARS - paragraphs * (frame + 6 * per);
   const para = `<p>${lt(per)}</p>`;
-  return para.repeat(paragraphs - 1) + `<p>${lt(per)}${'a'.repeat(remainder)}</p>`;
+  return para.repeat(paragraphs - 1) + `<p>${'a'.repeat(remainder)}${lt(per)}</p>`;
 }
 
 /** The images: 512 refs of 2048 code units, each of 10 240 decoded bytes (512 x 10 240 is the 5 242 880 budget), as svg+xml, the longest prefix. */
