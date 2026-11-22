@@ -1,0 +1,80 @@
+# Guided layout scrub audit
+
+## Design
+
+The guided layout is the reference's direction C, guided layers: the page reads in layers. A hero holds the title, the properties and "In short", with a glance under it. Every section then shows its heading, its reading time and its opening intro, and folds the rest behind one button. Expand all and Collapse all sit in the bar, a link, a quick-jump hit or a find opens the fold it lands in, and the choice is remembered. Terms are defined where they stand, a Product and Engineering lens quiets implementation detail without hiding it, and tables become cards on a phone. Most of that is what the shared reader already does, so the layout is a feature list over the shared modules, three small modules of its own and a stylesheet. It is not the default reader with parts removed: it leaves out what direction C does not have.
+
+**The feature list** (`src/enhance/layouts/guided/features.ts`) selects the shared modules in their standard relative order (the header of `src/enhance/features.ts` says why each step follows the ones before it): `editorial`, `tables`, `status`, `code`, `figures`, `glossary`, `attention`, `scroll`, `cards`, `jump`, `diagrams`, `position`, behind the layout mark. It leaves out `rules`, `ids`, `xrefs`, `plans`, `marks`, `rail`, `strip`, `folds`, `settings`, `changes`, `since` and `keysheet`: direction C has no Index tab, no ID chips or previews, no review strip, no read marks, no change stepper and no reading settings menu, and its folds are its own (below). A unit row holds the list to that.
+
+| Layout module | Placed | Why it is the layout's, and not shared |
+|---|---|---|
+| `guided/contents.ts` (`guided-contents`) | after `attention`, before `scroll` | Builds the shared Contents-only rail and drawer (the one the editorial layout builds, `layouts/contents.ts`, called as it is) and adds each section's reading time beside its link from the sections the shared steps measured. Adding the time inside `layouts/contents.ts` would change the classic and editorial bundles. |
+| `guided/hero.ts` (`guided-hero`) | after `scroll`, before the layers | Moves the title block the shared `editorial` feature built (eyebrow, title, meta line, byline, facts panel) into one header, takes "In short" in when it opens the document, and draws the glance (how long "In short" takes, what the document holds, what waits). It sends the bar's "Skip to the text" link on to the title the header now holds. |
+| `guided/layers.ts` (`guided-layers`) | after the hero | The shared `folds.ts` hides every block of a section; direction C keeps the intro and folds the rest, so the layers are their own. They share its state field and its find, reveal and print behaviour. The same module puts the lens and Expand all and Collapse all in the bar, through the bar's own `tool` method. |
+| `guided/sections.ts` | imported by the three | A heading's words, the one section never folded ("Where things stand") and a section's members. Pure helpers. |
+| `layouts/mark.ts`, `layouts/reveal.ts` | first, and before `position` | Shared by the other layouts: the layout mark, and reveal on scroll in its classic mode. |
+
+Everything else is imported from `src/enhance/`, never copied, and no default asset is edited: the shared modules are the default bundle's, and this layout adds nodes beside them through the journal.
+
+**Layers.** A level-2 section's intro is the reference's cut: up to two paragraphs and about fifty words, an alert that opens the section coming with them, and a paragraph that ends in a colon taking the short list after it. What follows folds when it is worth a click: 300 words of reading, a figure, a table or code. Folding sets `hidden="until-found"` on each of the root's own children through the journal, only on a block the author had not hidden, so nothing is wrapped and find-in-page reaches a folded block and opens its section (`beforematch`). A jump, a link or a quick-jump hit opens the section through the reveal service. Print shows everything the reader had folded.
+
+**State.** The layers write no store key and no document field of their own. The folded sections' ids go to the existing `folds` field, the shape the default layout's folds read, so a document read in either layout keeps one answer; Expand all and Collapse all write the whole list. The reader's choice of layers is the existing UI memory (`state.readUi` and `writeUi`) under the name `layers`, as the rail keeps its tab; with neither remembered a document of fifteen minutes or more opens guided and a shorter one in full, as the reference does. The lens is the reader's own `lens` pref, so no pref is added. `gen-doc-fields --check` is green with the list unchanged (`folds`, `ixfold`, `marks`, `outline`, `pos`, `seen`), and the bootstrap stays at 32,740 bytes.
+
+**Budgets.** The layout's enhance bundle is 179,294 characters and its stylesheet 11,392, 190,686 together, against the default enhance bundle's 225,709. The five entries the default frame inlines and the classic, editorial and review entries keep their sha256 and bytes.
+
+## In short
+
+Guided selects the shared reader's title block, tables, glossary, cards, jump, Contents, figures and lens classes, drops what direction C lacks, adds a hero with a glance, the layers with the bar's reading tools, and the times in the Contents, and has its own stylesheet. This is a source-level mapping of the reference lanes, not a claim of pixel or complete behavioural parity. The layout corpus pins scoped DOM output of the shared cases; their scopes are class lists that do not name the hero, the fold bars or the tools, so those are pinned by the interaction rows.
+
+## 1. Reference lanes
+
+| Reference lane | Guided implementation and boundary |
+|---|---|
+| Hero: title, properties, "In short" | `guided/hero.ts` moves the shared title block (through the journal, so teardown puts every node back) and "In short" into one `header.gd-hero`. The properties are the shared byline and facts panel, which read the host's front matter (`info.frontList`) and the meta line; the reference parsed a front-matter strip and a JSON script a second time. "In short" joins the header when it is within three blocks of the title block, as the reference. |
+| Glance: how long, what is in it, what waits | The header's last row: "In short" reading time, what the document holds (sections, figures, tables) and a link to the "Waiting on you" box with its item count. The reference's "Whole doc" time is not repeated: the shared byline already shows it. |
+| Layers: intro kept, the rest folded behind one button | `guided/layers.ts`: the reference's intro cut and its worth-a-click threshold; a fold bar with "Read the whole section" or "Show less", a summary (time left, what it holds), an "Inside" list of the subsections (six at most) and a "Fold this section" button that puts the heading back at the top. "Where things stand" is never folded. |
+| Expand all, Collapse all | Two buttons in the bar's tray, each disabled when it would do nothing and the idle one hidden on a phone. The reader's choice is remembered for documents with nothing remembered. |
+| Remembered per reader and per document | The `folds` field and the UI memory's `layers` (see State). The reference's local storage keys, one per document path, are not used. |
+| A link, a search hit or find-in-page opens its fold | The reveal service (every jump, link and quick-jump hit goes through it) and `beforematch`. |
+| Reading time per section | A time and what the section holds under its heading (only when it takes a minute or holds a figure or a table), in the fold summary and beside each Contents link. |
+| Glossary terms defined on hover, focus or tap | The shared `glossary` (the first mention of each term in each section) and `cards` (the preview card on hover, focus and a first tap). |
+| Product and Engineering lens | The two buttons in the bar set the reader's `lens` pref; the shared `attention` marks implementation-heavy blocks and file paths, and the shared peek bars say "Show engineering detail" over them; nothing is hidden. A peek bar made after a section folded joins the fold. |
+| Tables become cards on a phone | The shared `tables` and `status` with the reader's own stylesheet: each row a card, each cell labelled by its column. |
+| Where things stand boxes, numbered sections | The shared `editorial`. |
+| Sidebar contents with scroll-spy and progress, phone drawer | The shared Contents-only rail and drawer, `scroll` and the bar's progress line; the drawer traps focus, closes with Escape and returns focus. |
+| Quick jump | The shared `jump`: `/` and Ctrl or Cmd+K over the sections and figures. |
+| Sticky table headers, table filters, status pills, code copy, reveal on scroll | The shared `tables`, `status`, `code` and reveal (`layouts/reveal.ts`, classic mode). |
+| Mermaid figures with Play, Copy Mermaid, Animate edges and Full screen | The shared `figures`, `diagrams` and `diagram-tools`, with no definition dialog this layout has no ID index to open. |
+
+## 2. Scrubbed or deliberately not shipped
+
+| Reference default or mechanism | Boundary and reason |
+|---|---|
+| Sub-folds of long subsections (the reference's level-3 folds) | Not shipped. Each would need a second layer of state in the same `folds` list and a second intro cut for a block that is already folded by its section; the section's fold with its "Inside" list reaches the same reading. |
+| The fold's opening animation | Not shipped: no wrapper exists to animate, and the motion adds nothing a reader asks for. The stylesheet has no motion beyond the shared reveal. |
+| Reading time that follows the lens (the Product time counts code as skimmed) | Not shipped: the shared sections carry one time. |
+| "Whole doc" time in the glance | Dropped as a duplicate of the byline's. |
+| The Product lens's quieter paragraphs that are mostly code (`tech-text`) | Not shipped: the shared `attention` quiets code blocks, tables and file paths; it has no class for prose. |
+| The lens written to the address (`?lens=`) | Not shipped: no link rewriting of the layout's own. The lens is the reader's pref and is stored by the reader's state service. |
+| The glossary popover's own "All terms" link | The shared preview card's "Go to definition" is used. |
+| Terms in the quick jump | Not shipped: the shared `jump` lists sections, tasks, IDs and figures; listing terms is a change to it, which would move the default bundle. |
+| Section chips under the hero | Not shipped: the reference hides them whenever the Contents exist, and they exist for every document. |
+| Rule-ID badges, rule anchors and the front-matter chips with "Show all" | Not shipped: they belong to the `rules` and `ids` modules and to the reference's own front-matter card, which this layout does not build. The shared facts panel shows the front matter's lists. |
+| "Headlines" and "Full" switch of In short | The shared `inShort` option, off by default: a host asks for it. |
+| Page-global startup, body classes (`layers`, `has-toc`, `lens-product`, `all-open`), global IDs and window listeners | The host mounts a root-scoped instance; classes go on the root, every chrome node and listener through the journal, undone at teardown. |
+| A CDN import of the diagram library | Mermaid is supplied by the host adapter; no network is added. |
+| Local storage for folds, the choice of layers, the lens and the In short view | The reader's state service (the bridge's store). The layout adds no store key and no document field. |
+| Direct history, clipboard and location writes (`replaceState` on every jump, `navigator.clipboard`, `location.pathname` as a key) | Navigation goes through the reader's `nav` service and its host seam; copy through the host's copy adapter; the per-document key is the host's `storageKey`. |
+| Fixed palette (`rgba`, hex) and a dark-mode media query of its own | The stylesheet uses the reader's tokens and the host's appearance slots only; it holds no literal colour (a unit row scans it), and the hosted control-row size applies under a fine pointer only, a coarse pointer keeping 44 px. |
+| Timers for popover delays and the copy button's label | The shared cards and code modules use the reader's window seam. |
+| Operator-specific vocabulary, ID prefixes, status words and document kinds | The shared vocabulary options (`vocab.ts`) supply them; the private defaults are empty or off. |
+| Direct DOM replacement and inline handlers | Chrome is created with the document's API; document nodes are moved or given an attribute through the journal. |
+| Site footer, top bar and readiness assumptions | Page-level elements belong to the host. |
+
+## 3. Evidence limits
+
+The 54 shared Level 2 cases are pinned under `conformance/layouts/guided/`. Their scopes are the shared cases' class lists, none of which names the hero (`gd-hero`, `gd-glance`), the fold bars (`gd-bar`, `gd-end-row`), the bar's tools (`gd-tools`) or the time lines (`gd-meta`, `gd-rt`), so those are pinned by the interaction rows of `test/browser/layout-guided.test.ts` and the unit rows of `test/enhance-layouts.test.ts`, not by snapshots; what a snapshot does show is the blocks a fold hides (`hidden="until-found"`, in the cases whose stored state folds them) and the shared chrome. A new shared case would add files under the default's and every other layout's directories, which this task may not move. The two diagram cases that name nodes by an ID expect no definition cue here, as this layout has no ID index; the glossary cases keep theirs.
+
+The interaction rows run in Chromium locally: three widths with no horizontal scroll, folded and open, and the contents reachable; the hero and its glance; the skip link; the layers (intro kept, the rest with no height, the summary, the Inside list, the end button and its focus), Expand all and Collapse all; the fold a link, the Inside list and the quick jump land in; the lens and a peek bar made after a fold; the reading times; a term's card; tables as cards at 412 px and as a table at 1280; the drawer's focus trap, dismissal and focus restore; the touch floor of 44 px against a 56 px hosted row, an open bar's included; the fine-pointer slot at 40 and 56 px; print; and teardown with a folded document. The twelve hosted fixture appearances, the pair floors and the closed grounds run for this layout in `appearance-style`, with a synthetic spec that folds, and three states of the layout's own (every section folded, every section open, the lens on Product) beside the term card; `appearance-cues` runs the cue rows for what guided draws (the quick jump, the table filter, the chrome literals, term and ordinary links, the In short switch, the waiting callout) through the shared mechanism, with the layout's own control-row row.
+
+Not measured: find-in-page itself. Playwright cannot drive the browser's find, and `window.find` does not reach `hidden="until-found"`, so the row dispatches the `beforematch` event the browser sends and proves the layout's reaction to it, not the browser's. Print is proven in Chromium, where the browser shows a block hidden "until-found" when printing; the layout's own print handler (shown for the printing, folded again after) is proven in the unit rows, because Chromium does not need it and a browser that knows no "until-found" would. WebKit is proven in CI only.
