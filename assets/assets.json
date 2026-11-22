@@ -65,10 +65,10 @@
     },
     {
       "path": "frame/enhance-review.js",
-      "sha256": "3621c6330514c692a215df91cef57ab4e617c91f4670f6e5257c11af992c145d",
-      "bytes": 190237,
+      "sha256": "0bb883408bbf144e43f6d121a643088c9683edadc38f6cf147311ee563d03fa1",
+      "bytes": 190217,
       "kind": "script",
-      "csp": "'sha256-NiHGMwUUxpKiFd+RzvV6tOYXyR9GcPblJXwRr5ksFF0='",
+      "csp": "'sha256-C7iDQIu/FE5D9tEhpkMIjJaD7a3Dj2zxRzEe5WPQP6E='",
       "layout": "review"
     },
     {
@@ -102,8 +102,8 @@
     },
     {
       "path": "frame/layout-review.css",
-      "sha256": "e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e",
-      "bytes": 5507,
+      "sha256": "a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3",
+      "bytes": 5432,
       "kind": "style",
       "layout": "review"
     },
@@ -129,8 +129,8 @@
     },
     {
       "path": "layouts/review.css",
-      "sha256": "e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e",
-      "bytes": 5507,
+      "sha256": "a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3",
+      "bytes": 5432,
       "kind": "style",
       "layout": "review"
     },

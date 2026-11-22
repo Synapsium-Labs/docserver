@@ -41,7 +41,6 @@
   [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark { min-height: 44px; }
 }
 @media screen and (max-width: 1239px) and (pointer: coarse) {
-  [data-docreader-root][data-docreader-layout="review"].toc-open .rv-wait,
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-tabs button,
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-contents a,
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-index a.ix { min-height: 44px; }

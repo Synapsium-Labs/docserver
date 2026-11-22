@@ -370,6 +370,12 @@ describe('review: the header card and the context tool', () => {
     expect(root.querySelector('header.rv-card > .eyebrow')).toBeNull();
   });
 
+  it('has direction B\'s features and none of the default\'s that direction B lacks (folds, the changes menu and stepper, the glossary, the attention lens, the settings menu)', async () => {
+    const names = (await lists())['review']?.map((f) => f.name) ?? [];
+    for (const lacked of ['folds', 'since', 'changes', 'glossary', 'attention', 'settings']) expect(names, lacked).not.toContain(lacked);
+    for (const kept of ['rail', 'marks', 'ids', 'xrefs', 'cards', 'strip', 'jump', 'keysheet', 'review-header', 'review-rail', 'review-context']) expect(names, kept).toContain(kept);
+  });
+
   it('builds neither card nor tool for a page that is not a document', async () => {
     pick.layout = 'review';
     for (const markdown of ['Just a paragraph.\n', '# A title\n\nOne paragraph and no sections.\n']) {
