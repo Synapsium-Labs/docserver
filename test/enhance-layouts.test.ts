@@ -247,14 +247,20 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
    * Text that ends at `{` is a prelude (a selector, an `&` selector or an at-rule) and is never read. Text that ends at `;` or at `}`
    * inside a block is a declaration, so a nesting parent's own declarations before, between and after its nested rules are read; only
    * the part after the declaration's first `:` is read, so a property named like a colour (`background: var(--x)`) is none. A
-   * top-level statement (`@import ...;`) and a segment with no `:` are not declarations. Any value word that is a colour is reported,
-   * including `background` in `transition: background .2s` (a deprecated system colour that is also a property name): the scan does not know
-   * which properties take a colour, so the false positive is visible, never silent. `transparent`, `currentColor`, `inherit`, `initial`,
+   * top-level statement (`@import ...;`) and a segment with no `:` are not declarations. Any value word, such as a grid area or a container name,
+   * that is a colour keyword is reported, including `background` in `transition: background .2s` (a deprecated system colour that is also
+   * a property name), `grid-area: menu` and `container-name: window`: the scan does not know which properties take a colour, so the false
+   * positive is visible, never silent. `transparent`, `currentColor`, `inherit`, `initial`,
    * `unset` and `revert` are not in the list.
    */
   const namedColours = (text: string): string[] => {
     const out: string[] = [];
-    const clean = text.replace(/\/\*[\s\S]*?\*\/|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|url\([^)]*\)/gi, ' ');
+    // A string runs to its closing quote, over an escaped character (an escaped newline too, so `[\s\S]` and not `.`), and ends at an unescaped
+    // newline or at the end of the text if it never closes (invalid CSS: the rest is read as CSS reads it). A `url()` may hold a quoted argument.
+    const clean = text.replace(
+      /\/\*[\s\S]*?\*\/|url\(\s*(?:"(?:[^"\\\n\r\f]|\\[\s\S])*"|'(?:[^'\\\n\r\f]|\\[\s\S])*'|[^)]*)\s*\)|"(?:[^"\\\n\r\f]|\\[\s\S])*(?:"|(?=[\n\r\f])|$)|'(?:[^'\\\n\r\f]|\\[\s\S])*(?:'|(?=[\n\r\f])|$)/gi,
+      ' ',
+    );
     const read = (declaration: string): void => {
       const colon = declaration.indexOf(':');
       if (colon < 0) return;
@@ -331,6 +337,20 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
     // A single-quoted string, and a string with an escaped quote, are no colour.
     expect(namedColours("a { content: 'red'; quotes: 'tan' 'navy'; color: var(--x); }")).toEqual([]);
     expect(namedColours('a { content: "say \\"red\\" now"; color: var(--x); }')).toEqual([]);
+    // An escaped newline stays inside its string (`.` does not match a newline), in either quote: the closing quote does not open a false string.
+    expect(namedColours('a { content: "a\\\nb"; color: red; content: "c"; }')).toEqual(['red']);
+    expect(namedColours("a { content: 'a\\\nb'; color: tan; content: 'c'; }")).toEqual(['tan']);
+    // A quoted url() argument may hold a closing parenthesis; an unquoted one ends at the first.
+    expect(namedColours('a { background: url("a)b"); color: red; content: "z"; }')).toEqual(['red']);
+    expect(namedColours("a { background: url( 'a)b' ); color: tan; content: 'z'; }")).toEqual(['tan']);
+    expect(namedColours('a { background: url(a.png); color: red; background: url(red.png) }')).toEqual(['red']);
+    // A string that never closes ends at the newline (or the end of the text), so it swallows no later declaration.
+    expect(namedColours('a { content: "abc\n color: red; content: "z"; }')).toEqual(['red']);
+    expect(namedColours("a { content: 'abc\n color: tan; content: 'z'; }")).toEqual(['tan']);
+    expect(namedColours('a { content: "red\n color: tan; }')).toEqual(['tan']);
+    expect(namedColours("a { content: 'red\n color: tan; }")).toEqual(['tan']);
+    expect(namedColours('a { content: "red; }')).toEqual([]);
+    expect(namedColours("a { content: 'red; }")).toEqual([]);
   });
 
   it('flags a deprecated system colour that is a value word in `transition`: a visible false positive, chosen over a per-property list', () => {
