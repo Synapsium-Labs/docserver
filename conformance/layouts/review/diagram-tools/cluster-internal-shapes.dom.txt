@@ -1,0 +1,102 @@
+h1
+  "Cluster internal shapes"
+h2
+  "1. Decisions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "R1"
+        td
+          "A neutral reference"
+figure
+  pre
+    "flowchart LR subgraph R1 A{R1} --> B((Pl"…
+  svg
+    style
+    g
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        polygon
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      g
+        g
+        g
+        g
+        g
+          g
+            g
+              g
+                rect
+                g .dnode
+                  foreignObject
+                    div
+                      span
+                        p
+                  rect .dn-ring chrome
+                  circle .dn-dot chrome
+            g
+              path
+            g
+              g
+                g
+                  foreignObject
+                    div
+                      span
+            g
+              g .dnode
+                polygon
+                g
+                  rect
+                  foreignObject
+                    div
+                      span
+                        p
+                rect .dn-ring chrome
+                circle .dn-dot chrome
+              g
+                circle
+                g
+                  rect
+                  foreignObject
+                    div
+                      span
+                        p
+    defs
+      filter
+        feDropShadow
+    defs
+      filter
+        feDropShadow
+    linearGradient
+      stop
+      stop
+  figcaption
+    "Figure 1. Cluster internal shapes."

@@ -1,0 +1,128 @@
+h1
+  "Bullet cells"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "1. Lines in a cell"
+p
+  "A cell whose lines are split by breaks s"…
+div
+  table
+    thead
+      tr
+        th
+          "Area"
+        th
+          "Notes"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "Reading"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            "The title comes first"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            "The sections fold"
+        td
+          span .ok.pill chrome
+            "Agreed"
+      tr
+        td
+          "Tables"
+        td
+          span .cell-line chrome
+            "A plain line"
+            span .cell-br chrome hidden=""
+              br
+          span .cell-line chrome
+            "A second plain line"
+        td
+          span .pill.wait chrome
+            "Pending review"
+      tr
+        td
+          "Code"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "-"
+            "A dash is a bullet"
+            span .cell-br chrome hidden=""
+              br
+          span .cell-line chrome
+            "-5 is a number, not a bullet"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            span .ok.pill chrome
+              "Done"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            "Shipped last week"
+h2
+  "2. Where the marks read"
+p
+  "The status column reads each cell's firs"…
+div
+  table
+    thead
+      tr
+        th
+          "Item"
+        th
+          "State"
+    tbody
+      tr
+        td
+          "One"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            span .pill.wait chrome
+              "Open"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            "Two owners"
+      tr
+        td
+          "Two"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "▪"
+            span .no.pill chrome
+              "Rejected"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "·"
+            "Too costly"
+      tr
+        td
+          "Three"
+        td
+          span .cell-line chrome
+            span .cell-br chrome hidden=""
+              br
+            span .info.pill chrome
+              "Deferred"

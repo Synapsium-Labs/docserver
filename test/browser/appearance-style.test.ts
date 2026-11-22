@@ -118,8 +118,42 @@ function allDocs(): Doc[] {
     csp: undefined,
     html: undefined,
   };
+  // The guided layout's layers (parity Task 13): a spec with sections long enough to fold, subsections, code, a table and a term, the
+  // layers stored as guided, so the fold bars, their summaries, the time lines and the Inside lists are drawn.
+  const para = 'A paragraph long enough to fill a few lines of the reading column, and to give the section some length to fold.';
+  const guided: Doc = {
+    id: 'synthetic/guided',
+    markdown: [
+      '# Guided layers', '', '**Spec** · 2026-01-01 · Status: Draft', '', '## In short', '', 'The summary names a Widget.', '',
+      '## 1. First', '', 'The first intro paragraph says what the Widget is.', '', 'The second intro paragraph says why it matters.', '',
+      ...Array.from({ length: 8 }, () => [`${para} ${para}`, '']).flat(),
+      '### Part one', '', para, '', '### Part two', '', '```ts\nconst a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;\n```', '',
+      '## 2. Second', '', 'The intro of the second section.', '', 'Run `aaa bbb ccc ddd` and `eee fff ggg` then `hhh iii` today ok, thanks.', '', '| Name | Owner | Status |', '|---|---|---|', '| Alpha | one | Agreed |', '| Beta | two | Pending |', '',
+      '## 3. Words used here', '', '| Term | Meaning |', '|---|---|', '| Widget | A small thing the document talks about. |', '',
+      '## Where things stand', '', '### Agreed', '', '- Alpha: kept.', '', '### Waiting on you', '', '- Beta: whether to change it.', '',
+    ].join('\n'),
+    options: { storageKey: 'guided', storage: { snapshot: { 'docreader:ui': '{"layers":"guided"}' } } },
+    viewport: undefined,
+    csp: undefined,
+    html: undefined,
+  };
+  // The review layout's compact rows (parity Task 12): a table of seven rows whose rows average well over 240 characters, so the
+  // rows are clipped at rest and "Open all rows" and each row's button are drawn.
+  const long = 'A long cell that runs over several lines of the table, so that the row is clipped until the reader opens it, and says enough to need it.';
+  const compact: Doc = {
+    id: 'synthetic/compact',
+    markdown: [
+      '# Compact rows', '', '## 1. Decisions', '', '| ID | Decision | Why |', '|---|---|---|',
+      ...Array.from({ length: 7 }, (_, i) => `| D${String(i + 1)} | ${long} ${long} | ${long} Agreed |`), '',
+      '## 2. After', '', 'Text.', '', '## 3. Last', '', 'Text.', '',
+    ].join('\n'),
+    options: {},
+    viewport: undefined,
+    csp: undefined,
+    html: undefined,
+  };
   const figure: Doc = { id: 'synthetic/figure', markdown: FIGURE_MARKDOWN, options: {}, viewport: undefined, csp: 'strict', html: (h) => `${h}${DRAWING}` };
-  return [...corpus, ...layout, menu, dots, figure];
+  return [...corpus, ...layout, menu, dots, figure, guided, compact];
 }
 
 /** The documents every fixture appearance is run on: between them every chrome piece, mark, card, table and code block. */
@@ -388,6 +422,10 @@ interface State {
   readonly variants?: readonly Variant[];
   /** A state of the In short switch (parity Task 5): read by (b) and (c), which open each document with `inShort` on; (a) opens none that way. */
   readonly needsSwitch?: true;
+  /** A state of the review layout's own chrome: the default's documents never reach it, so only the review rows require it. */
+  readonly reviewOnly?: true;
+  /** A state of the guided layout's own chrome (parity Task 13): likewise, only the guided rows require it. */
+  readonly guidedOnly?: true;
   /** Put the page in the state; true when it is in it (the trigger exists and the thing is shown). */
   apply(page: Page): Promise<boolean>;
   clear(page: Page): Promise<void>;
@@ -596,6 +634,139 @@ const STATES: readonly State[] = [
       await frames(page);
     },
   },
+  {
+    // The review layout's bar toggle, pressed: a unit's own mark control is read, the page is scrolled to it, and the toggle says so.
+    name: 'rv-pressed',
+    reviewOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const control = document.querySelector('button.h-mark');
+        const heading = control?.closest('h2, h3, h4, h5, h6');
+        if (!(control instanceof HTMLElement) || !(heading instanceof HTMLElement) || document.querySelector('.rv-mark') === null) return false;
+        if (!control.classList.contains('on')) control.click();
+        window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - 100);
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.rv-mark[aria-pressed="true"]') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page);
+    },
+  },
+  {
+    // The guided layout's layers, every section folded: the fold bars and their summaries are what is drawn. A state is put on the
+    // page and left (the next state starts from it), so the document is folded, then open, as the later states read it.
+    name: 'gd-folded',
+    guidedOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll('.bar-tools .gd-all')).find((x) => x.textContent === 'Collapse all');
+        if (!(b instanceof HTMLElement)) return false;
+        if (!b.hasAttribute('disabled')) b.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => Array.from(document.querySelectorAll('.gd-btn[aria-expanded="false"]')).some((x) => x.getClientRects().length > 0));
+    },
+    async clear() {},
+  },
+  {
+    // ... and every section open, the fold bars as a dashed "Show less" and the end buttons shown.
+    name: 'gd-open',
+    guidedOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll('.bar-tools .gd-all')).find((x) => x.textContent === 'Expand all');
+        if (!(b instanceof HTMLElement)) return false;
+        if (!b.hasAttribute('disabled')) b.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => Array.from(document.querySelectorAll('.gd-end')).some((x) => x.getClientRects().length > 0));
+    },
+    async clear() {},
+  },
+  {
+    // ... and the lens on Product, with the peek bars it makes.
+    name: 'gd-lens',
+    guidedOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const b = document.querySelector('.bar-tools .gd-seg button');
+        if (!(b instanceof HTMLElement)) return false;
+        b.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.lens-product') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        const b = document.querySelectorAll('.bar-tools .gd-seg button')[1];
+        if (b instanceof HTMLElement) b.click();
+      });
+      await frames(page);
+    },
+  },
+  {
+    // ... and changed: a mark whose section changed since it was read.
+    name: 'rv-changed',
+    reviewOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const heading = document.querySelector('button.h-mark.changed')?.closest('h2, h3, h4, h5, h6');
+        if (!(heading instanceof HTMLElement) || document.querySelector('.rv-mark') === null) return false;
+        // A short document cannot scroll its last section up to the reading line: give the page room below it.
+        const room = document.createElement('div');
+        room.id = 'rv-room';
+        room.style.height = '2000px';
+        document.body.append(room);
+        window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - 100);
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.rv-mark.changed') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        document.getElementById('rv-room')?.remove();
+        window.scrollTo(0, 0);
+      });
+      await frames(page);
+    },
+  },
+  {
+    // The review layout's compact rows, all opened with "Open all rows".
+    name: 'rv-compact-open',
+    reviewOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const all = document.querySelector('button.rv-all');
+        if (!(all instanceof HTMLElement)) return false;
+        all.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => document.querySelector('button.rv-all[aria-pressed="true"]') !== null && document.querySelector('tr.rv-open') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        const all = document.querySelector('button.rv-all[aria-pressed="true"]');
+        if (all instanceof HTMLElement) all.click();
+      });
+      await frames(page);
+    },
+  },
   forced('hover', ['hover']),
   forced('focus-visible', ['focus', 'focus-visible']),
   {
@@ -700,7 +871,7 @@ async function compareDoc(doc: Doc, browser: BrowserName, other: string, count =
     await inMode(b, mode, doc.id);
     for (const st of STATES) {
       if (st.chromiumOnly === true && browser !== 'chromium') continue;
-      if (st.needsSwitch === true) continue;
+      if (st.needsSwitch === true || st.reviewOnly === true || st.guidedOnly === true) continue;
       if (only !== null && !only.includes(st.name)) continue;
       const began = Date.now();
       const ok = [await st.apply(a.page), await st.apply(b.page)];
@@ -944,7 +1115,7 @@ describeBrowsers((browser) => {
 
     it('every state was reached by some document', () => {
       if (reached.size === 0) return; // this row was run alone
-      const missing = STATES.filter((s) => s.needsSwitch !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
+      const missing = STATES.filter((s) => s.needsSwitch !== true && s.reviewOnly !== true && s.guidedOnly !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
       expect(missing).toEqual([]);
     });
   });
@@ -1237,18 +1408,24 @@ describeBrowsers((browser) => {
     }
   });
 
-  for (const layout of ['classic', 'editorial'] as const) {
+  for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     describe(`(b) and (c): ${layout} hosted appearance`, () => {
-      // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome.
+      // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome; review adds what it draws
+      // of its own or over the shared reader: the header card with its progress (a spec with a strip), the Index tab, the ID
+      // chips and their preview, and a plan.
       const ids = [
         'corpus/spec-template', 'layout/core/editorial', 'layout/rail/drawer', 'layout/jump/dialogs',
         'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
         ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
+        ...(layout === 'review' ? ['layout/changes/strip', 'layout/rail/marks-index', 'layout/cards/xrefs', 'layout/ids/id-table', 'layout/plans/plan', 'synthetic/compact'] : []),
+        ...(layout === 'guided' ? ['layout/links/first-mention', 'layout/cards/xrefs', 'synthetic/guided'] : []),
       ];
       const docs = DOCS.filter((doc) => ids.includes(doc.id));
       const required = [
         'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
         ...(layout === 'editorial' ? ['short-headlines'] : []),
+        ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines', 'rv-pressed', 'rv-changed', 'rv-compact-open'] : []),
+        ...(layout === 'guided' ? ['tcard', 'gd-folded', 'gd-open', 'gd-lens'] : []),
       ];
       const states = [...required, 'hover', 'focus-visible'];
 

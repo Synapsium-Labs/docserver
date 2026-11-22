@@ -254,14 +254,14 @@ async function controlRowRules(page: Page): Promise<{ sheet: string; selector: s
 
 describeBrowsers((browser) => {
   // Only register alternate layouts for cues their own features draw.
-  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial']): void {
+  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial', 'review', 'guided']): void {
     for (const layout of layouts) {
       it(layout === 'default' ? name : `${layout}: ${name}`, () => check(layout));
     }
   }
 
-  it('a heading mark in the changed state reads "Changed since you read it"', async () => {
-    const doc = await open(browser, { appearance: COLLISION, marks: true });
+  sharedCue('a heading mark in the changed state reads "Changed since you read it"', async (layout) => {
+    const doc = await open(browser, { layout, appearance: COLLISION, marks: true });
     try {
       const mk = doc.page.locator(`${rootSel} h2[id="1-section"] .h-mark`);
       expect(await mk.textContent()).toBe('Changed since you read it');
@@ -269,29 +269,39 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review']);
 
-  it('painted geometry: a changed block, item and row (wide) paint two 2px runs and a 2px gap; an attention mark paints one 3px run', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  // Test 10's painted-geometry rows, for each layout whose own features draw what they measure. The test puts the reader's own
+  // classes on the document's blocks by hand (mark), so what is measured is the shared stylesheet's rule (assets/reader.css) as the
+  // layout's own stylesheet leaves it. A layout is registered only for a mark one of its features writes: `attention` writes `attn`
+  // on table rows (default, guided); `plans` writes it on task items (default, review); `attention` also writes it on rule
+  // paragraphs (default only); only the default builds `changes`, which makes the changed run. Editorial writes none (its plans
+  // mark no `attn`), and classic builds none of these modules.
+  const ATTENTION: Readonly<Record<string, readonly ('rule' | 'item' | 'row')[]>> = {
+    default: ['rule', 'item', 'row'], review: ['item'], guided: ['row'],
+  };
+  sharedCue('painted geometry: a changed block, item and row (wide) paint two 2px runs and a 2px gap; an attention mark paints one 3px run', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       await mark(doc.page);
-      const at = (s: string): Locator => doc.page.locator(`${rootSel} ${s}`).first();
-      const targets = {
-        block: doc.page.locator(`${rootSel} > p.chg`).first(),
-        item: at('li.chg'),
-        row: at('tr.chg > td:first-child'),
-      };
-      for (const [name, el] of Object.entries(targets)) {
-        const runs = await runsThrough(doc.page, el, HUE.mark, 40, name === 'item' ? 2 : 8);
-        expect(widths(runs), `${name}: ${JSON.stringify(runs)}`).toEqual([2, 2]);
-        expect(Math.abs((runs[1] as Run).edge - (runs[0] as Run).edge - 4), `${name}: the gap`).toBeLessThan(0.5);
+      const at = (sel: string): Locator => doc.page.locator(`${rootSel} ${sel}`).first();
+      if (layout === 'default') {
+        const targets = {
+          block: doc.page.locator(`${rootSel} > p.chg`).first(),
+          item: at('li.chg'),
+          row: at('tr.chg > td:first-child'),
+        };
+        for (const [name, el] of Object.entries(targets)) {
+          const runs = await runsThrough(doc.page, el, HUE.mark, 40, name === 'item' ? 2 : 8);
+          expect(widths(runs), `${name}: ${JSON.stringify(runs)}`).toEqual([2, 2]);
+          expect(Math.abs((runs[1] as Run).edge - (runs[0] as Run).edge - 4), `${name}: the gap`).toBeLessThan(0.5);
+        }
       }
-      const attention = {
-        rule: at('p.rule.attn'),
-        item: at('li.task-list-item.attn'),
-        row: at('tr.attn > td:first-child'),
-        waiting: at('.callout.waiting'),
-      };
+      const where = { rule: 'p.rule.attn', item: 'li.task-list-item.attn', row: 'tr.attn > td:first-child' } as const;
+      const attention: Record<string, Locator> = {};
+      for (const kind of ATTENTION[layout] ?? []) attention[kind] = at(where[kind]);
+      if (layout === 'default') attention['waiting'] = at('.callout.waiting');
+      expect(Object.keys(attention).length, `${layout} draws some attention mark`).toBeGreaterThan(0);
       for (const [name, el] of Object.entries(attention)) {
         const runs = await runsThrough(doc.page, el, HUE.mark);
         expect(widths(runs), `attention ${name}: ${JSON.stringify(runs)}`).toEqual([3]);
@@ -299,9 +309,9 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review', 'guided']);
 
-  for (const layout of ['classic', 'editorial'] as const) {
+  for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
       const doc = await open(browser, { appearance: COLLISION, layout });
       try {
@@ -326,20 +336,23 @@ describeBrowsers((browser) => {
     });
   }
 
-  it('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async () => {
-    const doc = await open(browser, { appearance: COLLISION, width: 390 });
+  // The phone card: an attention card where `attention` marks rows (default, guided); the changed card only where `changes` does.
+  sharedCue('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, width: 390, layout });
     try {
       await mark(doc.page);
       expect(await doc.page.locator(`${rootSel} .table-wrapper.stack`).count()).toBeGreaterThan(0);
-      const changed = await runsThrough(doc.page, doc.page.locator(`${rootSel} .stack tr.chg`).first(), HUE.mark, 12, 8);
-      expect(widths(changed), JSON.stringify(changed)).toEqual([2, 2]);
-      expect(Math.abs((changed[1] as Run).edge - (changed[0] as Run).edge - 4)).toBeLessThan(0.5);
+      if (layout === 'default') {
+        const changed = await runsThrough(doc.page, doc.page.locator(`${rootSel} .stack tr.chg`).first(), HUE.mark, 12, 8);
+        expect(widths(changed), JSON.stringify(changed)).toEqual([2, 2]);
+        expect(Math.abs((changed[1] as Run).edge - (changed[0] as Run).edge - 4)).toBeLessThan(0.5);
+      }
       const attn = await runsThrough(doc.page, doc.page.locator(`${rootSel} .stack tr.attn`).first(), HUE.mark, 12, 8);
       expect(widths(attn), JSON.stringify(attn)).toEqual([3]);
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'guided']);
 
   it('the 2px gap of a changed block shows the ground it sits on: bg in the page, surface in the summary box, wait-soft in a waiting callout', async () => {
     const doc = await open(browser, { appearance: PHOSPHOR_COLOURS() });
@@ -418,8 +431,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the four status dots have pairwise different shapes with every colour removed, and each swatch has its role\'s dot\'s shape', async () => {
-    const doc = await open(browser, { appearance: NO_COLOUR });
+  sharedCue('the four status dots have pairwise different shapes with every colour removed, and each swatch has its role\'s dot\'s shape', async (layout) => {
+    const doc = await open(browser, { layout, appearance: NO_COLOUR });
     try {
       await doc.page.evaluate((sel) => {
         const root = document.querySelector(sel) as HTMLElement;
@@ -435,7 +448,9 @@ describeBrowsers((browser) => {
         }
         root.append(index);
       }, rootSel);
-      await doc.page.locator(`${rootSel} .aa-btn`).click();
+      // The colour key is on the keys sheet (the review layout has no Aa menu, which holds the other copy).
+      await doc.page.keyboard.press('?');
+      await doc.page.locator(`${rootSel} .keys.open`).waitFor();
       const shapes = await doc.page.evaluate((sel) => {
         const shape = (e: Element): string => {
           const c = getComputedStyle(e);
@@ -455,10 +470,10 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review']);
 
-  it('a term is dotted, an id link dashed and an ordinary link solid, each underlined, on hover and while a card is open too', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  sharedCue('a term is dotted, an id link dashed and an ordinary link solid, each underlined, on hover and while a card is open too', async (layout) => {
+    const doc = await open(browser, { layout, appearance: COLLISION });
     try {
       await doc.page.evaluate((sel) => {
         const p = document.createElement('p');
@@ -495,10 +510,11 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review', 'guided']);
 
-  it('a glossary table\'s term cell is its row\'s first cell, at a computed weight of 600', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  // The glossary is built by the default and guided layouts; classic, editorial and review have no `glossary` in their lists.
+  sharedCue('a glossary table\'s term cell is its row\'s first cell, at a computed weight of 600', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       const got = await doc.page.evaluate((sel) => {
         const cell = document.querySelector(`${sel} td.termcell`) as HTMLTableCellElement;
@@ -508,7 +524,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'guided']);
 
   sharedCue('quick jump\'s selected row has an inset 2px accent bar, and an unselected row has none', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });
@@ -591,7 +607,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  }, ['default', 'editorial']);
+  }, ['default', 'editorial', 'review', 'guided']);
 
   sharedCue('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });
@@ -1028,7 +1044,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the contents panel takes controlRow and the section type only as a drawer, never as the wide column', async () => {
+  sharedCue('the contents panel takes controlRow and the section type only as a drawer, never as the wide column', async (layout) => {
     const skin = { controlRow: '44px', sectionSize: '12px' };
     const probe = (d: OpenedDoc): Promise<{ row: string; tab: string }> =>
       d.page.evaluate((sel) => {
@@ -1041,8 +1057,8 @@ describeBrowsers((browser) => {
         panel.append(tab);
         return { row: getComputedStyle(root.querySelector('.toc-contents a') as Element).minHeight, tab: getComputedStyle(b).fontSize };
       }, rootSel);
-    const column = await open(browser, { appearance: { mode: 'dark', skin }, width: 1440 });
-    const drawer = await open(browser, { appearance: { mode: 'dark', skin }, width: 1000 });
+    const column = await open(browser, { layout, appearance: { mode: 'dark', skin }, width: 1440 });
+    const drawer = await open(browser, { layout, appearance: { mode: 'dark', skin }, width: 1000 });
     try {
       expect(await probe(column), 'the wide column').toEqual({ row: '0px', tab: '11px' });
       await drawer.page.locator(`${rootSel} .toc-btn`).click();
@@ -1051,9 +1067,9 @@ describeBrowsers((browser) => {
       await column.close();
       await drawer.close();
     }
-  });
+  }, ['default', 'review']);
 
-  it('a drawer left open and then widened does not style the docked rail: a stale toc-open keeps 1.1.0\'s values', async () => {
+  sharedCue('a drawer left open and then widened does not style the docked rail: a stale toc-open keeps 1.1.0\'s values', async (layout) => {
     const skin = { controlRow: '44px', sectionSize: '12px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'uppercase', sectionFamily: 'mono' };
     const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
       d.page.evaluate((sel) => {
@@ -1068,8 +1084,52 @@ describeBrowsers((browser) => {
         const c = getComputedStyle(b);
         return { row: getComputedStyle(root.querySelector('.toc-contents a') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, family: c.fontFamily };
       }, rootSel);
-    const hosted = await open(browser, { appearance: { mode: 'dark', skin }, width: 1000 });
-    const plain = await open(browser, { appearance: { mode: 'dark' }, width: 1440 });
+    const hosted = await open(browser, { layout, appearance: { mode: 'dark', skin }, width: 1000 });
+    const plain = await open(browser, { layout, appearance: { mode: 'dark' }, width: 1440 });
+    try {
+      await hosted.page.locator(`${rootSel} .toc-btn`).click();
+      await hosted.page.setViewportSize({ width: 1440, height: 1000 });
+      const baseline = await probe(plain);
+      expect(await probe(hosted)).toEqual(baseline);
+      expect(baseline.row).toBe('0px');
+    } finally {
+      await hosted.close();
+      await plain.close();
+    }
+  }, ['default', 'review']);
+
+  // The guided layout's rail is the Contents-only one (no tabs, no Index): its panel's rows are `.doc-toc a` and its heading `.toc-title`.
+  it('guided: the contents drawer takes controlRow and the section type only as a drawer, never as the wide column', async () => {
+    const skin = { controlRow: '56px', sectionSize: '13px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'none', sectionFamily: 'mono' };
+    const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
+      d.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        const c = getComputedStyle(root.querySelector('.doc-toc .toc-title') as Element);
+        return { row: getComputedStyle(root.querySelector('.doc-toc a') as Element).minHeight, close: getComputedStyle(root.querySelector('.doc-toc .toc-close') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, mono: String(c.fontFamily.includes('monospace')) };
+      }, rootSel);
+    const column = await open(browser, { layout: 'guided', appearance: { mode: 'dark', skin }, width: 1440 });
+    const drawer = await open(browser, { layout: 'guided', appearance: { mode: 'dark', skin }, width: 1000 });
+    try {
+      expect(await probe(column), 'the wide column').toEqual({ row: '0px', close: '0px', size: '11.5px', weight: '700', tracking: '0.805px', transform: 'uppercase', mono: 'false' });
+      await drawer.page.locator(`${rootSel} .toc-btn`).click();
+      expect(await probe(drawer), 'the open drawer').toEqual({ row: '56px', close: '56px', size: '13px', weight: '500', tracking: '1.04px', transform: 'none', mono: 'true' });
+    } finally {
+      await column.close();
+      await drawer.close();
+    }
+  });
+
+  it('guided: a drawer left open and then widened does not style the docked rail: a stale toc-open keeps the column\'s values', async () => {
+    const skin = { controlRow: '56px', sectionSize: '13px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'none', sectionFamily: 'mono' };
+    const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
+      d.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        root.classList.add('toc-open'); // whatever the reader did on resize (it closes the drawer), the class stands here
+        const c = getComputedStyle(root.querySelector('.doc-toc .toc-title') as Element);
+        return { row: getComputedStyle(root.querySelector('.doc-toc a') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, mono: String(c.fontFamily.includes('monospace')) };
+      }, rootSel);
+    const hosted = await open(browser, { layout: 'guided', appearance: { mode: 'dark', skin }, width: 1000 });
+    const plain = await open(browser, { layout: 'guided', appearance: { mode: 'dark' }, width: 1440 });
     try {
       await hosted.page.locator(`${rootSel} .toc-btn`).click();
       await hosted.page.setViewportSize({ width: 1440, height: 1000 });
@@ -1150,6 +1210,33 @@ describeBrowsers((browser) => {
       } finally { await doc.close(); }
     });
   }
+
+  it('review: its own controlRow rules, the card\'s Next button and the compact rows\' buttons, are under a fine pointer only, and every controlRow rule of the page is', async () => {
+    const doc = await open(browser, { layout: 'review' });
+    try {
+      const rows = await controlRowRules(doc.page);
+      const own = rows.filter((row) => row.sheet === '/assets/layout.css');
+      const root = '[data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"]';
+      expect(own.map((row) => row.selector).sort(), JSON.stringify(own)).toEqual([`${root} .rv-all`, `${root} .rv-next`, `${root} .table-wrapper.rv-compact .rx`]);
+      expect(new Set(own.map((row) => row.media))).toEqual(new Set(['(pointer: fine)']));
+      expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+    } finally { await doc.close(); }
+  });
+
+  it('guided: its own controlRow rules, the fold bar\'s buttons and the drawer\'s rows, are under a fine pointer only, and every controlRow rule of the page is', async () => {
+    const doc = await open(browser, { layout: 'guided' });
+    try {
+      const rows = await controlRowRules(doc.page);
+      const own = rows.filter((row) => row.sheet === '/assets/layout.css');
+      const scope = '[data-docreader-root][data-docreader-layout="guided"]';
+      expect(own.map((row) => [row.selector, row.media]), JSON.stringify(own)).toEqual([
+        [`${scope}[data-docreader-skin~="controlRow"] .gd-btn, ${scope}[data-docreader-skin~="controlRow"] .gd-end`, '(pointer: fine)'],
+        [`${scope}[data-docreader-skin~="controlRow"].toc-open .toc-close`, 'screen and (max-width: 1239px) and (pointer: fine)'],
+        [`${scope}[data-docreader-skin~="controlRow"].toc-open .doc-toc a`, 'screen and (max-width: 1239px) and (pointer: fine)'],
+      ]);
+      expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+    } finally { await doc.close(); }
+  });
 
   it("Mermaid's tooltip, which sits in body outside the root, computes the verdict's surface, text and border (second review F8)", async () => {
     // The tooltip is one element per document, and its three colours are the document element's properties; the jsdom rows of

@@ -499,7 +499,7 @@ describe('L3.M7 each code at its boundary', () => {
     // The five assets of the default frame (a layout's own are counted by maxSrcdocChars(layout), test/frame-layouts.test.ts's).
     const assetChars = ASSET_CHARS_NOW;
     expect(Object.keys(FRAME_MANIFEST).sort()).toEqual(
-      ['bootstrap', 'css', 'cssClassic', 'cssEditorial', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'guard', 'mermaid'],
+      ['bootstrap', 'css', 'cssClassic', 'cssEditorial', 'cssGuided', 'cssReview', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'enhanceGuided', 'enhanceReview', 'guard', 'mermaid'],
     );
     for (const name of ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const) expect(FRAME_MANIFEST[name].chars, name).toBe(built.files[name].chars);
     // The skeleton at its longest, measured on a real srcdoc rather than read from document.ts: the empty document framed

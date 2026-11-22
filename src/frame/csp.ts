@@ -18,6 +18,8 @@ const KNOWN: readonly string[] = [
   FRAME_MANIFEST.mermaid.csp,
   FRAME_MANIFEST.enhanceClassic.csp,
   FRAME_MANIFEST.enhanceEditorial.csp,
+  FRAME_MANIFEST.enhanceReview.csp,
+  FRAME_MANIFEST.enhanceGuided.csp,
 ];
 
 /** checkFrameCsp's answer: a refusal names its reason from CSP_REFUSALS. */

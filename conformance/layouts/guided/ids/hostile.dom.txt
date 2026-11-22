@@ -1,0 +1,103 @@
+dl
+  div
+    dt
+      "rules"
+    dd
+      "AB-1, a]b, AB-2"
+  div
+    dt
+      "covers"
+    dd
+      "AB-1"
+h1
+  "Hostile IDs"
+details .doc-facts chrome
+  summary chrome
+    "3 rules"
+    span .sep chrome aria-hidden="true"
+      "·"
+    "1 covers"
+  div .facts-body chrome
+    dl chrome
+      dt chrome
+        "rules"
+      dd chrome
+        code chrome
+          "AB-1"
+        ","
+        code chrome
+          "a]b"
+        ","
+        code chrome
+          "AB-2"
+      dt chrome
+        "covers"
+      dd chrome
+        code chrome
+          "AB-1"
+p
+  code
+    "AB-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"…
+  "and"
+  code
+    "AB-1"
+  "—"
+  em
+    "done in"
+    code
+      "v2"
+    "now"
+  "(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"…
+p
+  code
+    "AB-2"
+  "—"
+  strong
+    "Bold"
+  "with no space after the dash."
+p
+  code
+    "AB-3"
+  "—"
+  em
+    "agreed"
+  strong
+    "Bold"
+  "right after the status."
+p
+  code
+    "AB-4"
+  "—"
+  em
+    "rejected"
+  "(#x [y] \"z\" <b>). Body."
+p
+  code
+    "AB-5"
+  "—"
+  em
+    "rejected"
+  "(a note with \"quotes\", [brackets] and #h"…
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "What"
+    tbody
+      tr
+        td
+          "R111111111111111111111111111111111111111"…
+        td
+          "long"
+      tr
+        td
+          "R2"
+        td
+          "short"
+h2
+  "A111111111111111111111111111111111111111"…
+p
+  "Text."

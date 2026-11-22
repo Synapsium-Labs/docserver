@@ -55,11 +55,11 @@ const BUILD = path.join(ROOT, 'scripts', 'build-frame.mjs');
 /** The five assets every layout shares or that are the default layout's. */
 const BASE_NAMES = ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const;
 /** The layouts besides `default`, with their two manifest names (parity Task 9). */
-const OWN = { classic: ['enhanceClassic', 'cssClassic'], editorial: ['enhanceEditorial', 'cssEditorial'] } as const;
-const LAYOUT_BUNDLES = ['enhanceClassic', 'enhanceEditorial'] as const;
-const LAYOUT_STYLES = ['cssClassic', 'cssEditorial'] as const;
+const OWN = { classic: ['enhanceClassic', 'cssClassic'], editorial: ['enhanceEditorial', 'cssEditorial'], review: ['enhanceReview', 'cssReview'], guided: ['enhanceGuided', 'cssGuided'] } as const;
+const LAYOUT_BUNDLES = ['enhanceClassic', 'enhanceEditorial', 'enhanceReview', 'enhanceGuided'] as const;
+const LAYOUT_STYLES = ['cssClassic', 'cssEditorial', 'cssReview', 'cssGuided'] as const;
 /** Every frame asset, by manifest name, in the order the build writes them. */
-const NAMES = [...BASE_NAMES, 'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial'] as const;
+const NAMES = [...BASE_NAMES, 'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial', 'enhanceReview', 'cssReview', 'enhanceGuided', 'cssGuided'] as const;
 /** The scripts of the first scan (the list's source), and of the second (the outputs, the layout bundles included). */
 const SCANNED = ['guard', 'bootstrap', 'enhance', 'mermaid'] as const;
 const SCANNED_ALL = [...SCANNED, ...LAYOUT_BUNDLES] as const;

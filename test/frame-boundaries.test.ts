@@ -118,6 +118,10 @@ const DELTAS: readonly { readonly entry: number; readonly addsFrameOps: readonly
   { entry: 2, addsFrameOps: ['place', 'print-figure'], addsFrameAccepts: [] },
   // Entry 3, the layouts (parity Task 9): no new op and nothing new accepted; what the entry adds is the policy of each layout.
   { entry: 3, addsFrameOps: [], addsFrameAccepts: [] },
+  // Entry 4, the review layout (parity Task 12): no new op and nothing new accepted; the entry adds the policy of `review`.
+  { entry: 4, addsFrameOps: [], addsFrameAccepts: [] },
+  // Entry 5, the guided layout (parity Task 13): no new op and nothing new accepted; the entry adds the policy of `guided`.
+  { entry: 5, addsFrameOps: [], addsFrameAccepts: [] },
 ];
 
 const recordText = readFileSync(`${ROOT}${RECORD}`, 'utf8');

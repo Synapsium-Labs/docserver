@@ -1,0 +1,111 @@
+dl
+  div
+    dt
+      "type"
+    dd
+      "Design"
+  div
+    dt
+      "rules"
+    dd
+      "AB-ONE, AB-TWO, AB-THREE, CD-4, EF-5"
+  div
+    dt
+      "tags"
+    dd
+      "alpha, beta"
+h1
+  "Example rules"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+details .doc-facts chrome
+  summary chrome
+    "5 rules"
+    span .sep chrome aria-hidden="true"
+      "·"
+    "2 tags"
+  div .facts-body chrome
+    dl chrome
+      dt chrome
+        "rules"
+      dd chrome
+        code chrome
+          "AB-ONE"
+        ","
+        code chrome
+          "AB-TWO"
+        ","
+        code chrome
+          "AB-THREE"
+        ","
+        code chrome
+          "CD-4"
+        ","
+        code chrome
+          "EF-5"
+      dt chrome
+        "tags"
+      dd chrome
+        code chrome
+          "alpha"
+        ","
+        code chrome
+          "beta"
+h2
+  "1. Rules"
+p
+  code
+    "AB-ONE"
+  "—"
+  strong
+    "The first rule."
+  "It says what it says."
+p
+  code
+    "AB-TWO"
+  "and"
+  code
+    "AB-THREE"
+  "—"
+  em
+    "agreed"
+  "(after review). The second and third rul"…
+p
+  code
+    "CD-4"
+  "—"
+  em
+    "deferred"
+  ": the fourth rule has no bold title. It "…
+p
+  code
+    "AB-ONE"
+  ","
+  code
+    "GH-6"
+  "— A later paragraph repeats an ID."
+p
+  code
+    "AB-7"
+  "—"
+  em
+    "maybe"
+  "is no status word, so this stays text."
+h2
+  "2. Not rules"
+p
+  "Text"
+  code
+    "AB-8"
+  "— a code that does not open the paragrap"…
+p
+  code
+    "AB-9"
+  "no dash after the ID."
+p
+  code
+    "ab-10"
+  "— a lower-case code."

@@ -1,0 +1,18 @@
+h1
+  "A diagram over the size limit"
+p
+  "The host allows 120 characters; this dia"…
+figure .draw-failed
+  div .fig-error chrome role="note"
+    p chrome
+      "This diagram is too long to draw, so it "…
+    details chrome
+      summary chrome
+        "Show its Mermaid source"
+      pre .fig-src chrome
+        code chrome
+          "flowchart LR A[A first step with a long "…
+  pre
+    "flowchart LR A[A first step with a long "…
+  figcaption
+    "Figure 1. Too long to draw."

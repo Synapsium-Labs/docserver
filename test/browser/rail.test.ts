@@ -2,6 +2,7 @@
 // viewport reserves one 308 px source-column allocation. Rail widths are border-box
 // values, so their 20px + 14px horizontal padding is already included.
 import { afterAll, expect, it } from 'vitest';
+import type { Page } from 'playwright-core';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName } from './harness.js';
 
 afterAll(closeBrowsers);
@@ -67,9 +68,26 @@ interface WideMetrics {
   readonly runningHeadPadding: string;
 }
 
+/**
+ * Wait for the first relayout before a measurement. The code block takes the wide width from the `long` class, which the
+ * code feature first writes in the start relayout (an estimate on a canvas with the system monospace stack, independent of the
+ * fonts); that relayout is queued for the frame after the reader enhances, and the harness can return before it runs. The
+ * page is read until the block carries `long`. Nothing here is a timer.
+ */
+async function waitForSettledRail(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const root = document.querySelector('main[data-harness-root]');
+    const rail = root?.querySelector('.doc-toc');
+    const code = root?.querySelector('.codehilite');
+    return root !== null && root !== undefined && rail !== null && rail !== undefined && code !== null && code !== undefined
+      && code.classList.contains('long');
+  });
+}
+
 async function wideMetrics(browser: BrowserName, width: number): Promise<WideMetrics> {
   const doc = await openDoc(MARKDOWN, { chrome: { rail: true } }, { browser, viewport: { width, height: 900 } });
   try {
+    await waitForSettledRail(doc.page);
     return await doc.page.evaluate(() => {
       const root = document.querySelector('main[data-harness-root]') as HTMLElement;
       const rail = root.querySelector('.doc-toc') as HTMLElement;
@@ -164,6 +182,7 @@ describeBrowsers((browser) => {
       try {
         for (const scrollY of [0, 150]) {
           await doc.page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), scrollY);
+          await waitForSettledRail(doc.page);
           const got = await doc.page.evaluate(() => {
             const root = document.querySelector('main[data-harness-root]') as HTMLElement;
             const bar = root.querySelector('.topbar') as HTMLElement;

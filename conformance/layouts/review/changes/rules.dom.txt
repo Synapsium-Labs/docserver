@@ -1,0 +1,71 @@
+dl
+  div
+    dt
+      "rules"
+    dd
+      "AB-ONE, AB-TWO"
+h1
+  "Rules"
+section .review-strip chrome aria-label="Review"
+  p .rs-facts chrome
+    span .fact chrome
+      a chrome
+        "3 decisions"
+      span .cnt.ok chrome
+        "1 agreed"
+      span .cnt.wait chrome
+        "1 pending"
+      span .cnt.no chrome
+        "1 rejected"
+p
+  code
+    "AB-ONE"
+  "Agreed —"
+  em
+  "."
+  strong
+    "Read once."
+  "The folder is read at the start."
+p
+  code
+    "AB-TWO"
+  "Pending —"
+  em
+  "."
+  strong
+    "Write Markdown."
+  "The report is one file."
+h2
+  "Decisions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Rule"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "R1"
+        td
+          "Read once"
+        td
+          "Agreed"
+      tr
+        td
+          "R2"
+        td
+          "Write Markdown"
+        td
+          "Pending"
+      tr
+        td
+          "R3"
+        td
+          "Keep a cache"
+        td
+          "Rejected"

@@ -1,0 +1,80 @@
+/* Review: the header card, the reader's progress, the bar's mark toggle and the ID chips, on the reader's tokens and the host's slots. */
+[data-docreader-root][data-docreader-layout="review"] { --docreader-layout: review; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card { margin: 0 0 2.2em; padding: 1.1em 1.3em 1em; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); }
+[data-docreader-root][data-docreader-layout="review"] .rv-card > h1 { margin-top: .25em; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card .byline { margin: .6em 0 0; padding: .7em 0 0; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card .review-strip,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .doc-facts,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .byline + .doc-facts,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .byline + .review-strip + .doc-facts,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .doc-facts + .review-strip { margin: .8em 0 0 !important; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card .doc-facts { border-bottom: 0; }
+[data-docreader-root][data-docreader-layout="review"] .rv-read { display: flex; flex-wrap: wrap; align-items: center; gap: .4em .9em; margin: 1em 0 0; padding: .85em 0 0; border-top: 1px solid var(--border); font-family: var(--sans); font-size: calc(.88 * var(--rem)); color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="review"] .rv-n { color: var(--text); font-size: calc(1.1 * var(--rem)); }
+[data-docreader-root][data-docreader-layout="review"] .rv-of { margin-left: -.7em; }
+[data-docreader-root][data-docreader-layout="review"] .rv-changed { color: var(--text); font-weight: 600; }
+[data-docreader-root][data-docreader-layout="review"] .rv-changed:empty { display: none; }
+[data-docreader-root][data-docreader-layout="review"] .rv-bar { flex: 1 1 8em; min-width: 6em; max-width: 16em; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+[data-docreader-root][data-docreader-layout="review"] .rv-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] a.xref:hover { background: var(--surface2); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] a.xref[aria-expanded="true"] { background: var(--surface2); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] .toc-panel.toc-contents a.rv-wait { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 .6em; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; }
+[data-docreader-root][data-docreader-layout="review"] .toc-panel.toc-contents a.rv-wait:hover { border-color: var(--accent); }
+[data-docreader-root][data-docreader-layout="review"] .rv-count { color: var(--text-muted); font-weight: 400; }
+[data-docreader-root][data-docreader-layout="review"] .rv-foot-read { margin-right: auto; color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="review"] .rv-next { margin-left: auto; max-width: 100%; font: inherit; font-weight: 600; padding: 5px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+[data-docreader-root][data-docreader-layout="review"] .rv-next:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+[data-docreader-root][data-docreader-layout="review"] .rv-next:disabled { color: var(--text-muted); cursor: default; }
+[data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark[aria-pressed="true"] { color: var(--text); border-color: var(--border); }
+[data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark.changed { color: var(--text); border-color: var(--chg); }
+[data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark:disabled { cursor: default; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td .cc { max-height: 4.9em; overflow: hidden; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-clipped:not(.rv-open) td .cc.over { -webkit-mask-image: linear-gradient(var(--bg) 55%, transparent); mask-image: linear-gradient(var(--bg) 55%, transparent); }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-open td .cc { max-height: none; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody tr.rv-open td { background: var(--surface) !important; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td:first-child { position: relative; padding-left: 1.9em; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx { display: none; position: absolute; left: 2px; top: .4em; min-width: 24px; min-height: 24px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tr.rv-clipped .rx { display: inline-block; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx::before { content: "\25B8"; }
+[data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx[aria-expanded="true"]::before { content: "\25BE"; }
+[data-docreader-root][data-docreader-layout="review"] .rv-hint { margin-right: auto; }
+[data-docreader-root][data-docreader-layout="review"] .rv-all { font: inherit; padding: 3px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; }
+[data-docreader-root][data-docreader-layout="review"] .rv-all[aria-pressed="true"] { border-color: var(--accent); }
+@media screen and (max-width: 700px) {
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td .cc { max-height: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-hint { display: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-all { display: none; }
+}
+@media (pointer: fine) {
+  [data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-all { min-height: var(--dr-control-row); }
+  [data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .table-wrapper.rv-compact .rx { min-height: var(--dr-control-row); }
+}
+@media (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td:first-child { padding-left: 48px; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-all { min-height: 44px; }
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx { min-height: 44px; min-width: 44px; }
+}
+@media screen and (max-width: 700px) {
+  [data-docreader-root][data-docreader-layout="review"] .rv-card { padding: .9em 1em .8em; border-radius: 8px; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-next { flex: 1 1 100%; margin-left: 0; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-mark { padding-left: 6px; padding-right: 6px; }
+}
+@media (pointer: fine) {
+  [data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-next { min-height: var(--dr-control-row); }
+}
+@media (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"] .rv-next,
+  [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark { min-height: 44px; }
+}
+@media screen and (max-width: 1239px) and (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"].toc-open .toc-tabs button,
+  [data-docreader-root][data-docreader-layout="review"].toc-open .toc-contents a,
+  [data-docreader-root][data-docreader-layout="review"].toc-open .toc-index a.ix { min-height: 44px; }
+}
+@media print {
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact tbody td .cc { max-height: none; overflow: visible; -webkit-mask-image: none !important; mask-image: none !important; }
+  [data-docreader-root][data-docreader-layout="review"] .table-wrapper.rv-compact .rx { display: none !important; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-hint, [data-docreader-root][data-docreader-layout="review"] .rv-all { display: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-read, [data-docreader-root][data-docreader-layout="review"] .rv-mark { display: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-card { border: 0; padding: 0; background: none; }
+}

@@ -1,0 +1,67 @@
+h1
+  "First mentions"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "In short"
+p
+  "The fold and the read mark are each link"…
+h2
+  "1. Reading"
+p
+  "A fold hides a section, and the next fol"…
+p
+  "A new paragraph in the same section: the"…
+h2
+  "2. Words used here"
+div
+  table
+    thead
+      tr
+        th
+          "Word"
+        th
+          "What it says"
+    tbody
+      tr
+        td
+          "Fold"
+        td
+          "A section shown as its heading only; a f"…
+      tr
+        td
+          "Read mark (marker)"
+        td
+          "A mark on a section the reader has read"
+      tr
+        td
+          "Box, Pill and Tag"
+        td
+          "Small labels, each a name matched as spe"…
+h2
+  "3. Another section"
+p
+  "A fold, a read mark and a marker are lin"…
+p
+  "A Box and a Tag are linked; a box and a "…
+h2
+  "4. A glossary by its headers"
+div
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "Lantern"
+        td
+          "A light, defined in a table headed Term "…
+p
+  "A lantern is linked once in this section"…

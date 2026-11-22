@@ -67,7 +67,7 @@ const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'M
 const INERT_LINE =
   'consumer-smoke: @synapsium-labs/pinax-lib/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
 const ASSETS_LINE =
-  'consumer-smoke: every one of the 20 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
+  'consumer-smoke: every one of the 26 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
 const SCANS_LINE =
   "consumer-smoke: the M8.3, M8.4 and M8.8 scans pass on both srcdocs and on the clean template, and each of the 16 labelled frame mutants fails its own row's scan";
 
@@ -118,7 +118,7 @@ const ALLOWED = [
   /^assets\/mermaid\/mermaid\.frame\.js$/,
   // The alternate layout bundles, stylesheet sources, and their internal compiled modules.
   /^assets\/frame\/enhance-[a-z]+\.js$|^assets\/frame\/layout-[a-z]+\.css$|^assets\/layouts\/[a-z]+\.css$/,
-  /^dist\/enhance\/layouts\/(?:contents|mark|reveal|classic\/(?:editorial|features)|editorial\/(?:features|plans))\.(?:js|d\.ts)$/,
+  /^dist\/enhance\/layouts\/(?:contents|mark|reveal|classic\/(?:editorial|features)|editorial\/(?:features|plans)|review\/(?:compact|context|features|header|rail)|guided\/(?:contents|features|hero|layers|sections|tech|times))\.(?:js|d\.ts)$/,
   /^(?:package\.json|README\.md|LICENSE|THIRD-PARTY-NOTICES)$/,
 ];
 
@@ -310,6 +310,12 @@ describe('npm pack', () => {
       'assets/frame/enhance-editorial.js',
       'assets/frame/layout-editorial.css',
       'assets/layouts/editorial.css',
+      'assets/frame/enhance-review.js',
+      'assets/frame/layout-review.css',
+      'assets/layouts/review.css',
+      'assets/frame/enhance-guided.js',
+      'assets/frame/layout-guided.css',
+      'assets/layouts/guided.css',
       'THIRD-PARTY-NOTICES',
     ]) {
       expect(packed.files).toContain(must);

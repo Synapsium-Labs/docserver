@@ -1,0 +1,81 @@
+h1
+  "Example decisions"
+h2
+  "1. Decisions"
+h3
+  "Accepted ones"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Decision"
+        th
+          "Why"
+        th
+          "Status"
+    tbody
+      tr
+        td .idcell
+          "D1"
+        td
+          "Keep the palette"
+        td
+          "Readers know it"
+        td
+          span .ok.pill chrome
+            "Agreed"
+      tr
+        td .idcell
+          "D2: Fold by default"
+        td
+          "Short pages"
+        td
+          "Shorter"
+        td
+          span .no.pill chrome
+            "Rejected"
+          ", too costly"
+      tr
+        td .idcell
+          "D3"
+        td
+          "A third"
+        td
+          "Later on"
+        td
+          span .info.pill chrome
+            "Deferred"
+h2
+  "F2. A lettered section"
+div
+  table
+    thead
+      tr
+        th
+          "Item"
+        th
+          "Note"
+    tbody
+      tr
+        td .idcell
+          "X1"
+        td
+          "Exactly an ID"
+      tr
+        td
+          "X2 with words"
+        td
+          "Not exactly"
+      tr
+        td
+          "plain"
+        td
+          "Third"
+      tr
+        td
+          "more"
+        td
+          "Fourth"

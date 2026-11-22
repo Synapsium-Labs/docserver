@@ -1,0 +1,154 @@
+h1
+  "Example plan"
+p
+  strong
+    "Plan"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "In short"
+ul
+  li
+    "Four tasks build a small tool, and the l"…
+h2 aria-label="1. Tasks"
+  "1. Tasks"
+p
+  "The tasks, in order."
+h3 aria-label="Task 1: Set up the project"
+  "Task 1: Set up the project"
+p
+  "Who: you."
+p
+  "Who: a second owner line, never read."
+ul
+  li
+    input
+    strong
+      "Step 1: Make the folder"
+    "with a readme in it."
+  li
+    input
+    strong
+      "Step 2 (you): Pick a name"
+    "for the tool."
+  li
+    input
+    strong
+      "Step 3:"
+    "Write the first"
+    code
+      "config.json"
+    "."
+  li
+    input
+    "A step with no title, just text."
+  li
+    input
+    strong
+      "Not a step title"
+    ", then more text."
+h3 aria-label="Task 2. Write the parser"
+  "Task 2. Write the parser"
+p
+  "Who: the build team."
+ul
+  li
+    p
+      input
+      strong
+        "Step 1: Read the input"
+    p
+      "The input is one file; this second parag"…
+  li
+    p
+      input
+      strong
+        "Step 2 (yours): Check the tokens"
+  li
+    p
+      input
+      strong
+        "Step 3 (a reviewer): Review the grammar"
+p
+  "The parts it builds:"
+div
+  table
+    thead
+      tr
+        th
+          "Part"
+        th
+          "Owner"
+    tbody
+      tr
+        td
+          "Lexer"
+        td
+          "the build team"
+h3 aria-label="Task P0-1 — An odd number"
+  "Task P0-1 — An odd number"
+ul
+  li
+    input
+    strong
+      "Step 1: One"
+h2 aria-label="Task 3: Ship it"
+  "Task 3: Ship it"
+p
+  "Shipping takes 11 steps."
+ul
+  li
+    input
+    strong
+      "Step 1: Do part 1"
+    "of the release."
+  li
+    input
+    strong
+      "Step 2: Do part 2"
+    "of the release."
+  li
+    input
+    strong
+      "Step 3: Do part 3"
+    "of the release."
+  li
+    input
+    strong
+      "Step 4: Do part 4"
+    "of the release."
+  li
+    input
+    strong
+      "Step 5: Do part 5"
+    "of the release."
+  li
+    input
+    strong
+      "Step 6: Do part 6"
+    "of the release."
+  li
+    input
+    strong
+      "Step 7: Do part 7"
+    "of the release."
+  li
+    input
+    strong
+      "Step 8: Do part 8"
+    "of the release."
+  li
+    input
+    strong
+      "Step 9: Do part 9"
+    "of the release."
+  li
+    input
+    strong
+      "Step 10: Do part 10"
+    "of the release."
+  li
+    input
+    strong
+      "Step 11: Do part 11"
+    "of the release."

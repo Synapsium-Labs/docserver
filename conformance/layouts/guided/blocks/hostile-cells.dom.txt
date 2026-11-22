@@ -1,0 +1,126 @@
+h1
+  "Cells of breaks"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "1. Shapes"
+p
+  "Breaks first, breaks last, breaks in a r"…
+div
+  table
+    thead
+      tr
+        th
+          "Shape"
+        th
+          "Cell"
+    tbody
+      tr
+        td
+          "Leading"
+        td
+          span .cell-line chrome
+            span .cell-br chrome hidden=""
+              br
+            span .cell-br chrome hidden=""
+              br
+            "after two breaks"
+      tr
+        td
+          "Trailing"
+        td
+          span .cell-line chrome
+            "before two breaks"
+            span .cell-br chrome hidden=""
+              br
+            span .cell-br chrome hidden=""
+              br
+      tr
+        td
+          "In a row"
+        td
+          span .cell-line chrome
+            "one"
+            span .cell-br chrome hidden=""
+              br
+            span .cell-br chrome hidden=""
+              br
+            span .cell-br chrome hidden=""
+              br
+          span .cell-line chrome
+            "two"
+      tr
+        td
+          "Alone"
+        td
+          span .cell-br chrome hidden=""
+            br
+          span .cell-br chrome hidden=""
+            br
+      tr
+        td
+          "Bare bullet"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            span .cell-br chrome hidden=""
+              br
+          span .cell-line chrome
+            "•"
+      tr
+        td
+          "Before code"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            code
+              "first"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            code
+              "second"
+            "and text"
+      tr
+        td
+          "No space"
+        td
+          span .cell-line chrome
+            "•tight"
+            span .cell-br chrome hidden=""
+              br
+          span .cell-line chrome
+            "-5"
+      tr
+        td
+          "Every bullet"
+        td
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "•"
+            "a"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "·"
+            "b"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "▪"
+            "c"
+            span .cell-br chrome hidden=""
+              br
+          span .b.cell-line chrome
+            span .cell-bullet chrome hidden=""
+              "-"
+            "d"

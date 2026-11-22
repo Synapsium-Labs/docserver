@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { LINE_MIN, LINE_SHARE } from '../../src/enhance/scroll.js';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenHow } from './harness.js';
 import {
   compareOrWrite,
@@ -75,7 +76,11 @@ function cueState(): CueState | null {
 async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>, layout?: HarnessLayout): Promise<void> {
   const expected = CUE_SCOPES[c.id];
   if (expected === undefined) return;
-  if (layout === 'classic' || layout === 'editorial') {
+  // The review layout keeps the ID index and so the cues of IDs, but not the glossary, whose terms two cases name in edge labels.
+  const noGlossary = layout === 'review' && (c.id === 'diagram-tools/edge-label' || c.id === 'diagram-tools/flowchart-link-data-id');
+  // The guided layout keeps the glossary and so its terms' cues, but no ID index: the two cases that name nodes by ID have none.
+  const noIds = layout === 'guided' && (c.id === 'diagram-tools/node-id' || c.id === 'diagram-tools/cluster-internal-shapes');
+  if (layout === 'classic' || layout === 'editorial' || noGlossary || noIds) {
     // Both alternate layouts draw and control figures but omit definition previews.
     // Wait for tool wiring before asserting absence; don't accept an undrawn source.
     await doc.page.locator('figure.drawn svg').first().waitFor();
@@ -111,26 +116,47 @@ function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
 }
 
 /**
+ * The plan-marks case reads the rail before the reader has reached any section, so the snapshot must wait for the settled
+ * neutral state, whatever the layout. First one animation-frame pair passes: the reader queues its start relayout (the first
+ * spy run of the default layout) while it enhances, so after the pair the spy has run at least once, and a neutral rail is a
+ * result and not a spy that has not run yet. Then the page is read until the rail holds no active entry (the default's and
+ * the alternate layouts' rails mark one the same way). The first heading's top and the spy's reading line (the larger of
+ * LINE_MIN and LINE_SHARE of the window's height, the constants of src/enhance/scroll.ts) are read only for the message of a
+ * wait that times out. No layout is named.
+ */
+async function waitForNeutralRail(page: Awaited<ReturnType<typeof openDoc>>['page']): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolve) => { requestAnimationFrame(() => { requestAnimationFrame(() => { resolve(); }); }); }));
+  // With `report` the state itself, else only whether it is settled: waitForFunction takes the truthiness of what it returns.
+  const read = ([min, share, report]: readonly [number, number, boolean]): boolean | { top: number | null; line: number; active: string[] } => {
+    const root = document.querySelector<HTMLElement>('main[data-harness-root]');
+    const heading = root?.querySelector<HTMLElement>('h2');
+    const rail = root?.querySelector('.doc-toc');
+    const line = Math.max(min, window.innerHeight * share);
+    const top = heading === null || heading === undefined ? null : heading.getBoundingClientRect().top;
+    const active = rail === null || rail === undefined ? [] : Array.from(rail.querySelectorAll('a[aria-current], a.active, li.open'), (el) => el.className || el.localName);
+    if (report) return { top, line, active };
+    // Settled is the rail's neutral state after the first spy run; `top` and `line` are reported only, for the diagnosis
+    // (a geometry conjunct here was measured unable to fire, row B2R1g, and was dropped).
+    return rail !== null && rail !== undefined && active.length === 0;
+  };
+  try {
+    await page.waitForFunction(read, [LINE_MIN, LINE_SHARE, false] as const);
+  } catch (error) {
+    const state = await page.evaluate(read, [LINE_MIN, LINE_SHARE, true] as const);
+    throw new Error(`plan-marks: the rail did not settle neutral ${JSON.stringify(state)}`, { cause: error });
+  }
+}
+
+/**
  * One case in one browser: the page is clean (holdClean), then its snapshot is held to the expected file. With a `layout` the
  * reader is bundled for it (the harness's layout option) and the snapshot is that layout's.
  */
 async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void, layout?: HarnessLayout): Promise<void> {
-  const classicPlan = layout === 'classic' && c.id === 'rail/plan-marks';
-  // Keep the initial heading well below the Classic reading line; at 900px it straddles the line as fonts settle.
-  const viewport = classicPlan ? { viewport: { width: 1440, height: 600 } } : {};
-  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout), ...viewport });
+  const planMarks = c.id === 'rail/plan-marks';
+  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout) });
   try {
     await waitForCues(c, doc, layout);
-    if (classicPlan) {
-      await doc.page.waitForFunction(() => {
-        const root = document.querySelector<HTMLElement>('main[data-harness-root]');
-        const heading = root?.querySelector<HTMLElement>('h2[id="1-work"]');
-        const rail = root?.querySelector('.doc-toc');
-        return heading !== null && heading !== undefined
-          && heading.getBoundingClientRect().top > 200
-          && rail !== null && rail !== undefined && rail.querySelector('a[aria-current], li.open') === null;
-      });
-    }
+    if (planMarks) await waitForNeutralRail(doc.page);
     const snap = await doc.snapshot(c.scope);
     holdClean(c.id, { violations: await doc.violations(), aborted: doc.aborted, missing: doc.missing });
     holdIt(c.id, snap, c.expected);
@@ -217,10 +243,14 @@ describe('the Level 2 cases', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'layout-missing-'));
     try {
       const own = path.join(dir, 'layouts');
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial.*review.*guided/i);
       mkdirSync(path.join(own, 'classic'), { recursive: true });
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial.*review.*guided/i);
       mkdirSync(path.join(own, 'editorial'));
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*review.*guided/i);
+      mkdirSync(path.join(own, 'review'));
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*guided/i);
+      mkdirSync(path.join(own, 'guided'));
       expect(layoutsWithSnapshots(own)).toEqual(OWN_LAYOUT_NAMES);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -237,7 +267,9 @@ describe('the Level 2 cases', () => {
       writeFileSync(path.join(shared, 'x', 'a.options.json'), '{"options":{},"scope":["byline"]}');
       mkdirSync(path.join(own, 'editorial'), { recursive: true });
       mkdirSync(path.join(own, 'classic'));
-      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial']);
+      mkdirSync(path.join(own, 'review'));
+      mkdirSync(path.join(own, 'guided'));
+      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial', 'review', 'guided']);
       mkdirSync(path.join(own, 'plain'));
       expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
       // The same case, a snapshot of its own under each layout; the inputs are the shared ones.

@@ -64,6 +64,22 @@
       "layout": "editorial"
     },
     {
+      "path": "frame/enhance-guided.js",
+      "sha256": "1e3c1fab4001e46a299a10190c93ca4b0c730b8f7005d0bd74820c1e2d653deb",
+      "bytes": 181511,
+      "kind": "script",
+      "csp": "'sha256-Hjwfq0AB5GopmhAZDJPKSwxzC49wBdC9dIIMHi1lPes='",
+      "layout": "guided"
+    },
+    {
+      "path": "frame/enhance-review.js",
+      "sha256": "6098583df6b74fb90f8cc77810fc98edc089a7cc497e3a6680a729806c281987",
+      "bytes": 192387,
+      "kind": "script",
+      "csp": "'sha256-YJhYPfa3T7kPjMd4EPyY7cCJp8xJfjpmgKcpgGwoGYc='",
+      "layout": "review"
+    },
+    {
       "path": "frame/enhance.js",
       "sha256": "cc9613b7ed73b16789fee72a4b7263d9071bfbd143a16acaef1ea682b52670fe",
       "bytes": 225727,
@@ -93,6 +109,20 @@
       "layout": "editorial"
     },
     {
+      "path": "frame/layout-guided.css",
+      "sha256": "9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c",
+      "bytes": 11553,
+      "kind": "style",
+      "layout": "guided"
+    },
+    {
+      "path": "frame/layout-review.css",
+      "sha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68",
+      "bytes": 8860,
+      "kind": "style",
+      "layout": "review"
+    },
+    {
       "path": "frame/reader.css",
       "sha256": "367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2",
       "bytes": 564567,
@@ -111,6 +141,20 @@
       "bytes": 3801,
       "kind": "style",
       "layout": "editorial"
+    },
+    {
+      "path": "layouts/guided.css",
+      "sha256": "9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c",
+      "bytes": 11553,
+      "kind": "style",
+      "layout": "guided"
+    },
+    {
+      "path": "layouts/review.css",
+      "sha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68",
+      "bytes": 8860,
+      "kind": "style",
+      "layout": "review"
     },
     {
       "path": "mermaid/mermaid.frame.js",
