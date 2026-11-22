@@ -167,8 +167,8 @@ Text.
     const touch = await openCompact(1280, true, { appearance: { skin: { controlRow: '56px' } } });
     try {
       await touch.page.locator('tr.rv-clipped').first().waitFor();
-      expect((await touch.page.locator('button.rv-all').boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      expect((await touch.page.locator('tbody tr button.rx').first().boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await touch.page.locator('button.rv-all').boundingBox())!.height).toBe(44);
+      expect((await touch.page.locator('tbody tr button.rx').first().boundingBox())!.height).toBe(44);
     } finally { await touch.close(); }
     for (const height of [40, 56]) {
       const fine = await openCompact(1280, false, { appearance: { skin: { controlRow: `${height}px` } } });

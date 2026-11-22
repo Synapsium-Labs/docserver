@@ -1153,13 +1153,14 @@ describeBrowsers((browser) => {
     });
   }
 
-  it('review: its own controlRow rule, the card\'s Next button, is under a fine pointer only, and every controlRow rule of the page is', async () => {
+  it('review: its own controlRow rules, the card\'s Next button and the compact rows\' buttons, are under a fine pointer only, and every controlRow rule of the page is', async () => {
     const doc = await open(browser, { layout: 'review' });
     try {
       const rows = await controlRowRules(doc.page);
       const own = rows.filter((row) => row.sheet === '/assets/layout.css');
-      expect(own.map((row) => row.selector), JSON.stringify(own)).toEqual(['[data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-next']);
-      expect(own.map((row) => row.media)).toEqual(['(pointer: fine)']);
+      const root = '[data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"]';
+      expect(own.map((row) => row.selector).sort(), JSON.stringify(own)).toEqual([`${root} .rv-all`, `${root} .rv-next`, `${root} .table-wrapper.rv-compact .rx`]);
+      expect(new Set(own.map((row) => row.media))).toEqual(new Set(['(pointer: fine)']));
       expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
     } finally { await doc.close(); }
   });
