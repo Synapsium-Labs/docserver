@@ -252,22 +252,52 @@ Text.
   });
 
   it('a row closed by its button takes the marks of the width it is closed at', async () => {
-    const doc = await openCompact(1300);
+    // Rows in identical pairs, the pairs with a third cell of graduated length, so that some cell's overflow changes somewhere across
+    // the desktop widths whatever the engine's metrics; the second row of a pair is the untouched twin the first is compared with.
+    const part = (n: number): string => CELL.slice(0, Math.floor(CELL.length * n));
+    const pairs = [0.75, 0.87, 0.99, 1.11].flatMap((n, j) => [0, 1].map((k) => `| D${String(2 * j + k + 1)} | ${CELL} ${CELL} | ${part(n)} ${CELL.slice(0, 20)} |`));
+    const markdown = `# Title\n\n## 1. Decisions\n\n| ID | A | B |\n| --- | --- | --- |\n${pairs.join('\n')}\n\n## 2. After\n\nText.\n\n## 3. Last\n\nText.\n`;
+    const doc = await openDoc(markdown, {}, { browser, layout: 'review', viewport: { width: 1600, height: 900 } });
     try {
       const { page } = doc;
-      await page.locator('tr.rv-clipped').first().waitFor();
+      await page.locator('.table-wrapper.rv-compact').waitFor();
       await page.clock.install();
       const marks = (row: number): Promise<string> =>
         page.locator('tbody tr').nth(row).evaluate((el) => `${el.classList.contains('rv-clipped')}:${Array.from(el.querySelectorAll('.cc')).map((c) => c.classList.contains('over')).join(',')}`);
-      const first = await marks(1);
-      await page.locator('tbody tr').first().locator('button.rx').click();
-      await page.setViewportSize({ width: 900, height: 900 });
-      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
-      await page.clock.runFor(1000);
-      const second = await marks(1);
-      expect(second, 'the fixture has a cell whose overflow differs between the two widths').not.toBe(first);
-      await page.locator('tbody tr').first().locator('button.rx').click();
-      expect(await marks(0)).toBe(second);
+      const at = async (width: number): Promise<void> => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+        await page.clock.runFor(1000);
+      };
+      // The widths to try: desktop ones above the phone breakpoint, widest first. At each, the marks the module itself gives each pair's untouched twin.
+      const widths = [1600, 1440, 1300, 1240, 1100, 1000, 900, 820];
+      const found = new Map<number, string[]>();
+      for (const w of widths) {
+        await at(w);
+        found.set(w, await Promise.all([1, 3, 5, 7].map((row) => marks(row))));
+      }
+      // The first (wide, narrow, pair) whose twin's marks differ between the two widths, and is clipped at the wide one (so it has a button).
+      let choice: { wide: number; narrow: number; row: number } | null = null;
+      for (const [i, wide] of widths.entries()) {
+        for (const narrow of widths.slice(i + 1)) {
+          const row = [0, 1, 2, 3].find((j) => (found.get(wide) as string[])[j]?.startsWith('true') === true && found.get(wide)?.[j] !== found.get(narrow)?.[j]);
+          if (row !== undefined) {
+            choice = { wide, narrow, row: 2 * row };
+            break;
+          }
+        }
+        if (choice !== null) break;
+      }
+      expect(choice, `no pair of widths changes a clipped row's marks: ${JSON.stringify(Object.fromEntries(found))}`).not.toBeNull();
+      const { wide, narrow, row } = choice as { wide: number; narrow: number; row: number };
+      await at(wide);
+      const first = await marks(row + 1);
+      await page.locator('tbody tr').nth(row).locator('button.rx').click();
+      await at(narrow);
+      const second = await marks(row + 1);
+      expect(second).not.toBe(first);
+      await page.locator('tbody tr').nth(row).locator('button.rx').click();
+      expect(await marks(row), `closed at ${String(narrow)} px after opening at ${String(wide)} px`).toBe(second);
     } finally { await doc.close(); }
   });
 

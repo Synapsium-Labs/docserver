@@ -221,13 +221,13 @@ Measured on `9c05f53`'s `compact.ts` (sha256 `3b8e77c16c62a3b5e18aacfcbc0d6ec741
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
-| Lr5-c4 | A row closed by its button is measured at the width it is closed at | Drop the measure after the button closes a row | Red: `layout-review` 1 failed, 27 passed (fake clock: open at 1300 px, resize to 900, close, compare with an untouched row) |
+| Lr5-c4 | A row closed by its button is measured at the width it is closed at | Drop the measure after the button closes a row | Red: `layout-review` 1 failed, 27 passed. Re-measured after the CI fix (run 45014869048 failed this row in WebKit only: its 1300 and 900 px were chosen from Chromium's metrics and WebKit's overflow was the same at both, so the precondition reddened). The row now discovers the width pair in the page on the fake clock from a fixed list of desktop widths and rows in identical pairs; in Chromium it found 1300 then 1100 px, first pair; the measure removed reds it. Measured on `compact.ts` sha256 `5e6a447933b56ad16ab5ea89cd655065353f14b16137af23cd7fd555512e4a7a` (the committed version) |
 | Lr5-f | Rows with no box keep their marks | Measure every row | Red: `layout-review` 1 failed, 27 passed (filter, Open all rows twice, clear: 12 clipped rows with their buttons) |
 | Lr5-h | The root-level hidden check | Drop it | Green (28 passed): the row-level check covers a hidden root, so the root check was removed; Lr4-h's red result was on the version without the row check |
 
 ```json
 [
-  {"id":"Lr5-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28},
+  {"id":"Lr5-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"5e6a447933b56ad16ab5ea89cd655065353f14b16137af23cd7fd555512e4a7a","restoredSha256":"5e6a447933b56ad16ab5ea89cd655065353f14b16137af23cd7fd555512e4a7a","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28,"note":"re-measured after CI run 45014869048; width pair discovered in the page"},
   {"id":"Lr5-f","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28},
   {"id":"Lr5-h","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":0,"passed":28,"skipped":28,"note":"equivalent: the row-level check covers a hidden root; the root check was removed"}
 ]
