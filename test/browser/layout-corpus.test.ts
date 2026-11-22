@@ -78,7 +78,9 @@ async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc
   if (expected === undefined) return;
   // The review layout keeps the ID index and so the cues of IDs, but not the glossary, whose terms two cases name in edge labels.
   const noGlossary = layout === 'review' && (c.id === 'diagram-tools/edge-label' || c.id === 'diagram-tools/flowchart-link-data-id');
-  if (layout === 'classic' || layout === 'editorial' || noGlossary) {
+  // The guided layout keeps the glossary and so its terms' cues, but no ID index: the two cases that name nodes by ID have none.
+  const noIds = layout === 'guided' && (c.id === 'diagram-tools/node-id' || c.id === 'diagram-tools/cluster-internal-shapes');
+  if (layout === 'classic' || layout === 'editorial' || noGlossary || noIds) {
     // Both alternate layouts draw and control figures but omit definition previews.
     // Wait for tool wiring before asserting absence; don't accept an undrawn source.
     await doc.page.locator('figure.drawn svg').first().waitFor();
@@ -241,12 +243,14 @@ describe('the Level 2 cases', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'layout-missing-'));
     try {
       const own = path.join(dir, 'layouts');
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial.*review/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial.*review.*guided/i);
       mkdirSync(path.join(own, 'classic'), { recursive: true });
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial.*review/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial.*review.*guided/i);
       mkdirSync(path.join(own, 'editorial'));
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*review/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*review.*guided/i);
       mkdirSync(path.join(own, 'review'));
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*guided/i);
+      mkdirSync(path.join(own, 'guided'));
       expect(layoutsWithSnapshots(own)).toEqual(OWN_LAYOUT_NAMES);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -264,7 +268,8 @@ describe('the Level 2 cases', () => {
       mkdirSync(path.join(own, 'editorial'), { recursive: true });
       mkdirSync(path.join(own, 'classic'));
       mkdirSync(path.join(own, 'review'));
-      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial', 'review']);
+      mkdirSync(path.join(own, 'guided'));
+      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial', 'review', 'guided']);
       mkdirSync(path.join(own, 'plain'));
       expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
       // The same case, a snapshot of its own under each layout; the inputs are the shared ones.

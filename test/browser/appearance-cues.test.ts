@@ -254,7 +254,7 @@ async function controlRowRules(page: Page): Promise<{ sheet: string; selector: s
 
 describeBrowsers((browser) => {
   // Only register alternate layouts for cues their own features draw.
-  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial', 'review']): void {
+  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial', 'review', 'guided']): void {
     for (const layout of layouts) {
       it(layout === 'default' ? name : `${layout}: ${name}`, () => check(layout));
     }
@@ -301,7 +301,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  for (const layout of ['classic', 'editorial', 'review'] as const) {
+  for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
       const doc = await open(browser, { appearance: COLLISION, layout });
       try {
@@ -497,7 +497,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  }, ['default', 'review']);
+  }, ['default', 'review', 'guided']);
 
   it('a glossary table\'s term cell is its row\'s first cell, at a computed weight of 600', async () => {
     const doc = await open(browser, { appearance: COLLISION });
@@ -593,7 +593,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  }, ['default', 'editorial', 'review']);
+  }, ['default', 'editorial', 'review', 'guided']);
 
   sharedCue('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });
@@ -1160,6 +1160,21 @@ describeBrowsers((browser) => {
       const own = rows.filter((row) => row.sheet === '/assets/layout.css');
       expect(own.map((row) => row.selector), JSON.stringify(own)).toEqual(['[data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-next']);
       expect(own.map((row) => row.media)).toEqual(['(pointer: fine)']);
+      expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+    } finally { await doc.close(); }
+  });
+
+  it('guided: its own controlRow rules, the fold bar\'s buttons and the drawer\'s rows, are under a fine pointer only, and every controlRow rule of the page is', async () => {
+    const doc = await open(browser, { layout: 'guided' });
+    try {
+      const rows = await controlRowRules(doc.page);
+      const own = rows.filter((row) => row.sheet === '/assets/layout.css');
+      const scope = '[data-docreader-root][data-docreader-layout="guided"]';
+      expect(own.map((row) => [row.selector, row.media]), JSON.stringify(own)).toEqual([
+        [`${scope}[data-docreader-skin~="controlRow"] .gd-btn, ${scope}[data-docreader-skin~="controlRow"] .gd-end`, '(pointer: fine)'],
+        [`${scope}[data-docreader-skin~="controlRow"].toc-open .toc-close`, 'screen and (max-width: 1239px) and (pointer: fine)'],
+        [`${scope}[data-docreader-skin~="controlRow"].toc-open .doc-toc a`, 'screen and (max-width: 1239px) and (pointer: fine)'],
+      ]);
       expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
     } finally { await doc.close(); }
   });

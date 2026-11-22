@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { findShapes } from '../scripts/public-shapes.mjs';
-import { destroyEnhancement, enhance, runEnhancementCommand } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, setEnhancementPrefs } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { features as defaultFeatures } from '../src/enhance/features.js';
 import { FRAME_LAYOUTS } from '../src/frame/layouts.js';
@@ -659,6 +659,163 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     await Promise.resolve();
     expect(root.hasAttribute('data-docreader-root')).toBe(false);
     expect(root.querySelector('[hidden="until-found"]')).toBeNull();
+  });
+
+  /** A document whose section A has two short intro paragraphs and `detail` after them, then three plain sections. */
+  const mini = (detail: string): string => `# T\n\n## A\n\nOne.\n\nTwo.\n\n${detail}\n\n## B\n\nx\n\n## C\n\nx\n\n## D\n\nx\n`;
+  const barsOf = async (md: string, options: Parameters<typeof enhance>[1] = {}): Promise<{ root: HTMLElement; bars: number }> => {
+    pick.layout = 'guided';
+    const root = mount(md);
+    await enhance(root, options);
+    return { root, bars: root.querySelectorAll('.gd-bar').length };
+  };
+
+  it('folds what follows the intro only when it is worth a click: 300 words of prose, a figure, a table or code', async () => {
+    expect((await barsOf(mini(WORDS(299)))).bars, '299 words').toBe(0);
+    expect((await barsOf(mini(WORDS(300)))).bars, '300 words').toBe(1);
+    expect((await barsOf(mini('```mermaid\ngraph TD; A-->B\n```'))).bars, 'a figure').toBe(1);
+    expect((await barsOf(mini('| a | b |\n|---|---|\n| 1 | 2 |'))).bars, 'a table').toBe(1);
+    expect((await barsOf(mini('```ts\nconst a = 1;\n```'))).bars, 'code').toBe(1);
+    expect((await barsOf(mini('A short paragraph.'))).bars, 'a short paragraph').toBe(0);
+  });
+
+  it('puts a time and what a section holds under its heading only when it takes a minute or holds a figure or a table', async () => {
+    const meta = async (md: string): Promise<string | null> => (await barsOf(md)).root.querySelector('h2[id="a"] + .gd-meta')?.textContent ?? null;
+    expect(await meta(mini(WORDS(100)))).toBeNull();
+    expect(await meta(mini(WORDS(230)))).toBe('1 min read');
+    expect(await meta(mini('```mermaid\ngraph TD; A-->B\n```'))).toBe('1 figure');
+    expect(await meta(mini('| a | b |\n|---|---|\n| 1 | 2 |'))).toBe('1 table');
+    expect(await meta(mini(`${WORDS(230)}\n\n### H\n\nx`))).toBe('1 min read · 1 subsection');
+  });
+
+  it('lists the subsections of a folded section as links, six at most, and none for one', async () => {
+    const subs = (n: number): string => Array.from({ length: n }, (_, i) => `### H${String(i)}\n\nx`).join('\n\n');
+    const seven = (await barsOf(mini(`${WORDS(300)}\n\n${subs(7)}`))).root.querySelector('.gd-inside') as HTMLElement;
+    expect(Array.from(seven.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['H0', 'H1', 'H2', 'H3', 'H4', 'H5']);
+    expect(seven.querySelector('.gd-inside-more')?.textContent).toBe('+1 more');
+    expect(seven.getAttribute('aria-label')).toBe('In A');
+    const six = (await barsOf(mini(`${WORDS(300)}\n\n${subs(6)}`))).root.querySelector('.gd-inside') as HTMLElement;
+    expect(six.querySelectorAll('a').length).toBe(6);
+    expect(six.querySelector('.gd-inside-more')).toBeNull();
+    expect((await barsOf(mini(`${WORDS(300)}\n\n${subs(1)}`))).root.querySelector('.gd-inside')).toBeNull();
+  });
+
+  it('never folds "Where things stand", whatever it holds, and tolerates a heading with no id', async () => {
+    const stand = `# T\n\n## A\n\nx\n\n## B\n\nx\n\n## Where things stand\n\nOne.\n\nTwo.\n\n${WORDS(400)}\n`;
+    expect((await barsOf(stand)).bars).toBe(0);
+    pick.layout = 'guided';
+    const root = mount(mini(WORDS(300)));
+    const bare = document.createElement('h2');
+    bare.textContent = 'No id';
+    const long = document.createElement('p');
+    long.textContent = WORDS(400);
+    root.append(bare, long);
+    await enhance(root);
+    expect(root.querySelectorAll('.gd-bar').length).toBe(1);
+  });
+
+  it('decides a document of a few minutes by its length: open in full, as the reference does under fifteen', async () => {
+    const mid = mini(Array.from({ length: 8 }, () => WORDS(230)).join('\n\n'));
+    const { root } = await barsOf(mid);
+    expect(root.querySelector('.gd-btn')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('shows what a host or the author set on a block the layout hid as it was set, when the section opens', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const block = root.querySelector('h2[id="1-first"] ~ [hidden="until-found"]') as HTMLElement;
+    block.setAttribute('hidden', '');
+    (root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(block.getAttribute('hidden')).toBe('');
+  });
+
+  it('does nothing for a find or a jump that lands on a block it did not hide', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const before = hiddenOf(root).length;
+    expect(before).toBeGreaterThan(0);
+    root.querySelector('h2[id="1-first"] + .gd-meta + p')?.dispatchEvent(new Event('beforematch', { bubbles: true }));
+    (root.querySelector('.doc-toc a[href="#where-things-stand"]') as HTMLElement).click();
+    expect(hiddenOf(root).length).toBe(before);
+    expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('puts the hero\'s parts together: the eyebrow and the facts panel move in, a source node classed eyebrow stays out', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC);
+    const own = document.createElement('div');
+    own.className = 'eyebrow';
+    root.prepend(own);
+    await enhance(root, { info: { frontList: [{ key: 'type', list: false, vals: ['Spec'] }, { key: 'tags', list: true, vals: ['a', 'b'] }] } });
+    const hero = root.querySelector('header.gd-hero') as HTMLElement;
+    expect(hero.querySelector(':scope > .eyebrow + h1')).not.toBeNull();
+    expect(hero.querySelector(':scope > details.doc-facts')).not.toBeNull();
+    expect(own.parentElement).toBe(root);
+    expect(hero.querySelector(':scope > .eyebrow:not([data-docreader-chrome])')).toBeNull();
+  });
+
+  it('takes In short into the hero when it is within three blocks of the title block, and leaves it where it is when it is later', async () => {
+    pick.layout = 'guided';
+    const near = mount(`# T\n\nOne.\n\nTwo.\n\n${SPEC.slice(SPEC.indexOf('## In short'))}`);
+    await enhance(near);
+    expect(near.querySelector('header.gd-hero > .short')).not.toBeNull();
+    const far = mount(`# T\n\nOne.\n\nTwo.\n\nThree.\n\n${SPEC.slice(SPEC.indexOf('## In short'))}`);
+    await enhance(far);
+    expect(far.querySelector('header.gd-hero > .short')).toBeNull();
+    expect(far.querySelector(':scope > .short')).not.toBeNull();
+    expect(far.querySelector('.gd-glance .gd-gk')?.textContent).toBe('Contains');
+  });
+
+  it('builds the hero with no bar, and the layers with no bar: no skip link, no tools, the folds still work', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC);
+    await enhance(root, { chrome: { bar: false }, storage: stored({ 'docreader:ui': '{"layers":"guided"}' }).storage, storageKey: 'doc' });
+    expect(root.querySelector('header.gd-hero')).not.toBeNull();
+    expect(root.querySelector('.gd-tools, .skip-link')).toBeNull();
+    expect(root.querySelectorAll('.gd-bar').length).toBe(2);
+    (root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('gives a document nothing to put in a glance no glance, and a document with nothing to fold the lens alone', async () => {
+    pick.layout = 'guided';
+    const bare = mount('# T\n\n## Where things stand\n\n### a\n\nx\n\n### b\n\nx\n\n### c\n\nx\n\n### d\n\nx\n');
+    await enhance(bare);
+    expect(bare.querySelector('header.gd-hero')).not.toBeNull();
+    expect(bare.querySelector('.gd-glance')).toBeNull();
+    const plain = mount(mini('A short paragraph.'));
+    await enhance(plain);
+    expect(plain.querySelector('.bar-tools .gd-tools .gd-seg')).not.toBeNull();
+    expect(plain.querySelector('.gd-tools .gd-all')).toBeNull();
+  });
+
+  it('keeps the lens buttons in step with a lens a host sets', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC);
+    await enhance(root);
+    const [product, engineering] = Array.from(root.querySelectorAll('.gd-seg button')) as HTMLButtonElement[];
+    setEnhancementPrefs(root, { lens: 'product' });
+    expect([product?.getAttribute('aria-pressed'), engineering?.getAttribute('aria-pressed')]).toEqual(['true', 'false']);
+  });
+
+  it('adds no time to a Contents link whose heading is not a section of the document', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC.replace(WORDS(340), WORDS(600)));
+    const nested = document.createElement('h2');
+    nested.id = 'nested';
+    nested.textContent = 'Nested';
+    const quote = document.createElement('blockquote');
+    quote.append(nested);
+    root.insertBefore(quote, root.querySelector('h2[id="3-third"]'));
+    await enhance(root);
+    const link = root.querySelector('.doc-toc a[href="#nested"]') as HTMLElement;
+    expect(link).not.toBeNull();
+    expect(link.querySelector('.gd-rt')).toBeNull();
+    expect(root.querySelector('.doc-toc a[href="#3-third"] .gd-rt')?.textContent).toBe('3 min');
   });
 });
 

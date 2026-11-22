@@ -27,7 +27,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  for (const layout of ['classic', 'editorial', 'review'] as const) {
+  for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     it(`${layout}: the page runs that layout's bundle (its mark is on the root), serves its stylesheet, applies its rule, and is clean under the strict policy`, async () => {
       expect(LAYOUT_TABLE[layout].source).toBe(`assets/layouts/${layout}.css`);
       const doc = await openDoc(DOC, {}, { browser, layout });

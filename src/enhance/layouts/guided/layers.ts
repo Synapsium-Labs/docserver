@@ -117,7 +117,6 @@ export function build(ctx: FeatureContext): void {
   if (!ctx.options.folds || !ctx.info.isDocument) return;
   const doc = root.ownerDocument;
   const units = new Map(ctx.sections.map((u) => [u.heading, u] as const));
-  const timeOf = (h: Element): number => units.get(h as HTMLElement)?.minutes ?? 0;
 
   const remembered = state.readDoc(FOLDS);
   const kept = Array.isArray(remembered) ? new Set(remembered) : null;
@@ -165,12 +164,13 @@ export function build(ctx: FeatureContext): void {
   };
 
   for (const heading of Array.from(root.children) as HTMLElement[]) {
-    if (heading.localName !== 'h2' || !units.has(heading) || isStand(ctx, heading)) continue;
+    const unit = units.get(heading);
+    if (unit === undefined || isStand(ctx, heading)) continue;
     const members = membersOf(heading);
     const all = cost(members);
-    const minutes = formatMinutes(timeOf(heading));
+    const minutes = formatMinutes(unit.minutes);
     // What the section holds, under its heading, when it is long or holds more than prose.
-    if (timeOf(heading) >= 1 || all.figures > 0 || all.tables > 0) {
+    if (unit.minutes >= 1 || all.figures > 0 || all.tables > 0) {
       const what = contents(all, members.filter((m) => m.localName === 'h3').length);
       const meta = chrome(doc, 'p', { className: 'gd-meta', text: [minutes === '' ? '' : `${minutes} read`, ...what].filter((s) => s !== '').join(' · ') });
       journal.insert(meta, root, heading.nextSibling);
@@ -229,7 +229,7 @@ export function build(ctx: FeatureContext): void {
   });
   // A member a feature adds after this build (the lens's peek bars) joins a folded section, so it never shows alone.
   journal.defer(ctx.events.on('prefs', () => {
-    for (const l of layers) if (l.folded) paint(l);
+    for (const l of layers) paint(l);
   }));
 
   const slots = ctx.slots;

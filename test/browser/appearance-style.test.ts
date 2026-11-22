@@ -390,6 +390,8 @@ interface State {
   readonly needsSwitch?: true;
   /** A state of the review layout's own chrome: the default's documents never reach it, so only the review rows require it. */
   readonly reviewOnly?: true;
+  /** A state of the guided layout's own chrome (parity Task 13): likewise, only the guided rows require it. */
+  readonly guidedOnly?: true;
   /** Put the page in the state; true when it is in it (the trigger exists and the thing is shown). */
   apply(page: Page): Promise<boolean>;
   clear(page: Page): Promise<void>;
@@ -622,6 +624,52 @@ const STATES: readonly State[] = [
     },
   },
   {
+    // The guided layout's layers, every section folded: the fold bars and their summaries are what is drawn.
+    name: 'gd-folded',
+    guidedOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll('.bar-tools .gd-all')).find((x) => x.textContent === 'Collapse all');
+        if (!(b instanceof HTMLElement) || b.hasAttribute('disabled')) return false;
+        b.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.gd-btn[aria-expanded="false"]')?.getClientRects().length !== 0);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll('.bar-tools .gd-all')).find((x) => x.textContent === 'Expand all');
+        if (b instanceof HTMLElement && !b.hasAttribute('disabled')) b.click();
+      });
+      await frames(page);
+    },
+  },
+  {
+    // ... and the lens on Product, with the peek bars it makes.
+    name: 'gd-lens',
+    guidedOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const b = document.querySelector('.bar-tools .gd-seg button');
+        if (!(b instanceof HTMLElement)) return false;
+        b.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.lens-product') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        const b = document.querySelectorAll('.bar-tools .gd-seg button')[1];
+        if (b instanceof HTMLElement) b.click();
+      });
+      await frames(page);
+    },
+  },
+  {
     // ... and changed: a mark whose section changed since it was read.
     name: 'rv-changed',
     reviewOnly: true,
@@ -754,7 +802,7 @@ async function compareDoc(doc: Doc, browser: BrowserName, other: string, count =
     await inMode(b, mode, doc.id);
     for (const st of STATES) {
       if (st.chromiumOnly === true && browser !== 'chromium') continue;
-      if (st.needsSwitch === true || st.reviewOnly === true) continue;
+      if (st.needsSwitch === true || st.reviewOnly === true || st.guidedOnly === true) continue;
       if (only !== null && !only.includes(st.name)) continue;
       const began = Date.now();
       const ok = [await st.apply(a.page), await st.apply(b.page)];
@@ -998,7 +1046,7 @@ describeBrowsers((browser) => {
 
     it('every state was reached by some document', () => {
       if (reached.size === 0) return; // this row was run alone
-      const missing = STATES.filter((s) => s.needsSwitch !== true && s.reviewOnly !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
+      const missing = STATES.filter((s) => s.needsSwitch !== true && s.reviewOnly !== true && s.guidedOnly !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
       expect(missing).toEqual([]);
     });
   });
@@ -1291,7 +1339,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  for (const layout of ['classic', 'editorial', 'review'] as const) {
+  for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     describe(`(b) and (c): ${layout} hosted appearance`, () => {
       // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome; review adds what it draws
       // of its own or over the shared reader: the header card with its progress (a spec with a strip), the Index tab, the ID
@@ -1301,12 +1349,14 @@ describeBrowsers((browser) => {
         'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
         ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
         ...(layout === 'review' ? ['layout/changes/strip', 'layout/rail/marks-index', 'layout/cards/xrefs', 'layout/ids/id-table', 'layout/plans/plan'] : []),
+        ...(layout === 'guided' ? ['layout/links/first-mention', 'layout/cards/xrefs'] : []),
       ];
       const docs = DOCS.filter((doc) => ids.includes(doc.id));
       const required = [
         'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
         ...(layout === 'editorial' ? ['short-headlines'] : []),
         ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines', 'rv-pressed', 'rv-changed'] : []),
+        ...(layout === 'guided' ? ['tcard', 'gd-folded', 'gd-lens'] : []),
       ];
       const states = [...required, 'hover', 'focus-visible'];
 

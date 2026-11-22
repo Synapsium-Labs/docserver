@@ -17,7 +17,7 @@ export function build(ctx: FeatureContext): void {
   if (rail === null) return;
   const minutes = new Map<string, number>(ctx.sections.map((u) => [`#${u.heading.id}`, u.minutes]));
   for (const link of Array.from(rail.querySelectorAll(':scope > ul > li > a'))) {
-    const time = formatMinutes(minutes.get(link.getAttribute('href') ?? '') ?? 0);
+    const time = formatMinutes(minutes.get(link.getAttribute('href') as string) ?? 0);
     if (time !== '') ctx.journal.insert(chrome(ctx.root.ownerDocument, 'span', { className: 'gd-rt', text: time }), link, null);
   }
 }

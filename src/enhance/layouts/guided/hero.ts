@@ -61,7 +61,7 @@ export function build(ctx: FeatureContext): void {
     const n = ctx.page.waiting.length;
     glance.append(chrome(doc, 'a', { className: 'gd-gl gd-wait', attrs: { href: `#${heading.id}` } }, [
       chrome(doc, 'span', { className: 'gd-gk', text: 'Waiting on you' }),
-      doc.createTextNode(`${n > 0 ? plural(n, 'item') : 'see'} →`),
+      doc.createTextNode(`${plural(n, 'item')} →`),
     ]));
   }
   if (glance.children.length > 0) journal.insert(glance, hero, null);

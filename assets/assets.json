@@ -65,10 +65,10 @@
     },
     {
       "path": "frame/enhance-guided.js",
-      "sha256": "9e8f75ccc7c4b0d7099e199e63703c796f99885b7d4988549c174bcc3d934ed7",
-      "bytes": 179297,
+      "sha256": "096e64e39a6f28159b955d6080c4823999db831fc326a547bd45925e9e6e24d1",
+      "bytes": 179253,
       "kind": "script",
-      "csp": "'sha256-no91zMfEsNcJnhmeY3A8eW+ZiFt9SYhUnBdLzD2TTtc='",
+      "csp": "'sha256-CW5k45pvKBWblV1ggMSCOZnbgx/DJqVHvUWSXp5uJNE='",
       "layout": "guided"
     },
     {
@@ -110,8 +110,8 @@
     },
     {
       "path": "frame/layout-guided.css",
-      "sha256": "11fd32f3c3c0798a2364bef1fe6b14af5e71d3980bdbd15443dc0b811db1b22f",
-      "bytes": 8795,
+      "sha256": "5dc30b7fa12e43412436bf37709292df21127ad9bdd01996aa55f6e15b1be74a",
+      "bytes": 11702,
       "kind": "style",
       "layout": "guided"
     },
@@ -144,8 +144,8 @@
     },
     {
       "path": "layouts/guided.css",
-      "sha256": "11fd32f3c3c0798a2364bef1fe6b14af5e71d3980bdbd15443dc0b811db1b22f",
-      "bytes": 8795,
+      "sha256": "5dc30b7fa12e43412436bf37709292df21127ad9bdd01996aa55f6e15b1be74a",
+      "bytes": 11702,
       "kind": "style",
       "layout": "guided"
     },
