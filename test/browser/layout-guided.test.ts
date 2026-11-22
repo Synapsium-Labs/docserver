@@ -132,6 +132,10 @@ describeBrowsers((browser) => {
       expect(await paragraphs.nth(0).isVisible()).toBe(true);
       expect(await paragraphs.nth(1).isVisible()).toBe(true);
       expect(await paragraphs.nth(2).evaluate((el) => el.getBoundingClientRect().height)).toBe(0);
+      // Not a block of what is folded holds any height of its own (a table's wrapper, a code block, a quote included).
+      expect(await page.evaluate(() => Math.max(0, ...Array.from(document.querySelectorAll('[data-docreader-root] > [hidden="until-found"]')).map((el) => el.getBoundingClientRect().height)))).toBe(0);
+      // What is folded takes no room: the next heading is a heading's margin below the fold bar, not a paragraph's margin below each hidden block.
+      expect(await page.locator('h2[id="2-second"]').evaluate((el, b) => el.getBoundingClientRect().top - (b as HTMLElement).getBoundingClientRect().bottom, await button.elementHandle())).toBeLessThan(200);
       expect(await page.locator('h2[id="where-things-stand"]').isVisible()).toBe(true);
       expect(await page.locator('.callout').first().isVisible()).toBe(true);
       // Second's Inside list names its two subsections.
@@ -141,6 +145,8 @@ describeBrowsers((browser) => {
       expect(await paragraphs.nth(2).evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(0);
       expect(await button.locator('.gd-label').textContent()).toBe('Show less');
       await page.locator('.gd-end[aria-label$=": First"]').click();
+      // The heading is put back at the top of the reading area, so the reader is not left in what folded away.
+      await expect.poll(() => first.evaluate((el) => Math.abs(el.getBoundingClientRect().top))).toBeLessThan(120);
       expect(await button.getAttribute('aria-expanded')).toBe('false');
       expect(await button.evaluate((el) => el === document.activeElement)).toBe(true);
       expect(await paragraphs.nth(2).evaluate((el) => el.getBoundingClientRect().height)).toBe(0);
@@ -171,6 +177,9 @@ describeBrowsers((browser) => {
       // The Inside list's link.
       await page.locator('h2[id="2-second"] ~ .gd-bar .gd-inside a', { hasText: 'Part two' }).click();
       expect(await second.getAttribute('aria-expanded')).toBe('true');
+      // An open section has no list of what is inside, nor its summary: it is all there.
+      expect(await page.locator('.gd-bar.open .gd-inside').first().isVisible()).toBe(false);
+      expect(await page.locator('.gd-bar.open .gd-sum').first().isVisible()).toBe(false);
       await page.getByRole('button', { name: 'Collapse all' }).click();
       // The quick jump, to a subsection in a folded section.
       await page.keyboard.press('/');
@@ -304,7 +313,10 @@ describeBrowsers((browser) => {
         for (const h of found) expect(h, selector).toBeGreaterThanOrEqual(44);
       }
       await page.getByRole('button', { name: 'Expand all' }).click();
-      for (const h of await heights('.gd-end')) expect(h, '.gd-end').toBeGreaterThanOrEqual(44);
+      // An open section's bar is a small dashed button: it keeps the floor too.
+      for (const h of await heights('.gd-btn')) expect(h, 'an open .gd-btn').toBeGreaterThanOrEqual(44);
+      // A one-line button measures the floor itself under touch: the hosted control row's 56 px is for a fine pointer.
+      for (const h of await heights('.gd-end')) expect(h, '.gd-end').toBe(44);
     } finally { await doc.close(); }
   });
 
@@ -326,8 +338,12 @@ describeBrowsers((browser) => {
       const third = page.locator('h2[id="1-first"] ~ p:not(.gd-meta)').nth(5);
       expect(await third.evaluate((el) => el.getBoundingClientRect().height)).toBe(0);
       await page.emulateMedia({ media: 'print' });
+      await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
       expect(await third.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(0);
       expect(await page.locator('.gd-bar').first().isVisible()).toBe(false);
+      await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+      await page.emulateMedia({ media: 'screen' });
+      expect(await third.evaluate((el) => el.getBoundingClientRect().height)).toBe(0);
     } finally { await doc.close(); }
   });
 

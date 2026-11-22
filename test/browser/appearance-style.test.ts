@@ -118,8 +118,27 @@ function allDocs(): Doc[] {
     csp: undefined,
     html: undefined,
   };
+  // The guided layout's layers (parity Task 13): a spec with sections long enough to fold, subsections, code, a table and a term, the
+  // layers stored as guided, so the fold bars, their summaries, the time lines and the Inside lists are drawn.
+  const para = 'A paragraph long enough to fill a few lines of the reading column, and to give the section some length to fold.';
+  const guided: Doc = {
+    id: 'synthetic/guided',
+    markdown: [
+      '# Guided layers', '', '**Spec** · 2026-01-01 · Status: Draft', '', '## In short', '', 'The summary names a Widget.', '',
+      '## 1. First', '', 'The first intro paragraph says what the Widget is.', '', 'The second intro paragraph says why it matters.', '',
+      ...Array.from({ length: 8 }, () => [`${para} ${para}`, '']).flat(),
+      '### Part one', '', para, '', '### Part two', '', '```ts\nconst a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;\n```', '',
+      '## 2. Second', '', 'The intro of the second section.', '', '| Name | Owner | Status |', '|---|---|---|', '| Alpha | one | Agreed |', '| Beta | two | Pending |', '',
+      '## 3. Words used here', '', '| Term | Meaning |', '|---|---|', '| Widget | A small thing the document talks about. |', '',
+      '## Where things stand', '', '### Agreed', '', '- Alpha: kept.', '', '### Waiting on you', '', '- Beta: whether to change it.', '',
+    ].join('\n'),
+    options: { storageKey: 'guided', storage: { snapshot: { 'docreader:ui': '{"layers":"guided"}' } } },
+    viewport: undefined,
+    csp: undefined,
+    html: undefined,
+  };
   const figure: Doc = { id: 'synthetic/figure', markdown: FIGURE_MARKDOWN, options: {}, viewport: undefined, csp: 'strict', html: (h) => `${h}${DRAWING}` };
-  return [...corpus, ...layout, menu, dots, figure];
+  return [...corpus, ...layout, menu, dots, figure, guided];
 }
 
 /** The documents every fixture appearance is run on: between them every chrome piece, mark, card, table and code block. */
@@ -624,27 +643,39 @@ const STATES: readonly State[] = [
     },
   },
   {
-    // The guided layout's layers, every section folded: the fold bars and their summaries are what is drawn.
+    // The guided layout's layers, every section folded: the fold bars and their summaries are what is drawn. A state is put on the
+    // page and left (the next state starts from it), so the document is folded, then open, as the later states read it.
     name: 'gd-folded',
     guidedOnly: true,
     async apply(page) {
       const found = await page.evaluate(() => {
         const b = Array.from(document.querySelectorAll('.bar-tools .gd-all')).find((x) => x.textContent === 'Collapse all');
-        if (!(b instanceof HTMLElement) || b.hasAttribute('disabled')) return false;
-        b.click();
+        if (!(b instanceof HTMLElement)) return false;
+        if (!b.hasAttribute('disabled')) b.click();
         return true;
       });
       if (!found) return false;
       await frames(page);
-      return page.evaluate(() => document.querySelector('.gd-btn[aria-expanded="false"]')?.getClientRects().length !== 0);
+      return page.evaluate(() => Array.from(document.querySelectorAll('.gd-btn[aria-expanded="false"]')).some((x) => x.getClientRects().length > 0));
     },
-    async clear(page) {
-      await page.evaluate(() => {
+    async clear() {},
+  },
+  {
+    // ... and every section open, the fold bars as a dashed "Show less" and the end buttons shown.
+    name: 'gd-open',
+    guidedOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
         const b = Array.from(document.querySelectorAll('.bar-tools .gd-all')).find((x) => x.textContent === 'Expand all');
-        if (b instanceof HTMLElement && !b.hasAttribute('disabled')) b.click();
+        if (!(b instanceof HTMLElement)) return false;
+        if (!b.hasAttribute('disabled')) b.click();
+        return true;
       });
+      if (!found) return false;
       await frames(page);
+      return page.evaluate(() => Array.from(document.querySelectorAll('.gd-end')).some((x) => x.getClientRects().length > 0));
     },
+    async clear() {},
   },
   {
     // ... and the lens on Product, with the peek bars it makes.
@@ -1349,14 +1380,14 @@ describeBrowsers((browser) => {
         'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
         ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
         ...(layout === 'review' ? ['layout/changes/strip', 'layout/rail/marks-index', 'layout/cards/xrefs', 'layout/ids/id-table', 'layout/plans/plan'] : []),
-        ...(layout === 'guided' ? ['layout/links/first-mention', 'layout/cards/xrefs'] : []),
+        ...(layout === 'guided' ? ['layout/links/first-mention', 'layout/cards/xrefs', 'synthetic/guided'] : []),
       ];
       const docs = DOCS.filter((doc) => ids.includes(doc.id));
       const required = [
         'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
         ...(layout === 'editorial' ? ['short-headlines'] : []),
         ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines', 'rv-pressed', 'rv-changed'] : []),
-        ...(layout === 'guided' ? ['tcard', 'gd-folded', 'gd-lens'] : []),
+        ...(layout === 'guided' ? ['tcard', 'gd-folded', 'gd-open', 'gd-lens'] : []),
       ];
       const states = [...required, 'hover', 'focus-visible'];
 

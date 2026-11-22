@@ -424,9 +424,6 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
   };
   const FOLDS_KEY = 'docreader:doc:doc:folds';
   const hiddenOf = (root: HTMLElement): string[] => Array.from(root.querySelectorAll(':scope > [hidden="until-found"]')).map((e) => e.localName);
-  const bar = (root: HTMLElement, id: string): HTMLElement => (root.querySelector(`h2[id="${id}"]`) as HTMLElement).nextElementSibling?.matches('.gd-meta') === true
-    ? ((root.querySelector(`h2[id="${id}"]`) as HTMLElement).nextElementSibling as HTMLElement)
-    : (root.querySelector(`h2[id="${id}"]`) as HTMLElement);
 
   it('moves the title block and the In short box into one header, with the glance after them', async () => {
     pick.layout = 'guided';
@@ -731,6 +728,24 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(block.getAttribute('hidden')).toBe('');
   });
 
+  it('shows what is folded while the page prints, and folds it again after, leaving what a host set on a block as it was set', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const view = root.ownerDocument.defaultView as Window;
+    const folded = hiddenOf(root).length;
+    expect(folded).toBeGreaterThan(0);
+    view.dispatchEvent(new Event('beforeprint'));
+    expect(hiddenOf(root)).toEqual([]);
+    view.dispatchEvent(new Event('afterprint'));
+    expect(hiddenOf(root).length).toBe(folded);
+    const block = root.querySelector('h2[id="1-first"] ~ [hidden="until-found"]') as HTMLElement;
+    block.setAttribute('hidden', '');
+    view.dispatchEvent(new Event('beforeprint'));
+    expect(block.getAttribute('hidden')).toBe('');
+  });
+
   it('does nothing for a find or a jump that lands on a block it did not hide', async () => {
     pick.layout = 'guided';
     const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
@@ -738,8 +753,17 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     await enhance(root, { storage: s.storage, storageKey: s.storageKey });
     const before = hiddenOf(root).length;
     expect(before).toBeGreaterThan(0);
+    // A handler that throws is reported as an error event of the window: none comes.
+    const errors: unknown[] = [];
+    const onError = (e: ErrorEvent): void => {
+      errors.push(e.error);
+      e.preventDefault();
+    };
+    window.addEventListener('error', onError);
     root.querySelector('h2[id="1-first"] + .gd-meta + p')?.dispatchEvent(new Event('beforematch', { bubbles: true }));
     (root.querySelector('.doc-toc a[href="#where-things-stand"]') as HTMLElement).click();
+    window.removeEventListener('error', onError);
+    expect(errors).toEqual([]);
     expect(hiddenOf(root).length).toBe(before);
     expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('false');
   });
@@ -758,6 +782,23 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(hero.querySelector(':scope > .eyebrow:not([data-docreader-chrome])')).toBeNull();
   });
 
+  it('leaves outside the hero a node of the document right before the title that is only half the eyebrow: classed eyebrow, or claiming to be chrome', async () => {
+    pick.layout = 'guided';
+    for (const make of [
+      (n: HTMLElement): void => void (n.className = 'eyebrow'),
+      (n: HTMLElement): void => n.setAttribute('data-docreader-chrome', ''),
+    ]) {
+      const root = mount(SPEC);
+      const node = document.createElement('div');
+      make(node);
+      (root.querySelector('h1') as HTMLElement).before(node);
+      await enhance(root);
+      expect(node.parentElement, node.outerHTML).toBe(root);
+      expect(root.querySelector('header.gd-hero')?.contains(node)).toBe(false);
+      expect(root.querySelector('header.gd-hero > h1')).not.toBeNull();
+    }
+  });
+
   it('takes In short into the hero when it is within three blocks of the title block, and leaves it where it is when it is later', async () => {
     pick.layout = 'guided';
     const near = mount(`# T\n\nOne.\n\nTwo.\n\n${SPEC.slice(SPEC.indexOf('## In short'))}`);
@@ -768,6 +809,25 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(far.querySelector('header.gd-hero > .short')).toBeNull();
     expect(far.querySelector(':scope > .short')).not.toBeNull();
     expect(far.querySelector('.gd-glance .gd-gk')?.textContent).toBe('Contains');
+  });
+
+  it('ends a section at the next section and at a box that holds one: folding the section before In short leaves In short and the next section shown', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(`# T\n\n## A\n\nOne.\n\nTwo.\n\n${WORDS(300)}\n\n## In short\n\nSum.\n\n## B\n\nx\n\n## C\n\nx\n`);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    expect(root.querySelectorAll('.gd-bar').length).toBe(1);
+    expect(hiddenOf(root)).toEqual(['p', 'div']);
+    expect(root.querySelector(':scope > .short')?.hasAttribute('hidden')).toBe(false);
+    expect(root.querySelector('h2[id="b"]')?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('builds the hero for a document whose title comes after its sections, with nothing after it to take in', async () => {
+    pick.layout = 'guided';
+    const root = mount('## A\n\nx\n\n## B\n\nx\n\n## C\n\nx\n\n# T\n');
+    await enhance(root);
+    expect(root.querySelector('header.gd-hero > h1')?.textContent).toBe('T');
+    expect(root.querySelector('header.gd-hero > .short')).toBeNull();
   });
 
   it('builds the hero with no bar, and the layers with no bar: no skip link, no tools, the folds still work', async () => {
@@ -816,6 +876,12 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(link).not.toBeNull();
     expect(link.querySelector('.gd-rt')).toBeNull();
     expect(root.querySelector('.doc-toc a[href="#3-third"] .gd-rt')?.textContent).toBe('3 min');
+  });
+
+  it('has direction C\'s features and none of the default\'s that direction C lacks (the Index tab, IDs and their previews, the strip, marks, changes, the keys sheet, the settings menu)', async () => {
+    const names = (await lists())['guided']?.map((f) => f.name) ?? [];
+    for (const lacked of ['rail', 'ids', 'xrefs', 'rules', 'plans', 'strip', 'marks', 'changes', 'since', 'keysheet', 'settings', 'folds']) expect(names, lacked).not.toContain(lacked);
+    for (const kept of ['editorial', 'tables', 'status', 'code', 'figures', 'glossary', 'attention', 'cards', 'jump', 'diagrams', 'guided-contents', 'guided-hero', 'guided-layers', 'guided-reveal']) expect(names, kept).toContain(kept);
   });
 });
 

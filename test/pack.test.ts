@@ -67,7 +67,7 @@ const HIGHLIGHT_API = ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'M
 const INERT_LINE =
   'consumer-smoke: @synapsium-labs/pinax-lib/frame, /host and /highlight import in Node and are import-inert, each imported alone in a fresh process: no new global and no timer, and /host reads no DOM name at import';
 const ASSETS_LINE =
-  'consumer-smoke: every one of the 25 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
+  'consumer-smoke: every one of the 26 assets.json entries resolves through ./assets/* into node_modules and re-hashes to its sha256 and bytes, and it lists every installed asset';
 const SCANS_LINE =
   "consumer-smoke: the M8.3, M8.4 and M8.8 scans pass on both srcdocs and on the clean template, and each of the 16 labelled frame mutants fails its own row's scan";
 
