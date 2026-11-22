@@ -1,0 +1,50 @@
+h1
+  "Stored product lens"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-21Draft"
+h2
+  "1. Detail"
+div .tech
+  table
+    thead
+      tr
+        th
+          "Field"
+        th
+          "Path"
+        th
+          "Type"
+    tbody
+      tr
+        td
+          "One"
+        td
+          code .path
+            "src/item.ts"
+        td
+          code
+            "string"
+      tr
+        td
+          "Two"
+        td
+          code .path
+            "src/list.ts"
+        td
+          code
+            "number"
+      tr
+        td
+          "Three"
+        td
+          code .path
+            "src/view.ts"
+        td
+          code
+            "boolean"
+div .peek-bar chrome
+  button .peek-btn chrome aria-expanded="false"
+    "Show engineering detail - 3 rows"

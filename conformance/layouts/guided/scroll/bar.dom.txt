@@ -1,0 +1,30 @@
+a .skip-link chrome
+  "Skip to the text"
+div .running-head chrome aria-hidden="true"
+  "Reading a long page"
+div .doc-progress chrome
+h1
+  "Reading a long page"
+p
+  strong
+    "Note"
+  "· · Status:"
+"2026-10-20Draft"
+p
+  "A page opens with its title and a few pa"…
+p
+  "The bar sits at the top of the reader an"…
+p
+  "On a narrow screen the bar slides away w"…
+h2
+  "1. First section"
+p
+  "The first section's text."
+h2
+  "2. Second section"
+p
+  "The second section's text."
+h2
+  "3. Third section"
+p
+  "The third section's text."

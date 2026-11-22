@@ -1,0 +1,18 @@
+h1
+  "A diagram that asks for ELK"
+p
+  "This flowchart's front matter asks for t"…
+figure .draw-failed
+  div .fig-error chrome role="note"
+    p chrome
+      "This diagram has an error, so it is show"…
+    details chrome
+      summary chrome
+        "Show its Mermaid source"
+      pre .fig-src chrome
+        code chrome
+          "--- config: layout: elk --- flowchart LR"…
+  pre
+    "--- config: layout: elk --- flowchart LR"…
+  figcaption
+    "Figure 1. Laid out by ELK."

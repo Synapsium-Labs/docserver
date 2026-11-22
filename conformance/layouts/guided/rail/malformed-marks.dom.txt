@@ -1,0 +1,32 @@
+nav .doc-toc chrome aria-label="Contents"
+  div .toc-head chrome
+    span .toc-title chrome
+      "Contents"
+    button chrome
+      "Collapse"
+    button .toc-close chrome hidden=""
+      "Close"
+  ul chrome
+    li chrome
+      a chrome
+        "1. First"
+    li chrome
+      a chrome
+        "2. Second"
+    li chrome
+      a chrome
+        "3. Third"
+h1
+  "Stored marks"
+h2 aria-label="1. First"
+  "1. First"
+p
+  "The first section makes a bounded record"…
+h2 aria-label="2. Second"
+  "2. Second"
+p
+  "The second section keeps the document va"…
+h2 aria-label="3. Third"
+  "3. Third"
+p
+  "The third section receives no valid stor"…
