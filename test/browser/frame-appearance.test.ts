@@ -254,6 +254,11 @@ describeBrowsers((browser) => {
       const { input: doc, options } = oldCapDocument();
       const face = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(131072 - 4)]).toString('base64');
       const host = await openLibHost(await browserFor(browser));
+      // The host's and the frame's own warnings (a fallback's `why`), printed: the page's record keeps only errors.
+      host.page.on('console', (m) => {
+        const text = m.text();
+        if (/^(?:docserver frame|pinax-lib host)/.test(text)) figure('oldCap', browser, 'console', text.slice(0, 400));
+      });
       try {
         const scan = { mermaid: { fences: 1, largestBytes: 1, totalBytes: 1, largestChars: 1, totalChars: 1 } };
         const t0 = performance.now();
@@ -272,6 +277,9 @@ describeBrowsers((browser) => {
         figure('oldCap', browser, 'mountCallMs', sent);
         figure('oldCap', browser, 'waitedMs', w.ms);
         figure('oldCap', browser, 'readyAtMs', rec.events.find((e) => e.kind === 'ready')?.at ?? -1);
+        // Each adapter event with its value (a fallback's reason) and time, and each load of the iframe, before the checks.
+        figure('oldCap', browser, 'events', JSON.stringify(rec.events).slice(0, 2000));
+        figure('oldCap', browser, 'loads', JSON.stringify(rec.loads).slice(0, 2000));
         expect(w.gaveUp).toBe(false);
         expect(rec.events.map((e) => e.kind)).toEqual(['ready']); // no fallback
         expect(host.errors).toEqual([]);
