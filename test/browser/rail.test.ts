@@ -2,6 +2,7 @@
 // viewport reserves one 308 px source-column allocation. Rail widths are border-box
 // values, so their 20px + 14px horizontal padding is already included.
 import { afterAll, expect, it } from 'vitest';
+import type { Page } from 'playwright-core';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName } from './harness.js';
 
 afterAll(closeBrowsers);
@@ -67,9 +68,36 @@ interface WideMetrics {
   readonly runningHeadPadding: string;
 }
 
+/**
+ * Wait for the settled rail layout before a measurement. The float, the root's padding and the code block's width come from
+ * three steps: the rail is built (the root gains has-toc, and from 1240 px the stylesheet reserves --rail-w and shows the
+ * rail), the fonts are loaded (the reader then asks for one more relayout), and that relayout has sized the code block (it
+ * carries long, which the stylesheet turns into the wide width). The page is read until all of these hold and the window is
+ * at `top` (when given), and one more pair of animation frames has passed with the state unchanged, so a relayout queued for
+ * the next frame has run. Nothing here is a timer.
+ */
+async function waitForSettledRail(page: Page, top?: number): Promise<void> {
+  const settled = (scrollTop: number | null): boolean => {
+    const root = document.querySelector('main[data-harness-root]');
+    const rail = root?.querySelector('.doc-toc');
+    const code = root?.querySelector('.codehilite');
+    return root !== null && root !== undefined && rail !== null && rail !== undefined && code !== null && code !== undefined
+      && root.classList.contains('has-toc')
+      && (window.innerWidth < 1240 || (getComputedStyle(root).getPropertyValue('--rail-w').trim() !== '' && getComputedStyle(rail).display !== 'none'))
+      && code.classList.contains('long')
+      && document.fonts.status === 'loaded'
+      && (scrollTop === null || window.scrollY === scrollTop);
+  };
+  const scrollTop = top ?? null;
+  await page.waitForFunction(settled, scrollTop);
+  await page.evaluate(() => new Promise<void>((resolve) => { requestAnimationFrame(() => { requestAnimationFrame(() => { resolve(); }); }); }));
+  await page.waitForFunction(settled, scrollTop);
+}
+
 async function wideMetrics(browser: BrowserName, width: number): Promise<WideMetrics> {
   const doc = await openDoc(MARKDOWN, { chrome: { rail: true } }, { browser, viewport: { width, height: 900 } });
   try {
+    await waitForSettledRail(doc.page);
     return await doc.page.evaluate(() => {
       const root = document.querySelector('main[data-harness-root]') as HTMLElement;
       const rail = root.querySelector('.doc-toc') as HTMLElement;
@@ -164,6 +192,7 @@ describeBrowsers((browser) => {
       try {
         for (const scrollY of [0, 150]) {
           await doc.page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), scrollY);
+          await waitForSettledRail(doc.page, scrollY);
           const got = await doc.page.evaluate(() => {
             const root = document.querySelector('main[data-harness-root]') as HTMLElement;
             const bar = root.querySelector('.topbar') as HTMLElement;

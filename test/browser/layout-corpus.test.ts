@@ -111,26 +111,34 @@ function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
 }
 
 /**
+ * The plan-marks case reads the rail before the reader has reached any section, so the snapshot must wait for the settled
+ * neutral state, whatever the layout: the fonts are loaded (their relayout re-measures the headings), the first work heading
+ * sits below the reading line the scroll spy uses (the larger of 150px and 30% of the window's height), and the rail holds no
+ * active entry (the default's and the alternate layouts' rails mark one the same way). Read from the page; no layout is named.
+ */
+async function waitForNeutralRail(page: Awaited<ReturnType<typeof openDoc>>['page']): Promise<void> {
+  await page.waitForFunction(() => {
+    const root = document.querySelector<HTMLElement>('main[data-harness-root]');
+    const heading = root?.querySelector<HTMLElement>('h2');
+    const rail = root?.querySelector('.doc-toc');
+    if (heading === null || heading === undefined || rail === null || rail === undefined) return false;
+    const line = Math.max(150, window.innerHeight * 0.3);
+    return document.fonts.status === 'loaded'
+      && heading.getBoundingClientRect().top >= line
+      && rail.querySelector('a[aria-current], a.active, li.open') === null;
+  });
+}
+
+/**
  * One case in one browser: the page is clean (holdClean), then its snapshot is held to the expected file. With a `layout` the
  * reader is bundled for it (the harness's layout option) and the snapshot is that layout's.
  */
 async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void, layout?: HarnessLayout): Promise<void> {
-  const classicPlan = layout === 'classic' && c.id === 'rail/plan-marks';
-  // Keep the initial heading well below the Classic reading line; at 900px it straddles the line as fonts settle.
-  const viewport = classicPlan ? { viewport: { width: 1440, height: 600 } } : {};
-  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout), ...viewport });
+  const planMarks = c.id === 'rail/plan-marks';
+  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout) });
   try {
     await waitForCues(c, doc, layout);
-    if (classicPlan) {
-      await doc.page.waitForFunction(() => {
-        const root = document.querySelector<HTMLElement>('main[data-harness-root]');
-        const heading = root?.querySelector<HTMLElement>('h2[id="1-work"]');
-        const rail = root?.querySelector('.doc-toc');
-        return heading !== null && heading !== undefined
-          && heading.getBoundingClientRect().top > 200
-          && rail !== null && rail !== undefined && rail.querySelector('a[aria-current], li.open') === null;
-      });
-    }
+    if (planMarks) await waitForNeutralRail(doc.page);
     const snap = await doc.snapshot(c.scope);
     holdClean(c.id, { violations: await doc.violations(), aborted: doc.aborted, missing: doc.missing });
     holdIt(c.id, snap, c.expected);
