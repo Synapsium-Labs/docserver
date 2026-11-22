@@ -237,6 +237,40 @@ Text.
     } finally { await doc.close(); }
   });
 
+  it('rows the filter hides keep their clip marks through Open all rows, and a row closed after a width change takes the new width\'s marks', async () => {
+    const doc = await openCompact(1280, undefined, {}, 12, 'zebra');
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      await page.locator('.tbl-tools input').fill('zebra');
+      await page.locator('button.rv-all').click();
+      await page.locator('button.rv-all').click();
+      await page.locator('.tbl-tools input').fill('');
+      expect(await page.locator('tbody tr.rv-clipped').count()).toBe(12);
+      expect(await page.locator('tbody tr.rv-clipped button.rx:visible').count()).toBe(12);
+    } finally { await doc.close(); }
+  });
+
+  it('a row closed by its button takes the marks of the width it is closed at', async () => {
+    const doc = await openCompact(1300);
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      await page.clock.install();
+      const marks = (row: number): Promise<string> =>
+        page.locator('tbody tr').nth(row).evaluate((el) => `${el.classList.contains('rv-clipped')}:${Array.from(el.querySelectorAll('.cc')).map((c) => c.classList.contains('over')).join(',')}`);
+      const first = await marks(1);
+      await page.locator('tbody tr').first().locator('button.rx').click();
+      await page.setViewportSize({ width: 900, height: 900 });
+      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+      await page.clock.runFor(1000);
+      const second = await marks(1);
+      expect(second, 'the fixture has a cell whose overflow differs between the two widths').not.toBe(first);
+      await page.locator('tbody tr').first().locator('button.rx').click();
+      expect(await marks(0)).toBe(second);
+    } finally { await doc.close(); }
+  });
+
   it('keeps the first cell clear of the 44 px row button under touch, and hides the hint and Open all on a phone', async () => {
     const touch = await openCompact(1280, true);
     try {

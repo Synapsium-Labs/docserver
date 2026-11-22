@@ -73,10 +73,10 @@
     },
     {
       "path": "frame/enhance-review.js",
-      "sha256": "52437440268ccc1308852bc4267327418e8139d7df50589a03d7c9c8b3dbb53e",
-      "bytes": 192264,
+      "sha256": "3a97f10fa9bcdcfef2eb2f711ce122800c05dd03b5b7e6abf5a124a4e15338af",
+      "bytes": 192327,
       "kind": "script",
-      "csp": "'sha256-UkN0QCaMzBMIhSvEJnMnQY6BOdffUFiaA9fJyLPbtT4='",
+      "csp": "'sha256-OpfxD6m83P7y6y9xHOEigAwF3QO1t+ar9aEkpOFTOK8='",
       "layout": "review"
     },
     {

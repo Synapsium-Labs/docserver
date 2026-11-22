@@ -7,10 +7,12 @@
 // them back. Nothing the shared modules read afterwards is changed by the wrapper: the filter reads a row's text, the rail reads
 // status pills by descendant query, and a preview card copies the cell's children (the button has no text and the card drops
 // buttons). Whether a cell overflows is measured in the relayout run, reads first and then writes, as tables.ts does, and not
-// at all while the root has no box (a host's hidden panel, whose showing asks for no relayout: zero heights would strip every
-// mark and nothing would put them back). A row that is open is not measured (it is not clipped), and keeps the mark it had so
-// its button stays to close it, except on a phone, where nothing is clipped and no button is shown (the mark comes back when the
-// window is wide again); the rows Open all rows closes are measured at once, since a row opened at a phone width was never marked.
+// at all while the root has no box (a hidden panel reads zero heights, which would strip every mark; showing it asks for a relayout,
+// but the rows would be cut with no fade or button for the frame before it). A row with no box of its own (one the filter hides)
+// is left as it was for the same reason. A row that is open is not measured (it is not clipped), and keeps the mark it had so its
+// button stays to close it, except on a phone, where nothing is clipped and no button is shown (the mark comes back when the window
+// is wide again). A row that closes is measured at once: the window may have changed width while it was open, and it would
+// otherwise keep the old width's marks until the next relayout.
 //
 // Built after `tables`, `status`, `ids`, `xrefs` and `cards`. The stylesheet clips (review.css); on a phone, where rows stack
 // as cards, nothing is clipped, so no row is ever marked clipped there.
@@ -37,7 +39,9 @@ export function build(ctx: FeatureContext): void {
   const cells = new Map<HTMLTableRowElement, HTMLElement[]>();
   const buttons = new Map<HTMLTableRowElement, HTMLButtonElement>();
   /** Mark `rows` clipped or not: every read first, then every write. */
-  const measure = (rows: readonly HTMLTableRowElement[]): void => {
+  const measure = (all: readonly HTMLTableRowElement[]): void => {
+    // A row the filter hides has no box and would read zero heights, which would strip its marks.
+    const rows = all.filter((r) => r.getClientRects().length > 0);
     const read = rows.map((r) => (cells.get(r) as HTMLElement[]).map((cc) => cc.scrollHeight > cc.clientHeight + 2));
     rows.forEach((r, i) => {
       const flags = read[i] as boolean[];
@@ -65,7 +69,11 @@ export function build(ctx: FeatureContext): void {
       const button = chrome(doc, 'button', { className: 'rx', attrs: { type: 'button', 'aria-expanded': 'false', 'aria-label': `Open row ${id}` } });
       buttons.set(row, button);
       journal.insert(button, row.cells[0] as HTMLTableCellElement, row.cells[0]?.firstChild ?? null);
-      journal.listen(button, 'click', () => setRow(row, !row.classList.contains('rv-open')));
+      journal.listen(button, 'click', () => {
+        const open = !row.classList.contains('rv-open');
+        setRow(row, open);
+        if (!open) measure([row]);
+      });
     }
     const all = chrome(doc, 'button', { className: 'rv-all', text: 'Open all rows', attrs: { type: 'button', 'aria-pressed': 'false' } });
     journal.listen(all, 'click', () => {
