@@ -24,9 +24,9 @@ Every row was measured in place, one at a time, on the review layout's sources a
 | Lr-r1 | The byline is moved into the card | Drop `dl.byline` from the run's parts | Red: `layout-review` 2 failed, 11 passed |
 | Lr-r2 | The review strip is moved into the card | Drop `section.review-strip` from the run's parts | Red: `layout-review` 2 failed, 11 passed |
 | Lr-r3 | The facts panel is moved into the card | Drop `details.doc-facts` from the run's parts | Red: `layout-review` 1 failed, 12 passed (front-matter row) |
-| Lr-s1 | The toggle needs the bar | Drop `slots === null ||` from `context.ts` | Red: `enhance-layouts` 1 failed, 19 passed (a document with no bar) |
-| Lr-s2 | The toggle is for a document only | Drop `!ctx.info.isDocument` from `context.ts` | Red: `enhance-layouts` 1 failed, 19 passed (a page that is not a document) |
-| Lr-s3 | A click presses the unit's own mark control | Drop the click listener | Red: `layout-review` 1 failed, 12 passed |
+| Lr-s1 | The toggle needs the bar (superseded, re-measured, kept: Lr2-s1 on the final line) | Drop `slots === null ||` from `context.ts` | Red: `enhance-layouts` 1 failed, 19 passed (a document with no bar) |
+| Lr-s2 | The toggle is for a document only (superseded: with the read-mark check restored the check was unreachable and was removed; Lr2-s2 measured it green first) | Drop `!ctx.info.isDocument` from `context.ts` | Was red before the read-mark check came back; green after it (27 passed), so the check is gone |
+| Lr-s3 | A click presses the unit's own mark control (superseded, re-measured, kept: the click line lost its null branch; Lr2-s3) | Drop the click listener | Red: `layout-review` 1 failed, 12 passed |
 | Lr-s4 | The toggle follows the marks | Drop the `marks` listener | Red: `layout-review` 1 failed, 12 passed |
 | Lr-s5 | The toggle follows the scroll spy | Drop the `spy` listener | Red: `layout-review` 1 failed, 12 passed |
 | Lr-t1 | The card button keeps the 44 px touch floor | Drop `.rv-next` from the coarse-pointer rule | Red: `layout-review` 1 failed, 12 passed |
@@ -35,7 +35,7 @@ Every row was measured in place, one at a time, on the review layout's sources a
 | Lr-t4 | The drawer's Index rows keep the touch floor | Drop `.toc-index a.ix` from the drawer's coarse-pointer rule | Red: `layout-review` 1 failed, 12 passed (an Index row measures 24.9 px) |
 | Lr-t5 | The drawer's tabs keep the touch floor | Drop `.toc-tabs button` from the drawer's coarse-pointer rule | Red: `layout-review` 1 failed, 12 passed (a tab measures 24.8 px) |
 
-Guards removed rather than left unreachable: the header card and the bar toggle each once checked for read marks and, for the card, for a title among the root's children. A document always has both, so no input reaches those branches (the lifecycle's document check counts the root's own headings, and the marks feature builds a control for every section but "In short"); `deb8d3c` removed them, so no row is owed for them.
+Guards that deb8d3c removed as unreachable were wrong for the card's and the toggle's early returns: a document whose "In short" box takes every sub-heading has no marks, so a document can reach them. Both are back (the fix round below), with rows on that input.
 
 ```json
 [
@@ -69,5 +69,61 @@ Guards removed rather than left unreachable: the header card and the bar toggle 
   {"id":"Lr-t3","file":"assets/layouts/review.css","savedSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","restoredSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13},
   {"id":"Lr-t4","file":"assets/layouts/review.css","savedSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","restoredSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13},
   {"id":"Lr-t5","file":"assets/layouts/review.css","savedSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","restoredSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13}
+]
+```
+
+## Review fix round: direction B, and the guards the review asked for
+
+Measured in the same way on the fix round's sources (each row's JSON records the file's saved and restored SHA-256). Rows of the first table not listed here keep their original measurement, taken at `deb8d3c`: their guards are unchanged by the fix round, though the stylesheet and `header.ts` bytes moved elsewhere in the file, which is stated rather than re-run. Lr-d is superseded, re-measured, kept: the review layout is now 195,631 characters (190,199 and 5,432) against 225,709; padding 30,079 gives 225,710 and the judge rejects it, the control has no violation.
+
+| Row | Guard | Mutation | Measured result |
+|---|---|---|---|
+| Lr2-f | The list holds direction B's features and none the default has that B lacks | Add a `settings` feature to the list | Red: `enhance-layouts` 12 failed, 15 passed (the exclusion row among them) |
+| Lr2-n1 | `n` is bound to the next unread section and listed | Remove the binding | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-n2 | `n` applies only when a section is unread | Drop `when` | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-i4h | The card builds no progress for a document with no marks | Drop the early return in `header.ts` | Red: `enhance-layouts` 1 failed, 26 passed (the In-short-takes-all input) |
+| Lr2-i4c | The toggle needs read marks | Drop the read-mark check in `context.ts` | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-i4r | The rail's read count needs read marks | Drop the early return in `rail.ts` | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-s1 | The toggle needs the bar | Drop `slots === null` | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-s2 | Unreachable check | Drop `!ctx.info.isDocument` from `context.ts` | Green (27 passed): the check was unreachable and was removed |
+| Lr2-s3 | A click presses the unit's own control | Drop the click listener | Red: `layout-review` 1 failed, 15 passed |
+| Lr2-m1 | The skip link lands on the card's title | Drop the skip listener | Red: `layout-review` 1 failed, 15 passed |
+| Lr2-m2 | The toggle goes through the bar's tool method | `journal.insert` into the tray instead | Red: `enhance-layouts` 1 failed, 26 passed (a bar holding only the toggle keeps `role="none"`) |
+| Lr2-m4a | A source node classed eyebrow stays out of the card | Drop the chrome check | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-m4b | The card's changed text is hidden when empty | Replace `.rv-changed:empty { display: none }` | Red: `layout-review` 1 failed, 15 passed |
+| Lr2-w1 | The Contents tab leads with the waiting link | Drop the link's insertion | Red: `enhance-layouts` 1 failed, 26 passed |
+| Lr2-w2 | The rail addition needs a rail | Drop the `rail === null` return | Red: `enhance-layouts` 2 failed, 25 passed (a page with no rail) |
+| Lr2-h | An ID link takes a hover tint | Drop the tint | Red: `layout-review` 1 failed, 15 passed |
+| Lr2-i1 | An ID link keeps the hosted dashed underline on hover (I1) | `text-decoration: none` on the hovered link | Red: `appearance-cues` 1 failed, 50 passed (the review link row) |
+| Lr2-w3 | The waiting link's touch floor | Drop `.rv-wait` from the drawer's coarse rule | Green (16 passed): the Contents links' rule covers it, so the entry was removed |
+| Lr2-5a | The card's changed text sits on a closed ground | Literal colour on `.rv-changed` | Red: `appearance-style` review Nord, 1 failed (rest, toc-drawer and rv-changed states) |
+| Lr2-5b | The bar toggle's changed state sits on a closed ground | Literal colour on `.rv-mark.changed` | Red: `appearance-style` review Nord, 1 failed (`rv-changed` state) |
+| Lr2-5c | The bar toggle's pressed state sits on a closed ground | Literal colour on `.rv-mark[aria-pressed="true"]` | Red: `appearance-style` review Nord, 1 failed (`rv-pressed` state) |
+
+Features review lacks run no cue row for it: the changed and attention geometry rows, the Aa menu rows and the glossary table row are default rows; the marks, status-dot, link, drawer, quick-jump, switch, filter, callout and literals rows run for review through `sharedCue`.
+
+```json
+[
+  {"id":"Lr2-f","file":"src/enhance/layouts/review/features.ts","savedSha256":"647af39402e6c783a89b25640e6330220781595130704df9d29208547d483695","restoredSha256":"647af39402e6c783a89b25640e6330220781595130704df9d29208547d483695","tests":"test/enhance-layouts.test.ts","rc":1,"failed":12,"passed":15},
+  {"id":"Lr2-n1","file":"src/enhance/layouts/review/header.ts","savedSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","restoredSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-n2","file":"src/enhance/layouts/review/header.ts","savedSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","restoredSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-i4h","file":"src/enhance/layouts/review/header.ts","savedSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","restoredSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-i4c","file":"src/enhance/layouts/review/context.ts","savedSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","restoredSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-i4r","file":"src/enhance/layouts/review/rail.ts","savedSha256":"f37dc2f7e6de487fd73b90b62659a6f03f8b8b8b185014d1287c069640d09896","restoredSha256":"f37dc2f7e6de487fd73b90b62659a6f03f8b8b8b185014d1287c069640d09896","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-s1","file":"src/enhance/layouts/review/context.ts","savedSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","restoredSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-s2","file":"src/enhance/layouts/review/context.ts","savedSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","restoredSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","tests":"test/enhance-layouts.test.ts","rc":0,"passed":27,"note":"equivalent mutant: unreachable once the read-mark check is back; the check was removed"},
+  {"id":"Lr2-s3","file":"src/enhance/layouts/review/context.ts","savedSha256":"133f71a01e0373487786b99418557f9f0afb0e33684a03e714490558c1839a02","restoredSha256":"133f71a01e0373487786b99418557f9f0afb0e33684a03e714490558c1839a02","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":15,"skipped":16},
+  {"id":"Lr2-m1","file":"src/enhance/layouts/review/header.ts","savedSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","restoredSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":15,"skipped":16},
+  {"id":"Lr2-m2","file":"src/enhance/layouts/review/context.ts","savedSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","restoredSha256":"931bf3a7b6445eb5ee2027b0a2673046722af53218804bbd6a0f470699f0de20","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-m4a","file":"src/enhance/layouts/review/header.ts","savedSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","restoredSha256":"ec6621d242d29f9dbe1d16d1607ff55b2d9f6440a031597de81ce2f57efc44cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-m4b","file":"assets/layouts/review.css","savedSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","restoredSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":15,"skipped":16},
+  {"id":"Lr2-w1","file":"src/enhance/layouts/review/rail.ts","savedSha256":"f37dc2f7e6de487fd73b90b62659a6f03f8b8b8b185014d1287c069640d09896","restoredSha256":"f37dc2f7e6de487fd73b90b62659a6f03f8b8b8b185014d1287c069640d09896","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":26},
+  {"id":"Lr2-w2","file":"src/enhance/layouts/review/rail.ts","savedSha256":"f37dc2f7e6de487fd73b90b62659a6f03f8b8b8b185014d1287c069640d09896","restoredSha256":"f37dc2f7e6de487fd73b90b62659a6f03f8b8b8b185014d1287c069640d09896","tests":"test/enhance-layouts.test.ts","rc":1,"failed":2,"passed":25},
+  {"id":"Lr2-h","file":"assets/layouts/review.css","savedSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","restoredSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":15,"skipped":16},
+  {"id":"Lr2-i1","file":"assets/layouts/review.css","savedSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","restoredSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","tests":"test/browser/appearance-cues.test.ts","rc":1,"failed":1,"passed":50,"skipped":51},
+  {"id":"Lr2-w3","file":"assets/layouts/review.css","savedSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","restoredSha256":"e3874d86922d3cf630b67ab0b5c8450d0a85097f91e68ffc0f284f270f2ade2e","tests":"test/browser/layout-review.test.ts","rc":0,"passed":16,"skipped":16,"note":"equivalent mutant: covered by the Contents links' rule; the entry was removed"},
+  {"id":"Lr2-5a","file":"assets/layouts/review.css","savedSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","restoredSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":427},
+  {"id":"Lr2-5b","file":"assets/layouts/review.css","savedSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","restoredSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":427},
+  {"id":"Lr2-5c","file":"assets/layouts/review.css","savedSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","restoredSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":427}
 ]
 ```
