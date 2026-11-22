@@ -115,9 +115,10 @@ function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
  * The plan-marks case reads the rail before the reader has reached any section, so the snapshot must wait for the settled
  * neutral state, whatever the layout. First one animation-frame pair passes: the reader queues its start relayout (the first
  * spy run of the default layout) while it enhances, so after the pair the spy has run at least once, and a neutral rail is a
- * result and not a spy that has not run yet. Then the page is read until the first heading sits at or below the scroll spy's
- * reading line (the larger of LINE_MIN and LINE_SHARE of the window's height, the constants of src/enhance/scroll.ts) and the
- * rail holds no active entry (the default's and the alternate layouts' rails mark one the same way). No layout is named.
+ * result and not a spy that has not run yet. Then the page is read until the rail holds no active entry (the default's and
+ * the alternate layouts' rails mark one the same way). The first heading's top and the spy's reading line (the larger of
+ * LINE_MIN and LINE_SHARE of the window's height, the constants of src/enhance/scroll.ts) are read only for the message of a
+ * wait that times out. No layout is named.
  */
 async function waitForNeutralRail(page: Awaited<ReturnType<typeof openDoc>>['page']): Promise<void> {
   await page.evaluate(() => new Promise<void>((resolve) => { requestAnimationFrame(() => { requestAnimationFrame(() => { resolve(); }); }); }));
@@ -130,7 +131,9 @@ async function waitForNeutralRail(page: Awaited<ReturnType<typeof openDoc>>['pag
     const top = heading === null || heading === undefined ? null : heading.getBoundingClientRect().top;
     const active = rail === null || rail === undefined ? [] : Array.from(rail.querySelectorAll('a[aria-current], a.active, li.open'), (el) => el.className || el.localName);
     if (report) return { top, line, active };
-    return top !== null && rail !== null && rail !== undefined && top >= line && active.length === 0;
+    // Settled is the rail's neutral state after the first spy run; `top` and `line` are reported only, for the diagnosis
+    // (a geometry conjunct here was measured unable to fire, row B2R1g, and was dropped).
+    return rail !== null && rail !== undefined && active.length === 0;
   };
   try {
     await page.waitForFunction(read, [LINE_MIN, LINE_SHARE, false] as const);
