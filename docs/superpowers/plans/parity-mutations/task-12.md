@@ -2,6 +2,8 @@
 
 Every row was measured in place, one at a time, on the review layout's sources as committed at `deb8d3c` (the stylesheet unchanged since `ccff02f`), through the test wrapper, one test file per call, with Chromium selected for browser files. For each file edit the file's bytes were saved first, the edit applied, the test run, and the saved bytes copied back and their SHA-256 checked equal to the one recorded before the edit; no `git checkout` was used. The unmodified files pass every row's test file. The browser rows read the working stylesheet and bundle sources through the layout harness, so no frame rebuild was needed. Lr-d is a pure judge row: a scratch script (outside the tree) pads the review bundle's manifest characters in memory and runs `judge` from `test/size-rules.ts`, as Le-d did; no runtime asset is padded.
 
+Counts: this first table has 30 rows and its JSON fence 31 entries (Lr-d2 is the re-measurement of Lr-d, which has no table row of its own); the fix round's table and fence have 21 each; fix round 2's have 16 each.
+
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
 | Lr-a | No literal colour in the stylesheet; text sits on a closed ground | `.rv-n { color: #123456 }` in `assets/layouts/review.css` | Red: the hosted review rows 12 failed of the 12 selected ("text on a ground that is not closed", `b.rv-n` on the card's surface, every fixture); the unit scan 1 failed, 19 passed |
@@ -43,6 +45,7 @@ Guards that deb8d3c removed as unreachable were wrong for the card's and the tog
   {"id":"Lr-b","file":"src/enhance/layouts/review/header.ts","savedSha256":"9292e4d4a818981725985d599a1e7917c5b9acac446fef56bccad832e271dcd2","restoredSha256":"9292e4d4a818981725985d599a1e7917c5b9acac446fef56bccad832e271dcd2","tests":"test/enhance-walls.test.ts","rc":1,"failed":2,"passed":14},
   {"id":"Lr-c","file":"assets/layouts/review.css","savedSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","restoredSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13,"red":["412x915: the contents are reachable, the card shows, and nothing scrolls sideways"]},
   {"id":"Lr-d","file":"src/frame/manifest.generated.ts","tests":"test/size-rules.ts (pure judge, scratch script)","rc":0,"control":{"review":212815,"defaults":225709,"violations":[]},"paddingChars":12895,"mutantChars":225710,"capChars":225709,"red":["layouts: review is 225710 characters, over the default enhance bundle's 225709"]},
+  {"id":"Lr-d2","file":"src/frame/manifest.generated.ts","tests":"test/size-rules.ts (pure judge, scratch script)","rc":0,"supersedes":"Lr-d","control":{"review":195631,"defaults":225709,"violations":[]},"paddingChars":30079,"mutantChars":225710,"capChars":225709,"red":["layouts: review is 225710 characters, over the default enhance bundle's 225709"]},
   {"id":"Lr-e","file":"assets/layouts/review.css","savedSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","restoredSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","runs":[{"tests":"test/browser/appearance-cues.test.ts","rc":1,"failed":1,"passed":45,"skipped":46},{"tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13}]},
   {"id":"Lr-f","file":"src/frame/csp.ts","savedSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","restoredSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","runs":[{"tests":"test/frame-layouts.test.ts","rc":1,"failed":1,"passed":52},{"tests":"test/frame-boundaries.test.ts","rc":1,"failed":3,"passed":19},{"tests":"test/frame-csp.test.ts","rc":1,"failed":1,"passed":153}]},
   {"id":"Lr-g","file":"src/frame/csp.ts","savedSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","restoredSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","runs":[{"tests":"test/frame-csp.test.ts","rc":1,"failed":3,"passed":151},{"tests":"test/frame-layouts.test.ts","rc":1,"failed":7,"passed":46},{"tests":"test/frame-boundaries.test.ts","rc":0,"passed":22}]},
@@ -60,7 +63,7 @@ Guards that deb8d3c removed as unreachable were wrong for the card's and the tog
   {"id":"Lr-r2","file":"src/enhance/layouts/review/header.ts","savedSha256":"9292e4d4a818981725985d599a1e7917c5b9acac446fef56bccad832e271dcd2","restoredSha256":"9292e4d4a818981725985d599a1e7917c5b9acac446fef56bccad832e271dcd2","tests":"test/browser/layout-review.test.ts","rc":1,"failed":2,"passed":11,"skipped":13},
   {"id":"Lr-r3","file":"src/enhance/layouts/review/header.ts","savedSha256":"9292e4d4a818981725985d599a1e7917c5b9acac446fef56bccad832e271dcd2","restoredSha256":"9292e4d4a818981725985d599a1e7917c5b9acac446fef56bccad832e271dcd2","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13},
   {"id":"Lr-s1","file":"src/enhance/layouts/review/context.ts","savedSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","restoredSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":19},
-  {"id":"Lr-s2","file":"src/enhance/layouts/review/context.ts","savedSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","restoredSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":19},
+  {"id":"Lr-s2","file":"src/enhance/layouts/review/context.ts","savedSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","restoredSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":19,"note":"red at this measurement; superseded by Lr2-s2, green once the read-mark check returned"},
   {"id":"Lr-s3","file":"src/enhance/layouts/review/context.ts","savedSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","restoredSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13},
   {"id":"Lr-s4","file":"src/enhance/layouts/review/context.ts","savedSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","restoredSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13},
   {"id":"Lr-s5","file":"src/enhance/layouts/review/context.ts","savedSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","restoredSha256":"1877d4b105de834cd660c83e7debc3b979dc2fe15f4dad673fb51aba4fa2c7cb","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13},
@@ -74,7 +77,7 @@ Guards that deb8d3c removed as unreachable were wrong for the card's and the tog
 
 ## Review fix round: direction B, and the guards the review asked for
 
-Measured in the same way on the fix round's sources (each row's JSON records the file's saved and restored SHA-256). Rows of the first table not listed here keep their original measurement, taken at `deb8d3c`: their guards are unchanged by the fix round, though the stylesheet and `header.ts` bytes moved elsewhere in the file, which is stated rather than re-run. Lr-d is superseded, re-measured, kept: the review layout is now 195,631 characters (190,199 and 5,432) against 225,709; padding 30,079 gives 225,710 and the judge rejects it, the control has no violation.
+`18264c6` changed `header.ts` after the Lr2 header rows were measured: a type cast on the title's focus call, the bundle byte-identical, so those rows' saved hashes name the file as measured, not as committed. Measured in the same way on the fix round's sources (each row's JSON records the file's saved and restored SHA-256). Rows of the first table not listed here keep their original measurement, taken at `deb8d3c`: their guards are unchanged by the fix round, though the stylesheet and `header.ts` bytes moved elsewhere in the file, which is stated rather than re-run. Lr-d is superseded, re-measured, kept: the review layout was then 195,631 characters (190,199 and 5,432) against 225,709; padding 30,079 gives 225,710 and the judge rejects it, the control has no violation (JSON entry Lr-d2).
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
@@ -125,5 +128,49 @@ Features review lacks run no cue row for it: the changed and attention geometry 
   {"id":"Lr2-5a","file":"assets/layouts/review.css","savedSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","restoredSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":427},
   {"id":"Lr2-5b","file":"assets/layouts/review.css","savedSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","restoredSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":427},
   {"id":"Lr2-5c","file":"assets/layouts/review.css","savedSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","restoredSha256":"a4cce015756e2d65c512cd1f044f902d6a6d19289f82a10e9222d3e246cdb7b3","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":427}
+]
+```
+
+## Fix round 2: compact rows and the rail's waiting link
+
+Measured on the committed sources (the file bytes are in each row's JSON); one test file per call, Chromium for browser files, except the last fine-pointer row, whose two runs shared a call.
+
+| Row | Guard | Mutation | Measured result |
+|---|---|---|---|
+| Lr3-d | The layout stays under the default bundle (supersedes Lr-d and Lr2 size notes) | Pad the review bundle's characters by 25,691 in memory | Red: control 200,019 against 225,709 has no violation; 225,710 is rejected |
+| Lr3-c1 | A table is compact from six rows | `ROWS_MIN` 5 | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-c2 | A table is compact over 240 characters a row | `AVERAGE_MIN` 200 | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-c3 | An empty cell is not wrapped | Drop the skip | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-c4 | The buttons go in the filter's tools when the table has a filter | Always make a bar of its own | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-c5 | A row's button opens and closes it | Drop the class toggle | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-c6 | Open all rows opens every row | Drop the row loop | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-c7 | The relayout measures overflow | Never overflowing | Red: `layout-review` 2 failed, 19 passed |
+| Lr3-c8 | The hidden-root check | Dropped permanently | Equivalent: a root with no box reads zero heights and marks nothing clipped; the check was removed |
+| Lr3-w1 | The waiting link needs a list | Drop `waiting.length > 0` | Red: `enhance-layouts` 1 failed, 66 passed |
+| Lr3-w2 | The waiting link beats the shared rail's link rule | Revert to the bare `.rv-wait` selector | Red: `layout-review` 1 failed, 20 passed (computed border and padding) |
+| Lr3-p | Nothing is clipped on a phone | Drop the phone rule | Red: `layout-review` 1 failed, 20 passed |
+| Lr3-t1 | Open all rows keeps the 44 px floor | `min-height: 20px` | Red: `layout-review` 1 failed, 20 passed |
+| Lr3-t2 | A row button keeps the 44 px floor | `min-height` and `min-width` 20px | Red: `layout-review` 1 failed, 20 passed |
+| Lr3-f | The control-row rule is under a fine pointer | `@media all` | Red: `layout-review` 1 failed, 20 passed and `appearance-cues` 1 failed, 57 passed |
+| Lr3-5 | The compact states sit on closed grounds | Literal colour on Open all rows | Red: `appearance-style` review Nord 1 failed (rest, rv-pressed and other states of the synthetic compact fixture) |
+
+```json
+[
+  {"id":"Lr3-d","file":"src/frame/manifest.generated.ts","tests":"test/size-rules.ts (pure judge, scratch script)","rc":0,"control":{"review":200019,"defaults":225709,"violations":[]},"paddingChars":25691,"mutantChars":225710,"capChars":225709},
+  {"id":"Lr3-c1","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c2","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c3","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c5","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c6","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c7","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/browser/layout-review.test.ts","rc":1,"failed":2,"passed":19,"skipped":21},
+  {"id":"Lr3-c8","file":"src/enhance/layouts/review/compact.ts","rc":0,"note":"equivalent: removed"},
+  {"id":"Lr3-w1","file":"src/enhance/layouts/review/rail.ts","savedSha256":"f3a39cbb4f9543a689af","restoredSha256":"f3a39cbb4f9543a689af","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-w2","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-p","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-t1","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-t2","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-f","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","runs":[{"tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20},{"tests":"test/browser/appearance-cues.test.ts","rc":1,"failed":1,"passed":57}]},
+  {"id":"Lr3-5","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":455}
 ]
 ```

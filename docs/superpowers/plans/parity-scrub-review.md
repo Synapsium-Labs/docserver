@@ -2,7 +2,7 @@
 
 ## Design
 
-The review layout is the reference's direction B, the review workbench: a header card that says what the document is, its status and what waits on the reader; a rail with Contents, with per-section read marks, and an Index of every defined ID; ID links in running text that preview their row; a sticky bar naming the section being read; keyboard first. Most of that is what the shared reader already does, so the layout is a feature list over the shared modules, three small modules of its own, and a stylesheet. It is not the default reader with two parts removed: it leaves out what direction B does not have.
+The review layout is the reference's direction B, the review workbench: a header card that says what the document is, its status and what waits on the reader; a rail with Contents, with per-section read marks, and an Index of every defined ID; ID links in running text that preview their row; a sticky bar naming the section being read; keyboard first. Most of that is what the shared reader already does, so the layout is a feature list over the shared modules, four small modules of its own, and a stylesheet. It is not the default reader with two parts removed: it leaves out what direction B does not have.
 
 **The feature list** (`src/enhance/layouts/review/features.ts`) selects the shared modules in their standard relative order (the header of `src/enhance/features.ts` says why each step follows the ones before it): `editorial`, `rules`, `tables`, `status`, `ids`, `plans`, `code`, `figures`, `xrefs`, `marks`, `rail`, `strip`, `scroll`, `cards`, `jump`, `keysheet`, `diagrams`, `diagram-tools`, `position`, behind the layout mark. It leaves out `folds`, `since`, `changes` (the change stepper and its `n` and `p` keys), `glossary` (term links), `attention` (the lens) and `settings` (the Aa menu): direction B has none of them. A unit row holds the list to that.
 
@@ -11,13 +11,14 @@ The review layout is the reference's direction B, the review workbench: a header
 | `review/header.ts` (`review-header`) | after `strip`, before `scroll` | No shared module draws a card round the title block, and the shared modules have no next-unread key. The strip is in the block by then and the marks' controls exist, which the card's progress counts. It also sends the bar's "Skip to the text" link on to the title the card now holds. |
 | `review/rail.ts` (`review-rail`) | after `header` | Adds chrome to the rail the shared module made, without editing it: a link to what waits at the top of the Contents tab, and the read count in the rail's footer. |
 | `review/context.ts` (`review-context`) | after `jump` | No shared module puts a read-mark toggle in the bar. It takes the tray's slot of the change stepper, which this layout does not build, through the bar's own `tool` method, so the bar's landmark bookkeeping runs. It follows the spy and marks events. |
+| `review/compact.ts` (`review-compact`) | after `cards` | No shared module clips long table rows. It runs after the table, status, ID, link and card modules: they read cells by position only while they build, and after that only text (the filter), descendants (the rail's pills) and copies of a cell's children (preview cards), none of which a wrapper changes. |
 | `layouts/mark.ts` | first | Shared by every non-default layout. |
 
 Everything else is imported from `src/enhance/`, never copied, and no default asset is edited: the rail, the strip and the bar are the default bundle's modules and this layout only adds nodes beside them through the journal. The rail (Contents and Index tabs, drawer), the ID links and preview cards (`xrefs`, `cards`), the strip, the running head and progress line (`scroll`), the keys (`keys`, `keysheet`), the quick jump and the marks are the default's, so their behaviour, accessibility and hosted contract are the default's.
 
 **State.** The layout holds no state of its own and no new store key or document field. The read marks are the marks feature's (`doc:<key>:marks`, an existing document field), the rail's tab is the reader's `ui` pref as the default's, and the card's counts, the rail's count, the `n` key and the bar toggle read the marks feature's controls (`button.h-mark`) and its `marks` and `spy` events. The toggle presses the unit's own control, so there is one writer. The bootstrap, the document fields and the store keys are unchanged.
 
-**Budgets.** The layout's enhance bundle is 190,199 characters and its stylesheet 5,432, 195,631 together, against the default enhance bundle's 225,709. The five entries the default frame inlines and the B1 layouts' entries keep their sha256 and bytes, and the bootstrap stays at 32,740 bytes.
+**Budgets.** The layout's enhance bundle is 191,929 characters and its stylesheet 8,090, 200,019 together, against the default enhance bundle's 225,709. The five entries the default frame inlines and the B1 layouts' entries keep their sha256 and bytes, and the bootstrap stays at 32,740 bytes.
 
 ## In short
 
@@ -38,6 +39,7 @@ Review selects the shared reader's rail, ID links, strip, running head and keys,
 | Skip to the text | The bar's own link goes to the first node that is not chrome, which the card changes; `review/header.ts` sends focus on to the title. |
 | Read marks | Shared `marks.ts` and its `m` key, in the heading's controls, the rail and the card. |
 | Keyboard | `/` and Ctrl or Cmd+K, `j` `k`, `w`, `n` (next unread), `m`, `o` (plans), `i`, `?` : the shared bindings and `n`; the sheet lists the keys that apply. The reference's `p` has no use without the change stepper. |
+| Compact clipped rows and "Open all rows" (section 5) | `review/compact.ts`, with the reference's thresholds (six rows or more, rows averaging over 240 characters): each cell's children move into a chrome wrapper through the journal, overflow is measured in the relayout run (reads, then writes), and the stylesheet clips to a few lines. A button in the first cell opens a row (keyboard reachable, `aria-expanded`), and "Open all rows" sits in the table's tools (the filter's, for twelve rows or more). Differences: clicking a clipped row's text does not open it (the button does), and nothing is clipped on a phone, where rows stack as cards. |
 | Tables, status pills, code copy, figures and their tools | The shared `tables`, `status`, `code`, `figures`, `diagrams` and `diagram-tools`, as the default's. |
 | Alerts, boxes and numbered sections | Renderer output and the shared `editorial`, styled by shared reader assets. |
 
@@ -45,7 +47,6 @@ Review selects the shared reader's rail, ID links, strip, running head and keys,
 
 | Reference default or mechanism | Boundary and reason |
 |---|---|
-| Compact clipped rows with "Open all rows" (reference section 5) | Not ported. Clipping a table row needs a wrapper inside every cell, and the shared `tables`, `status`, `ids` and `xrefs` modules have by then put their own chrome and positions in those cells (the phone cards, status marks and ID cells address them by position), so a layout module moving every cell's children would change what those modules built and their snapshots. It can be built only by a change to the shared table module, which this landing may not make. |
 | Page-global startup, body classes, global IDs and window listeners | The host mounts a root-scoped instance; every chrome node and listener goes through the journal and is undone at teardown. |
 | A CDN import of the diagram library | Mermaid is supplied by the host adapter; no network is added. |
 | Local storage for read marks and other state | Marks go through the reader's state service (the bridge's store), as the default's. The layout adds no store key and no document field. |
@@ -58,7 +59,7 @@ Review selects the shared reader's rail, ID links, strip, running head and keys,
 
 ## 3. Evidence limits
 
-The 54 shared Level 2 cases are pinned under `conformance/layouts/review/`. Their scopes are the shared cases' class lists, none of which names the card (`rv-card`, `rv-read`), the bar toggle (`rv-mark`) or the rail additions (`rv-wait`, `rv-foot-read`, although the footer's count shows in the rail snapshots), so those are pinned by the interaction rows of `test/browser/layout-review.test.ts` and the unit rows of `test/enhance-layouts.test.ts`, not by snapshots. A new shared case would add files under the default's and every other layout's directories, which this task may not move.
+None of the 54 shared Level 2 cases has a table that is compact, so the compact rows are pinned by the interaction rows and a synthetic hosted fixture, not by snapshots. The 54 shared Level 2 cases are pinned under `conformance/layouts/review/`. Their scopes are the shared cases' class lists, none of which names the card (`rv-card`, `rv-read`), the bar toggle (`rv-mark`) or the rail additions (`rv-wait`, `rv-foot-read`, although the footer's count shows in the rail snapshots), so those are pinned by the interaction rows of `test/browser/layout-review.test.ts` and the unit rows of `test/enhance-layouts.test.ts`, not by snapshots. A new shared case would add files under the default's and every other layout's directories, which this task may not move.
 
 Under review, the first heading sits lower than under the default (the card is taller than the shared title block), so the rail's initial active entry differs in `review/rail/drawer` and its marks cases. Dropping the glossary and the settings menu removed the term links from the `links` cases, emptied the settings cases, and removed the definition cue from the two diagram cases that name a glossary term in an edge label; the corpus waits for no cue there.
 
