@@ -32,6 +32,9 @@ const LARGE: Record<BrowserName, { k: number; backstopMs: number }> = {
 /** The separators of the case whose text is cut into FRAGMENTS nodes first. */
 const FRAGMENT_K = 4000;
 const FRAGMENTS = 5;
+/** The like fixture: separators in a few text nodes, the same on every engine. */
+const LIKE_K = 10000;
+const LIKE_FRAGMENTS = 2;
 
 function markdown(k: number): string {
   return `# T\n\n**Spec** · ${Array.from({ length: k }, (_, i) => `w${String(i)}`).join(' · ')}\n\n## Body\n\nText.\n`;
@@ -160,6 +163,17 @@ describeBrowsers((name: BrowserName) => {
     expect(out.texts).toBeGreaterThanOrEqual(FRAGMENTS);
     expectBounded(out, FRAGMENT_K, backstopMs);
     // Every node had separators, so every node was joined by a range of its own: the count is the nodes, here, exactly.
+    expect(out.undone['createRange']).toBe(out.texts);
+  }, 120000);
+
+  // A like fixture for the two engines: 10 000 separators in 2 text nodes, which is what WebKit's own parser makes of the large
+  // case, here made on every engine. The build and the undo are printed apart, so a WebKit leg's line sets against Chromium's
+  // and against the README's table; the bounds are the file's counts and its backstop, no new clock.
+  it(`${name}: ${String(LIKE_K)} separators in ${String(LIKE_FRAGMENTS)} text nodes are cut and joined with a bounded count of DOM operations`, async () => {
+    const out = await measure(name, LIKE_K, LIKE_FRAGMENTS);
+    console.info(`byline-many ${name} k=${String(LIKE_K)} fragments=${String(LIKE_FRAGMENTS)}: texts=${String(out.texts)} enhanceMs=${out.enhanceMs.toFixed(0)} destroyMs=${out.destroyMs.toFixed(0)}`);
+    expect(out.texts).toBeGreaterThanOrEqual(LIKE_FRAGMENTS);
+    expectBounded(out, LIKE_K, backstopMs);
     expect(out.undone['createRange']).toBe(out.texts);
   }, 120000);
 });
