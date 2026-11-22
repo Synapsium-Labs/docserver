@@ -388,6 +388,8 @@ interface State {
   readonly variants?: readonly Variant[];
   /** A state of the In short switch (parity Task 5): read by (b) and (c), which open each document with `inShort` on; (a) opens none that way. */
   readonly needsSwitch?: true;
+  /** A state of the review layout's own chrome: the default's documents never reach it, so only the review rows require it. */
+  readonly reviewOnly?: true;
   /** Put the page in the state; true when it is in it (the trigger exists and the thing is shown). */
   apply(page: Page): Promise<boolean>;
   clear(page: Page): Promise<void>;
@@ -596,6 +598,58 @@ const STATES: readonly State[] = [
       await frames(page);
     },
   },
+  {
+    // The review layout's bar toggle, pressed: a unit's own mark control is read, the page is scrolled to it, and the toggle says so.
+    name: 'rv-pressed',
+    reviewOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const control = document.querySelector('button.h-mark');
+        const heading = control?.closest('h2, h3, h4, h5, h6');
+        if (!(control instanceof HTMLElement) || !(heading instanceof HTMLElement) || document.querySelector('.rv-mark') === null) return false;
+        if (!control.classList.contains('on')) control.click();
+        window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - 100);
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.rv-mark[aria-pressed="true"]') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page);
+    },
+  },
+  {
+    // ... and changed: a mark whose section changed since it was read.
+    name: 'rv-changed',
+    reviewOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const heading = document.querySelector('button.h-mark.changed')?.closest('h2, h3, h4, h5, h6');
+        if (!(heading instanceof HTMLElement) || document.querySelector('.rv-mark') === null) return false;
+        // A short document cannot scroll its last section up to the reading line: give the page room below it.
+        const room = document.createElement('div');
+        room.id = 'rv-room';
+        room.style.height = '2000px';
+        document.body.append(room);
+        window.scrollTo(0, heading.getBoundingClientRect().top + window.scrollY - 100);
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      await frames(page);
+      return page.evaluate(() => document.querySelector('.rv-mark.changed') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        document.getElementById('rv-room')?.remove();
+        window.scrollTo(0, 0);
+      });
+      await frames(page);
+    },
+  },
   forced('hover', ['hover']),
   forced('focus-visible', ['focus', 'focus-visible']),
   {
@@ -700,7 +754,7 @@ async function compareDoc(doc: Doc, browser: BrowserName, other: string, count =
     await inMode(b, mode, doc.id);
     for (const st of STATES) {
       if (st.chromiumOnly === true && browser !== 'chromium') continue;
-      if (st.needsSwitch === true) continue;
+      if (st.needsSwitch === true || st.reviewOnly === true) continue;
       if (only !== null && !only.includes(st.name)) continue;
       const began = Date.now();
       const ok = [await st.apply(a.page), await st.apply(b.page)];
@@ -944,7 +998,7 @@ describeBrowsers((browser) => {
 
     it('every state was reached by some document', () => {
       if (reached.size === 0) return; // this row was run alone
-      const missing = STATES.filter((s) => s.needsSwitch !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
+      const missing = STATES.filter((s) => s.needsSwitch !== true && s.reviewOnly !== true && (s.chromiumOnly !== true || browser === 'chromium') && (reached.get(s.name) ?? 0) === 0).map((s) => s.name);
       expect(missing).toEqual([]);
     });
   });
@@ -1252,7 +1306,7 @@ describeBrowsers((browser) => {
       const required = [
         'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
         ...(layout === 'editorial' ? ['short-headlines'] : []),
-        ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines'] : []),
+        ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines', 'rv-pressed', 'rv-changed'] : []),
       ];
       const states = [...required, 'hover', 'focus-visible'];
 

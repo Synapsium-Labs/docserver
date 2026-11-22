@@ -97,6 +97,41 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('the bar\'s Skip to the text link lands on the card\'s title', async () => {
+    const doc = await open();
+    try {
+      const { page } = doc;
+      await page.locator('a.skip-link').focus();
+      await page.keyboard.press('Enter');
+      expect(await page.evaluate(() => document.activeElement?.tagName === 'H1' && document.activeElement.closest('header.rv-card') !== null)).toBe(true);
+    } finally { await doc.close(); }
+  });
+
+  it('n goes to the next unread section and the sheet lists it; the rail leads with a link to what waits and ends with the read count', async () => {
+    const doc = await open();
+    try {
+      const { page } = doc;
+      await page.keyboard.press('n');
+      await expect.poll(() => page.locator('h2[id="1-first"].flash').count()).toBe(1);
+      await page.locator('h2[id="1-first"] .h-mark').click();
+      expect(await page.locator('.rv-foot-read').textContent()).toBe('1 of 3 read');
+      await page.keyboard.press('?');
+      expect(await page.locator('.keys.open').innerText()).toContain('Next unread section');
+      await page.keyboard.press('Escape');
+      const wait = page.locator('.toc-contents > a.rv-wait');
+      expect(await wait.innerText()).toContain('Waiting on you');
+      await wait.click();
+      await expect.poll(() => page.locator('h3.flash').count()).toBe(1);
+    } finally { await doc.close(); }
+  });
+
+  it('the card says nothing about changes until a mark has changed', async () => {
+    const doc = await open();
+    try {
+      expect(await doc.page.locator('.rv-changed').evaluate((el) => getComputedStyle(el).display)).toBe('none');
+    } finally { await doc.close(); }
+  });
+
   it('the bar names the section being read and its toggle marks it read and unread, with the card and the rail in step', async () => {
     const doc = await open();
     try {
@@ -140,16 +175,16 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
-  it('an ID in running text is a chip that previews its row, and its link goes to the row', async () => {
+  it('an ID in running text previews its row, takes a tint on hover, and its link goes to the row', async () => {
     const doc = await open();
     try {
       const { page } = doc;
       const chip = page.locator('h2[id="1-first"] ~ p a.xref', { hasText: 'D2' }).first();
-      const shape = await chip.evaluate((el) => {
-        const s = getComputedStyle(el);
-        return { border: s.borderTopWidth, radius: parseFloat(s.borderTopLeftRadius) > 8, decoration: s.textDecorationLine };
-      });
-      expect(shape).toEqual({ border: '1px', radius: true, decoration: 'none' });
+      const tint = async (): Promise<string> => chip.evaluate((el) => getComputedStyle(el).backgroundColor);
+      const rest = await tint();
+      await chip.hover();
+      expect(await tint(), 'a hover tint').not.toBe(rest);
+      await page.mouse.move(2, 2);
       await chip.focus();
       const card = page.locator('.xcard.open');
       await card.waitFor();
@@ -223,7 +258,7 @@ describeBrowsers((browser) => {
       expect((await page.locator('.rv-next').boundingBox())!.height, 'the card button').toBe(44);
       expect((await page.locator('.bar-tools .rv-mark').boundingBox())!.height, 'the bar toggle').toBeGreaterThanOrEqual(44);
       await page.getByRole('button', { name: 'Contents' }).click();
-      for (const row of [page.getByRole('tab', { name: 'Contents' }), page.locator('.toc-contents a').first()]) {
+      for (const row of [page.getByRole('tab', { name: 'Contents' }), page.locator('.toc-contents a.rv-wait'), page.locator('.toc-contents a').nth(1)]) {
         expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       }
       await page.getByRole('tab', { name: 'Index' }).click();

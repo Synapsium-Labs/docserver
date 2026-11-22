@@ -76,7 +76,9 @@ function cueState(): CueState | null {
 async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>, layout?: HarnessLayout): Promise<void> {
   const expected = CUE_SCOPES[c.id];
   if (expected === undefined) return;
-  if (layout === 'classic' || layout === 'editorial') {
+  // The review layout keeps the ID index and so the cues of IDs, but not the glossary, whose terms two cases name in edge labels.
+  const noGlossary = layout === 'review' && (c.id === 'diagram-tools/edge-label' || c.id === 'diagram-tools/flowchart-link-data-id');
+  if (layout === 'classic' || layout === 'editorial' || noGlossary) {
     // Both alternate layouts draw and control figures but omit definition previews.
     // Wait for tool wiring before asserting absence; don't accept an undrawn source.
     await doc.page.locator('figure.drawn svg').first().waitFor();

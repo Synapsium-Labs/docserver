@@ -260,8 +260,8 @@ describeBrowsers((browser) => {
     }
   }
 
-  it('a heading mark in the changed state reads "Changed since you read it"', async () => {
-    const doc = await open(browser, { appearance: COLLISION, marks: true });
+  sharedCue('a heading mark in the changed state reads "Changed since you read it"', async (layout) => {
+    const doc = await open(browser, { layout, appearance: COLLISION, marks: true });
     try {
       const mk = doc.page.locator(`${rootSel} h2[id="1-section"] .h-mark`);
       expect(await mk.textContent()).toBe('Changed since you read it');
@@ -269,7 +269,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review']);
 
   it('painted geometry: a changed block, item and row (wide) paint two 2px runs and a 2px gap; an attention mark paints one 3px run', async () => {
     const doc = await open(browser, { appearance: COLLISION });
@@ -418,8 +418,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the four status dots have pairwise different shapes with every colour removed, and each swatch has its role\'s dot\'s shape', async () => {
-    const doc = await open(browser, { appearance: NO_COLOUR });
+  sharedCue('the four status dots have pairwise different shapes with every colour removed, and each swatch has its role\'s dot\'s shape', async (layout) => {
+    const doc = await open(browser, { layout, appearance: NO_COLOUR });
     try {
       await doc.page.evaluate((sel) => {
         const root = document.querySelector(sel) as HTMLElement;
@@ -435,7 +435,9 @@ describeBrowsers((browser) => {
         }
         root.append(index);
       }, rootSel);
-      await doc.page.locator(`${rootSel} .aa-btn`).click();
+      // The colour key is on the keys sheet (the review layout has no Aa menu, which holds the other copy).
+      await doc.page.keyboard.press('?');
+      await doc.page.locator(`${rootSel} .keys.open`).waitFor();
       const shapes = await doc.page.evaluate((sel) => {
         const shape = (e: Element): string => {
           const c = getComputedStyle(e);
@@ -455,10 +457,10 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review']);
 
-  it('a term is dotted, an id link dashed and an ordinary link solid, each underlined, on hover and while a card is open too', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  sharedCue('a term is dotted, an id link dashed and an ordinary link solid, each underlined, on hover and while a card is open too', async (layout) => {
+    const doc = await open(browser, { layout, appearance: COLLISION });
     try {
       await doc.page.evaluate((sel) => {
         const p = document.createElement('p');
@@ -495,7 +497,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'review']);
 
   it('a glossary table\'s term cell is its row\'s first cell, at a computed weight of 600', async () => {
     const doc = await open(browser, { appearance: COLLISION });
@@ -1028,7 +1030,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the contents panel takes controlRow and the section type only as a drawer, never as the wide column', async () => {
+  sharedCue('the contents panel takes controlRow and the section type only as a drawer, never as the wide column', async (layout) => {
     const skin = { controlRow: '44px', sectionSize: '12px' };
     const probe = (d: OpenedDoc): Promise<{ row: string; tab: string }> =>
       d.page.evaluate((sel) => {
@@ -1041,8 +1043,8 @@ describeBrowsers((browser) => {
         panel.append(tab);
         return { row: getComputedStyle(root.querySelector('.toc-contents a') as Element).minHeight, tab: getComputedStyle(b).fontSize };
       }, rootSel);
-    const column = await open(browser, { appearance: { mode: 'dark', skin }, width: 1440 });
-    const drawer = await open(browser, { appearance: { mode: 'dark', skin }, width: 1000 });
+    const column = await open(browser, { layout, appearance: { mode: 'dark', skin }, width: 1440 });
+    const drawer = await open(browser, { layout, appearance: { mode: 'dark', skin }, width: 1000 });
     try {
       expect(await probe(column), 'the wide column').toEqual({ row: '0px', tab: '11px' });
       await drawer.page.locator(`${rootSel} .toc-btn`).click();
@@ -1051,9 +1053,9 @@ describeBrowsers((browser) => {
       await column.close();
       await drawer.close();
     }
-  });
+  }, ['default', 'review']);
 
-  it('a drawer left open and then widened does not style the docked rail: a stale toc-open keeps 1.1.0\'s values', async () => {
+  sharedCue('a drawer left open and then widened does not style the docked rail: a stale toc-open keeps 1.1.0\'s values', async (layout) => {
     const skin = { controlRow: '44px', sectionSize: '12px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'uppercase', sectionFamily: 'mono' };
     const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
       d.page.evaluate((sel) => {
@@ -1068,8 +1070,8 @@ describeBrowsers((browser) => {
         const c = getComputedStyle(b);
         return { row: getComputedStyle(root.querySelector('.toc-contents a') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, family: c.fontFamily };
       }, rootSel);
-    const hosted = await open(browser, { appearance: { mode: 'dark', skin }, width: 1000 });
-    const plain = await open(browser, { appearance: { mode: 'dark' }, width: 1440 });
+    const hosted = await open(browser, { layout, appearance: { mode: 'dark', skin }, width: 1000 });
+    const plain = await open(browser, { layout, appearance: { mode: 'dark' }, width: 1440 });
     try {
       await hosted.page.locator(`${rootSel} .toc-btn`).click();
       await hosted.page.setViewportSize({ width: 1440, height: 1000 });
@@ -1080,7 +1082,7 @@ describeBrowsers((browser) => {
       await hosted.close();
       await plain.close();
     }
-  });
+  }, ['default', 'review']);
 
   it('popShadow replaces the shadow of quick jump, the keys sheet and the contents drawer, and the verdict\'s radii reach their boxes', async () => {
     const shadow = 'rgb(95, 105, 124) 0px 0px 0px 3px';
