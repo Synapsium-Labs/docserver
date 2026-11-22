@@ -43,6 +43,7 @@ export async function loadFrame(): Promise<BuiltFrame> {
     classic: { enhance: built.files.enhanceClassic.text, layoutCss: built.files.cssClassic.text },
     editorial: { enhance: built.files.enhanceEditorial.text, layoutCss: built.files.cssEditorial.text },
     review: { enhance: built.files.enhanceReview.text, layoutCss: built.files.cssReview.text },
+    guided: { enhance: built.files.enhanceGuided.text, layoutCss: built.files.cssGuided.text },
   };
   layoutAssetsLoaded = layouts;
   return {

@@ -116,6 +116,7 @@ export const LAYOUT_TABLE = Object.freeze({
   classic: ownLayout('classic'),
   editorial: ownLayout('editorial'),
   review: ownLayout('review'),
+  guided: ownLayout('guided'),
 });
 
 /** The layouts besides `default`, in table order. */

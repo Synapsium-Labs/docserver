@@ -36,6 +36,7 @@ vi.mock('../src/enhance/features.js', async (importOriginal) => {
     classic: (await import('../src/enhance/layouts/classic/features.js')).features,
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features,
     review: (await import('../src/enhance/layouts/review/features.js')).features,
+    guided: (await import('../src/enhance/layouts/guided/features.js')).features,
     // Not a layout: the review toggle alone, so the bar holds no other tool.
     'toggle-only': () => Object.freeze([
       { name: 'layout-mark', build: markBuild },
@@ -72,6 +73,7 @@ async function lists(): Promise<Record<string, readonly Feature[]>> {
     classic: (await import('../src/enhance/layouts/classic/features.js')).features(),
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features(),
     review: (await import('../src/enhance/layouts/review/features.js')).features(),
+    guided: (await import('../src/enhance/layouts/guided/features.js')).features(),
   };
 }
 
@@ -81,6 +83,7 @@ describe('the layouts\' feature lists', () => {
       classic: await import('../src/enhance/layouts/classic/features.js'),
       editorial: await import('../src/enhance/layouts/editorial/features.js'),
       review: await import('../src/enhance/layouts/review/features.js'),
+      guided: await import('../src/enhance/layouts/guided/features.js'),
     };
     for (const [name, m] of Object.entries(mods)) {
       const a = m.features();
@@ -393,6 +396,279 @@ describe('review: the scrub scan', () => {
   it('its sources and its stylesheet hold none of the shapes of a private detail (an absolute home or mount path, a private host or address, an e-mail, a credential) and no URL', () => {
     expect(files.map((f) => path.relative(ROOT, f))).toEqual([
       'src/enhance/layouts/review/context.ts', 'src/enhance/layouts/review/features.ts', 'src/enhance/layouts/review/header.ts', 'src/enhance/layouts/review/rail.ts', 'assets/layouts/review.css',
+    ]);
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8');
+      expect(findShapes(text), f).toEqual([]);
+      expect(/[a-z][a-z0-9+.-]*:\/\//i.test(text), `${f} names a URL`).toBe(false);
+    }
+  });
+});
+
+// ───────── guided (docserver parity Task 13) ─────────
+
+describe('guided: the hero, the layers, the reading tools and the times in Contents', () => {
+  const WORDS = (n: number): string => Array.from({ length: n }, (_, i) => `word${String(i)}`).join(' ');
+  const SPEC = [
+    '# A title', '', 'Some words.', '',
+    '## In short', '', 'Summary.', '',
+    `## 1. First`, '', 'The opening paragraph says what this is.', '', 'The second paragraph says why.', '',
+    'A third paragraph is already the rest.', '', '| a | b |', '|---|---|', '| 1 | 2 |', '',
+    `## 2. Second`, '', 'Only a short paragraph.', '',
+    `## 3. Third`, '', 'Opening words.', '', 'More opening words.', '', WORDS(340), '', '### Sub one', '', 'Text.', '', '### Sub two', '', 'Text.', '',
+    '## Where things stand', '', '### Waiting on you', '', '- A question.', '- Another.', '',
+  ].join('\n');
+  const stored = (extra: Record<string, string> = {}): { storage: { snapshot: Record<string, string>; set: (k: string, v: string | null) => void }; storageKey: string; writes: Map<string, string | null> } => {
+    const writes = new Map<string, string | null>();
+    return { storage: { snapshot: extra, set: (k, v) => void writes.set(k, v) }, storageKey: 'doc', writes };
+  };
+  const FOLDS_KEY = 'docreader:doc:doc:folds';
+  const hiddenOf = (root: HTMLElement): string[] => Array.from(root.querySelectorAll(':scope > [hidden="until-found"]')).map((e) => e.localName);
+  const bar = (root: HTMLElement, id: string): HTMLElement => (root.querySelector(`h2[id="${id}"]`) as HTMLElement).nextElementSibling?.matches('.gd-meta') === true
+    ? ((root.querySelector(`h2[id="${id}"]`) as HTMLElement).nextElementSibling as HTMLElement)
+    : (root.querySelector(`h2[id="${id}"]`) as HTMLElement);
+
+  it('moves the title block and the In short box into one header, with the glance after them', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC);
+    await enhance(root);
+    const hero = root.querySelector('header.gd-hero') as HTMLElement;
+    expect(root.querySelector(':scope > h1')).toBeNull();
+    expect(hero.querySelector(':scope > h1')?.textContent).toBe('A title');
+    expect(hero.querySelector(':scope > div.short h2')?.textContent).toBe('In short');
+    const glance = hero.querySelector(':scope > .gd-glance') as HTMLElement;
+    expect(hero.lastElementChild).toBe(glance);
+    expect(Array.from(glance.children).map((c) => c.textContent)).toEqual(['In short1 min', 'Contains3 sections · 1 table', 'Waiting on you2 items →']);
+    expect(glance.querySelector('a.gd-wait')?.getAttribute('href')).toBe('#waiting-on-you');
+    expect(Array.from(root.children).find((c) => !c.hasAttribute('data-docreader-chrome') || c.matches('header'))).toBe(hero);
+  });
+
+  it('builds neither hero, layers nor tools for a page that is not a document, and no layers without folds', async () => {
+    pick.layout = 'guided';
+    for (const markdown of ['Just a paragraph.\n', '# A title\n\nOne paragraph and no sections.\n']) {
+      const root = mount(markdown);
+      await enhance(root);
+      expect(root.querySelector('.gd-hero, .gd-bar, .gd-tools, .gd-glance'), markdown).toBeNull();
+    }
+    const root = mount(SPEC);
+    await enhance(root, { folds: false });
+    expect(root.querySelector('.gd-bar, .gd-tools')).toBeNull();
+    expect(root.querySelector('header.gd-hero')).not.toBeNull();
+  });
+
+  it('keeps each section\'s heading, time and intro, folds the rest behind one button, and folds nothing it should not', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    // First: two paragraphs are the intro; the third paragraph and the table fold. A time under a minute says nothing of it.
+    const first = root.querySelector('h2[id="1-first"]') as HTMLElement;
+    expect(first.nextElementSibling?.matches('.gd-meta')).toBe(true);
+    expect(first.nextElementSibling?.textContent).toBe('1 table');
+    const kids = Array.from(root.children);
+    const at = kids.indexOf(first);
+    const shape = (c: Element): string => `${c.localName}${c.matches('.gd-bar') ? '.bar' : ''}${c.hasAttribute('hidden') ? '!' : ''}`;
+    expect(kids.slice(at + 1, at + 7).map(shape)).toEqual(['p', 'p', 'p', 'div.bar', 'p!', 'div!']);
+    const btn = root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(btn.querySelector('.gd-label')?.textContent).toBe('Read the whole section');
+    expect(btn.querySelector('.gd-sum')?.textContent).toBe('1 table');
+    // Second has nothing worth folding, and Where things stand is never folded.
+    expect(root.querySelectorAll('.gd-bar').length).toBe(2);
+    expect(root.querySelector('h2[id="where-things-stand"]')?.hasAttribute('hidden')).toBe(false);
+    expect(root.querySelector('.callout')?.hasAttribute('hidden')).toBe(false);
+    // Third: the intro is its one short paragraph and the long one; the subsections come as links.
+    const third = root.querySelector('h2[id="3-third"] ~ .gd-bar') as HTMLElement;
+    expect(third.querySelector('.gd-sum')?.textContent).toMatch(/^\d+ min more · 2 subsections$/);
+    expect(Array.from(third.querySelectorAll('.gd-inside a')).map((a) => [a.textContent, a.getAttribute('href')])).toEqual([['Sub one', '#sub-one'], ['Sub two', '#sub-two']]);
+    expect(hiddenOf(root).length).toBeGreaterThan(0);
+  });
+
+  it('opens and folds a section with its button, writes the folded sections behind, and the end button folds it and goes to the heading', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"full"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    expect(hiddenOf(root)).toEqual([]);
+    const btn = root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLButtonElement;
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    expect(btn.querySelector('.gd-label')?.textContent).toBe('Show less');
+    expect(btn.getAttribute('aria-label')).toBe('Show less: First');
+    btn.click();
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(btn.getAttribute('aria-label')).toBe('Read the whole section: First');
+    expect(s.writes.get(FOLDS_KEY)).toBe('["1-first"]');
+    expect(hiddenOf(root)).toEqual(['p', 'div', 'div']);
+    expect(root.querySelector('h2[id="1-first"] ~ .gd-bar')?.classList.contains('open')).toBe(false);
+    btn.click();
+    expect(s.writes.get(FOLDS_KEY)).toBe('[]');
+    expect(hiddenOf(root)).toEqual([]);
+    // The end button folds the section again and puts the heading back at the top.
+    (root.querySelector('h2[id="1-first"] ~ .gd-end-row .gd-end') as HTMLButtonElement).click();
+    expect(s.writes.get(FOLDS_KEY)).toBe('["1-first"]');
+    expect(hiddenOf(root)).toEqual(['p', 'div', 'div']);
+    expect(document.activeElement).toBe(btn);
+  });
+
+  it('expands and collapses every section from the bar, remembers the choice for a document with nothing remembered, and disables the button that would do nothing', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"full"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const [expand, collapse] = Array.from(root.querySelectorAll('.bar-tools .gd-tools button.gd-all')) as HTMLButtonElement[];
+    expect([expand?.textContent, expand?.disabled, collapse?.textContent, collapse?.disabled]).toEqual(['Expand all', true, 'Collapse all', false]);
+    collapse?.click();
+    expect(s.writes.get(FOLDS_KEY)).toBe('["1-first","3-third"]');
+    expect(s.writes.get('docreader:ui')).toBe('{"layers":"guided"}');
+    expect([expand?.disabled, collapse?.disabled]).toEqual([false, true]);
+    expect(hiddenOf(root).length).toBeGreaterThan(2);
+    expand?.click();
+    expect(s.writes.get(FOLDS_KEY)).toBe('[]');
+    expect(s.writes.get('docreader:ui')).toBe('{"layers":"full"}');
+    expect(hiddenOf(root)).toEqual([]);
+    expect([expand?.disabled, collapse?.disabled]).toEqual([true, false]);
+  });
+
+  it('decides a document with nothing remembered by its length: a short one opens in full, a long one guided, the reader\'s choice first, a stored list before both', async () => {
+    pick.layout = 'guided';
+    const long = SPEC.replace(WORDS(340), WORDS(3600));
+    const state = async (md: string, extra: Record<string, string>): Promise<string[]> => {
+      const root = mount(md);
+      const s = stored(extra);
+      await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+      return Array.from(root.querySelectorAll('.gd-btn')).map((b) => b.getAttribute('aria-expanded') as string);
+    };
+    expect(await state(SPEC, {})).toEqual(['true', 'true']);
+    expect(await state(long, {})).toEqual(['false', 'false']);
+    expect(await state(long, { 'docreader:ui': '{"layers":"full"}' })).toEqual(['true', 'true']);
+    expect(await state(SPEC, { 'docreader:ui': '{"layers":"guided"}' })).toEqual(['false', 'false']);
+    expect(await state(SPEC, { 'docreader:ui': '{"layers":"guided"}', 'docreader:doc:doc:folds': '["3-third"]' })).toEqual(['true', 'false']);
+    expect(await state(long, { 'docreader:doc:doc:folds': '[]' })).toEqual(['true', 'true']);
+  });
+
+  it('opens the section a jump, a link inside the document or a find-in-page lands in', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const third = root.querySelector('h2[id="3-third"] ~ .gd-bar .gd-btn') as HTMLElement;
+    expect(third.getAttribute('aria-expanded')).toBe('false');
+    // A link: the Inside list's link goes to the subsection, which opens its section; the other stays folded.
+    (root.querySelector('h2[id="3-third"] ~ .gd-bar .gd-inside a') as HTMLElement).click();
+    expect(third.getAttribute('aria-expanded')).toBe('true');
+    expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('false');
+    expect(s.writes.get(FOLDS_KEY)).toBe('["1-first"]');
+    // Find-in-page: the browser fires beforematch on the folded block it found a match in.
+    const found = root.querySelector('h2[id="1-first"] ~ [hidden="until-found"]') as HTMLElement;
+    found.dispatchEvent(new Event('beforematch', { bubbles: true }));
+    expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('true');
+    expect(hiddenOf(root)).toEqual([]);
+  });
+
+  it('shows what the author hid as the author left it, and only unhides what the layout hid', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    const table = root.querySelector('.table-wrapper') as HTMLElement;
+    table.setAttribute('hidden', 'until-found');
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    (root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(table.getAttribute('hidden')).toBe('until-found');
+    table.setAttribute('hidden', '');
+    (root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    (root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(table.getAttribute('hidden')).toBe('');
+  });
+
+  it('puts the lens in the bar, as the reader\'s own pref: Product quiets, Engineering is everything, and a peek bar made after joins a folded section', async () => {
+    pick.layout = 'guided';
+    const code = '```ts\nconst a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;\n```\n';
+    const s = stored({ 'docreader:doc:doc:folds': '["1-first"]' });
+    const root = mount(SPEC.replace('| a | b |', `${code}\n| a | b |`));
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const [product, engineering] = Array.from(root.querySelectorAll('.bar-tools .gd-seg button')) as HTMLButtonElement[];
+    expect([product?.getAttribute('aria-pressed'), engineering?.getAttribute('aria-pressed')]).toEqual(['false', 'true']);
+    expect(product?.title).toContain('quiets');
+    expect(root.querySelector('.peek-bar')).toBeNull();
+    product?.click();
+    expect(root.classList.contains('lens-product')).toBe(true);
+    expect([product?.getAttribute('aria-pressed'), engineering?.getAttribute('aria-pressed')]).toEqual(['true', 'false']);
+    expect(root.querySelector('.peek-bar')?.getAttribute('hidden')).toBe('until-found');
+    expect(s.writes.get('docreader:prefs')).toContain('"lens":"product"');
+    engineering?.click();
+    expect(root.classList.contains('lens-product')).toBe(false);
+    expect([product?.getAttribute('aria-pressed'), engineering?.getAttribute('aria-pressed')]).toEqual(['false', 'true']);
+  });
+
+  it('adds a reading time to each Contents link of a section that takes a minute, and nothing to the others', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC.replace(WORDS(340), WORDS(600)));
+    await enhance(root);
+    const times = Array.from(root.querySelectorAll('.doc-toc > ul > li > a')).map((a) => [a.getAttribute('href'), a.querySelector('.gd-rt')?.textContent ?? null]);
+    expect(times).toEqual([['#in-short', null], ['#1-first', null], ['#2-second', null], ['#3-third', '3 min'], ['#where-things-stand', null]]);
+    const bare = mount(SPEC);
+    await enhance(bare, { chrome: { rail: false } });
+    expect(bare.querySelector('.doc-toc, .gd-rt')).toBeNull();
+  });
+
+  it('puts the time and what a section holds under its heading, and leaves "Where things stand" and a plain short section as they are', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC.replace(WORDS(340), WORDS(600)));
+    await enhance(root);
+    expect(root.querySelector('h2[id="3-third"] + .gd-meta')?.textContent).toBe('3 min read · 2 subsections');
+    expect(root.querySelector('h2[id="2-second"] + .gd-meta')).toBeNull();
+    expect(root.querySelector('h2[id="where-things-stand"] + .gd-meta')).toBeNull();
+  });
+
+  it('cuts an intro as the reference does: two paragraphs or about fifty words, an alert that opens the section, a colon line with its short list', async () => {
+    const { introCount } = await import('../src/enhance/layouts/guided/layers.js');
+    const el = (html: string): Element[] => Array.from(new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body.children);
+    const p = (n: number): string => `<p>${WORDS(n)}</p>`;
+    expect(introCount(el(`${p(5)}${p(5)}${p(5)}`))).toBe(2);
+    expect(introCount(el(`${p(60)}${p(5)}`))).toBe(1);
+    expect(introCount(el(`${p(5)}<pre>x</pre>${p(5)}`))).toBe(1);
+    expect(introCount(el(`<pre>x</pre>${p(5)}`))).toBe(0);
+    expect(introCount(el(`<div class="gh-alert"><p>x</p></div>${p(5)}${p(5)}${p(5)}`))).toBe(3);
+    expect(introCount(el(`${p(5)}<div class="gh-alert"><p>x</p></div>`))).toBe(1);
+    expect(introCount(el(`<p>These are:</p><ul><li>${WORDS(5)}</li></ul>${p(5)}`))).toBe(2);
+    expect(introCount(el(`<p>These are:</p><ol><li>${WORDS(5)}</li></ol>${p(5)}`))).toBe(2);
+    expect(introCount(el(`<p>These are:</p><ul><li>${WORDS(130)}</li></ul>${p(5)}`))).toBe(1);
+    expect(introCount(el(`${p(5)}<p>These are:</p><ul><li>${WORDS(130)}</li></ul>`))).toBe(1);
+    expect(introCount(el(`<p>These are:</p>${p(5)}`))).toBe(1);
+    expect(introCount(el(`<p>These are:</p>`))).toBe(1);
+    expect(introCount([])).toBe(0);
+  });
+
+  it('teardown puts everything back: the moved title block, the hidden blocks, the bars and the tools, the root as it was', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(SPEC);
+    const before = root.outerHTML;
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    (root.querySelector('.bar-tools .gd-seg button') as HTMLElement).click();
+    expect(hiddenOf(root).length).toBeGreaterThan(0);
+    await destroyEnhancement(root);
+    expect(root.outerHTML).toBe(before);
+  });
+
+  it('a host that destroys the reader while the fold is written leaves the page as it was and throws nothing', async () => {
+    pick.layout = 'guided';
+    const root = mount(SPEC);
+    await enhance(root, { storage: { snapshot: { 'docreader:ui': '{"layers":"full"}' }, set: (key) => { if (key === FOLDS_KEY) void destroyEnhancement(root); } }, storageKey: 'doc' });
+    (root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    await Promise.resolve();
+    expect(root.hasAttribute('data-docreader-root')).toBe(false);
+    expect(root.querySelector('[hidden="until-found"]')).toBeNull();
+  });
+});
+
+describe('guided: the scrub scan', () => {
+  const dir = path.join(ROOT, 'src', 'enhance', 'layouts', 'guided');
+  const files = [...readdirSync(dir).sort().map((n) => path.join(dir, n)), path.join(ROOT, 'assets', 'layouts', 'guided.css')];
+
+  it('its sources and its stylesheet hold none of the shapes of a private detail (an absolute home or mount path, a private host or address, an e-mail, a credential) and no URL', () => {
+    expect(files.map((f) => path.relative(ROOT, f))).toEqual([
+      'src/enhance/layouts/guided/contents.ts', 'src/enhance/layouts/guided/features.ts', 'src/enhance/layouts/guided/hero.ts', 'src/enhance/layouts/guided/layers.ts', 'src/enhance/layouts/guided/sections.ts', 'assets/layouts/guided.css',
     ]);
     for (const f of files) {
       const text = readFileSync(f, 'utf8');

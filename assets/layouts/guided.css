@@ -1,0 +1,67 @@
+/* Guided: the hero and its glance, every section's layers (the fold bar), reading times and the bar's reading tools, on the reader's tokens and the host's slots. */
+[data-docreader-root][data-docreader-layout="guided"] { --docreader-layout: guided; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-hero { margin: 0 0 1.8em; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-hero > h1 { margin-top: .3em; margin-bottom: .55em; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-hero > .short { margin: 1em 0 0; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); color: var(--text); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-glance { display: flex; flex-wrap: wrap; gap: .7em 1.8em; align-items: center; margin: 1em 0 0; padding: 0 .15em; font-family: var(--sans); font-size: calc(.88 * var(--rem)); color: var(--text); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-gk { display: block; font-size: calc(.66 * var(--rem)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="guided"] a.gd-wait { padding: .35em .8em; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; }
+[data-docreader-root][data-docreader-layout="guided"] a.gd-wait:hover { border-color: var(--accent); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-meta { margin: 0 0 1em; font-family: var(--sans); font-size: calc(.82 * var(--rem)); color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-bar { margin: .4em 0 1.4em; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-btn { display: flex; align-items: center; gap: .7em; width: 100%; box-sizing: border-box; padding: .6em .85em; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-family: var(--sans); font-size: calc(.9 * var(--rem)); line-height: 1.4; text-align: left; cursor: pointer; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-btn:hover { border-color: var(--accent); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-chev { flex: none; width: 0; height: 0; border-left: 6px solid var(--accent); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-btn[aria-expanded="true"] .gd-chev { transform: rotate(90deg); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-label { flex: none; font-weight: 650; color: var(--accent); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-sum { margin-left: auto; text-align: right; color: var(--text-muted); font-size: calc(.84 * var(--rem)); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-bar.open .gd-btn { width: auto; padding: .3em .75em; border-style: dashed; background: none; font-size: calc(.82 * var(--rem)); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-bar.open .gd-sum, [data-docreader-root][data-docreader-layout="guided"] .gd-bar.open .gd-inside { display: none; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-inside { display: flex; flex-wrap: wrap; align-items: center; gap: .4em; margin: .6em .15em 0; font-family: var(--sans); font-size: calc(.82 * var(--rem)); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-inside-k { margin-right: .2em; font-size: calc(.66 * var(--rem)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-inside a { max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: .1em .7em; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--text); text-decoration: none; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-inside a:hover { border-color: var(--accent); color: var(--accent); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-inside-more { color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-end-row { margin: 1em 0 .4em; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-end { padding: .2em .1em; border: 0; background: none; color: var(--text-muted); font: inherit; font-family: var(--sans); font-size: calc(.82 * var(--rem)); cursor: pointer; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-end::before { content: "\25B4  "; }
+[data-docreader-root][data-docreader-layout="guided"] .gd-end:hover { color: var(--accent); }
+[data-docreader-root][data-docreader-layout="guided"] > [hidden="until-found"] { margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-top-width: 0; border-bottom-width: 0; }
+[data-docreader-root][data-docreader-layout="guided"] .doc-toc a { display: flex; align-items: baseline; gap: .4em; }
+[data-docreader-root][data-docreader-layout="guided"] .doc-toc a .gd-rt { margin-left: auto; padding-left: .5em; color: var(--text-muted); font-size: calc(.78 * var(--rem)); white-space: nowrap; font-variant-numeric: tabular-nums; }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools { display: flex; align-items: center; gap: 6px; }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools-k { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-seg button[aria-pressed="true"] { background: var(--surface2); border-color: var(--rule); color: var(--text); }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all { border-color: var(--border); background: var(--surface); }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all:disabled { opacity: .6; cursor: default; }
+[data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-sm { display: none; }
+@media screen and (max-width: 860px) {
+  [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools-k, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-lg { display: none; }
+  [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-sm { display: inline; }
+}
+@media screen and (max-width: 600px) {
+  [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all:disabled { display: none; }
+  [data-docreader-root][data-docreader-layout="guided"] .gd-btn { flex-wrap: wrap; gap: .2em .7em; }
+  [data-docreader-root][data-docreader-layout="guided"] .gd-sum { width: 100%; margin-left: 1.3em; text-align: left; }
+}
+@media (pointer: fine) {
+  [data-docreader-root][data-docreader-layout="guided"][data-docreader-skin~="controlRow"] .gd-btn, [data-docreader-root][data-docreader-layout="guided"][data-docreader-skin~="controlRow"] .gd-end { min-height: var(--dr-control-row); }
+}
+@media (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="guided"] .gd-btn, [data-docreader-root][data-docreader-layout="guided"] .gd-end, [data-docreader-root][data-docreader-layout="guided"] .gd-inside a, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-seg button, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all, [data-docreader-root][data-docreader-layout="guided"] a.gd-wait { min-height: 44px; }
+  [data-docreader-root][data-docreader-layout="guided"] .gd-inside a { display: inline-flex; align-items: center; }
+}
+@media screen and (max-width: 1239px) and (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="guided"].toc-open .doc-toc a { min-height: 44px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-docreader-root][data-docreader-layout="guided"] .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+  [data-docreader-root][data-docreader-layout="guided"] .reveal.in { opacity: 1; transform: none; }
+}
+@media print {
+  [data-docreader-root][data-docreader-layout="guided"] .gd-bar, [data-docreader-root][data-docreader-layout="guided"] .gd-end-row, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools { display: none; }
+  [data-docreader-root][data-docreader-layout="guided"] > [hidden="until-found"] { content-visibility: visible; }
+  [data-docreader-root][data-docreader-layout="guided"] .reveal { opacity: 1; transform: none; }
+  [data-docreader-root][data-docreader-layout="guided"] .gd-hero > .short { border: 0; background: none; }
+}

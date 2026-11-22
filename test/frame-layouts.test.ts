@@ -160,7 +160,7 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
     }
     // Its scripts, hashed: the guard, the bootstrap, Mermaid's and one bundle per layout; a stylesheet has no hash source.
     expect(Object.entries(FRAME_MANIFEST).filter(([, e]) => e.csp !== null).map(([n]) => n).sort()).toEqual(
-      ['bootstrap', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'enhanceReview', 'guard', 'mermaid'],
+      ['bootstrap', 'enhance', 'enhanceClassic', 'enhanceEditorial', 'enhanceGuided', 'enhanceReview', 'guard', 'mermaid'],
     );
     for (const l of OWN) expect(FRAME_MANIFEST[LAYOUT_ENTRIES[l].css as 'cssClassic'].csp).toBeNull();
   });
@@ -218,7 +218,7 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
     }
     expect(Object.keys(FRAME_FILES)).toEqual([
       'guard', 'bootstrap', 'enhance', 'css', 'mermaid',
-      'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial', 'enhanceReview', 'cssReview',
+      'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial', 'enhanceReview', 'cssReview', 'enhanceGuided', 'cssGuided',
     ]);
   });
 });
