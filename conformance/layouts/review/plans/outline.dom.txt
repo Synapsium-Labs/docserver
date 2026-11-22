@@ -1,0 +1,242 @@
+button .outline-btn chrome aria-pressed="true"
+  "Outline"
+h1
+  "Example plan"
+p
+  strong
+    "Plan"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "In short"
+ul
+  li
+    "Four tasks build a small tool, and the l"…
+h2 aria-label="1. Tasks"
+  "1. Tasks"
+p
+  "The tasks, in order."
+h3 .task aria-label="Task 1: Set up the project"
+  span .task-id chrome
+    "Task 1"
+    span .tmeta chrome
+      "5 steps"
+    span .tmeta.yours chrome
+      "you"
+  ": Set up the project"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+p .task-part
+  "Who: you."
+p .task-part
+  "Who: a second owner line, never read."
+ul .task-part
+  li
+    input aria-label="Step 1: Make the folder"
+    span .step-no chrome
+      "Step 1"
+    strong
+      ": Make the folder"
+    span .step-rest chrome
+      "with a readme in it."
+  li .attn
+    input aria-label="Step 2: Pick a name"
+    span .step-no chrome
+      "Step 2"
+      span .who chrome
+        "you"
+    strong
+      "(): Pick a name"
+    span .step-rest chrome
+      "for the tool."
+  li
+    input aria-label="Step 3: "
+    span .step-no chrome
+      "Step 3"
+    strong
+      ":"
+    span .step-rest chrome
+      "Write the first"
+    code .step-rest
+      "config.json"
+    span .step-rest chrome
+      "."
+  li
+    input aria-label="A step with no title, just text."
+    "A step with no title, just text."
+  li
+    input aria-label="Not a step title"
+    strong
+      "Not a step title"
+    span .step-rest chrome
+      ", then more text."
+h3 .task aria-label="Task 2. Write the parser"
+  span .task-id chrome
+    "Task 2"
+    span .tmeta chrome
+      "3 steps"
+    span .tmeta chrome
+      "the build team"
+  ". Write the parser"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+p .task-part
+  "Who: the build team."
+ul .task-part
+  li .loose
+    p
+      input aria-label="Step 1: Read the input"
+      span .step-no chrome
+        "Step 1"
+      strong
+        ": Read the input"
+    p .step-rest
+      "The input is one file; this second parag"…
+  li .attn.loose
+    p
+      input aria-label="Step 2: Check the tokens"
+      span .step-no chrome
+        "Step 2"
+        span .who chrome
+          "yours"
+      strong
+        "(): Check the tokens"
+  li .loose
+    p
+      input aria-label="Step 3: Review the grammar"
+      span .step-no chrome
+        "Step 3"
+        span .who chrome
+          "a reviewer"
+      strong
+        "(): Review the grammar"
+p .task-part
+  "The parts it builds:"
+div .task-part
+  table
+    thead
+      tr
+        th
+          "Part"
+        th
+          "Owner"
+    tbody
+      tr
+        td
+          "Lexer"
+        td
+          "the build team"
+h3 .task aria-label="Task P0-1 — An odd number"
+  span .task-id chrome
+    "Task P0-1"
+    span .tmeta chrome
+      "1 step"
+  "— An odd number"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+ul .task-part
+  li
+    input aria-label="Step 1: One"
+    span .step-no chrome
+      "Step 1"
+    strong
+      ": One"
+h2 .task aria-label="Task 3: Ship it"
+  span .task-id chrome
+    "Task 3"
+    span .tmeta chrome
+      "11 steps"
+  ": Ship it"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+p .task-part
+  "Shipping takes 11 steps."
+ul .task-part
+  li
+    input aria-label="Step 1: Do part 1"
+    span .step-no chrome
+      "Step 1"
+    strong
+      ": Do part 1"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 2: Do part 2"
+    span .step-no chrome
+      "Step 2"
+    strong
+      ": Do part 2"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 3: Do part 3"
+    span .step-no chrome
+      "Step 3"
+    strong
+      ": Do part 3"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 4: Do part 4"
+    span .step-no chrome
+      "Step 4"
+    strong
+      ": Do part 4"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 5: Do part 5"
+    span .step-no chrome
+      "Step 5"
+    strong
+      ": Do part 5"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 6: Do part 6"
+    span .step-no chrome
+      "Step 6"
+    strong
+      ": Do part 6"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 7: Do part 7"
+    span .step-no chrome
+      "Step 7"
+    strong
+      ": Do part 7"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 8: Do part 8"
+    span .step-no chrome
+      "Step 8"
+    strong
+      ": Do part 8"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 9: Do part 9"
+    span .step-no chrome
+      "Step 9"
+    strong
+      ": Do part 9"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 10: Do part 10"
+    span .step-no chrome
+      "Step 10"
+    strong
+      ": Do part 10"
+    span .step-rest chrome
+      "of the release."
+  li
+    input aria-label="Step 11: Do part 11"
+    span .step-no chrome
+      "Step 11"
+    strong
+      ": Do part 11"
+    span .step-rest chrome
+      "of the release."

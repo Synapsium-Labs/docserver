@@ -1,0 +1,80 @@
+h1
+  "Clobbering"
+p hidden=""
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+p
+  "Every heading and anchor below has an id"…
+h2 aria-label="jump"
+  "jump"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to jump"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+p
+  "A heading and an anchor named like the q"…
+h2 aria-label="keys"
+  "keys"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to keys"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+p
+  "Named like the keys sheet."
+h2 aria-label="xcard"
+  "xcard"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to xcard"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+p
+  "Named like a preview card."
+h2 aria-label="toc-contents"
+  "toc-contents"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to toc-contents"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+p
+  "Named like the contents rail."
+h2 aria-label="__proto__"
+  "__proto__"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to __proto__"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+p
+  "Named like the prototype key."
+h2 aria-label="constructor"
+  "constructor"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to constructor"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+span .doc-anchor
+p
+  "Named like two inherited properties."
+h2 aria-label="data-docreader-root"
+  "data-docreader-root"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to data-docreader-root"
+      "#"
+    button .h-mark chrome aria-pressed="false"
+      "Mark read"
+span .doc-anchor
+p
+  "Named like the root's own mark."

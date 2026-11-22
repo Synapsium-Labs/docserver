@@ -1,0 +1,270 @@
+h1
+  "Example review"
+p
+  strong
+    "Spec"
+  "· · Status: ·"
+  strong
+    "Owner:"
+"2026-10-20Draft project-a team"
+section .review-strip chrome aria-label="Review"
+  div .rs-wait chrome
+    p .rs-label chrome
+      span .dot chrome
+      "Waiting on you · 2"
+    ol chrome
+      li chrome
+        a chrome
+          "Pick a name for the tool and for its out"…
+      li chrome
+        a chrome
+          "Decide on the cache once it is measured "…
+  p .rs-facts chrome
+    span .fact chrome
+      a chrome
+        "6 decisions"
+      span .cnt.ok chrome
+        "3 agreed"
+      span .cnt.wait chrome
+        "1 pending"
+      span .cnt.wait chrome
+        "1 in"
+      span .cnt.no chrome
+        "1 rejected"
+    span .sep chrome aria-hidden="true"
+      "·"
+    span .fact chrome
+      span chrome
+        "2 tasks · 20 steps"
+      span .cnt.wait chrome
+        "3 yours"
+h2
+  "In short"
+ul
+  li
+    "A small tool reads one folder and writes"…
+  li
+    "Two decisions are still open, and three "…
+h2
+  "1. Decisions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Decision"
+        th
+          "Status"
+    tbody
+      tr
+        td
+          "D1"
+        td
+          "Read the folder once, at the start"
+        td
+          "Agreed"
+      tr
+        td
+          "D2"
+        td
+          "Write the report as Markdown"
+        td
+          "Agreed"
+      tr
+        td
+          "D3"
+        td
+          "Keep a cache between runs"
+        td
+          "Pending, see below"
+      tr
+        td
+          "D4"
+        td
+          "Name the output after the folder"
+        td
+          "In review"
+      tr
+        td
+          "D5"
+        td
+          "Drop the old flag"
+        td
+          "Rejected"
+      tr
+        td
+          "D6"
+        td
+          "Print a summary line at the end"
+        td
+          "Agreed"
+p
+  "D3 waits on a measurement of the cache's"…
+h2
+  "2. Design"
+p
+  "The tool walks the folder once and keeps"…
+p
+  "A file the tool cannot read is listed wi"…
+p
+  "The report is one Markdown file. Its fir"…
+h2
+  "3. Tasks"
+h3
+  "Task 1: Set up the project"
+ul
+  li
+    input
+    "Step 1"
+    strong
+      ": Make the folder"
+    "with a readme in it."
+  li
+    input
+    "Step 2you"
+    strong
+      "(): Pick a name"
+    "for the tool."
+  li
+    input
+    "Step 3"
+    strong
+      ": Add the test runner"
+    "and one empty test."
+  li
+    input
+    "Step 4"
+    strong
+      ": Write the first case"
+    "for an empty folder."
+  li
+    input
+    "Step 5"
+    strong
+      ": Read one file"
+    "and print its size."
+  li
+    input
+    "Step 6"
+    strong
+      ": Read a folder"
+    "of three files."
+  li
+    input
+    "Step 7"
+    strong
+      ": Count by kind"
+    "and print the counts."
+  li
+    input
+    "Step 8"
+    strong
+      ": List the largest"
+    "five files."
+  li
+    input
+    "Step 9you"
+    strong
+      "(): Review the output"
+    "on a real folder."
+  li
+    input
+    "Step 10"
+    strong
+      ": Keep the failures"
+    "in a list of their own."
+h3
+  "Task 2: Ship it"
+ul
+  li
+    input
+    "Step 1"
+    strong
+      ": Write the report"
+    "to a file."
+  li
+    input
+    "Step 2"
+    strong
+      ": Add the summary line"
+    "at the end."
+  li
+    input
+    "Step 3"
+    strong
+      ": Measure the cache"
+    "on a large folder."
+  li
+    input
+    "Step 4you"
+    strong
+      "(): Decide on the cache"
+    "from the measurement."
+  li
+    input
+    "Step 5"
+    strong
+      ": Drop the old flag"
+    "and its tests."
+  li
+    input
+    "Step 6"
+    strong
+      ": Update the readme"
+    "with an example."
+  li
+    input
+    "Step 7"
+    strong
+      ": Tag a release"
+    "and note what changed."
+  li
+    input
+    "Step 8"
+    strong
+      ": Run it on three folders"
+    "and keep the reports."
+  li
+    input
+    "Step 9"
+    strong
+      ": Fix what the runs show"
+    "in a second release."
+  li
+    input
+    "Step 10"
+    strong
+      ": Close the project"
+    "with a short note."
+h2
+  "Where things stand"
+h3
+  "Agreed"
+ul
+  li
+    "Read once, write Markdown, print a summa"…
+h3
+  "Waiting on you"
+ul
+  li
+    "Pick a name for the tool and for its out"…
+  li
+    "Decide on the cache once it is measured "…
+h2
+  "4. Notes"
+p
+  "The walk reads each file's first line on"…
+p
+  "A folder of ten thousand files took unde"…
+p
+  "The kinds are read from the file names, "…
+p
+  "The report lists at most five of the lar"…
+p
+  "A file the tool cannot read is not retri"…
+p
+  "The summary line repeats the counts of t"…
+p
+  "Nothing here depends on the operating sy"…

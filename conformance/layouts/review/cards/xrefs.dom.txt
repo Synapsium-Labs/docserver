@@ -1,0 +1,70 @@
+h1
+  "Cross-references"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "1. Decisions"
+div
+  table
+    thead
+      tr
+        th
+          "ID"
+        th
+          "Decision"
+        th
+          "Status"
+    tbody
+      tr
+        td .idcell
+          "D1"
+        td
+          "The first decision: D1 named in its own "…
+          a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+            "D2"
+          "here links"
+        td
+          "Agreed"
+      tr
+        td .idcell
+          "D2"
+        td
+          "The second decision"
+        td
+          "Pending"
+p
+  a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+    "D1"
+  "and"
+  a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+    "D2"
+  "link the first time this paragraph names"…
+p
+  "A new paragraph links"
+  a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+    "D1"
+  "again. The annex D2 is another document'"…
+  a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+    "D2"
+  "after it links."
+ul
+  li
+    a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+      "D1"
+    "in a list item links once, and D1 again "…
+  li
+    "The next item links"
+    a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+      "D2"
+    "."
+blockquote
+  p
+    "A quote names"
+    a .xref chrome aria-expanded="false" aria-haspopup="dialog"
+      "D1"
+    ": a block of its own."
+p
+  "D9 is defined nowhere, so it stays text,"…

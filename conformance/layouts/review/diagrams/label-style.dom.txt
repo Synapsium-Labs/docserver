@@ -1,0 +1,73 @@
+h1
+  "A style element in a label"
+p
+  "A flowchart whose first label holds a st"…
+figure .drawn
+  pre
+    "flowchart LR A[\"x<b>y</b><style>p { colo"…
+  svg role="img" aria-label="Figure 1. A label with a style element."
+    style
+    g
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        polygon
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      g
+        g
+        g
+          path
+        g
+          g
+            g
+              foreignObject
+                div
+                  span
+        g
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+                      b
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+    defs
+      filter
+        feDropShadow
+    defs
+      filter
+        feDropShadow
+    linearGradient
+      stop
+      stop
+  figcaption
+    "Figure 1. A label with a style element."

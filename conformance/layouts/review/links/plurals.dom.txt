@@ -1,0 +1,74 @@
+h1
+  "Plurals"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "Glossary"
+div .glossary
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td .termcell
+          "Box"
+        td
+          "A container"
+      tr
+        td .termcell
+          "Read mark"
+        td
+          "A mark on a section"
+      tr
+        td .termcell
+          "Read"
+        td
+          "To take in"
+      tr
+        td .termcell
+          "Lamp, Wick"
+        td
+          "Two names, each matched as spelled"
+h2
+  "1. Endings"
+p
+  "Two"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "BOXES"
+  ": a plural in es links, in any case."
+p
+  "The"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "READ MARKS"
+  ": a plural in s links, and a run of spac"…
+p
+  "In lower case, lamps do not link: an exa"…
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "Lamps"
+  "as spelled do."
+h2
+  "2. Word edges"
+p
+  "An unboxed thing, a box-shaped one and a"…
+p
+  "A"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "box"
+  "links. A second box does not: a term is "…
+h2
+  "3. Longest first"
+p
+  "A"
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "read mark"
+  "links as one name, the longest that star"…
+  a .term chrome aria-expanded="false" aria-haspopup="dialog"
+    "read"
+  "marker a letter follows the longer name,"…

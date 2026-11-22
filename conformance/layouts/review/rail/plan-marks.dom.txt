@@ -1,0 +1,172 @@
+nav .doc-toc chrome aria-label="Contents and index"
+  div .toc-tabs chrome role="tablist" aria-label="Contents and index"
+    button chrome role="tab" aria-controls="docreader.1.toc-contents" aria-selected="true"
+      "Contents"
+  div .toc-contents.toc-panel chrome role="tabpanel" aria-labelledby="docreader.1.tab-contents"
+    ul chrome
+      li chrome
+        a chrome
+          span .t chrome
+            "Work"
+          span .meta chrome
+            span .cd chrome
+            span .mk chrome aria-hidden="true"
+        ul chrome
+          li chrome
+            a chrome
+              span .t chrome
+                "Prepare"
+              span .meta chrome
+                span .cd chrome
+                span .mk chrome aria-hidden="true"
+      li chrome
+        a chrome
+          span .t chrome
+            "Notes"
+          span .meta chrome
+            span .cd chrome
+            span .mk chrome aria-hidden="true"
+      li chrome
+        a chrome
+          span .t chrome
+            "Close"
+          span .meta chrome
+            span .cd chrome
+            span .mk chrome aria-hidden="true"
+  div .toc-index.toc-panel chrome role="tabpanel" hidden=""
+  div .toc-foot chrome
+    button .keys-btn.linkish chrome
+      "Keys"
+h1
+  "Delivery plan"
+p
+  "This introduction leaves the first work "…
+p
+  "The rail starts neutral until the reader"…
+h2 aria-label="1. Work"
+  "1. Work"
+p
+  "The plan has enough steps for outline mo"…
+h3 .task aria-label="Task 1: Prepare"
+  span .task-id chrome
+    "Task 1"
+    span .tmeta chrome
+      "20 steps"
+  ": Prepare"
+  button .task-open chrome aria-expanded="false"
+    "Show all"
+  button .h-mark chrome aria-pressed="false"
+    "Mark read"
+ul
+  li
+    input
+    "Step 1"
+    strong
+      ": Read the brief"
+  li
+    input
+    "Step 2"
+    strong
+      ": Make a note"
+  li
+    input
+    "Step 3"
+    strong
+      ": Check the input"
+  li
+    input
+    "Step 4"
+    strong
+      ": Share the draft"
+  li
+    input
+    "Step 5"
+    strong
+      ": Review the change"
+  li
+    input
+    "Step 6"
+    strong
+      ": Close the task"
+  li
+    input
+    "Step 7"
+    strong
+      ": Record the result"
+  li
+    input
+    "Step 8"
+    strong
+      ": Confirm the work"
+  li
+    input
+    "Step 9"
+    strong
+      ": Send the note"
+  li
+    input
+    "Step 10"
+    strong
+      ": Keep the record"
+  li
+    input
+    "Step 11"
+    strong
+      ": Finish the pass"
+  li
+    input
+    "Step 12"
+    strong
+      ": Compare the outcome"
+  li
+    input
+    "Step 13"
+    strong
+      ": Note the decision"
+  li
+    input
+    "Step 14"
+    strong
+      ": Check the evidence"
+  li
+    input
+    "Step 15"
+    strong
+      ": Share the result"
+  li
+    input
+    "Step 16"
+    strong
+      ": Review the notes"
+  li
+    input
+    "Step 17"
+    strong
+      ": Prepare the close"
+  li
+    input
+    "Step 18"
+    strong
+      ": Confirm the record"
+  li
+    input
+    "Step 19"
+    strong
+      ": Publish the update"
+  li
+    input
+    "Step 20"
+    strong
+      ": Finish the plan"
+h2 aria-label="2. Notes"
+  "2. Notes"
+  button .h-mark chrome aria-pressed="false"
+    "Mark read"
+p
+  "A normal section follows the outlineable"…
+h2 aria-label="3. Close"
+  "3. Close"
+  button .h-mark chrome aria-pressed="false"
+    "Mark read"
+p
+  "The final section completes the document"…
