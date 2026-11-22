@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { load } from 'js-yaml';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ROW_TITLE } from '../scripts/old-cap-gate.mjs';
 import { INSTALL } from '../scripts/visual/compare.mjs';
 
 interface Step {
@@ -58,6 +59,8 @@ interface Step {
   env?: Record<string, unknown>;
   run?: string;
   'timeout-minutes'?: number;
+  'continue-on-error'?: unknown;
+  if?: unknown;
 }
 interface Job {
   name?: string;
@@ -65,10 +68,14 @@ interface Job {
   'timeout-minutes'?: number;
   permissions?: unknown;
   env?: Record<string, unknown>;
-  strategy?: { 'fail-fast'?: boolean; matrix?: { node?: unknown } };
+  strategy?: { 'fail-fast'?: boolean; matrix?: { node?: unknown; browser?: unknown } };
+  if?: unknown;
+  'continue-on-error'?: unknown;
+  needs?: unknown;
   steps?: Step[];
 }
 interface Workflow {
+  name?: string;
   on?: Record<string, unknown>;
   permissions?: unknown;
   concurrency?: unknown;
@@ -81,6 +88,9 @@ const wf = load(TEXT) as Workflow;
 const jobs = wf.jobs ?? {};
 const test = jobs['test'] ?? {};
 const steps = test.steps ?? [];
+/** The opt-in release gate (docserver readiness T1), the job after `test`. */
+const gate = jobs['old-cap-gate'] ?? {};
+const gateSteps = gate.steps ?? [];
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   name: string;
   version: string;
@@ -320,8 +330,11 @@ describe('ci.yml: triggers', () => {
 });
 
 describe('ci.yml: the test job', () => {
-  it('is the only job', () => {
-    expect(Object.keys(jobs)).toEqual(['test']);
+  it('is the first of two jobs, the other being the opt-in old-cap gate, and it never waits on or is skipped by it', () => {
+    expect(Object.keys(jobs)).toEqual(['test', 'old-cap-gate']);
+    expect(test.if).toBeUndefined();
+    expect(test.needs).toBeUndefined();
+    expect(test['continue-on-error']).toBeUndefined();
   });
 
   it('runs on Node 22 and 24, both legs to the end, within 75 minutes (L3.CI2: two install attempts and the suite fit)', () => {
@@ -424,7 +437,136 @@ describe('ci.yml: the test job', () => {
     expect(TEXT).not.toMatch(/npx\s+vitest/);
     expect(TEXT).not.toMatch(/UPDATE_EXPECTED/);
     expect(TEXT).not.toMatch(/UPDATE_LAYOUT/);
-    expect(TEXT.replace(/^\s*#.*$/gm, '')).not.toMatch(/DOCREADER_BROWSERS/);
+    // The test job's own steps and settings (the gate job selects its one browser per leg, see its describe below).
+    expect(JSON.stringify(test)).not.toMatch(/DOCREADER_BROWSERS/);
+    expect(JSON.stringify(test)).not.toMatch(/DOCREADER_MEASURE/);
+    expect(wf).not.toHaveProperty('env');
+  });
+});
+
+describe('ci.yml: the old-cap release gate, an opt-in input (docserver readiness T1; ccrc D-8824)', () => {
+  const dispatch = (wf.on?.['workflow_dispatch'] ?? {}) as { inputs?: Record<string, { description?: string; type?: string; default?: unknown }> };
+  const matrixEnv = '${{ matrix.browser }}';
+  const REPORT = '"${RUNNER_TEMP:?}/old-cap-report.json"';
+  const vitestStep = gateSteps[4];
+  const checkStep = gateSteps[5];
+
+  it('G-IN: workflow_dispatch has one input, old_cap: a boolean, off by default, whose description names the old-cap mount, ccrc D-8824, Chromium and WebKit; a call still takes none', () => {
+    expect(Object.keys(dispatch.inputs ?? {})).toEqual(['old_cap']);
+    const input = dispatch.inputs?.['old_cap'];
+    expect(input?.type).toBe('boolean');
+    expect(input?.default).toBe(false);
+    expect(input?.description).toMatch(/old-cap browser mount/);
+    expect(input?.description).toMatch(/ccrc D-8824/);
+    expect(input?.description).toMatch(/Chromium and WebKit/);
+    expect(wf.on?.['workflow_call']).toBeNull();
+  });
+
+  it("G-IF: the job runs only on a dispatch of this workflow itself (a called run reports the caller's event and name) with the input true", () => {
+    expect(gate.if).toBe("github.event_name == 'workflow_dispatch' && github.workflow == 'ci' && inputs.old_cap");
+    expect(wf.name).toBe('ci');
+  });
+
+  it('G-JOB: a leg per browser, both to the end, on a GitHub-hosted runner, with no permissions of its own, no needs and no continue-on-error', () => {
+    expect(gate.name).toBe(`old-cap gate (${matrixEnv})`);
+    expect(gate['runs-on']).toBe('ubuntu-latest');
+    expect(gate.strategy).toEqual({ 'fail-fast': false, matrix: { browser: ['chromium', 'webkit'] } });
+    expect(gate.permissions).toBeUndefined();
+    expect(gate.needs).toBeUndefined();
+    expect(gate['continue-on-error']).toBeUndefined();
+    expect(gate.env).toBeUndefined();
+    for (const s of gateSteps) expect(s['continue-on-error'], s.name ?? s.run).toBeUndefined();
+  });
+
+  it("G-STEPS: checkout and Node 22 with the test job's pinned actions, npm ci, the browser install, the row, then the checker", () => {
+    const pinned = (name: string): string | undefined => steps.find((s) => s.uses?.startsWith(`${name}@`))?.uses;
+    expect(gateSteps.map((s) => s.uses?.replace(/@.*$/, '') ?? s.name ?? s.run)).toEqual([
+      'actions/checkout',
+      'actions/setup-node',
+      'npm ci --no-audit --no-fund',
+      "install this leg's browser and its system libraries",
+      'the old-cap row alone, with its JSON report',
+      'the row ran under this browser and passed',
+    ]);
+    expect(gateSteps[0]?.uses).toBe(pinned('actions/checkout'));
+    expect(gateSteps[0]?.uses).toBe('actions/checkout@11d5960a326750d5838078e36cf38b85af677262');
+    expect(gateSteps[0]?.with).toEqual({ 'persist-credentials': false });
+    expect(gateSteps[1]?.uses).toBe(pinned('actions/setup-node'));
+    expect(gateSteps[1]?.uses).toBe('actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020');
+    expect(gateSteps[1]?.with).toEqual({ 'node-version': 22, cache: 'npm' });
+  });
+
+  it("G-INSTALL: the leg's browser and its system libraries come from the pinned playwright-core, once, under `timeout -k 30 600`, inside a step limit that holds that bound", () => {
+    const s = gateSteps[3];
+    expect(s?.env).toEqual({ BROWSER: matrixEnv });
+    expect(s?.run).toBe('timeout -k 30 600 npx playwright-core install --with-deps "${BROWSER:?}"');
+    expect(s?.run?.startsWith('timeout -k 30 600 ')).toBe(true);
+    expect((s?.['timeout-minutes'] ?? 0) * 60).toBeGreaterThan(630);
+    // The same command the harness names, narrowed to this leg's browser.
+    expect(INSTALL.replace(' chromium webkit', '')).toBe('npx playwright-core install --with-deps');
+    expect(s?.run).toContain(INSTALL.replace(' chromium webkit', ''));
+  });
+
+  it("G-ROW: the row runs with the measure switch, the leg's browser and a heap ceiling the runner holds, through the repository's vitest, on the one test file, filtered to the row, with a JSON report", () => {
+    expect(vitestStep?.env).toEqual({ DOCREADER_MEASURE: '1', DOCREADER_BROWSERS: matrixEnv, NODE_OPTIONS: '--max-old-space-size=8192' });
+    expect(vitestStep?.run).toBe(
+      `./node_modules/.bin/vitest run test/browser/frame-appearance.test.ts --reporter=default --reporter=json --outputFile.json=${REPORT} -t 'measures \\(DOCREADER_MEASURE=1\\): a document at 1\\.1\\.0.s default srcdoc cap'`,
+    );
+    const heap = Number(/--max-old-space-size=(\d+)/.exec(String(vitestStep?.env?.['NODE_OPTIONS']))?.[1]);
+    // A GitHub-hosted runner has 16 GB: the row holds a srcdoc of about 115 million characters several times, so the
+    // ceiling is above what a default heap allows and leaves the browser and the system their share.
+    expect(heap).toBeGreaterThanOrEqual(6144);
+    expect(heap).toBeLessThanOrEqual(10240);
+  });
+
+  it("G-ROW: the filter matches the measured row's title and no other title in the test file, and the title is the checker's", () => {
+    const filter = /-t '([^']*)'/.exec(vitestStep?.run ?? '')?.[1];
+    expect(filter).toBeDefined();
+    const re = new RegExp(filter ?? '');
+    const source = readFileSync(path.join(ROOT, 'test', 'browser', 'frame-appearance.test.ts'), 'utf8');
+    const titles = [...source.matchAll(/\bit(?:\.skipIf\([^)]*\))?\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g)].map((m) => m[2] ?? '');
+    expect(titles.length).toBeGreaterThan(5);
+    expect(re.test(ROW_TITLE)).toBe(true);
+    expect(titles.filter((t) => re.test(t))).toEqual([ROW_TITLE]);
+  });
+
+  it('G-ROW: the step limit holds the row’s own 20-minute test timeout with headroom, and the job holds every step limit with headroom', () => {
+    expect(vitestStep?.['timeout-minutes'] ?? 0).toBeGreaterThanOrEqual(20 + 5);
+    const source = readFileSync(path.join(ROOT, 'test', 'browser', 'frame-appearance.test.ts'), 'utf8');
+    expect(source).toContain('    1_200_000,\n  );');
+    const limits = gateSteps.reduce((sum, s) => sum + (s['timeout-minutes'] ?? 0), 0);
+    expect(limits).toBeGreaterThan(0);
+    expect(gate['timeout-minutes'] ?? 0).toBeGreaterThanOrEqual(limits);
+  });
+
+  it('G-CHECK: the checker runs right after the row, on the same report and this leg’s browser, and nothing runs after it', () => {
+    expect(gateSteps.indexOf(checkStep as Step)).toBe(gateSteps.indexOf(vitestStep as Step) + 1);
+    expect(gateSteps.at(-1)).toBe(checkStep);
+    expect(checkStep?.env).toEqual({ BROWSER: matrixEnv });
+    expect(checkStep?.run).toBe(`node scripts/old-cap-gate.mjs ${REPORT} "\${BROWSER:?}"`);
+    expect(checkStep?.if).toBeUndefined();
+  });
+
+  it('G-NPX: no step of the job runs a bare `npx vitest`, and the only vitest run is the repository’s own', () => {
+    expect(gateSteps.filter((s) => /npx\s+vitest/.test(s.run ?? ''))).toEqual([]);
+    expect(gateSteps.filter((s) => /vitest/.test(s.run ?? ''))).toEqual([vitestStep]);
+    expect(vitestStep?.run?.startsWith('./node_modules/.bin/vitest run ')).toBe(true);
+    expect(TEXT).not.toMatch(/npx\s+vitest/);
+  });
+
+  it('G-ENV: no expression is interpolated into a script; the matrix reaches each step through its env', () => {
+    for (const s of gateSteps) expect(s.run ?? '', s.name ?? s.run).not.toContain('${{');
+    for (const s of gateSteps) expect(Object.keys(s.env ?? {}), s.name ?? s.run).not.toContain('DOCSERVER_SIZE_TEXT');
+  });
+
+  it('G-TOKEN: the token is the workflow’s read-only one, widened by no job', () => {
+    expect(wf.permissions).toEqual({ contents: 'read' });
+    expect(Object.values(jobs).filter((j) => j.permissions !== undefined)).toEqual([]);
+    expect(TEXT.replace(/^\s*#.*$/gm, '')).not.toMatch(/:\s*write\b/);
+  });
+
+  it('G-FILE: the checker the job runs exists in the repository', () => {
+    expect(statSync(path.join(ROOT, 'scripts', 'old-cap-gate.mjs')).isFile()).toBe(true);
   });
 });
 
@@ -562,14 +704,14 @@ describe('ci.yml: the browser install survives a stalling package mirror (L3 Tas
 
   it('L3.CI4: every remote `uses:` is a full commit sha with its release tag in a trailing comment, and ci.yml holds no local `uses:`', () => {
     const lines = TEXT.split('\n').filter((l) => /^\s*(?:-\s+)?uses:/.test(l));
-    expect(lines).toHaveLength(steps.filter((s) => s.uses !== undefined).length);
+    expect(lines).toHaveLength(Object.values(jobs).flatMap((j) => j.steps ?? []).filter((s) => s.uses !== undefined).length);
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
       const m = /^\s*(?:-\s+)?uses:\s+(\S+)\s+#\s+(v\d+\.\d+\.\d+)\s*$/.exec(line);
       expect(m, line).not.toBeNull();
       expect(m?.[1], line).toMatch(SHA_PINNED);
     }
-    expect(steps.filter((s) => s.uses?.startsWith('./') === true)).toEqual([]);
+    expect(Object.values(jobs).flatMap((j) => j.steps ?? []).filter((s) => s.uses?.startsWith('./') === true)).toEqual([]);
     expect(TEXT).not.toMatch(/uses:\s*['"]?\.\//);
   });
 

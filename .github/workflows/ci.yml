@@ -39,12 +39,26 @@ name: ci
 # text a stranger writes.
 # The release workflow (release.yml) runs this workflow as its test job, through workflow_call with no inputs and no
 # secrets, at the tag's commit: the same steps as a push, on both Node legs, under the token the caller grants it.
+# The release gate, the old-cap browser mount (ccrc D-8824), is a second job, opt-in: it runs only on a dispatch of this
+# workflow itself with the old_cap input true, so a pull request, a push to main and the release workflow's call (a
+# called run reports the caller's event and workflow name, and has no such input) never start it. It runs the one measured
+# row of test/browser/frame-appearance.test.ts alone, on Chromium and on WebKit in a leg each, on a GitHub-hosted runner
+# (the shared test slice of the box that builds this library has a 6 GB memory cap, which killed the mount twice, and
+# WebKit does not launch there); the frame assets that row mounts are built in memory by the test, so no build comes
+# first. The vitest run writes a JSON report, and scripts/old-cap-gate.mjs fails the leg unless that row ran under that
+# leg's browser and passed: a skipped row, a filter that matched nothing or a missing report is unmeasured, never a pass.
+# The job names no permissions of its own, so it keeps the read-only token above.
 on:
   push:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
+    inputs:
+      old_cap:
+        description: 'Run the old-cap browser mount (ccrc D-8824), the release gate, on Chromium and WebKit'
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
@@ -159,3 +173,43 @@ jobs:
         env:
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: node scripts/consumer-smoke.mjs "./${TARBALL:?}"
+
+  old-cap-gate:
+    name: old-cap gate (${{ matrix.browser }})
+    if: github.event_name == 'workflow_dispatch' && github.workflow == 'ci' && inputs.old_cap
+    runs-on: ubuntu-latest
+    # The install (its own 15-minute step limit), the row's 20-minute test timeout, the frame build in the file's beforeAll
+    # hook and the launch of the browser, with headroom; test/ci-workflow.test.ts holds the sum.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: install this leg's browser and its system libraries
+        timeout-minutes: 15
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: timeout -k 30 600 npx playwright-core install --with-deps "${BROWSER:?}"
+      - name: the old-cap row alone, with its JSON report
+        timeout-minutes: 30
+        env:
+          DOCREADER_MEASURE: '1'
+          DOCREADER_BROWSERS: ${{ matrix.browser }}
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: >-
+          ./node_modules/.bin/vitest run test/browser/frame-appearance.test.ts
+          --reporter=default --reporter=json --outputFile.json="${RUNNER_TEMP:?}/old-cap-report.json"
+          -t 'measures \(DOCREADER_MEASURE=1\): a document at 1\.1\.0.s default srcdoc cap'
+      - name: the row ran under this browser and passed
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: node scripts/old-cap-gate.mjs "${RUNNER_TEMP:?}/old-cap-report.json" "${BROWSER:?}"
