@@ -436,6 +436,29 @@ describe('review: the header card and the context tool', () => {
     expect(rows.some((r) => r.classList.contains('rv-open'))).toBe(false);
   });
 
+  it('keeps Open all rows true to the rows: pressed when every row is open, however they got open, and not after one closes', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(7, 260));
+    await enhance(root);
+    const rows = Array.from(root.querySelectorAll('tbody tr'));
+    const all = root.querySelector('button.rv-all') as HTMLButtonElement;
+    for (const r of rows.slice(0, 6)) (r.querySelector('button.rx') as HTMLButtonElement).click();
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    (rows[6]?.querySelector('button.rx') as HTMLButtonElement).click();
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+    (rows[3]?.querySelector('button.rx') as HTMLButtonElement).click();
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    all.click();
+    expect(rows.every((r) => r.classList.contains('rv-open'))).toBe(true);
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+    (rows[0]?.querySelector('button.rx') as HTMLButtonElement).click();
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    all.click();
+    expect(rows.every((r) => r.classList.contains('rv-open'))).toBe(true);
+    all.click();
+    expect(rows.some((r) => r.classList.contains('rv-open'))).toBe(false);
+  });
+
   it('puts the buttons in the filter\'s tools on a table of twelve rows, and the filter still matches clipped text', async () => {
     pick.layout = 'review';
     const root = mount(TABLE(12, 260).replace(/\| D12 \| w+/, '$& zebra'));

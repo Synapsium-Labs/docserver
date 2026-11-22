@@ -37,6 +37,8 @@ export function build(ctx: FeatureContext): void {
   const stripped = new Set<HTMLTableRowElement>();
   const cells = new Map<HTMLTableRowElement, HTMLElement[]>();
   const buttons = new Map<HTMLTableRowElement, HTMLButtonElement>();
+  /** Each row's table's Open all rows state, made true to its rows after any row is opened or closed. */
+  const syncs = new Map<HTMLTableRowElement, () => void>();
   /** Mark `rows` clipped or not: every read first, then every write. */
   const measure = (all: readonly HTMLTableRowElement[]): void => {
     // A row the filter hides has no box and would read zero heights, which would strip its marks.
@@ -51,6 +53,7 @@ export function build(ctx: FeatureContext): void {
   const setRow = (row: HTMLTableRowElement, open: boolean): void => {
     journal.toggleClass(row, 'rv-open', open);
     journal.setAttribute(buttons.get(row) as HTMLButtonElement, 'aria-expanded', open ? 'true' : 'false');
+    (syncs.get(row) as () => void)();
   };
   for (const t of tables) {
     journal.toggleClass(t.el, 'rv-compact', true);
@@ -75,9 +78,10 @@ export function build(ctx: FeatureContext): void {
       });
     }
     const all = chrome(doc, 'button', { className: 'rv-all', text: 'Open all rows', attrs: { type: 'button', 'aria-pressed': 'false' } });
+    const sync = (): void => journal.setAttribute(all, 'aria-pressed', t.rows.every((r) => r.classList.contains('rv-open')) ? 'true' : 'false');
+    for (const row of t.rows) syncs.set(row, sync);
     journal.listen(all, 'click', () => {
       const on = all.getAttribute('aria-pressed') !== 'true';
-      journal.setAttribute(all, 'aria-pressed', on ? 'true' : 'false');
       for (const row of t.rows) setRow(row, on);
       if (!on) measure(t.rows);
     });
