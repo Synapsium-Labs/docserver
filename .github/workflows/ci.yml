@@ -47,7 +47,9 @@ name: ci
 # WebKit does not launch there); the frame assets that row mounts are built in memory by the test, so no build comes
 # first. The vitest run writes a JSON report, and scripts/old-cap-gate.mjs fails the leg unless that row ran under that
 # leg's browser and passed: a skipped row, a filter that matched nothing or a missing report is unmeasured, never a pass.
-# The job names no permissions of its own, so it keeps the read-only token above.
+# The job names no permissions of its own, so it keeps the read-only token above. Its name is static: a job skipped at job
+# level (every pull request and push) is not matrix-expanded, so a templated name would show as a skipped check with the
+# template text; GitHub appends the matrix values to a dispatched run's legs itself, `old-cap gate (chromium)` and `(webkit)`.
 on:
   push:
     branches: [main]
@@ -175,7 +177,7 @@ jobs:
         run: node scripts/consumer-smoke.mjs "./${TARBALL:?}"
 
   old-cap-gate:
-    name: old-cap gate (${{ matrix.browser }})
+    name: old-cap gate
     if: github.event_name == 'workflow_dispatch' && github.workflow == 'ci' && inputs.old_cap
     runs-on: ubuntu-latest
     # The install (its own 15-minute step limit), the row's 20-minute test timeout, the frame build in the file's beforeAll

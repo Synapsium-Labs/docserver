@@ -468,7 +468,10 @@ describe('ci.yml: the old-cap release gate, an opt-in input (docserver readiness
   });
 
   it('G-JOB: a leg per browser, both to the end, on a GitHub-hosted runner, with no permissions of its own, no needs and no continue-on-error', () => {
-    expect(gate.name).toBe(`old-cap gate (${matrixEnv})`);
+    // Static: a job skipped at job level (every pull request and push) is not matrix-expanded, so a templated name would show
+    // as a skipped check named literally `old-cap gate (${{ matrix.browser }})`; GitHub appends the matrix values to a dispatched
+    // run's legs itself, `old-cap gate (chromium)` and `old-cap gate (webkit)`.
+    expect(gate.name).toBe('old-cap gate');
     expect(gate['runs-on']).toBe('ubuntu-latest');
     expect(gate.strategy).toEqual({ 'fail-fast': false, matrix: { browser: ['chromium', 'webkit'] } });
     expect(gate.permissions).toBeUndefined();
@@ -530,10 +533,18 @@ describe('ci.yml: the old-cap release gate, an opt-in input (docserver readiness
     expect(titles.filter((t) => re.test(t))).toEqual([ROW_TITLE]);
   });
 
-  it('G-ROW: the step limit holds the row’s own 20-minute test timeout with headroom, and the job holds every step limit with headroom', () => {
-    expect(vitestStep?.['timeout-minutes'] ?? 0).toBeGreaterThanOrEqual(20 + 5);
+  it('G-ROW: the step limit holds the measured row’s own test timeout (read from the call that closes it) with five minutes of headroom, and the job holds every step limit with headroom', () => {
     const source = readFileSync(path.join(ROOT, 'test', 'browser', 'frame-appearance.test.ts'), 'utf8');
-    expect(source).toContain('    1_200_000,\n  );');
+    // The row's `it.skipIf(!MEASURE)(` call is found by its title; its timeout is the number argument that follows the
+    // test function's closing brace, the first `}, <number>)` after the title.
+    const at = source.indexOf(JSON.stringify(ROW_TITLE));
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf('\n', source.lastIndexOf('(', at - 1)), at)).toMatch(/it\.skipIf\(!MEASURE\)\(\s*$/);
+    const closing = /\n\s*\},\s*([0-9_]+),?\s*\)\s*;/.exec(source.slice(at));
+    expect(closing, 'the measured row ends with a numeric test timeout').not.toBeNull();
+    const rowMs = Number((closing?.[1] ?? '').replaceAll('_', ''));
+    expect(rowMs).toBeGreaterThanOrEqual(60_000);
+    expect((vitestStep?.['timeout-minutes'] ?? 0) * 60_000).toBeGreaterThanOrEqual(rowMs + 5 * 60_000);
     const limits = gateSteps.reduce((sum, s) => sum + (s['timeout-minutes'] ?? 0), 0);
     expect(limits).toBeGreaterThan(0);
     expect(gate['timeout-minutes'] ?? 0).toBeGreaterThanOrEqual(limits);
@@ -565,8 +576,10 @@ describe('ci.yml: the old-cap release gate, an opt-in input (docserver readiness
     expect(TEXT.replace(/^\s*#.*$/gm, '')).not.toMatch(/:\s*write\b/);
   });
 
-  it('G-FILE: the checker the job runs exists in the repository', () => {
-    expect(statSync(path.join(ROOT, 'scripts', 'old-cap-gate.mjs')).isFile()).toBe(true);
+  it('G-FILE: the script the checker step runs is a file of the repository', () => {
+    const script = /^node (scripts\/[\w.-]+\.mjs) /.exec(checkStep?.run ?? '')?.[1];
+    expect(script).toBeDefined();
+    expect(statSync(path.join(ROOT, script ?? 'absent')).isFile()).toBe(true);
   });
 });
 
