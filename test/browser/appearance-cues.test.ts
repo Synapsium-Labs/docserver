@@ -254,7 +254,7 @@ async function controlRowRules(page: Page): Promise<{ sheet: string; selector: s
 
 describeBrowsers((browser) => {
   // Only register alternate layouts for cues their own features draw.
-  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial']): void {
+  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial', 'review']): void {
     for (const layout of layouts) {
       it(layout === 'default' ? name : `${layout}: ${name}`, () => check(layout));
     }
@@ -301,7 +301,7 @@ describeBrowsers((browser) => {
     }
   });
 
-  for (const layout of ['classic', 'editorial'] as const) {
+  for (const layout of ['classic', 'editorial', 'review'] as const) {
     it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
       const doc = await open(browser, { appearance: COLLISION, layout });
       try {
@@ -591,7 +591,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  }, ['default', 'editorial']);
+  }, ['default', 'editorial', 'review']);
 
   sharedCue('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });
@@ -1150,6 +1150,17 @@ describeBrowsers((browser) => {
       } finally { await doc.close(); }
     });
   }
+
+  it('review: its own controlRow rule, the card\'s Next button, is under a fine pointer only, and every controlRow rule of the page is', async () => {
+    const doc = await open(browser, { layout: 'review' });
+    try {
+      const rows = await controlRowRules(doc.page);
+      const own = rows.filter((row) => row.sheet === '/assets/layout.css');
+      expect(own.map((row) => row.selector), JSON.stringify(own)).toEqual(['[data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-next']);
+      expect(own.map((row) => row.media)).toEqual(['(pointer: fine)']);
+      expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+    } finally { await doc.close(); }
+  });
 
   it("Mermaid's tooltip, which sits in body outside the root, computes the verdict's surface, text and border (second review F8)", async () => {
     // The tooltip is one element per document, and its three colours are the document element's properties; the jsdom rows of

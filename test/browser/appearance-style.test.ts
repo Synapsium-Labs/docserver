@@ -1237,18 +1237,22 @@ describeBrowsers((browser) => {
     }
   });
 
-  for (const layout of ['classic', 'editorial'] as const) {
+  for (const layout of ['classic', 'editorial', 'review'] as const) {
     describe(`(b) and (c): ${layout} hosted appearance`, () => {
-      // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome.
+      // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome; review adds what it draws
+      // of its own or over the shared reader: the header card with its progress (a spec with a strip), the Index tab, the ID
+      // chips and their preview, and a plan.
       const ids = [
         'corpus/spec-template', 'layout/core/editorial', 'layout/rail/drawer', 'layout/jump/dialogs',
         'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
         ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
+        ...(layout === 'review' ? ['layout/changes/strip', 'layout/rail/marks-index', 'layout/cards/xrefs', 'layout/ids/id-table', 'layout/plans/plan'] : []),
       ];
       const docs = DOCS.filter((doc) => ids.includes(doc.id));
       const required = [
         'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
         ...(layout === 'editorial' ? ['short-headlines'] : []),
+        ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines'] : []),
       ];
       const states = [...required, 'hover', 'focus-visible'];
 

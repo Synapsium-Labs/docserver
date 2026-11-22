@@ -288,8 +288,10 @@ describe('review: the header card and the context tool', () => {
 
   it('builds neither card nor tool for a page that is not a document', async () => {
     pick.layout = 'review';
-    const root = mount('Just a paragraph.\n');
-    await enhance(root);
-    expect(root.querySelector('.rv-card, .rv-read, .rv-mark')).toBeNull();
+    for (const markdown of ['Just a paragraph.\n', '# A title\n\nOne paragraph and no sections.\n']) {
+      const root = mount(markdown);
+      await enhance(root);
+      expect(root.querySelector('.rv-card, .rv-read, .rv-mark'), markdown).toBeNull();
+    }
   });
 });

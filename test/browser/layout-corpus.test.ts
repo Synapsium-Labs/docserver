@@ -225,10 +225,12 @@ describe('the Level 2 cases', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'layout-missing-'));
     try {
       const own = path.join(dir, 'layouts');
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial.*review/i);
       mkdirSync(path.join(own, 'classic'), { recursive: true });
-      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial/i);
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial.*review/i);
       mkdirSync(path.join(own, 'editorial'));
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*review/i);
+      mkdirSync(path.join(own, 'review'));
       expect(layoutsWithSnapshots(own)).toEqual(OWN_LAYOUT_NAMES);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -245,7 +247,8 @@ describe('the Level 2 cases', () => {
       writeFileSync(path.join(shared, 'x', 'a.options.json'), '{"options":{},"scope":["byline"]}');
       mkdirSync(path.join(own, 'editorial'), { recursive: true });
       mkdirSync(path.join(own, 'classic'));
-      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial']);
+      mkdirSync(path.join(own, 'review'));
+      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial', 'review']);
       mkdirSync(path.join(own, 'plain'));
       expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
       // The same case, a snapshot of its own under each layout; the inputs are the shared ones.
