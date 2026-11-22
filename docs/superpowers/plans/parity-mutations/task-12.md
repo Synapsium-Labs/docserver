@@ -179,11 +179,11 @@ Measured on the committed sources (the file bytes are in each row's JSON); one t
 
 ## Fix round 3: the hidden root, print and the open row
 
-Same method; `compact.ts` rows were measured on the committed sources (the file's saved hash is in each JSON entry; `Lr4-c1` to `Lr4-c3` on the uncommitted bytes whose sha256 is `12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda`, which differ from `3e46438`'s `compact.ts` (`9c730ee1...`, the version `Lr4-e` was measured on) only in its header comment; `Lr4-h` and `Lr4-c4` on `840450a`'s version, `a3f7ee6a...`). Rows: 13 in the table and 13 JSON entries below. `Lr3-c8` above is superseded by `Lr4-h`. 
+Same method; `compact.ts` rows were measured on the committed sources (the file's saved hash is in each JSON entry; `Lr4-c1` to `Lr4-c3` on the uncommitted bytes whose sha256 is `12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda`, which differ from `5915b1f`'s `compact.ts` (`9c730ee1...`, the version `Lr4-e` was measured on) only in its header comment; `Lr4-h` and `Lr4-c4` on `046b1dc`'s version, `a3f7ee6a...`). Rows: 13 in the table and 13 JSON entries below. `Lr3-c8` above is superseded by `Lr4-h`. 
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
-| Lr4-h | The hidden root is not measured (the reason is a one-frame flash of cut rows, since showing the root asks for a relayout; measured on the version of `840450a`, and superseded by Lr5-h) | Drop `getClientRects().length === 0` | Red: `layout-review` 1 failed, 25 passed (a relayout run on a fake clock while the root is hidden) |
+| Lr4-h | The hidden root is not measured (the reason is a one-frame flash of cut rows, since showing the root asks for a relayout; measured on the version of `046b1dc`, and superseded by Lr5-h) | Drop `getClientRects().length === 0` | Red: `layout-review` 1 failed, 25 passed (a relayout run on a fake clock while the root is hidden) |
 | Lr4-p1 | In print the row is not clipped | Drop `max-height: none` from the print rule | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-p2 | In print the fade is off | Drop the mask resets from the print rule | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-p3 | In print the row button is hidden | Drop `!important` from its print rule | Red: `layout-review` 1 failed, 25 passed |
@@ -195,7 +195,7 @@ Same method; `compact.ts` rows were measured on the committed sources (the file'
 | Lr4-c2 | An open row gets its mark back when the window is wide again | Drop the restore | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-c3 | A phone relayout takes the mark off an open row | Drop the strip | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-e | An empty first cell names its button "row" | Drop the fallback | Red: `enhance-layouts` 1 failed, 71 passed |
-| Lr4-c4 | A row the button closes is measured (superseded by Lr5-c4: the "unreachable" finding is withdrawn, a width change while the row is open makes it reachable) | Drop the measure after the button closes a row | Green on a fixture with no width change (26 passed), measured on `840450a`'s version; red with the width row of fix round 4 |
+| Lr4-c4 | A row the button closes is measured (superseded by Lr5-c4: the "unreachable" finding is withdrawn, a width change while the row is open makes it reachable) | Drop the measure after the button closes a row | Green on a fixture with no width change (26 passed), measured on `046b1dc`'s version; red with the width row of fix round 4 |
 
 ```json
 [
@@ -217,7 +217,7 @@ Same method; `compact.ts` rows were measured on the committed sources (the file'
 
 ## Fix round 4: the closing row and the filtered rows
 
-Measured on `df1986a`'s `compact.ts` (sha256 `3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac`), Chromium, one file per call. Rows: 3 in the table and 3 JSON entries.
+Measured on `9c05f53`'s `compact.ts` (sha256 `3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac`), Chromium, one file per call. Rows: 3 in the table and 3 JSON entries.
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
