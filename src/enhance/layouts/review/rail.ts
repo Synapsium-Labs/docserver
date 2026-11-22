@@ -6,7 +6,8 @@
 // the reader's navigation and the rail's own click handling (the drawer closes) already serve. The count reads the marks
 // feature's controls and follows its `marks` event, as the header card does.
 //
-// Built after `rail` and `strip`. Nothing is added when the page has no rail (a page that is not a document).
+// Built after `rail` and `strip`. Nothing is added when the page has no rail: a page that is not a document, one with no
+// heading that has an id, or a host that turned the rail off (`chrome.rail`).
 import { chrome } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
 import { readControls } from './header.js';
@@ -21,7 +22,8 @@ export function build(ctx: FeatureContext): void {
   const panel = rail.querySelector('.toc-contents') as HTMLElement;
   const foot = rail.querySelector('.toc-foot') as HTMLElement;
   const heading = ctx.page.waitBox?.querySelector('h3') ?? null;
-  if (heading !== null) {
+  // A box that holds no list has nothing to count (as the strip's own list needs items).
+  if (heading !== null && ctx.page.waiting.length > 0) {
     const link = chrome(doc, 'a', { className: 'rv-wait', attrs: { href: `#${heading.id}` } }, [
       chrome(doc, 'span', { text: 'Waiting on you' }),
       chrome(doc, 'span', { className: 'rv-count', text: String(ctx.page.waiting.length) }),

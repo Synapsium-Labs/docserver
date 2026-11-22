@@ -3,8 +3,9 @@
 // does). It has what direction B has: the Contents and Index rail with read marks, ID chips with their preview cards, the
 // review strip, the running head and progress line, the quick jump and the keys sheet, and diagrams with their tools.
 // It leaves out what direction B does not have: section folding, the "changes since" menu and change stepper, the glossary's
-// term links, the attention lens and the reading settings menu. Three modules are its own: a header card around the title
-// block with the reader's progress and the `n` key, a read-mark toggle in the bar, and a waiting link and read count in the rail.
+// term links, the attention lens and the reading settings menu. Four modules are its own: a header card around the title
+// block with the reader's progress and the `n` key, a read-mark toggle in the bar, a waiting link and read count in the rail,
+// and compact rows for tables of long rows.
 //
 // scripts/build-frame.mjs bundles this layout by resolving the lifecycle's import of `./features.js` to this file, so the
 // module exports the same `features()` the shared list does. Import-inert: declarations only; the list is made when the
@@ -30,6 +31,7 @@ import { build as buildStrip } from '../../strip.js';
 import { build as buildTables } from '../../tables.js';
 import { build as buildXrefs } from '../../xrefs.js';
 import { markFeature } from '../mark.js';
+import { build as buildCompact } from './compact.js';
 import { build as buildContext } from './context.js';
 import { build as buildHeader } from './header.js';
 import { build as buildReviewRail } from './rail.js';
@@ -55,6 +57,8 @@ export function features(): readonly Feature[] {
     { name: 'review-rail', build: buildReviewRail },
     { name: 'scroll', build: buildScroll },
     { name: 'cards', build: buildCards },
+    // After the tables, status, ids, xrefs and cards: the cells are read by position only while those build.
+    { name: 'review-compact', build: buildCompact },
     { name: 'jump', build: buildJump },
     { name: 'review-context', build: buildContext },
     { name: 'keysheet', build: buildKeysheet },

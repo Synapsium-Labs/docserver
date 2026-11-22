@@ -356,6 +356,9 @@ describe('review: the header card and the context tool', () => {
     expect(foot.textContent).toBe('0 of 3 read');
     (root.querySelector('h2[id="1-first"] button.h-mark') as HTMLElement).click();
     expect(foot.textContent).toBe('1 of 3 read');
+    const empty = mount(SPEC.replace('- A question.', 'Nothing yet.'));
+    await enhance(empty);
+    expect(empty.querySelector('.rv-wait')).toBeNull();
     const bare = mount('# A title\n\n## First\n\nText.\n\n## Second\n\nText.\n\n## Third\n\nText.\n');
     await enhance(bare);
     expect(bare.querySelector('.rv-wait')).toBeNull();
@@ -376,7 +379,82 @@ describe('review: the header card and the context tool', () => {
   it('has direction B\'s features and none of the default\'s that direction B lacks (folds, the changes menu and stepper, the glossary, the attention lens, the settings menu)', async () => {
     const names = (await lists())['review']?.map((f) => f.name) ?? [];
     for (const lacked of ['folds', 'since', 'changes', 'glossary', 'attention', 'settings']) expect(names, lacked).not.toContain(lacked);
-    for (const kept of ['rail', 'marks', 'ids', 'xrefs', 'cards', 'strip', 'jump', 'keysheet', 'review-header', 'review-rail', 'review-context']) expect(names, kept).toContain(kept);
+    for (const kept of ['rail', 'marks', 'ids', 'xrefs', 'cards', 'strip', 'jump', 'keysheet', 'review-header', 'review-rail', 'review-compact', 'review-context']) expect(names, kept).toContain(kept);
+  });
+
+  /** A document with one table of `rows` rows whose body rows are about `chars` characters each (three cells). */
+  const TABLE = (rows: number, chars: number, extra = ''): string => {
+    const cell = 'w'.repeat(Math.max(1, Math.floor((chars - 8) / 2)));
+    const body = Array.from({ length: rows }, (_, i) => `| D${String(i + 1)} | ${cell} ${extra} | ${cell} |`).join('\n');
+    return `${SPEC}\n## Table\n\n| ID | A | B |\n|---|---|---|\n${body}\n`;
+  };
+
+  it('clips the rows of a table of six or more rows averaging over 240 characters, and no other table', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(6, 260));
+    await enhance(root);
+    const table = root.querySelector('.table-wrapper') as HTMLElement;
+    expect(table.classList.contains('rv-compact')).toBe(true);
+    expect(table.querySelectorAll('tbody td > .cc').length).toBe(18);
+    expect(table.querySelectorAll('tbody td:first-child > button.rx[aria-expanded="false"]').length).toBe(6);
+    expect(table.parentElement?.querySelector('.tbl-tools > button.rv-all')?.textContent).toBe('Open all rows');
+    for (const [rows, chars] of [[5, 300], [6, 100], [6, 230]] as const) {
+      const other = mount(TABLE(rows, chars));
+      await enhance(other);
+      expect(other.querySelector('.rv-compact, .cc, .rx, .rv-all'), `${String(rows)} rows of ${String(chars)}`).toBeNull();
+    }
+  });
+
+  it('opens and closes a row with its button, and every row with Open all rows', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(7, 260));
+    await enhance(root);
+    const rows = Array.from(root.querySelectorAll('tbody tr'));
+    const button = rows[2]?.querySelector('button.rx') as HTMLButtonElement;
+    button.click();
+    expect(rows[2]?.classList.contains('rv-open')).toBe(true);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    button.click();
+    expect(rows[2]?.classList.contains('rv-open')).toBe(false);
+    const all = root.querySelector('button.rv-all') as HTMLButtonElement;
+    all.click();
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+    expect(rows.every((r) => r.classList.contains('rv-open') && r.querySelector('button.rx')?.getAttribute('aria-expanded') === 'true')).toBe(true);
+    all.click();
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    expect(rows.some((r) => r.classList.contains('rv-open'))).toBe(false);
+  });
+
+  it('puts the buttons in the filter\'s tools on a table of twelve rows, and the filter still matches clipped text', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(12, 260).replace(/\| D12 \| w+/, '$& zebra'));
+    await enhance(root);
+    const tools = root.querySelector('.tbl-tools') as HTMLElement;
+    expect(tools.querySelector('input')).not.toBeNull();
+    expect(tools.querySelector('button.rv-all')).not.toBeNull();
+    expect(root.querySelectorAll('.tbl-tools').length).toBe(1);
+    const input = tools.querySelector('input') as HTMLInputElement;
+    input.value = 'zebra';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(root.querySelectorAll('tbody tr:not([hidden])').length).toBe(1);
+  });
+
+  it('wraps no empty cell, and gives every other cell its wrapper', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(6, 320).replace(/\| D2 \| w+ +\| w+ \|/, '| D2 |  | www |'));
+    await enhance(root);
+    const row = root.querySelectorAll('tbody tr')[1] as HTMLElement;
+    expect(row.querySelectorAll('td > .cc').length).toBe(2);
+  });
+
+  it('takes the compact rows off again at teardown, the document as it was', async () => {
+    pick.layout = 'review';
+    const root = mount(TABLE(7, 260));
+    const before = root.outerHTML;
+    await enhance(root);
+    (root.querySelector('button.rx') as HTMLButtonElement).click();
+    await destroyEnhancement(root);
+    expect(root.outerHTML).toBe(before);
   });
 
   it('builds neither card nor tool for a page that is not a document', async () => {
@@ -395,7 +473,7 @@ describe('review: the scrub scan', () => {
 
   it('its sources and its stylesheet hold none of the shapes of a private detail (an absolute home or mount path, a private host or address, an e-mail, a credential) and no URL', () => {
     expect(files.map((f) => path.relative(ROOT, f))).toEqual([
-      'src/enhance/layouts/review/context.ts', 'src/enhance/layouts/review/features.ts', 'src/enhance/layouts/review/header.ts', 'src/enhance/layouts/review/rail.ts', 'assets/layouts/review.css',
+      'src/enhance/layouts/review/compact.ts', 'src/enhance/layouts/review/context.ts', 'src/enhance/layouts/review/features.ts', 'src/enhance/layouts/review/header.ts', 'src/enhance/layouts/review/rail.ts', 'assets/layouts/review.css',
     ]);
     for (const f of files) {
       const text = readFileSync(f, 'utf8');
