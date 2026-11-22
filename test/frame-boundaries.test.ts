@@ -201,13 +201,8 @@ describe('the record: its shape and its newest entries', () => {
     expect([...FRAME_ACCEPTS].slice(FRAME_ACCEPTS.length - (delta?.addsFrameAccepts.length ?? 0))).toEqual(delta?.addsFrameAccepts);
   });
 
-  it("each layout's masked frameCsp(layout) equals the previous entry's for the same layout: the same directives in the same order, the same sources but the hashes; a layout absent from every earlier entry has no parent, and its first value is the landing's review check", () => {
+  it("each layout's masked frameCsp(layout) equals the previous entry's for the same layout: the same directives in the same order, the same sources but the hashes", () => {
     expect(perLayoutProblems(record, FRAME_LAYOUTS, (l) => maskedCsp(frameCsp(l as FrameLayout)), FIRST_PER_LAYOUT)).toEqual([]);
-    // Every shipped layout absent from all earlier entries must be named in the newest entry.
-    const added = FRAME_LAYOUTS.filter((l) => !record.slice(0, -1).some((e) => cspOf(e, l) !== undefined));
-    for (const l of added) {
-      expect(cspOf(record.at(-1), l), `${l} is recorded in the newest entry`).toBeDefined();
-    }
   });
 
   it('the per-layout rows hold for a later landing that appends a layout (a synthetic entry), and are not vacuous: a changed policy, a dropped default and an unordered key each red', () => {

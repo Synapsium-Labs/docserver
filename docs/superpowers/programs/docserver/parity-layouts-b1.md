@@ -109,7 +109,7 @@ The original B8.2 assertion timed out at the last position. With Home sent to th
 
 Both alternate drawers now use the hosted Close control-row size only for a fine pointer. Chromium with a coarse pointer measured 56 px before the fix and 44 px after it; with a fine pointer the same Close button followed the hosted 40 px and 56 px values. The stylesheet walk now checks the rule in each alternate's own CSS. Neither this fix nor the stricter corpus guards changed a snapshot.
 
-The per-layout corpus no longer skips a shipped layout whose snapshot directory is missing. The ratchet refuses deletion of a per-layout hostile snapshot even with a correctly named trailer; an edit still needs its exact per-layout trailer. In the boundary check an unreachable condition was removed: the immediate parent already belongs to the set of earlier entries. A shipped layout absent from every earlier entry must be recorded in the newest entry; no parent-policy comparison is made for that layout.
+The per-layout corpus no longer skips a shipped layout whose snapshot directory is missing. The ratchet refuses deletion of a per-layout hostile snapshot even with a correctly named trailer; an edit still needs its exact per-layout trailer. In the boundary check an unreachable condition was removed: the immediate parent already belongs to the set of earlier entries. The newest entry must equal the values computed now, which records every shipped layout; no parent-policy comparison is made for a layout without a parent.
 
 The review found earlier snapshot additions and regenerations without precise trailers. History was not rewritten; the plan's B1 Results lists the gaps. The round's changes do not move any existing golden or snapshot.
 
@@ -119,6 +119,6 @@ The round's local gate passed 40 cue, 21 Editorial-file, 19 Classic-file and 173
 
 ## B1 review fix round 2
 
-The ratchet stayed green with its redundant shared-case filter removed: the two-part shared ID cannot match a three-part alternate ID. The per-layout hostile-deletion loop and exact-trailer check remain. The corpus test that repeated the module-load result was removed; its missing-directory failure case remains. The boundary test now asserts only the reachable requirement for newly added layouts: a shipped layout absent from all earlier entries must appear in the newest entry. The parent-policy comparisons for established layouts are unchanged.
+The ratchet stayed green with its redundant shared-case filter removed: the two-part shared ID cannot match a three-part alternate ID. The per-layout hostile-deletion loop and exact-trailer check remain. The corpus test that repeated the module-load result was removed; its missing-directory failure case remains. The boundary file relies on "the newest entry equals the values computed now" to require every shipped layout in the newest entry. The parent-policy comparisons for established layouts are unchanged.
 
 The three affected files stayed green with the deletions: ratchet 56, frame boundaries 22, and the Chromium corpus 172 with 165 WebKit rows skipped. The five file-edit probes in the [Task 14 record](../../plans/parity-mutations/task-14.md) reproduced their expected assertion failures before the deletions; the saved and restored SHA-256s matched for each. The round changes no shipped asset, conformance record or growth row.
