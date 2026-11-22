@@ -383,6 +383,7 @@ describeBrowsers((browser) => {
     const doc = await open({}, { width: 1280, height: 800, touch: true });
     try {
       const { page } = doc;
+      expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
       const rows = (): Promise<number> => page.locator('.doc-toc a').first().evaluate((el) => el.getBoundingClientRect().height);
       const docked = await rows();
       await page.evaluate(() => document.querySelector('[data-docreader-root]')?.classList.add('toc-open'));

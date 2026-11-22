@@ -270,6 +270,7 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
     // A colour word in a selector, a class, a custom property's name or a reference to one, or a string, is no colour.
     expect(namedColours('.ok-green:hover, a:not(.red) > .tan { color: var(--red); content: "red"; --green: 1px; background: var(--wait-tint); }')).toEqual([]);
     expect(namedColours('a { --tint: tan; color: var(--x, red); }')).toEqual(['tan', 'red']);
+    expect(namedColours('a { background: url(red.png); color: var(--x); /* tan */ }')).toEqual([]);
   });
 
   for (const layout of OWN) {
