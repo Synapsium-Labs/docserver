@@ -4,12 +4,9 @@ import { headingText } from '../../headctl.js';
 import { CHROME_ATTR } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
 
-/** A section number at the start of a heading's words: "3. ", "A2. ", "4b. ". */
-const SECTION_NUMBER = /^[A-Z]?\d+[a-z]?\.\s+/;
-
-/** A heading's words without its number: its accessible label when it has one, else its text with the reader's chrome left out. */
+/** A heading's own words: its text with the reader's chrome left out, which holds the number editorial.ts hung on it. */
 export function bare(heading: Element): string {
-  return (heading.getAttribute('aria-label') ?? headingText(heading, (el) => el.hasAttribute(CHROME_ATTR))).replace(SECTION_NUMBER, '');
+  return headingText(heading, (el) => el.hasAttribute(CHROME_ATTR));
 }
 
 /** True for the "Where things stand" heading: the vocabulary's word for it. */

@@ -26,7 +26,6 @@
 [data-docreader-root][data-docreader-layout="guided"] .gd-end { padding: .2em .1em; border: 0; background: none; color: var(--text-muted); font: inherit; font-family: var(--sans); font-size: calc(.82 * var(--rem)); cursor: pointer; }
 [data-docreader-root][data-docreader-layout="guided"] .gd-end::before { content: "\25B4  "; }
 [data-docreader-root][data-docreader-layout="guided"] .gd-end:hover { color: var(--accent); }
-[data-docreader-root][data-docreader-layout="guided"] > [hidden="until-found"] { margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-top-width: 0; border-bottom-width: 0; }
 [data-docreader-root][data-docreader-layout="guided"] .doc-toc { overflow-y: auto; border-right: 1px solid var(--border); }
 [data-docreader-root][data-docreader-layout="guided"] .toc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 8px 10px; }
 [data-docreader-root][data-docreader-layout="guided"] .toc-title { color: var(--text-muted); font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
@@ -82,7 +81,6 @@
 }
 @media print {
   [data-docreader-root][data-docreader-layout="guided"] .gd-bar, [data-docreader-root][data-docreader-layout="guided"] .gd-end-row, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools { display: none; }
-  [data-docreader-root][data-docreader-layout="guided"] > [hidden="until-found"] { content-visibility: visible; }
   [data-docreader-root][data-docreader-layout="guided"] .reveal { opacity: 1; transform: none; }
   [data-docreader-root][data-docreader-layout="guided"] .gd-hero > .short { border: 0; background: none; }
 }

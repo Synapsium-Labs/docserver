@@ -18,15 +18,17 @@
 //
 // The reading tools are one group in the bar's tray (the changes stepper's place, which this layout does not build): the
 // lens (the reader's `lens` pref: Product quiets implementation detail, Engineering is "all") and, with layers, the two
-// buttons. Only with the bar. Print shows everything (the stylesheet).
+// buttons. Only with the bar. Print shows everything the reader had folded.
 //
 // Built after `attention` (the lens's classes and peek bars) and `scroll`. A page that is not a document, or a host that
 // asked for no folds, gets no layers and no lens control.
-import { FOLDS } from '../../folds.js';
 import { chrome } from '../../journal.js';
 import { contributionMinutes, formatMinutes, memberContribution, words } from '../../reading.js';
 import type { FeatureContext } from '../../types.js';
 import { bare, isStand, membersOf, stops } from './sections.js';
+
+/** The per-document field the default layout's folds keep (src/enhance/folds.ts): the ids of the folded sections, one shape in both layouts. */
+const FOLDS = 'folds';
 
 /** The UI memory's field for the reader's choice of layers. */
 const LAYERS = 'layers';
@@ -145,10 +147,9 @@ export function build(ctx: FeatureContext): void {
     l.btn.setAttribute('aria-label', `${say}: ${l.name}`);
   };
   let sync = (): void => {};
-  /** The state changed: write the folded sections behind, then (still live) put it on the page. The host's set() may destroy the instance. */
+  /** The state changed: write the folded sections behind, then put it on the page. (A host's set() that destroys the instance leaves the journal to ignore the writes.) */
   const commit = (): void => {
     state.writeDoc(FOLDS, layers.filter((l) => l.folded).map((l) => l.id));
-    if (!ctx.live()) return;
     for (const l of layers) paint(l);
     sync();
     ctx.relayout('folds');
@@ -226,6 +227,14 @@ export function build(ctx: FeatureContext): void {
   journal.listen(root, 'beforematch', (event) => {
     const l = holding(event.target as Node);
     if (l !== undefined) setFold(l, false);
+  });
+  // Print shows everything the reader had folded, as the default layout's folds do: the blocks this layout hid are shown for the
+  // printing and hidden again after it (a browser that knows no hidden="until-found" would print nothing of them otherwise).
+  ctx.env.onPrint((printing) => {
+    for (const l of layers) {
+      if (!printing) paint(l);
+      else for (const n of l.hid) if (n.getAttribute('hidden') === 'until-found') journal.setAttribute(n, 'hidden', null);
+    }
   });
   // A member a feature adds after this build (the lens's peek bars) joins a folded section, so it never shows alone.
   journal.defer(ctx.events.on('prefs', () => {
