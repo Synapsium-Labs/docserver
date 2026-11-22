@@ -7,7 +7,8 @@
 // counts are the marks' and no state of this layout's own exists: the marks are stored by marks.ts, as the default's.
 //
 // Built after `strip` (the strip is in the block by then) and after `marks` (the controls exist). A document with no
-// title of its own at the top of the root, or with no read marks, gets what it can: no card, or a card with no progress.
+// title of its own at the top of the root gets no card. A document always has read marks (the marks feature builds a control
+// for every section but "In short"), so the card needs no case for a page without any.
 import { CHROME_ATTR, chrome, siblingRun } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
 
@@ -18,10 +19,11 @@ function label(heading: Element): string {
 
 /** Build the header card. */
 export function build(ctx: FeatureContext): void {
-  if (!ctx.info.isDocument) return;
   const { root, journal } = ctx;
   const doc = root.ownerDocument;
-  const title = Array.from(root.children).find((c) => c.localName === 'h1' && !c.hasAttribute(CHROME_ATTR));
+  // A document has its title among the root's own children (the lifecycle's check of a document counts them), so one
+  // guard serves both: a page that is not a document gets no card.
+  const title = ctx.info.isDocument ? Array.from(root.children).find((c) => c.localName === 'h1' && !c.hasAttribute(CHROME_ATTR)) : undefined;
   if (title === undefined) return;
   let first: Element = title;
   const before = title.previousElementSibling;
@@ -36,7 +38,6 @@ export function build(ctx: FeatureContext): void {
   journal.wrap(siblingRun(first, last.nextSibling), card);
 
   const controls = (): HTMLElement[] => Array.from(root.querySelectorAll<HTMLElement>('button.h-mark'));
-  if (controls().length === 0) return;
   const count = chrome(doc, 'b', { className: 'rv-n' });
   const of = chrome(doc, 'span', { className: 'rv-of' });
   const changed = chrome(doc, 'span', { className: 'rv-changed' });

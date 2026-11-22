@@ -6,7 +6,7 @@
 // read-mark control (marks.ts), which toggles, stores and emits. So the stored marks, the heading's control, the Contents
 // rail's marks and the card's counts are always one answer. The `m` key stays the marks feature's.
 //
-// Only with the bar (ctx.slots) and read marks; otherwise it builds nothing.
+// Only with the bar (ctx.slots), for a document (which always has read marks); otherwise it builds nothing.
 import { chrome } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
 
@@ -18,7 +18,7 @@ function label(heading: Element): string {
 /** Build the context tool. */
 export function build(ctx: FeatureContext): void {
   const { slots, root, journal } = ctx;
-  if (slots === null || !ctx.info.isDocument || root.querySelector('button.h-mark') === null) return;
+  if (slots === null || !ctx.info.isDocument) return;
   const doc = root.ownerDocument;
   const button = chrome(doc, 'button', { className: 'rv-mark', attrs: { type: 'button', disabled: '' } });
   journal.insert(button, slots.tools, slots.tools.firstChild);
