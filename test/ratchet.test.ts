@@ -281,7 +281,6 @@ describe('Level 2, per layout: conformance/layouts/<name>/<slug>/<id>.dom.txt (p
     expect(verdict('M', 'classic')).toEqual([]);
     expect(verdict('T', 'classic')).toEqual([]);
     expect(verdict('A', 'classic')).toEqual([]);
-    expect(checkLayoutHostile(['classic/h'], layoutChanges(`D\t${P}classic/core/h.dom.txt`))).toEqual([]);
     expect(checkLayoutHostile(['classic/h'], layoutChanges('D\tconformance/layout/classic/h.dom.txt'))).toEqual([
       'classic/h: a hostile layout case was removed (a hostile case is never removed)',
     ]);

@@ -201,7 +201,7 @@ export function checkLayoutHostile(hostileIds, changes) {
   const hostile = new Set(hostileIds);
   const out = [];
   for (const id of [...hostile].sort()) {
-    const mine = changes.filter((c) => LAYOUT_FILE.test(c.path) && c.id === id);
+    const mine = changes.filter((c) => c.id === id);
     if (mine.some((c) => c.status === 'D')) out.push(`${id}: a hostile layout case was removed (a hostile case is never removed)`);
     else if (mine.some((c) => c.kind !== 'dom.txt')) out.push(`${id}: a hostile layout case's input or options changed (add a new case instead)`);
   }

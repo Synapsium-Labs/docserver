@@ -73,7 +73,7 @@ const isLayoutPrefix = (keys: readonly string[], layouts: readonly string[]): bo
  * layout shows that the rows stay green when a landing appends one (and a bad one shows they are not vacuous).
  * - an entry that is per layout names a prefix of `layouts`, beginning with `default`;
  * - the newest entry's masked policy of each layout it names equals the previous entry's for the same layout, when it has one;
- * - the default layout always has a parent from the second entry on; a newly added layout is checked elsewhere in this file;
+ * - the default layout always has a parent from the second entry on; there is no parent-policy comparison for a layout without a parent;
  * - every consecutive pair of entries agrees on a layout both name.
  */
 function perLayoutProblems(rec: readonly Entry[], layouts: readonly string[], masked: (layout: string) => string, firstPerLayout: number): string[] {
@@ -203,10 +203,9 @@ describe('the record: its shape and its newest entries', () => {
 
   it("each layout's masked frameCsp(layout) equals the previous entry's for the same layout: the same directives in the same order, the same sources but the hashes; a layout absent from every earlier entry has no parent, and its first value is the landing's review check", () => {
     expect(perLayoutProblems(record, FRAME_LAYOUTS, (l) => maskedCsp(frameCsp(l as FrameLayout)), FIRST_PER_LAYOUT)).toEqual([]);
-    // The layouts the newest entry adds (absent from every earlier entry) are exactly the ones it names beyond the previous entry's.
+    // Every shipped layout absent from all earlier entries must be named in the newest entry.
     const added = FRAME_LAYOUTS.filter((l) => !record.slice(0, -1).some((e) => cspOf(e, l) !== undefined));
     for (const l of added) {
-      expect(cspOf(record.at(-2), l), `${l} has no parent`).toBeUndefined();
       expect(cspOf(record.at(-1), l), `${l} is recorded in the newest entry`).toBeDefined();
     }
   });

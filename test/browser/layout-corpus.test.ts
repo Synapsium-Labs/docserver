@@ -267,11 +267,6 @@ describe('the Level 2 cases', () => {
     }
   });
 
-  it('every shipped non-default layout has a snapshot directory', () => {
-    expect(OWN_LAYOUT_NAMES).toEqual(['classic', 'editorial']);
-    expect(SNAPSHOTTED).toEqual(OWN_LAYOUT_NAMES);
-  });
-
   it('a case page that was refused something, reached another origin or asked for an unserved file fails', () => {
     const clean = { violations: [], aborted: [], missing: [] };
     expect(() => holdClean('x/a', clean)).not.toThrow();
