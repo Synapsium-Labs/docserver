@@ -128,7 +128,7 @@ function allDocs(): Doc[] {
       '## 1. First', '', 'The first intro paragraph says what the Widget is.', '', 'The second intro paragraph says why it matters.', '',
       ...Array.from({ length: 8 }, () => [`${para} ${para}`, '']).flat(),
       '### Part one', '', para, '', '### Part two', '', '```ts\nconst a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;\n```', '',
-      '## 2. Second', '', 'The intro of the second section.', '', '| Name | Owner | Status |', '|---|---|---|', '| Alpha | one | Agreed |', '| Beta | two | Pending |', '',
+      '## 2. Second', '', 'The intro of the second section.', '', 'Run `aaa bbb ccc ddd` and `eee fff ggg` then `hhh iii` today ok, thanks.', '', '| Name | Owner | Status |', '|---|---|---|', '| Alpha | one | Agreed |', '| Beta | two | Pending |', '',
       '## 3. Words used here', '', '| Term | Meaning |', '|---|---|', '| Widget | A small thing the document talks about. |', '',
       '## Where things stand', '', '### Agreed', '', '- Alpha: kept.', '', '### Waiting on you', '', '- Beta: whether to change it.', '',
     ].join('\n'),

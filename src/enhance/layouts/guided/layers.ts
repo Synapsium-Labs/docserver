@@ -22,12 +22,13 @@
 //
 // Built after `attention` (the lens's classes and peek bars) and `scroll`. A page that is not a document, or a host that
 // asked for no folds, gets no layers and no lens control.
-import { chrome } from '../../journal.js';
-import { contributionMinutes, formatMinutes, memberContribution, words } from '../../reading.js';
+import { CHROME_ATTR, chrome } from '../../journal.js';
+import { formatMinutes, memberContribution, words, type ReadingContribution } from '../../reading.js';
 import type { FeatureContext } from '../../types.js';
 import { bare, isStand, membersOf, stops } from './sections.js';
+import { contributionOf, stamp } from './times.js';
 
-/** The per-document field the default layout's folds keep (src/enhance/folds.ts): the ids of the folded sections, one shape in both layouts. */
+/** The per-document field the default layout's folds keep (src/enhance/folds.ts): the ids of the folded sections. */
 const FOLDS = 'folds';
 
 /** The UI memory's field for the reader's choice of layers. */
@@ -62,6 +63,9 @@ function cost(nodes: readonly Element[]): Cost {
   return { prose, code, figures, tables };
 }
 
+/** A time and its word, with the separator before what follows when something does: "3 min read · 2 tables". */
+const saying = (time: string, word: string, more: boolean): string => (time === '' ? '' : `${time} ${word}${more ? ' · ' : ''}`);
+
 const plural = (n: number, one: string): string => `${String(n)} ${one}${n === 1 ? '' : 's'}`;
 
 /** What a run of blocks holds, as words: "1 figure · 2 tables". */
@@ -85,7 +89,7 @@ export function introCount(members: readonly Element[]): number {
   let paragraphs = 0;
   while (i < members.length && paragraphs < 2 && w < 55) {
     const n = members[i] as Element;
-    if (n.localName === 'p') {
+    if (n.localName === 'p' && n.querySelector('img') === null) {
       const text = n.textContent ?? '';
       if (/:\s*$/.test(text)) {
         const next = members[i + 1];
@@ -105,6 +109,10 @@ interface Layer {
   readonly id: string;
   readonly name: string;
   readonly first: Element;
+  /** The members that fold: the blocks of the document after the intro, as they were at the build. */
+  readonly members: ReadonlySet<Element>;
+  /** The row after the last of them. */
+  readonly endRow: Element;
   readonly btn: HTMLButtonElement;
   readonly label: HTMLElement;
   readonly bar: HTMLElement;
@@ -116,11 +124,13 @@ interface Layer {
 /** Build the layers and the reading tools. */
 export function build(ctx: FeatureContext): void {
   const { root, journal, state } = ctx;
-  if (!ctx.options.folds || !ctx.info.isDocument) return;
+  if (!ctx.info.isDocument) return;
   const doc = root.ownerDocument;
   const units = new Map(ctx.sections.map((u) => [u.heading, u] as const));
 
   const remembered = state.readDoc(FOLDS);
+  // What the default layout's folds (or an earlier guided read) left: ids that are not guided's layers are kept in every write.
+  const others: unknown[] = Array.isArray(remembered) ? remembered : [];
   const kept = Array.isArray(remembered) ? new Set(remembered) : null;
   const chosen = state.readUi(LAYERS);
   const guided = chosen === 'guided' ? true : chosen === 'full' ? false : ctx.sections.reduce((t, u) => t + u.minutes, 0) >= FULL_BELOW;
@@ -130,8 +140,10 @@ export function build(ctx: FeatureContext): void {
   /** Put a layer's state on the page: the members hidden or shown, the button and its bar. */
   const paint = (l: Layer): void => {
     if (l.folded) {
+      // Its members, its own end row and the peek bars of its members: never what another step put at the root's end.
       for (let n: Element | null = l.first; n !== null && !stops(n); n = n.nextElementSibling) {
-        if (!n.hasAttribute('hidden')) {
+        const mine = l.members.has(n) || n === l.endRow || (n.classList.contains('peek-bar') && n.hasAttribute(CHROME_ATTR) && l.members.has(n.previousElementSibling as Element));
+        if (mine && !n.hasAttribute('hidden')) {
           journal.setAttribute(n, 'hidden', 'until-found');
           l.hid.add(n);
         }
@@ -147,48 +159,56 @@ export function build(ctx: FeatureContext): void {
     l.btn.setAttribute('aria-label', `${say}: ${l.name}`);
   };
   let sync = (): void => {};
-  /** The state changed: write the folded sections behind, then put it on the page. (A host's set() that destroys the instance leaves the journal to ignore the writes.) */
-  const commit = (): void => {
-    state.writeDoc(FOLDS, layers.filter((l) => l.folded).map((l) => l.id));
+  /**
+   * The state changed. Only the reader's own act (a fold, an unfold, Expand all, Collapse all) is written behind, and then with
+   * every id the layers do not own as it was, so the default layout's folds are never dropped; a reveal or a find leaves
+   * the page as the reader's act left it, and the stored answer with it.
+   */
+  const commit = (persist: boolean): void => {
+    if (persist) {
+      const mine = new Set(layers.map((l) => l.id));
+      state.writeDoc(FOLDS, [...others.filter((v) => !mine.has(v as string)), ...layers.filter((l) => l.folded).map((l) => l.id)]);
+    }
     for (const l of layers) paint(l);
     sync();
     ctx.relayout('folds');
   };
-  const setFold = (l: Layer, on: boolean): void => {
+  const setFold = (l: Layer, on: boolean, persist: boolean): void => {
     l.folded = on;
-    commit();
+    commit(persist);
   };
   const setAll = (on: boolean): void => {
     for (const l of layers) l.folded = on;
     state.writeUi(LAYERS, on ? 'guided' : 'full');
-    commit();
+    commit(true);
   };
 
-  for (const heading of Array.from(root.children) as HTMLElement[]) {
+  for (const heading of ctx.options.folds ? (Array.from(root.children) as HTMLElement[]) : []) {
     const unit = units.get(heading);
     if (unit === undefined || isStand(ctx, heading)) continue;
     const members = membersOf(heading);
     const all = cost(members);
-    const minutes = formatMinutes(unit.minutes);
     // What the section holds, under its heading, when it is long or holds more than prose.
     if (unit.minutes >= 1 || all.figures > 0 || all.tables > 0) {
       const what = contents(all, members.filter((m) => m.localName === 'h3').length);
-      const meta = chrome(doc, 'p', { className: 'gd-meta', text: [minutes === '' ? '' : `${minutes} read`, ...what].filter((s) => s !== '').join(' · ') });
-      journal.insert(meta, root, heading.nextSibling);
+      const holds = what.join(' · ');
+      const time = stamp(ctx, chrome(doc, 'span', { className: 'gd-time' }), contributionOf(ctx, heading), (m) => saying(formatMinutes(m), 'read', holds !== ''));
+      journal.insert(chrome(doc, 'p', { className: 'gd-meta' }, [time, doc.createTextNode(holds)]), root, heading.nextSibling);
     }
     const detail = members.slice(introCount(members));
     const rest = cost(detail);
     if (!(rest.prose + rest.code >= 300 || rest.figures > 0 || rest.tables > 0 || rest.code > 0)) continue;
     const first = detail[0] as Element;
     const name = bare(heading);
-    const left = formatMinutes(contributionMinutes(rest.prose, rest.code, rest.figures));
+    const detailContribution: ReadingContribution = [rest.prose, rest.code, rest.figures];
     const subs = detail.filter((m) => m.localName === 'h3' && m.id !== '');
     const label = chrome(doc, 'span', { className: 'gd-label' });
-    const summary = [left === '' ? '' : `${left} more`, ...contents(rest, subs.length)].filter((s) => s !== '').join(' · ');
+    const holdsMore = contents(rest, subs.length).join(' · ');
+    const left = stamp(ctx, chrome(doc, 'span', { className: 'gd-time' }), detailContribution, (m) => saying(formatMinutes(m), 'more', holdsMore !== ''));
     const btn = chrome(doc, 'button', { className: 'gd-btn', attrs: { type: 'button', 'aria-expanded': 'true' } }, [
       chrome(doc, 'span', { className: 'gd-chev', attrs: { 'aria-hidden': 'true' } }),
       label,
-      chrome(doc, 'span', { className: 'gd-sum', text: summary }),
+      chrome(doc, 'span', { className: 'gd-sum' }, [left, doc.createTextNode(holdsMore)]),
     ]);
     const bar = chrome(doc, 'div', { className: 'gd-bar' }, [btn]);
     if (subs.length > 1) {
@@ -198,15 +218,16 @@ export function build(ctx: FeatureContext): void {
       bar.append(inside);
     }
     const end = chrome(doc, 'button', { className: 'gd-end', text: 'Fold this section', attrs: { type: 'button', 'aria-label': `Fold this section: ${name}` } });
+    const endRow = chrome(doc, 'div', { className: 'gd-end-row' }, [end]);
     journal.insert(bar, root, first);
-    journal.insert(chrome(doc, 'div', { className: 'gd-end-row' }, [end]), root, (detail[detail.length - 1] as Element).nextSibling);
-    const layer: Layer = { id: heading.id, name, first, btn, label, bar, hid: new Set(), folded: kept === null ? guided : kept.has(heading.id) };
+    journal.insert(endRow, root, (detail[detail.length - 1] as Element).nextSibling);
+    const layer: Layer = { id: heading.id, name, first, members: new Set(detail), endRow, btn, label, bar, hid: new Set(), folded: kept === null ? guided : kept.has(heading.id) };
     layers.push(layer);
     journal.listen(btn, 'click', () => {
-      setFold(layer, !layer.folded);
+      setFold(layer, !layer.folded, true);
     });
     journal.listen(end, 'click', () => {
-      setFold(layer, true);
+      setFold(layer, true, true);
       ctx.nav.goTo(heading, { push: false, focus: false, flash: false });
       btn.focus({ preventScroll: true });
     });
@@ -222,11 +243,11 @@ export function build(ctx: FeatureContext): void {
   };
   ctx.onReveal((element) => {
     const l = holding(element);
-    if (l !== undefined) setFold(l, false);
+    if (l !== undefined) setFold(l, false, false);
   });
   journal.listen(root, 'beforematch', (event) => {
     const l = holding(event.target as Node);
-    if (l !== undefined) setFold(l, false);
+    if (l !== undefined) setFold(l, false, false);
   });
   // Print shows everything the reader had folded, as the default layout's folds do: the blocks this layout hid are shown for the
   // printing and hidden again after it (a browser that knows no hidden="until-found" would print nothing of them otherwise).

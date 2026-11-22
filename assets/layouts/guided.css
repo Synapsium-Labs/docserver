@@ -2,7 +2,7 @@
 [data-docreader-root][data-docreader-layout="guided"] { --docreader-layout: guided; }
 [data-docreader-root][data-docreader-layout="guided"] .gd-hero { margin: 0 0 1.8em; }
 [data-docreader-root][data-docreader-layout="guided"] .gd-hero > h1 { margin-top: .3em; margin-bottom: .55em; }
-[data-docreader-root][data-docreader-layout="guided"] .gd-hero > .short { margin: 1em 0 0; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); color: var(--text); }
+[data-docreader-root][data-docreader-layout="guided"] .gd-hero > .short { border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); color: var(--text); }
 [data-docreader-root][data-docreader-layout="guided"] .gd-glance { display: flex; flex-wrap: wrap; gap: .7em 1.8em; align-items: center; margin: 1em 0 0; padding: 0 .15em; font-family: var(--sans); font-size: calc(.88 * var(--rem)); color: var(--text); }
 [data-docreader-root][data-docreader-layout="guided"] .gd-gk { display: block; font-size: calc(.66 * var(--rem)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
 [data-docreader-root][data-docreader-layout="guided"] a.gd-wait { padding: .35em .8em; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; }
@@ -36,6 +36,7 @@
 [data-docreader-root][data-docreader-layout="guided"] .doc-toc ul ul { display: none; margin: 2px 0 6px; }
 [data-docreader-root][data-docreader-layout="guided"] .doc-toc li.open > ul { display: block; }
 [data-docreader-root][data-docreader-layout="guided"] .doc-toc ul ul a { padding-left: 30px; font-size: 12.5px; }
+[data-docreader-root][data-docreader-layout="guided"] .doc-toc a .gd-rt:empty { display: none; }
 [data-docreader-root][data-docreader-layout="guided"] .doc-toc a .gd-rt { margin-left: auto; padding-left: .5em; color: var(--text-muted); font-size: calc(.78 * var(--rem)); white-space: nowrap; font-variant-numeric: tabular-nums; }
 [data-docreader-root][data-docreader-layout="guided"] .h-anchor { margin-inline-start: .5em; color: var(--text-muted); text-decoration: none; }
 [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools { display: flex; align-items: center; gap: 6px; }
@@ -45,6 +46,9 @@
 [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all { border-color: var(--border); background: var(--surface); }
 [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all:disabled { opacity: .6; cursor: default; }
 [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-sm { display: none; }
+@media screen {
+  [data-docreader-root][data-docreader-layout="guided"].lens-product .tech-text { color: var(--text-muted); font-size: .94em; }
+}
 @media screen and (max-width: 860px) {
   [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-tools-k, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-lg { display: none; }
   [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-sm { display: inline; }
@@ -58,7 +62,7 @@
   [data-docreader-root][data-docreader-layout="guided"][data-docreader-skin~="controlRow"] .gd-btn, [data-docreader-root][data-docreader-layout="guided"][data-docreader-skin~="controlRow"] .gd-end { min-height: var(--dr-control-row); }
 }
 @media (pointer: coarse) {
-  [data-docreader-root][data-docreader-layout="guided"] .gd-btn, [data-docreader-root][data-docreader-layout="guided"] .gd-end, [data-docreader-root][data-docreader-layout="guided"] .gd-inside a, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-seg button, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all, [data-docreader-root][data-docreader-layout="guided"] a.gd-wait { min-height: 44px; }
+  [data-docreader-root][data-docreader-layout="guided"] .gd-btn, [data-docreader-root][data-docreader-layout="guided"] .gd-end, [data-docreader-root][data-docreader-layout="guided"] .gd-inside a, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-seg button, [data-docreader-root][data-docreader-layout="guided"] .bar-tools .gd-all { min-height: 44px; }
   [data-docreader-root][data-docreader-layout="guided"] .gd-inside a { display: inline-flex; align-items: center; }
 }
 @media screen and (max-width: 1239px) {

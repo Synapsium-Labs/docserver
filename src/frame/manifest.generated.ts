@@ -15,6 +15,6 @@ export const FRAME_MANIFEST = {
   cssEditorial: { path: "frame/layout-editorial.css", sha256: "c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda", bytes: 3801, chars: 3801, csp: null, layout: "editorial" },
   enhanceReview: { path: "frame/enhance-review.js", sha256: "65b3ab37a6c6d8189f90552114143be0b771374ee2c14207524bed0086ee1715", bytes: 191947, chars: 191929, csp: "'sha256-ZbOrN6bG2BifkFUhFBQ74LdxN07iwUIHUkvtAIbuFxU='", layout: "review" },
   cssReview: { path: "frame/layout-review.css", sha256: "11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448", bytes: 8090, chars: 8090, csp: null, layout: "review" },
-  enhanceGuided: { path: "frame/enhance-guided.js", sha256: "84fb231eefbf7ac2fe13fc661f7983c88e38861ffb0c14dd2b432143ebd185e6", bytes: 179304, chars: 179294, csp: "'sha256-hPsjHu+/esL+E/xmH3mDyI44hh/7DBTdK0MhQ+vRheY='", layout: "guided" },
-  cssGuided: { path: "frame/layout-guided.css", sha256: "e987536f016bbdb7245bbf1eb737a36ea9b7263537bfaa06bdc8949234c1dd55", bytes: 11392, chars: 11392, csp: null, layout: "guided" },
+  enhanceGuided: { path: "frame/enhance-guided.js", sha256: "058219749a66049c60b9eec6b775341913547a74b3fe46c316ce95c1bec4b752", bytes: 181234, chars: 181224, csp: "'sha256-BYIZdJpmBJxgue7Gt3U0GRNUenSz/kbDFs6Vwb7Et1I='", layout: "guided" },
+  cssGuided: { path: "frame/layout-guided.css", sha256: "9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c", bytes: 11553, chars: 11553, csp: null, layout: "guided" },
 } as const;

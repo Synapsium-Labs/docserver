@@ -513,7 +513,7 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(hero.querySelector(':scope > div.short h2')?.textContent).toBe('In short');
     const glance = hero.querySelector(':scope > .gd-glance') as HTMLElement;
     expect(hero.lastElementChild).toBe(glance);
-    expect(Array.from(glance.children).map((c) => c.textContent)).toEqual(['In short1 min', 'Contains3 sections · 1 table', 'Waiting on you2 items →']);
+    expect(Array.from(glance.children).map((c) => c.textContent)).toEqual(['In short1 min', 'Whole document2 min', 'Contains3 sections · 1 table', 'Waiting on you2 items →']);
     expect(glance.querySelector('a.gd-wait')?.getAttribute('href')).toBe('#waiting-on-you');
     expect(Array.from(root.children).find((c) => !c.hasAttribute('data-docreader-chrome') || c.matches('header'))).toBe(hero);
   });
@@ -527,7 +527,9 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     }
     const root = mount(SPEC);
     await enhance(root, { folds: false });
-    expect(root.querySelector('.gd-bar, .gd-tools')).toBeNull();
+    // No layers and no layer buttons, but the lens: it is the reader's, and needs no fold.
+    expect(root.querySelector('.gd-bar, .gd-end-row, .gd-all')).toBeNull();
+    expect(root.querySelector('.bar-tools .gd-tools .gd-seg')).not.toBeNull();
     expect(root.querySelector('header.gd-hero')).not.toBeNull();
   });
 
@@ -632,7 +634,8 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     (root.querySelector('h2[id="3-third"] ~ .gd-bar .gd-inside a') as HTMLElement).click();
     expect(third.getAttribute('aria-expanded')).toBe('true');
     expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('false');
-    expect(s.writes.get(FOLDS_KEY)).toBe('["1-first"]');
+    // A jump leaves the stored answer alone: the reader folded nothing.
+    expect(s.writes.has(FOLDS_KEY)).toBe(false);
     // Find-in-page: the browser fires beforematch on the folded block it found a match in.
     const found = root.querySelector('h2[id="1-first"] ~ [hidden="until-found"]') as HTMLElement;
     found.dispatchEvent(new Event('beforematch', { bubbles: true }));
@@ -680,7 +683,7 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     const root = mount(SPEC.replace(WORDS(340), WORDS(600)));
     await enhance(root);
     const times = Array.from(root.querySelectorAll('.doc-toc > ul > li > a')).map((a) => [a.getAttribute('href'), a.querySelector('.gd-rt')?.textContent ?? null]);
-    expect(times).toEqual([['#in-short', null], ['#1-first', null], ['#2-second', null], ['#3-third', '3 min'], ['#where-things-stand', null]]);
+    expect(times).toEqual([['#in-short', ''], ['#1-first', ''], ['#2-second', ''], ['#3-third', '3 min'], ['#where-things-stand', '']]);
     const bare = mount(SPEC);
     await enhance(bare, { chrome: { rail: false } });
     expect(bare.querySelector('.doc-toc, .gd-rt')).toBeNull();
@@ -711,6 +714,7 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(introCount(el(`${p(5)}<p>These are:</p><ul><li>${WORDS(130)}</li></ul>`))).toBe(1);
     expect(introCount(el(`<p>These are:</p>${p(5)}`))).toBe(1);
     expect(introCount(el(`<p>These are:</p>`))).toBe(1);
+    expect(introCount(el(`<p><img src="x"></p>${p(5)}`))).toBe(0);
     expect(introCount([])).toBe(0);
   });
 
@@ -886,7 +890,7 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     await enhance(far);
     expect(far.querySelector('header.gd-hero > .short')).toBeNull();
     expect(far.querySelector(':scope > .short')).not.toBeNull();
-    expect(far.querySelector('.gd-glance .gd-gk')?.textContent).toBe('Contains');
+    expect(Array.from(far.querySelectorAll('.gd-glance .gd-gk'), (k) => k.textContent)).toEqual(['Whole document', 'Contains', 'Waiting on you']);
   });
 
   it('ends a section at the next section and at a box that holds one: folding the section before In short leaves In short and the next section shown', async () => {
@@ -919,12 +923,13 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(root.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('gives a document nothing to put in a glance no glance, and a document with nothing to fold the lens alone', async () => {
+  it('gives a document with nothing to count or wait for a glance of its time alone, and a document with nothing to fold the lens alone', async () => {
     pick.layout = 'guided';
     const bare = mount('# T\n\n## Where things stand\n\n### a\n\nx\n\n### b\n\nx\n\n### c\n\nx\n\n### d\n\nx\n');
     await enhance(bare);
     expect(bare.querySelector('header.gd-hero')).not.toBeNull();
-    expect(bare.querySelector('.gd-glance')).toBeNull();
+    // Nothing to count and no waiting box: the glance holds the document's time and nothing else.
+    expect(Array.from(bare.querySelectorAll('.gd-glance .gd-gk'), (k) => k.textContent)).toEqual(['Whole document']);
     const plain = mount(mini('A short paragraph.'));
     await enhance(plain);
     expect(plain.querySelector('.bar-tools .gd-tools .gd-seg')).not.toBeNull();
@@ -956,6 +961,78 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(root.querySelector('.doc-toc a[href="#3-third"] .gd-rt')?.textContent).toBe('3 min');
   });
 
+  it('folds the last section without touching what other steps put at the root\'s end: the quick jump, the Contents\' scrim, a card, an overlay', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const tail = `# T\n\n## A\n\nx\n\n## B\n\nx\n\n## B2\n\nx\n\n## B3\n\nx\n\n## B4\n\nx\n\n## C\n\nOne.\n\nTwo.\n\n${WORDS(400)}\n`;
+    const root = mount(tail);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const claimed = (): string[] => Array.from(root.querySelectorAll(':scope > [hidden="until-found"]')).filter((e) => e.hasAttribute('data-docreader-chrome') && !e.classList.contains('gd-end-row')).map((e) => e.className);
+    expect(root.querySelector(':scope > div > .jump')).not.toBeNull();
+    expect(hiddenOf(root).length).toBeGreaterThan(0);
+    // The lens repaints every layer, a fold repaints every layer: neither reaches what is after the last section.
+    (root.querySelector('.bar-tools .gd-seg button') as HTMLElement).click();
+    expect(claimed()).toEqual([]);
+    (root.querySelector('h2[id="c"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    (root.querySelector('h2[id="c"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(claimed()).toEqual([]);
+    const kids = Array.from(root.children);
+    const scrim = root.querySelector(':scope > .toc-scrim') as HTMLElement;
+    expect(scrim.getAttribute('hidden')).not.toBe('until-found');
+    expect(kids.indexOf(root.querySelector('.gd-end-row') as Element)).toBeLessThan(kids.indexOf(scrim));
+  });
+
+  it('writes the folds behind only for the reader\'s own act, and keeps what it does not own: the default layout\'s ids stay in every write', async () => {
+    pick.layout = 'guided';
+    const long = SPEC.replace(WORDS(340), WORDS(3600));
+    // Nothing remembered: a jump into a folded section opens it and writes nothing, and a find does the same.
+    const a = stored();
+    const rootA = mount(long);
+    await enhance(rootA, { storage: a.storage, storageKey: a.storageKey });
+    expect(rootA.querySelector('h2[id="3-third"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('false');
+    (rootA.querySelector('h2[id="3-third"] ~ .gd-bar .gd-inside a') as HTMLElement).click();
+    expect(rootA.querySelector('h2[id="3-third"] ~ .gd-bar .gd-btn')?.getAttribute('aria-expanded')).toBe('true');
+    expect(a.writes.has(FOLDS_KEY)).toBe(false);
+    (rootA.querySelector('h2[id="1-first"] ~ [hidden="until-found"]') as HTMLElement).dispatchEvent(new Event('beforematch', { bubbles: true }));
+    expect(a.writes.has(FOLDS_KEY)).toBe(false);
+    // The reader's own fold writes, with the id the default layout folded and guided has no layer for.
+    await destroyEnhancement(rootA);
+    rootA.remove();
+    const b = stored({ 'docreader:doc:doc:folds': '["where-things-stand","3-third"]' });
+    const rootB = mount(SPEC);
+    await enhance(rootB, { storage: b.storage, storageKey: b.storageKey });
+    (rootB.querySelector('h2[id="1-first"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(b.writes.get(FOLDS_KEY)).toBe('["where-things-stand","1-first","3-third"]');
+    (rootB.querySelector('h2[id="3-third"] ~ .gd-bar .gd-btn') as HTMLElement).click();
+    expect(b.writes.get(FOLDS_KEY)).toBe('["where-things-stand","1-first"]');
+  });
+
+  it('times a section under the lens: code at 520 words a minute under Engineering and 2000 under Product, in the Contents, the time line, the fold and the glance', async () => {
+    pick.layout = 'guided';
+    const root = mount(mini(`\`\`\`ts\n${WORDS(2000)}\n\`\`\``));
+    await enhance(root);
+    const times = (): string[] => [
+      root.querySelector('.doc-toc a[href="#a"] .gd-rt')?.textContent ?? '',
+      root.querySelector('h2[id="a"] + .gd-meta')?.textContent ?? '',
+      root.querySelector('.gd-sum')?.textContent ?? '',
+      root.querySelector('.gd-glance .gd-gl:last-child, .gd-glance .gd-gl')?.textContent ?? '',
+    ];
+    expect(times()).toEqual(['4 min', '4 min read · code', '4 min more · code', 'Whole document4 min']);
+    setEnhancementPrefs(root, { lens: 'product' });
+    expect(times()).toEqual(['1 min', '1 min read · code', '1 min more · code', 'Whole document1 min']);
+    setEnhancementPrefs(root, { lens: 'all' });
+    expect(times()[0]).toBe('4 min');
+  });
+
+  it('quietens technical prose: a paragraph or item of more than sixty characters that is over a third code, outside tables, In short and figures', async () => {
+    pick.layout = 'guided';
+    const tech = 'Run `aaa bbb ccc ddd` and `eee fff ggg` then `hhh iii` today ok, thanks.';
+    const root = mount(`# T\n\n## In short\n\n${tech}\n\n## A\n\n${tech}\n\nA plain paragraph of prose with a few words of code, \`x\`, and nothing else to say here.\n\nUse \`a b c\` and \`d e f\`.\n\n- ${tech}\n- Outer item\n  - ${tech}\n\n| a |\n|---|\n| ${tech} |\n\n## B\n\nx\n\n## C\n\nx\n`);
+    await enhance(root);
+    const marked = Array.from(root.querySelectorAll('.tech-text'), (e) => `${e.localName}${e.closest('.short') !== null ? ' short' : ''}`);
+    expect(marked).toEqual(['p', 'li', 'li']);
+  });
+
   it('has direction C\'s features and none of the default\'s that direction C lacks (the Index tab, IDs and their previews, the strip, marks, changes, the keys sheet, the settings menu)', async () => {
     const names = (await lists())['guided']?.map((f) => f.name) ?? [];
     for (const lacked of ['rail', 'ids', 'xrefs', 'rules', 'plans', 'strip', 'marks', 'changes', 'since', 'keysheet', 'settings', 'folds']) expect(names, lacked).not.toContain(lacked);
@@ -969,7 +1046,7 @@ describe('guided: the scrub scan', () => {
 
   it('its sources and its stylesheet hold none of the shapes of a private detail (an absolute home or mount path, a private host or address, an e-mail, a credential) and no URL', () => {
     expect(files.map((f) => path.relative(ROOT, f))).toEqual([
-      'src/enhance/layouts/guided/contents.ts', 'src/enhance/layouts/guided/features.ts', 'src/enhance/layouts/guided/hero.ts', 'src/enhance/layouts/guided/layers.ts', 'src/enhance/layouts/guided/sections.ts', 'assets/layouts/guided.css',
+      'src/enhance/layouts/guided/contents.ts', 'src/enhance/layouts/guided/features.ts', 'src/enhance/layouts/guided/hero.ts', 'src/enhance/layouts/guided/layers.ts', 'src/enhance/layouts/guided/sections.ts', 'src/enhance/layouts/guided/tech.ts', 'src/enhance/layouts/guided/times.ts', 'assets/layouts/guided.css',
     ]);
     for (const f of files) {
       const text = readFileSync(f, 'utf8');

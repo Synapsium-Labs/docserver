@@ -7,8 +7,8 @@
 // tab, ID chips and their previews, the review strip, read marks, the change stepper and "changes since" menu, the keys sheet
 // and the reading settings menu.
 //
-// Three modules are its own: a hero around the title block (hero.ts), the layers with the bar's reading tools (layers.ts)
-// and the times in the shared Contents (contents.ts).
+// Its own modules: the reading times under the lens (times.ts), a hero around the title block (hero.ts), the layers with the
+// bar's reading tools (layers.ts), the times in the shared Contents (contents.ts) and the quieter technical prose (tech.ts).
 //
 // scripts/build-frame.mjs bundles this layout by resolving the lifecycle's import of `./features.js` to this file, so the
 // module exports the same `features()` the shared list does. Import-inert: declarations only; the list is made when the
@@ -33,18 +33,23 @@ import { build as buildReveal } from '../reveal.js';
 import { build as buildContents } from './contents.js';
 import { build as buildHero } from './hero.js';
 import { build as buildLayers } from './layers.js';
+import { build as buildTech } from './tech.js';
+import { build as buildTimes } from './times.js';
 
 /** The guided layout's features, in build order. */
 export function features(): readonly Feature[] {
   return Object.freeze([
     markFeature('guided'),
     { name: 'editorial', build: buildEditorial },
+    // Before any step adds text to a section: the times are measured on the document's own.
+    { name: 'guided-times', build: buildTimes },
     { name: 'tables', build: buildTables },
     { name: 'status', build: buildStatusMarks },
     { name: 'code', build: buildCode },
     { name: 'figures', build: buildFigures },
     { name: 'glossary', build: buildGlossary },
     { name: 'attention', build: buildAttention },
+    { name: 'guided-tech', build: buildTech },
     { name: 'guided-contents', build: buildContents },
     { name: 'scroll', build: buildScroll },
     { name: 'guided-hero', build: buildHero },

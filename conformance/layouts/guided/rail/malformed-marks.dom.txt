@@ -10,12 +10,15 @@ nav .doc-toc chrome aria-label="Contents"
     li chrome
       a chrome
         "1. First"
+        span .gd-rt chrome
     li chrome
       a chrome
         "2. Second"
+        span .gd-rt chrome
     li chrome
       a chrome
         "3. Third"
+        span .gd-rt chrome
 h1
   "Stored marks"
 h2 aria-label="1. First"

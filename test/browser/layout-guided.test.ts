@@ -100,7 +100,7 @@ describeBrowsers((browser) => {
       expect(await hero.locator(':scope > dl.byline').count()).toBe(1);
       expect(await hero.locator(':scope > .short h2').textContent()).toBe('In short');
       const glance = await hero.locator('.gd-glance .gd-gl').allInnerTexts();
-      expect(glance.map((t) => t.replace(/\s+/g, ' ').trim())).toEqual(['IN SHORT 1 min', 'CONTAINS 3 sections · 2 tables', 'WAITING ON YOU 1 item →']);
+      expect(glance.map((t) => t.replace(/\s+/g, ' ').trim())).toEqual(['IN SHORT 1 min', 'WHOLE DOCUMENT 5 min', 'CONTAINS 3 sections · 2 tables', 'WAITING ON YOU 1 item →']);
       await hero.locator('a.gd-wait').click();
       await expect.poll(() => page.locator('h3.flash').count()).toBe(1);
     } finally { await doc.close(); }
@@ -150,6 +150,32 @@ describeBrowsers((browser) => {
       expect(await button.getAttribute('aria-expanded')).toBe('false');
       expect(await button.evaluate((el) => el === document.activeElement)).toBe(true);
       expect(await paragraphs.nth(2).evaluate((el) => el.getBoundingClientRect().height)).toBe(0);
+    } finally { await doc.close(); }
+  });
+
+  it('a folded last section leaves the quick jump, the phone drawer\'s scrim and a term\'s card alone, whatever repaints it, in a document that ends in a long section', async () => {
+    const tail = `# Title\n\n## A\n\nA word about a Widget.\n\n## B\n\nx\n\n## B2\n\nx\n\n## B3\n\nx\n\n## B4\n\nx\n\n## Words used here\n\n| Term | Meaning |\n| --- | --- |\n| Widget | A small thing. |\n\n## C\n\nOne.\n\nTwo.\n\n${FILL}`;
+    const doc = await open(GUIDED, { markdown: tail, width: 412, height: 915 });
+    try {
+      const { page } = doc;
+      await page.locator('.bar-tools .gd-seg button').nth(0).click();
+      expect(await page.locator('h2[id="c"] ~ [hidden="until-found"]').count()).toBeGreaterThan(0);
+      // The quick jump opens.
+      await page.keyboard.press('/');
+      await page.locator('.jump.open input').waitFor();
+      await page.keyboard.press('Escape');
+      // The drawer's scrim shows with the drawer.
+      await page.getByRole('button', { name: 'Contents' }).click();
+      // A repaint while the drawer is open (the lens, here) leaves the scrim as it is.
+      await page.locator('.bar-tools .gd-seg button').nth(1).evaluate((el) => (el as HTMLElement).click());
+      expect(await page.locator('.toc-scrim').evaluate((el) => getComputedStyle(el).contentVisibility)).toBe('visible');
+      expect(await page.locator('.toc-scrim').isVisible()).toBe(true);
+      await page.keyboard.press('Escape');
+      // A term's card opens, and a repaint after it leaves it be.
+      await page.locator('h2[id="a"] ~ p a.term').first().focus();
+      await page.locator('.xcard.open').waitFor();
+      await page.locator('.bar-tools .gd-seg button').nth(1).click({ force: true });
+      expect(await page.evaluate(() => Array.from(document.querySelectorAll('[data-docreader-root] > [hidden="until-found"]')).filter((e) => e.hasAttribute('data-docreader-chrome') && !e.classList.contains('gd-end-row')).length)).toBe(0);
     } finally { await doc.close(); }
   });
 
@@ -235,9 +261,11 @@ describeBrowsers((browser) => {
   it('the Contents shows a reading time beside the sections that take a minute', async () => {
     const doc = await open({}, { markdown: DOC.replace(FILL.slice(0, 200), 'x ') });
     try {
-      const times = await doc.page.locator('.doc-toc > ul > li > a .gd-rt').allInnerTexts();
+      const times = (await doc.page.locator('.doc-toc > ul > li > a .gd-rt').allInnerTexts()).filter((t) => t !== '');
       expect(times.length).toBeGreaterThan(0);
       for (const t of times) expect(t).toMatch(/^\d+ min$/);
+      // A section under a minute shows no time and takes no room for one.
+      expect(await doc.page.locator('.doc-toc > ul > li > a .gd-rt:empty').first().evaluate((el) => getComputedStyle(el).display)).toBe('none');
     } finally { await doc.close(); }
   });
 

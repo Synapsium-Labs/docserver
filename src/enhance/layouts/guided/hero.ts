@@ -1,6 +1,6 @@
 // The guided layout's hero (the reference's direction C): the title block the shared editorial feature built (the eyebrow,
 // the title, the byline and the facts panel) moved into one header, with the "In short" box when it opens the document (within three blocks of the title block),
-// and under it a glance: how long "In short" takes, what the document holds and a link to what waits on the reader.
+// and under it a glance: how long "In short" and the whole document take (under the reader's lens), what the document holds and a link to what waits on the reader.
 //
 // Nothing here reads the document again. The header moves the block's own nodes (journal.wrap, so teardown puts them back);
 // the glance is new chrome from what the shared steps published (ctx.sections, ctx.blocks, ctx.page). The bar's "Skip to the
@@ -8,9 +8,10 @@
 //
 // Built after `editorial` (the block exists) and `tables`. A page that is not a document gets no hero.
 import { CHROME_ATTR, chrome, siblingRun } from '../../journal.js';
-import { formatLong } from '../../reading.js';
+import { formatLong, type ReadingContribution } from '../../reading.js';
 import type { FeatureContext } from '../../types.js';
 import { isStand } from './sections.js';
+import { contributionOf, stamp, wholeDocument } from './times.js';
 
 const plural = (n: number, one: string): string => `${String(n)} ${one}${n === 1 ? '' : 's'}`;
 
@@ -45,17 +46,19 @@ export function build(ctx: FeatureContext): void {
     });
   }
 
-  const item = (key: string, value: string): HTMLElement =>
-    chrome(doc, 'span', { className: 'gd-gl' }, [chrome(doc, 'span', { className: 'gd-gk', text: key }), doc.createTextNode(value)]);
+  const item = (key: string, value: Node): HTMLElement =>
+    chrome(doc, 'span', { className: 'gd-gl' }, [chrome(doc, 'span', { className: 'gd-gk', text: key }), value]);
+  const time = (c: ReadingContribution): HTMLElement => stamp(ctx, chrome(doc, 'span'), c, formatLong);
   const glance = chrome(doc, 'div', { className: 'gd-glance' });
   const box = hero.querySelector(':scope > div.short');
   const summary = ctx.sections.find((u) => box?.contains(u.heading) === true);
-  if (summary !== undefined) glance.append(item('In short', formatLong(summary.minutes)));
+  if (summary !== undefined) glance.append(item('In short', time(contributionOf(ctx, summary.heading))));
+  glance.append(item('Whole document', time(wholeDocument(ctx))));
   const sections = Array.from(root.children).filter((c) => c.localName === 'h2' && !isStand(ctx, c)).length;
   const figures = root.querySelectorAll('figure.mermaid-figure').length;
   const tables = ctx.blocks.filter((b) => b.kind === 'table').length;
   const holds = [sections > 0 ? plural(sections, 'section') : '', figures > 0 ? plural(figures, 'figure') : '', tables > 0 ? plural(tables, 'table') : ''].filter((s) => s !== '');
-  if (holds.length > 0) glance.append(item('Contains', holds.join(' · ')));
+  if (holds.length > 0) glance.append(item('Contains', doc.createTextNode(holds.join(' · '))));
   const heading = ctx.page.waitBox?.querySelector('h3') ?? null;
   if (heading !== null) {
     const n = ctx.page.waiting.length;
@@ -64,5 +67,5 @@ export function build(ctx: FeatureContext): void {
       doc.createTextNode(`${plural(n, 'item')} →`),
     ]));
   }
-  if (glance.children.length > 0) journal.insert(glance, hero, null);
+  journal.insert(glance, hero, null);
 }
