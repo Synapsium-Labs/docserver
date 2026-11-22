@@ -1,8 +1,10 @@
 # Parity Task 12: review layout mutation rows
 
+The review layout adds no state of its own (no document field, no store key, no pref; its read marks, Index fold and tab are the shared modules' existing fields), so the per-layout-state row of the design's section 6 reads true for it (condition 3 of ccrc D-8881).
+
 Every row was measured in place, one at a time, on the review layout's sources as committed at `deb8d3c` (the stylesheet unchanged since `ccff02f`), through the test wrapper, one test file per call, with Chromium selected for browser files. For each file edit the file's bytes were saved first, the edit applied, the test run, and the saved bytes copied back and their SHA-256 checked equal to the one recorded before the edit; no `git checkout` was used. The unmodified files pass every row's test file. The browser rows read the working stylesheet and bundle sources through the layout harness, so no frame rebuild was needed. Lr-d is a pure judge row: a scratch script (outside the tree) pads the review bundle's manifest characters in memory and runs `judge` from `test/size-rules.ts`, as Le-d did; no runtime asset is padded.
 
-Counts: this first table has 30 rows and its JSON fence 31 entries (Lr-d2 is the re-measurement of Lr-d, which has no table row of its own); the fix round's table and fence have 21 each; fix round 2's have 16 each.
+Counts: this first table has 30 rows and its JSON fence 31 entries (Lr-d2 is the re-measurement of Lr-d, which has no table row of its own); the fix round's table and fence have 21 each; fix round 2's have 16 each; fix round 3's have 13 each; fix round 4's have 3 each.
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
@@ -145,7 +147,7 @@ Measured on the committed sources (the file bytes are in each row's JSON); one t
 | Lr3-c5 | A row's button opens and closes it | Drop the class toggle | Red: `enhance-layouts` 1 failed, 66 passed |
 | Lr3-c6 | Open all rows opens every row | Drop the row loop | Red: `enhance-layouts` 1 failed, 66 passed |
 | Lr3-c7 | The relayout measures overflow | Never overflowing | Red: `layout-review` 2 failed, 19 passed |
-| Lr3-c8 | The hidden-root check (superseded: the "equivalent" finding was wrong, the check is reachable and was restored; Lr4-h measured it red) | Dropped | Was recorded equivalent and removed in `d779c8f`; restored in fix round 3 |
+| Lr3-c8 | The hidden-root check (superseded: the "equivalent" finding was wrong: without the check a relayout while the root is hidden strips the marks for the frame after it is shown again, a one-frame flash of cut rows; Lr4-h measured it red) | Dropped | Was recorded equivalent and removed in `d779c8f`; restored in fix round 3 |
 | Lr3-w1 | The waiting link needs a list | Drop `waiting.length > 0` | Red: `enhance-layouts` 1 failed, 66 passed |
 | Lr3-w2 | The waiting link beats the shared rail's link rule | Revert to the bare `.rv-wait` selector | Red: `layout-review` 1 failed, 20 passed (computed border and padding) |
 | Lr3-p | Nothing is clipped on a phone | Drop the phone rule | Red: `layout-review` 1 failed, 20 passed |
@@ -177,11 +179,11 @@ Measured on the committed sources (the file bytes are in each row's JSON); one t
 
 ## Fix round 3: the hidden root, print and the open row
 
-Same method; `compact.ts` rows were measured on the committed sources (the file's saved hash is in each JSON entry; `Lr4-c1` to `Lr4-c3` on the version that follows the resize row's rewrite, hash given). Rows: 13 in the table and 13 JSON entries below. `Lr3-c8` above is superseded by `Lr4-h`. 
+Same method; `compact.ts` rows were measured on the committed sources (the file's saved hash is in each JSON entry; `Lr4-c1` to `Lr4-c3` on the uncommitted bytes whose sha256 is `12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda`, which differ from `3e46438`'s `compact.ts` (`9c730ee1...`, the version `Lr4-e` was measured on) only in its header comment; `Lr4-h` and `Lr4-c4` on `840450a`'s version, `a3f7ee6a...`). Rows: 13 in the table and 13 JSON entries below. `Lr3-c8` above is superseded by `Lr4-h`. 
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
-| Lr4-h | The hidden root is not measured | Drop `getClientRects().length === 0` | Red: `layout-review` 1 failed, 25 passed (a relayout run on a fake clock while the root is hidden) |
+| Lr4-h | The hidden root is not measured (the reason is a one-frame flash of cut rows, since showing the root asks for a relayout; measured on the version of `840450a`, and superseded by Lr5-h) | Drop `getClientRects().length === 0` | Red: `layout-review` 1 failed, 25 passed (a relayout run on a fake clock while the root is hidden) |
 | Lr4-p1 | In print the row is not clipped | Drop `max-height: none` from the print rule | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-p2 | In print the fade is off | Drop the mask resets from the print rule | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-p3 | In print the row button is hidden | Drop `!important` from its print rule | Red: `layout-review` 1 failed, 25 passed |
@@ -193,7 +195,7 @@ Same method; `compact.ts` rows were measured on the committed sources (the file'
 | Lr4-c2 | An open row gets its mark back when the window is wide again | Drop the restore | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-c3 | A phone relayout takes the mark off an open row | Drop the strip | Red: `layout-review` 1 failed, 25 passed |
 | Lr4-e | An empty first cell names its button "row" | Drop the fallback | Red: `enhance-layouts` 1 failed, 71 passed |
-| Lr4-c4 | A row the button closes is measured (superseded) | Drop the measure after the button closes a row | Green (26 passed): a row the button opened was clipped and keeps its mark, so the measure was unreachable and is gone |
+| Lr4-c4 | A row the button closes is measured (superseded by Lr5-c4: the "unreachable" finding is withdrawn, a width change while the row is open makes it reachable) | Drop the measure after the button closes a row | Green on a fixture with no width change (26 passed), measured on `840450a`'s version; red with the width row of fix round 4 |
 
 ```json
 [
@@ -209,6 +211,24 @@ Same method; `compact.ts` rows were measured on the committed sources (the file'
   {"id": "Lr4-c2", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "restoredSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
   {"id": "Lr4-c3", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "restoredSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
   {"id": "Lr4-e", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "9c730ee15baeaf7ce38d9d1c40b7b8aabfc67ddf444158424bf5b2749a971abc", "restoredSha256": "9c730ee15baeaf7ce38d9d1c40b7b8aabfc67ddf444158424bf5b2749a971abc", "tests": "test/enhance-layouts.test.ts", "rc": 1, "failed": 1, "passed": 71},
-  {"id": "Lr4-c4", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "restoredSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "tests": "test/browser/layout-review.test.ts", "rc": 0, "passed": 26}
+  {"id": "Lr4-c4", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "restoredSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "tests": "test/browser/layout-review.test.ts", "rc": 0, "passed": 26, "note": "superseded by Lr5-c4: the unreachable finding is withdrawn"}
+]
+```
+
+## Fix round 4: the closing row and the filtered rows
+
+Measured on `df1986a`'s `compact.ts` (sha256 `3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac`), Chromium, one file per call. Rows: 3 in the table and 3 JSON entries.
+
+| Row | Guard | Mutation | Measured result |
+|---|---|---|---|
+| Lr5-c4 | A row closed by its button is measured at the width it is closed at | Drop the measure after the button closes a row | Red: `layout-review` 1 failed, 27 passed (fake clock: open at 1300 px, resize to 900, close, compare with an untouched row) |
+| Lr5-f | Rows with no box keep their marks | Measure every row | Red: `layout-review` 1 failed, 27 passed (filter, Open all rows twice, clear: 12 clipped rows with their buttons) |
+| Lr5-h | The root-level hidden check | Drop it | Green (28 passed): the row-level check covers a hidden root, so the root check was removed; Lr4-h's red result was on the version without the row check |
+
+```json
+[
+  {"id":"Lr5-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28},
+  {"id":"Lr5-f","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28},
+  {"id":"Lr5-h","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":0,"passed":28,"skipped":28,"note":"equivalent: the row-level check covers a hidden root; the root check was removed"}
 ]
 ```

@@ -6,10 +6,9 @@
 // the cell's children are moved into a chrome `div.cc` through the journal, which gives the clip a box to cut; teardown moves
 // them back. Nothing the shared modules read afterwards is changed by the wrapper: the filter reads a row's text, the rail reads
 // status pills by descendant query, and a preview card copies the cell's children (the button has no text and the card drops
-// buttons). Whether a cell overflows is measured in the relayout run, reads first and then writes, as tables.ts does, and not
-// at all while the root has no box (a hidden panel reads zero heights, which would strip every mark; showing it asks for a relayout,
-// but the rows would be cut with no fade or button for the frame before it). A row with no box of its own (one the filter hides)
-// is left as it was for the same reason. A row that is open is not measured (it is not clipped), and keeps the mark it had so its
+// buttons). Whether a cell overflows is measured in the relayout run, reads first and then writes, as tables.ts does, and a row with no
+// box is left as it was: a hidden panel's rows, or the rows a filter hides, would read zero heights and lose their marks (showing
+// a hidden panel asks for a relayout, but the rows would be cut with no fade or button for the frame before it). A row that is open is not measured (it is not clipped), and keeps the mark it had so its
 // button stays to close it, except on a phone, where nothing is clipped and no button is shown (the mark comes back when the window
 // is wide again). A row that closes is measured at once: the window may have changed width while it was open, and it would
 // otherwise keep the old width's marks until the next relayout.
@@ -92,7 +91,6 @@ export function build(ctx: FeatureContext): void {
     }
   }
   ctx.onRelayout(() => {
-    if (ctx.root.getClientRects().length === 0) return;
     const rows = tables.flatMap((t) => t.rows);
     const phone = ctx.env.viewport().w <= PHONE_MAX_W;
     const open = rows.filter((r) => r.classList.contains('rv-open'));
