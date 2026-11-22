@@ -371,8 +371,12 @@ function bindKeys(ctx: FeatureContext, state: SinceState): void {
   ctx.journal.defer(() => close(ctx, state, false));
 }
 
-function addNotice(ctx: FeatureContext, state: SinceState | null, seen: { sha: string; at: number }): void {
-  void showChanges(ctx, seen.sha, { what: 'Since your last visit', measure: true }).then((outcome) => {
+/**
+ * The last-visit measure: counts the places since the last visit's commit, then draws the notice and the menu's "Since your last
+ * visit" row. Answers once it has drawn them (or found nothing to draw), so a caller can order a later request after it.
+ */
+function addNotice(ctx: FeatureContext, state: SinceState | null, seen: { sha: string; at: number }): Promise<void> {
+  return showChanges(ctx, seen.sha, { what: 'Since your last visit', measure: true }).then((outcome) => {
     if (!ctx.live() || !('places' in outcome) || outcome.places === 0) return;
     if (state !== null) {
       const commits = (ctx.info.commits ?? []).filter((entry) => !ctx.vocab.merge.test(entry.subject));
@@ -433,7 +437,7 @@ function baseLabel(ctx: FeatureContext, base: string): string {
 
 /**
  * The comparison the host seeded (`options.changesBase`, with the host's `changes` and a commit version): asked of the host
- * once, here, and shown as the menu shows one, without a jump (a reader who opens a document is not moved). The picker's own
+ * once, here (after the last-visit measure has settled, when there is one: see `build`), and shown as the menu shows one, without a jump (a reader who opens a document is not moved). The picker's own
  * state, when it exists, shows it as chosen. No other source sets it.
  */
 function showBase(ctx: FeatureContext, state: SinceState | null): void {
@@ -513,10 +517,13 @@ export function build(ctx: FeatureContext): void {
   });
   bindKeys(ctx, state);
   if (commits.length >= 2 || groups.length >= 2 || onlyActions) attachPicker(ctx, state);
-  if (hasPrior) {
-    addNotice(ctx, state, prior as { sha: string; at: number });
-  }
-  showBase(ctx, state);
+  // The seeded base is asked after the measure has settled, whatever its outcome (a set, none, no places, a failure), not beside
+  // it: in the sealed frame the outbox keeps one `changes` request before `ready` and the newer supersedes the older, so asking
+  // both at once would lose the measure. A comparison the reader picks meanwhile keeps its place (`selected`), and the late base
+  // does not take it; shown without a jump, as ever, so it does not move the reader either.
+  const measured = hasPrior ? addNotice(ctx, state, prior as { sha: string; at: number }) : null;
+  if (measured === null) showBase(ctx, state);
+  else void measured.finally(() => { if (ctx.live() && state.selected === null) showBase(ctx, state); });
 }
 
 /** The second phase follows changes.ts's initial day view and gives the banner the winning show ticket. */
