@@ -67,7 +67,6 @@ export function build(ctx: FeatureContext): void {
     }
   }
   ctx.onRelayout(() => {
-    if (ctx.root.getClientRects().length === 0) return;
     const rows = tables.flatMap((t) => t.rows).filter((r) => !r.classList.contains('rv-open'));
     const read = rows.map((r) => (cells.get(r) as HTMLElement[]).map((cc) => cc.scrollHeight > cc.clientHeight + 2));
     rows.forEach((r, i) => {

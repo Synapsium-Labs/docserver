@@ -13,7 +13,7 @@ export const FRAME_MANIFEST = {
   cssClassic: { path: "frame/layout-classic.css", sha256: "90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c", bytes: 4205, chars: 4205, csp: null, layout: "classic" },
   enhanceEditorial: { path: "frame/enhance-editorial.js", sha256: "6aada501607c3dd80c6a8e6948a71bd8bc145f44d2cbf3702f411b0ec5a05104", bytes: 163281, chars: 163263, csp: "'sha256-aq2lAWB8PdgMao5pSKcb2LwUX0TSy/NwL0EbDsWgUQQ='", layout: "editorial" },
   cssEditorial: { path: "frame/layout-editorial.css", sha256: "c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda", bytes: 3801, chars: 3801, csp: null, layout: "editorial" },
-  enhanceReview: { path: "frame/enhance-review.js", sha256: "e754de24239ec4622c8c75045768576abfe13585c645f8e680c24f2636293282", bytes: 191992, chars: 191974, csp: "'sha256-51TeJCOexGIsjHUEV2hXar/hNYXGRfjmgMJPJjYpMoI='", layout: "review" },
+  enhanceReview: { path: "frame/enhance-review.js", sha256: "65b3ab37a6c6d8189f90552114143be0b771374ee2c14207524bed0086ee1715", bytes: 191947, chars: 191929, csp: "'sha256-ZbOrN6bG2BifkFUhFBQ74LdxN07iwUIHUkvtAIbuFxU='", layout: "review" },
   cssReview: { path: "frame/layout-review.css", sha256: "11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448", bytes: 8090, chars: 8090, csp: null, layout: "review" },
   enhanceGuided: { path: "frame/enhance-guided.js", sha256: "84fb231eefbf7ac2fe13fc661f7983c88e38861ffb0c14dd2b432143ebd185e6", bytes: 179304, chars: 179294, csp: "'sha256-hPsjHu+/esL+E/xmH3mDyI44hh/7DBTdK0MhQ+vRheY='", layout: "guided" },
   cssGuided: { path: "frame/layout-guided.css", sha256: "e987536f016bbdb7245bbf1eb737a36ea9b7263537bfaa06bdc8949234c1dd55", bytes: 11392, chars: 11392, csp: null, layout: "guided" },
