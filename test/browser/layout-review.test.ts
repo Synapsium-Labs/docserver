@@ -87,11 +87,12 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
-  it('a document with front matter keeps its eyebrow in the card, ahead of the title', async () => {
-    const doc = await openDoc(`---\ntype: spec\narea: reading\nstatus: draft\n---\n\n${DOC}`, {}, { browser, layout: 'review' });
+  it('a document with front matter keeps its eyebrow and facts panel in the card', async () => {
+    const doc = await openDoc(`---\ntype: spec\narea: reading\nstatus: draft\ntags: [one, two]\n---\n\n${DOC}`, {}, { browser, layout: 'review' });
     try {
       const card = doc.page.locator('header.rv-card');
       expect(await card.locator(':scope > .eyebrow + h1').count()).toBe(1);
+      expect(await card.locator(':scope > details.doc-facts').count()).toBe(1);
       expect(await doc.page.locator('[data-docreader-root] > .eyebrow').count()).toBe(0);
     } finally { await doc.close(); }
   });
@@ -225,6 +226,8 @@ describeBrowsers((browser) => {
       for (const row of [page.getByRole('tab', { name: 'Contents' }), page.locator('.toc-contents a').first()]) {
         expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       }
+      await page.getByRole('tab', { name: 'Index' }).click();
+      expect((await page.locator('.toc-index a.ix').first().boundingBox())!.height, 'an Index row').toBeGreaterThanOrEqual(44);
     } finally { await doc.close(); }
   });
 

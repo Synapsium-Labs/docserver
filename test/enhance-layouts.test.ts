@@ -11,10 +11,11 @@
 //     and teardown (the journal's undo) takes the mark off again, the document as it was; the default layout's root is never
 //     marked;
 //   - the layout's stylesheet scopes every rule under the root's two marks, holds no literal colour and no font of its own.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { findShapes } from '../scripts/public-shapes.mjs';
 import { destroyEnhancement, enhance, runEnhancementCommand } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { features as defaultFeatures } from '../src/enhance/features.js';
@@ -292,6 +293,22 @@ describe('review: the header card and the context tool', () => {
       const root = mount(markdown);
       await enhance(root);
       expect(root.querySelector('.rv-card, .rv-read, .rv-mark'), markdown).toBeNull();
+    }
+  });
+});
+
+describe('review: the scrub scan', () => {
+  const dir = path.join(ROOT, 'src', 'enhance', 'layouts', 'review');
+  const files = [...readdirSync(dir).sort().map((n) => path.join(dir, n)), path.join(ROOT, 'assets', 'layouts', 'review.css')];
+
+  it('its sources and its stylesheet hold none of the shapes of a private detail (an absolute home or mount path, a private host or address, an e-mail, a credential) and no URL', () => {
+    expect(files.map((f) => path.relative(ROOT, f))).toEqual([
+      'src/enhance/layouts/review/context.ts', 'src/enhance/layouts/review/features.ts', 'src/enhance/layouts/review/header.ts', 'assets/layouts/review.css',
+    ]);
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8');
+      expect(findShapes(text), f).toEqual([]);
+      expect(/[a-z][a-z0-9+.-]*:\/\//i.test(text), `${f} names a URL`).toBe(false);
     }
   });
 });
