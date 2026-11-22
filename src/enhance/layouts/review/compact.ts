@@ -10,7 +10,7 @@
 // at all while the root has no box (a host's hidden panel, whose showing asks for no relayout: zero heights would strip every
 // mark and nothing would put them back). A row that is open is not measured (it is not clipped), and keeps the mark it had so
 // its button stays to close it, except on a phone, where nothing is clipped and no button is shown (the mark comes back when the
-// window is wide again); a row that closes is measured at once.
+// window is wide again); the rows Open all rows closes are measured at once, since a row opened at a phone width was never marked.
 //
 // Built after `tables`, `status`, `ids`, `xrefs` and `cards`. The stylesheet clips (review.css); on a phone, where rows stack
 // as cards, nothing is clipped, so no row is ever marked clipped there.
@@ -65,11 +65,7 @@ export function build(ctx: FeatureContext): void {
       const button = chrome(doc, 'button', { className: 'rx', attrs: { type: 'button', 'aria-expanded': 'false', 'aria-label': `Open row ${id}` } });
       buttons.set(row, button);
       journal.insert(button, row.cells[0] as HTMLTableCellElement, row.cells[0]?.firstChild ?? null);
-      journal.listen(button, 'click', () => {
-        const open = !row.classList.contains('rv-open');
-        setRow(row, open);
-        if (!open) measure([row]);
-      });
+      journal.listen(button, 'click', () => setRow(row, !row.classList.contains('rv-open')));
     }
     const all = chrome(doc, 'button', { className: 'rv-all', text: 'Open all rows', attrs: { type: 'button', 'aria-pressed': 'false' } });
     journal.listen(all, 'click', () => {

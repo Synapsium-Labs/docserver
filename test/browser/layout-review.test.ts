@@ -206,26 +206,33 @@ Text.
     } finally { await doc.close(); }
   });
 
-  it('an open row keeps its button across a phone width and back, and a row closed after its clip was never measured is measured', async () => {
+  it('an open row keeps its button across a phone width and back, and rows opened unmeasured are measured when closed', async () => {
     const doc = await openCompact();
     try {
       const { page } = doc;
       await page.locator('tr.rv-clipped').first().waitFor();
+      // The resize is debounced by a timer: a fake clock runs it, and the frame after it, so each relayout has happened when the step returns.
+      await page.clock.install();
+      const resize = async (width: number): Promise<void> => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+        await page.clock.runFor(1000);
+      };
       const first = page.locator('tbody tr').first();
       await first.locator('button.rx').click();
-      await page.setViewportSize({ width: 412, height: 900 });
-      await expect.poll(() => first.locator('button.rx').isVisible()).toBe(false);
-      await page.setViewportSize({ width: 1280, height: 900 });
-      await expect.poll(() => first.locator('button.rx').isVisible()).toBe(true);
+      await resize(412);
+      expect(await first.locator('button.rx').isVisible()).toBe(false);
+      await resize(1280);
+      expect(await first.locator('button.rx').isVisible()).toBe(true);
       await first.locator('button.rx').click();
       expect(await first.evaluate((el) => el.classList.contains('rv-clipped'))).toBe(true);
-      // Opened at a phone width (the button is hidden there, so by script), then widened: nothing marked it, and closing measures it.
-      await page.setViewportSize({ width: 412, height: 900 });
-      await expect.poll(() => page.locator('tr.rv-clipped').count()).toBe(0);
+      // Opened at a phone width (the button is hidden there, so by script), then widened: nothing marked the rows, and closing measures them.
+      await resize(412);
+      expect(await page.locator('tr.rv-clipped').count()).toBe(0);
       await page.evaluate(() => (document.querySelector('button.rv-all') as HTMLElement).click());
-      await page.setViewportSize({ width: 1280, height: 900 });
+      await resize(1280);
       await page.evaluate(() => (document.querySelector('button.rv-all') as HTMLElement).click());
-      await expect.poll(() => page.locator('tbody tr.rv-clipped').count()).toBe(7);
+      expect(await page.locator('tbody tr.rv-clipped').count()).toBe(7);
       expect(await page.locator('tbody tr.rv-clipped button.rx').first().isVisible()).toBe(true);
     } finally { await doc.close(); }
   });
