@@ -145,7 +145,7 @@ Measured on the committed sources (the file bytes are in each row's JSON); one t
 | Lr3-c5 | A row's button opens and closes it | Drop the class toggle | Red: `enhance-layouts` 1 failed, 66 passed |
 | Lr3-c6 | Open all rows opens every row | Drop the row loop | Red: `enhance-layouts` 1 failed, 66 passed |
 | Lr3-c7 | The relayout measures overflow | Never overflowing | Red: `layout-review` 2 failed, 19 passed |
-| Lr3-c8 | The hidden-root check | Dropped permanently | Equivalent: a root with no box reads zero heights and marks nothing clipped; the check was removed |
+| Lr3-c8 | The hidden-root check (superseded: the "equivalent" finding was wrong, the check is reachable and was restored; Lr4-h measured it red) | Dropped | Was recorded equivalent and removed in `d779c8f`; restored in fix round 3 |
 | Lr3-w1 | The waiting link needs a list | Drop `waiting.length > 0` | Red: `enhance-layouts` 1 failed, 66 passed |
 | Lr3-w2 | The waiting link beats the shared rail's link rule | Revert to the bare `.rv-wait` selector | Red: `layout-review` 1 failed, 20 passed (computed border and padding) |
 | Lr3-p | Nothing is clipped on a phone | Drop the phone rule | Red: `layout-review` 1 failed, 20 passed |
@@ -156,21 +156,58 @@ Measured on the committed sources (the file bytes are in each row's JSON); one t
 
 ```json
 [
-  {"id":"Lr3-d","file":"src/frame/manifest.generated.ts","tests":"test/size-rules.ts (pure judge, scratch script)","rc":0,"control":{"review":200019,"defaults":225709,"violations":[]},"paddingChars":25691,"mutantChars":225710,"capChars":225709},
-  {"id":"Lr3-c1","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-c2","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-c3","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-c5","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-c6","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-c7","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb","restoredSha256":"bf12fb97f3dc9644bdeb","tests":"test/browser/layout-review.test.ts","rc":1,"failed":2,"passed":19,"skipped":21},
-  {"id":"Lr3-c8","file":"src/enhance/layouts/review/compact.ts","rc":0,"note":"equivalent: removed"},
-  {"id":"Lr3-w1","file":"src/enhance/layouts/review/rail.ts","savedSha256":"f3a39cbb4f9543a689af","restoredSha256":"f3a39cbb4f9543a689af","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
-  {"id":"Lr3-w2","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
-  {"id":"Lr3-p","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
-  {"id":"Lr3-t1","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
-  {"id":"Lr3-t2","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
-  {"id":"Lr3-f","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","runs":[{"tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20},{"tests":"test/browser/appearance-cues.test.ts","rc":1,"failed":1,"passed":57}]},
-  {"id":"Lr3-5","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10","restoredSha256":"11fa119685d24a3aed10","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":455}
+  {"id":"Lr3-d","file":"src/frame/manifest.generated.ts","tests":"test/size-rules.ts (pure judge, scratch script)","rc":0,"control":{"review":200019,"defaults":225709,"violations":[]},"paddingChars":25691,"mutantChars":225710,"capChars":225709,"red":["layouts: review is 225710 characters, over the default enhance bundle's 225709"]},
+  {"id":"Lr3-c1","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c2","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c3","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c5","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c6","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-c7","file":"src/enhance/layouts/review/compact.ts","savedSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","restoredSha256":"bf12fb97f3dc9644bdeb9a625b62893c1fa64d67f67dc0e63c3990d7363c3d04","tests":"test/browser/layout-review.test.ts","rc":1,"failed":2,"passed":19,"skipped":21},
+  {"id":"Lr3-c8","file":"src/enhance/layouts/review/compact.ts","rc":0,"note":"superseded: the equivalent finding was wrong; see Lr4-h"},
+  {"id":"Lr3-w1","file":"src/enhance/layouts/review/rail.ts","savedSha256":"f3a39cbb4f9543a689af964f0fd1d5c29934f561234d1a4e8daad38ede7df29b","restoredSha256":"f3a39cbb4f9543a689af964f0fd1d5c29934f561234d1a4e8daad38ede7df29b","tests":"test/enhance-layouts.test.ts","rc":1,"failed":1,"passed":66},
+  {"id":"Lr3-w2","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","restoredSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-p","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","restoredSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-t1","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","restoredSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-t2","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","restoredSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20,"skipped":21},
+  {"id":"Lr3-f","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","restoredSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","runs":[{"tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":20},{"tests":"test/browser/appearance-cues.test.ts","rc":1,"failed":1,"passed":57}]},
+  {"id":"Lr3-5","file":"assets/layouts/review.css","savedSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","restoredSha256":"11fa119685d24a3aed10f2f4ac53f963581218dd913648a18af28835a7871448","tests":"test/browser/appearance-style.test.ts -t \"review: Nord\"","rc":1,"failed":1,"skipped":455}
+]
+```
+
+## Fix round 3: the hidden root, print and the open row
+
+Same method; `compact.ts` rows were measured on the committed sources (the file's saved hash is in each JSON entry; `Lr4-c1` to `Lr4-c3` on the version that follows the resize row's rewrite, hash given). Rows: 13 in the table and 13 JSON entries below. `Lr3-c8` above is superseded by `Lr4-h`. 
+
+| Row | Guard | Mutation | Measured result |
+|---|---|---|---|
+| Lr4-h | The hidden root is not measured | Drop `getClientRects().length === 0` | Red: `layout-review` 1 failed, 25 passed (a relayout run on a fake clock while the root is hidden) |
+| Lr4-p1 | In print the row is not clipped | Drop `max-height: none` from the print rule | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-p2 | In print the fade is off | Drop the mask resets from the print rule | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-p3 | In print the row button is hidden | Drop `!important` from its print rule | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-b | An open row has the surface for its ground | Drop `!important` from the open-row rule | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-t | The first cell clears the 44 px button under touch | Padding 20px | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-m1 | The hint is hidden on a phone | Drop its phone rule | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-m2 | Open all rows is hidden on a phone | Drop its phone rule | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-c1 | Rows Open all rows closes are measured | Drop the measure after a close | Red: `layout-review` 1 failed, 25 passed (deterministic resize row) |
+| Lr4-c2 | An open row gets its mark back when the window is wide again | Drop the restore | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-c3 | A phone relayout takes the mark off an open row | Drop the strip | Red: `layout-review` 1 failed, 25 passed |
+| Lr4-e | An empty first cell names its button "row" | Drop the fallback | Red: `enhance-layouts` 1 failed, 71 passed |
+| Lr4-c4 | A row the button closes is measured (superseded) | Drop the measure after the button closes a row | Green (26 passed): a row the button opened was clipped and keeps its mark, so the measure was unreachable and is gone |
+
+```json
+[
+  {"id": "Lr4-h", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "restoredSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-p1", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-p2", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-p3", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-b", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-t", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-m1", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-m2", "file": "assets/layouts/review.css", "savedSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "restoredSha256": "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-c1", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "restoredSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-c2", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "restoredSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-c3", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "restoredSha256": "12fb6249a55c90ee592079ab9d44c77a59f9a06f071e7499da0af4f9437f8cda", "tests": "test/browser/layout-review.test.ts", "rc": 1, "failed": 1, "passed": 25},
+  {"id": "Lr4-c4", "file": "src/enhance/layouts/review/compact.ts", "savedSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "restoredSha256": "a3f7ee6a2d7b8e357f05d2ab7a3907063e21adfc4f8de645c53a06169cb8b3a7", "tests": "test/browser/layout-review.test.ts", "rc": 0, "passed": 26}
 ]
 ```
