@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import type { Locator, Page } from 'playwright-core';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type OpenedDoc } from './harness.js';
+import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenedDoc } from './harness.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const COLLISION = JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'appearance', 'collision.json'), 'utf8')) as {
@@ -203,7 +203,7 @@ async function colourAt(page: Page, target: Locator, dx: number): Promise<number
 
 // ───────── a page ─────────
 
-type How = { appearance?: unknown; width?: number; stylesheet?: string; marks?: boolean; inShort?: boolean };
+type How = { appearance?: unknown; width?: number; stylesheet?: string; marks?: boolean; inShort?: boolean; layout?: HarnessLayout };
 
 async function open(browser: BrowserName, how: How = {}): Promise<OpenedDoc> {
   const options: Record<string, unknown> = { folds: false, storageKey: 'cues' };
@@ -214,6 +214,7 @@ async function open(browser: BrowserName, how: How = {}): Promise<OpenedDoc> {
     browser,
     csp: 'reader',
     viewport: { width: how.width ?? 1440, height: 900 },
+    ...(how.layout === undefined ? {} : { layout: how.layout }),
     ...(how.stylesheet !== undefined ? { stylesheet: how.stylesheet } : MUTANT === undefined ? {} : { stylesheet: MUTANT }),
   });
 }
@@ -235,7 +236,30 @@ async function mark(page: Page): Promise<void> {
   }, rootSel);
 }
 
+async function controlRowRules(page: Page): Promise<{ sheet: string; selector: string; media: string }[]> {
+  return page.evaluate(() => {
+    const out: { sheet: string; selector: string; media: string }[] = [];
+    const walk = (rules: CSSRuleList, media: string, sheet: string): void => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSMediaRule) walk(rule.cssRules, rule.conditionText, sheet);
+        else if (rule instanceof CSSStyleRule && rule.style.getPropertyValue('min-height').includes('--dr-control-row')) {
+          out.push({ sheet, selector: rule.selectorText, media });
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '', new URL(sheet.href ?? '', document.baseURI).pathname);
+    return out;
+  });
+}
+
 describeBrowsers((browser) => {
+  // Only register alternate layouts for cues their own features draw.
+  function sharedCue(name: string, check: (layout: HarnessLayout) => Promise<void>, layouts: readonly HarnessLayout[] = ['default', 'classic', 'editorial']): void {
+    for (const layout of layouts) {
+      it(layout === 'default' ? name : `${layout}: ${name}`, () => check(layout));
+    }
+  }
+
   it('a heading mark in the changed state reads "Changed since you read it"', async () => {
     const doc = await open(browser, { appearance: COLLISION, marks: true });
     try {
@@ -276,6 +300,31 @@ describeBrowsers((browser) => {
       await doc.close();
     }
   });
+
+  for (const layout of ['classic', 'editorial'] as const) {
+    it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
+      const doc = await open(browser, { appearance: COLLISION, layout });
+      try {
+        const waiting = doc.page.locator(`${rootSel}[data-docreader-layout="${layout}"] .callout.waiting`);
+        expect(await waiting.count()).toBe(1);
+        expect(await waiting.textContent()).toContain('Waiting on you');
+        // A pending reveal must enter and finish before its painted cue is measured.
+        await waiting.evaluate((e) => e.scrollIntoView({ block: 'center', inline: 'nearest' }));
+        await expect.poll(() => waiting.evaluate((e) => {
+          const style = getComputedStyle(e);
+          const opacity = style.opacity;
+          const transform = style.transform;
+          return (!e.classList.contains('reveal') || e.classList.contains('in'))
+            && opacity === '1' && transform === 'none'
+            && e.getAnimations().every((animation) => animation.playState === 'finished' || animation.playState === 'idle');
+        }), { timeout: 15_000 }).toBe(true);
+        const runs = await runsThrough(doc.page, waiting, HUE.mark);
+        expect(widths(runs), JSON.stringify(runs)).toEqual([3]);
+      } finally {
+        await doc.close();
+      }
+    });
+  }
 
   it('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async () => {
     const doc = await open(browser, { appearance: COLLISION, width: 390 });
@@ -461,8 +510,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('quick jump\'s selected row has an inset 2px accent bar, and an unselected row has none', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  sharedCue('quick jump\'s selected row has an inset 2px accent bar, and an unselected row has none', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       await doc.page.keyboard.press('/');
       await doc.page.locator(`${rootSel} .jump.open li`).first().waitFor();
@@ -523,8 +572,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('the switch the reader draws has the same pressed button: at 600 with an inset bottom bar of 2px in accent, in Full and in Headlines, and the unpressed one neither', async () => {
-    const doc = await open(browser, { appearance: COLLISION, inShort: true });
+  sharedCue('the switch the reader draws has the same pressed button: at 600 with an inset bottom bar of 2px in accent, in Full and in Headlines, and the unpressed one neither', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, inShort: true, layout });
     try {
       const read = (): Promise<{ pressed: string; on: { weight: string; shadow: string }; off: { weight: string; shadow: string } }> =>
         doc.page.evaluate((sel) => {
@@ -542,10 +591,10 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'editorial']);
 
-  it('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  sharedCue('the table filter, focused from the keyboard, has a 2px solid outline in focus, and none when blurred', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       const input = doc.page.locator(`${rootSel} .tbl-tools input`).first();
       await input.focus();
@@ -772,9 +821,9 @@ describeBrowsers((browser) => {
     });
   }
 
-  it('the chrome literals are slots: tool buttons surface and text, the pressed one accent and accent-ink, the full-screen overlay, and selected text', async () => {
+  sharedCue('the chrome literals are slots: tool buttons surface and text, the pressed one accent and accent-ink, the full-screen overlay, and selected text', async (layout) => {
     const c = PHOSPHOR.colour;
-    const doc = await open(browser, { appearance: PHOSPHOR });
+    const doc = await open(browser, { appearance: PHOSPHOR, layout });
     try {
       const got = await doc.page.evaluate((sel) => {
         const root = document.querySelector(sel) as HTMLElement;
@@ -1072,28 +1121,35 @@ describeBrowsers((browser) => {
   it('the family is sans or mono by the verdict, and controlRow is applied under a fine pointer only', async () => {
     const sans = await open(browser, { appearance: { mode: 'dark', skin: { sectionFamily: 'sans' } } });
     try {
-      const got = await sans.page.evaluate((sel) => {
+      const family = await sans.page.evaluate((sel) => {
         (document.querySelector(`${sel} .aa-btn`) as HTMLElement).click();
-        const family = getComputedStyle(document.querySelector(`${sel} .aa-menu legend`) as Element).fontFamily;
-        const walk = (rules: CSSRuleList, within: string, out: string[]): void => {
-          for (const r of Array.from(rules)) {
-            if (r instanceof CSSMediaRule) walk(r.cssRules, r.conditionText, out);
-            else if (r instanceof CSSStyleRule && r.style.getPropertyValue('min-height').includes('--dr-control-row')) out.push(within);
-          }
-        };
-        const where: string[] = [];
-        for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '', where);
-        return { family, where };
+        return getComputedStyle(document.querySelector(`${sel} .aa-menu legend`) as Element).fontFamily;
       }, rootSel);
-      expect(/^"?Docreader Host Sans"?,/.test(got.family), got.family).toBe(true);
-      expect(got.where.length).toBeGreaterThan(0);
+      const where = (await controlRowRules(sans.page)).map((row) => row.media);
+      expect(/^"?Docreader Host Sans"?,/.test(family), family).toBe(true);
+      expect(where.length).toBeGreaterThan(0);
       // the plain rule, and the drawer's own (a drawer is a narrow viewport's): both only under a fine pointer
-      expect(new Set(got.where)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+      expect(new Set(where)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
     } finally {
       await sans.close();
     }
   });
 
+
+  for (const layout of ['classic', 'editorial'] as const) {
+    it(`${layout}: every controlRow rule including its Close rule is under a fine pointer only`, async () => {
+      const doc = await open(browser, { layout });
+      try {
+        const rows = await controlRowRules(doc.page);
+        const own = rows.filter((row) => row.sheet === '/assets/layout.css');
+        const close = own.filter((row) => row.selector.includes('.toc-close'));
+        expect(close.length, JSON.stringify(own)).toBe(1);
+        expect(close[0]?.selector).toContain(`data-docreader-layout="${layout}"`);
+        expect(own.length).toBeGreaterThan(0);
+        expect(new Set(rows.map((row) => row.media)), JSON.stringify(rows)).toEqual(new Set(['(pointer: fine)', 'screen and (max-width: 1239px) and (pointer: fine)']));
+      } finally { await doc.close(); }
+    });
+  }
 
   it("Mermaid's tooltip, which sits in body outside the root, computes the verdict's surface, text and border (second review F8)", async () => {
     // The tooltip is one element per document, and its three colours are the document element's properties; the jsdom rows of

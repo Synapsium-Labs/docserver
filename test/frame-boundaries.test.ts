@@ -12,6 +12,11 @@
 //   `HEAD^1` that means its base, so a local run on a working branch names it: `DOCSERVER_BOUNDARY_BASE=origin/main`, which
 //   simulates the landing. A checkout that lacks the base fails the rows that read it, never skips them.
 //
+// Per layout (docserver parity Task 9): from the entry of the layouts on, `csp` is an object, the masked policy of each layout by its
+// name (frameCsp(layout)); the entries before it keep their one string, which is the default layout's. Each layout's masked policy
+// equals the previous entry's for the same layout, and a layout the previous entry does not name has no parent: its first value is
+// the landing's own review check, as a new entry's first masked policy always was.
+//
 // The genesis landing, the one whose first parent has no record, has exactly two entries: the first is the first parent's,
 // 1.1.0's, checked against what the parent commits (FRAME_OPS parsed from its src/frame/protocol.ts, and its port parser's
 // hard-coded four ops parsed from its src/frame-runtime/inbound.ts), except for the masked policy, which is computed and so
@@ -33,6 +38,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { frameCsp } from '../src/frame/csp.js';
 import { HASH_SOURCE } from '../src/frame/csp-rules.js';
+import { FRAME_LAYOUTS, LAYOUT_ENTRIES, type FrameLayout } from '../src/frame/layouts.js';
 import { FRAME_MANIFEST } from '../src/frame/manifest.generated.js';
 import { FRAME_ACCEPTS, FRAME_OPS, OP_KEYS, PARENT_OPS } from '../src/frame/protocol.js';
 import { parseParentMessage } from '../src/frame-runtime/inbound.js';
@@ -40,10 +46,55 @@ import { parseParentMessage } from '../src/frame-runtime/inbound.js';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const RECORD = 'conformance/frame-boundaries.json';
 
+/**
+ * One record entry. `csp` is the one masked policy of the entries before layouts (a string: the default layout's, the only one
+ * there was), and from the entry of parity Task 9 on an object, the masked policy of each layout by its name; earlier entries
+ * keep their string, as the record is append-only.
+ */
 interface Entry {
   readonly frameOps: readonly string[];
   readonly frameAccepts: readonly string[];
-  readonly csp: string;
+  readonly csp: string | Readonly<Record<string, string>>;
+}
+
+/** The masked policy `entry` records for `layout`: a string entry is the default layout's alone; a layout it does not name is undefined. */
+const cspOf = (entry: Entry | undefined, layout: FrameLayout | string): string | undefined => {
+  if (entry === undefined) return undefined;
+  if (typeof entry.csp === 'string') return layout === 'default' ? entry.csp : undefined;
+  return Object.hasOwn(entry.csp, layout) ? entry.csp[layout] : undefined;
+};
+
+/** True when `keys` are the first layouts of `layouts`, beginning with `default`: an entry names a prefix of the layouts, so a later landing that appends layouts leaves it valid. */
+const isLayoutPrefix = (keys: readonly string[], layouts: readonly string[]): boolean => keys.length >= 1 && keys.length <= layouts.length && keys[0] === 'default' && keys.every((k, i) => k === layouts[i]);
+
+/**
+ * The per-layout rows of test 9 over any record and any layout list, as a list of what is wrong (empty: holds). The real record
+ * is judged by them against FRAME_LAYOUTS and the masked policies computed now; a synthetic record with a later entry that adds a
+ * layout shows that the rows stay green when a landing appends one (and a bad one shows they are not vacuous).
+ * - an entry that is per layout names a prefix of `layouts`, beginning with `default`;
+ * - the newest entry's masked policy of each layout it names equals the previous entry's for the same layout, when it has one;
+ * - the default layout always has a parent from the second entry on; there is no parent-policy comparison for a layout without a parent;
+ * - every consecutive pair of entries agrees on a layout both name.
+ */
+function perLayoutProblems(rec: readonly Entry[], layouts: readonly string[], masked: (layout: string) => string, firstPerLayout: number): string[] {
+  const bad: string[] = [];
+  rec.forEach((e, i) => {
+    if (i >= firstPerLayout && (typeof e.csp === 'string' || !isLayoutPrefix(Object.keys(e.csp), layouts))) bad.push(`entry ${String(i)} does not name a prefix of the layouts, beginning with default`);
+  });
+  const previous = rec.at(-2);
+  for (const l of layouts) {
+    const parent = cspOf(previous, l);
+    if (l === 'default' && parent === undefined) bad.push('the default layout has no parent');
+    if (parent !== undefined && masked(l) !== parent) bad.push(`${l}: the masked policy now is not the previous entry's`);
+  }
+  for (let i = 1; i < rec.length; i += 1) {
+    for (const l of layouts) {
+      const a = cspOf(rec[i - 1], l);
+      const b = cspOf(rec[i], l);
+      if (a !== undefined && b !== undefined && a !== b) bad.push(`entry ${String(i)} ${l} differs from the entry before`);
+    }
+  }
+  return bad;
 }
 
 /** The newest entry's own sha256-free form: every script-src hash source `'sha256-*'`, the other directives untouched. */
@@ -65,11 +116,19 @@ function maskedCsp(policy: string): string {
 const DELTAS: readonly { readonly entry: number; readonly addsFrameOps: readonly string[]; readonly addsFrameAccepts: readonly string[] }[] = [
   { entry: 1, addsFrameOps: [], addsFrameAccepts: ['appearance'] },
   { entry: 2, addsFrameOps: ['place', 'print-figure'], addsFrameAccepts: [] },
+  // Entry 3, the layouts (parity Task 9): no new op and nothing new accepted; what the entry adds is the policy of each layout.
+  { entry: 3, addsFrameOps: [], addsFrameAccepts: [] },
 ];
 
 const recordText = readFileSync(`${ROOT}${RECORD}`, 'utf8');
 const record = JSON.parse(recordText) as Entry[];
-const now = (): Entry => ({ frameOps: [...FRAME_OPS], frameAccepts: [...FRAME_ACCEPTS], csp: maskedCsp(frameCsp()) });
+/** The first entry whose `csp` is per layout (an object): entries before it hold the default layout's policy as one string. */
+const FIRST_PER_LAYOUT = 3;
+const now = (): Entry => ({
+  frameOps: [...FRAME_OPS],
+  frameAccepts: [...FRAME_ACCEPTS],
+  csp: Object.fromEntries(FRAME_LAYOUTS.map((l) => [l, maskedCsp(frameCsp(l))])),
+});
 
 function git(args: readonly string[]): { status: number | null; stdout: string; stderr: string } {
   const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -89,12 +148,21 @@ describe('the record: its shape and its newest entries', () => {
       expect(Object.keys(e).sort()).toEqual(['csp', 'frameAccepts', 'frameOps']);
       expect(e.frameOps.every((x) => typeof x === 'string')).toBe(true);
       expect(e.frameAccepts.every((x) => typeof x === 'string')).toBe(true);
-      expect(typeof e.csp).toBe('string');
     }
+    record.forEach((e, i) => {
+      // Before the layouts one masked policy as a string; from the layouts on, one per layout: the first layouts of FRAME_LAYOUTS,
+      // in its order, beginning with `default` (a later landing appends layouts, and an entry before it is immutable).
+      if (i < FIRST_PER_LAYOUT) expect(typeof e.csp, `entry ${String(i)}`).toBe('string');
+      else {
+        expect(typeof e.csp, `entry ${String(i)}`).toBe('object');
+        expect(isLayoutPrefix(Object.keys(e.csp), FRAME_LAYOUTS), `entry ${String(i)}`).toBe(true);
+        for (const v of Object.values(e.csp)) expect(typeof v).toBe('string');
+      }
+    });
     expect(recordText.endsWith('\n')).toBe(true);
   });
 
-  it('the newest entry equals the values computed now: FRAME_OPS, FRAME_ACCEPTS and the masked frameCsp()', () => {
+  it('the newest entry equals the values computed now: FRAME_OPS, FRAME_ACCEPTS and the masked frameCsp(layout) of every layout', () => {
     expect(record.at(-1)).toEqual(now());
   });
 
@@ -133,19 +201,51 @@ describe('the record: its shape and its newest entries', () => {
     expect([...FRAME_ACCEPTS].slice(FRAME_ACCEPTS.length - (delta?.addsFrameAccepts.length ?? 0))).toEqual(delta?.addsFrameAccepts);
   });
 
-  it('the masked frameCsp() equals the previous entry\'s: the same directives in the same order, the same sources but the hashes', () => {
-    expect(maskedCsp(frameCsp())).toBe(record.at(-2)?.csp);
+  it("each layout's masked frameCsp(layout) equals the previous entry's for the same layout: the same directives in the same order, the same sources but the hashes", () => {
+    expect(perLayoutProblems(record, FRAME_LAYOUTS, (l) => maskedCsp(frameCsp(l as FrameLayout)), FIRST_PER_LAYOUT)).toEqual([]);
   });
 
-  it('the masked policy has one hash source per script the frame inlines, as many as the previous entry\'s', () => {
-    const scripts = Object.values(FRAME_MANIFEST).filter((a) => a.csp !== null).length;
-    expect(scripts).toBe(4);
+  it('the per-layout rows hold for a later landing that appends a layout (a synthetic entry), and are not vacuous: a changed policy, a dropped default and an unordered key each red', () => {
+    const newest = record.at(-1) as Entry;
+    const layouts = [...FRAME_LAYOUTS, 'later'];
+    const masked = (l: string): string => (l === 'later' ? "script-src 'sha256-*'" : maskedCsp(frameCsp(l as FrameLayout)));
+    const csp = newest.csp as Readonly<Record<string, string>>;
+    const appended: Entry = { ...newest, csp: { ...csp, later: "script-src 'sha256-*'" } };
+    // The real entries stay immutable and valid with one more layout in the list; the new entry names a layout no earlier one does.
+    expect(perLayoutProblems([...record, appended], layouts, masked, FIRST_PER_LAYOUT)).toEqual([]);
+    // An entry from before the landing names fewer layouts than the list now has: still a prefix.
+    expect(perLayoutProblems(record, layouts, masked, FIRST_PER_LAYOUT)).toEqual([]);
+    // Each of three defects is seen.
+    expect(perLayoutProblems([...record, { ...appended, csp: { ...appended.csp as object, classic: "script-src 'none'" } }], layouts, masked, FIRST_PER_LAYOUT)).not.toEqual([]);
+    const { default: _d, ...withoutDefault } = csp;
+    void _d;
+    expect(perLayoutProblems([...record, { ...appended, csp: { ...withoutDefault, later: "script-src 'sha256-*'" } }], layouts, masked, FIRST_PER_LAYOUT)).not.toEqual([]);
+    expect(perLayoutProblems([...record, { ...appended, csp: { later: "script-src 'sha256-*'", ...csp } }], layouts, masked, FIRST_PER_LAYOUT)).not.toEqual([]);
+  });
+
+  it("frameCsp() is the default layout's policy: byte for byte frameCsp('default'), and its masked form is the newest entry's `default` and the previous entry's", () => {
+    expect(frameCsp()).toBe(frameCsp('default'));
+    expect(maskedCsp(frameCsp())).toBe(cspOf(record.at(-1), 'default'));
+    expect(maskedCsp(frameCsp())).toBe(cspOf(record.at(-2), 'default'));
+  });
+
+  it("each layout's policy has one hash source per script that layout's frame inlines (four), and each is a hash this version ships; the manifest holds one per script of every layout", () => {
     const sources = (policy: string): string[] => policy.split('; ').find((d) => d.startsWith('script-src '))?.split(' ').slice(1) ?? [];
-    expect(sources(frameCsp())).toHaveLength(scripts);
-    expect(sources(frameCsp()).every((t) => HASH_SOURCE.test(t))).toBe(true);
-    expect(sources(maskedCsp(frameCsp()))).toEqual(Array.from({ length: scripts }, () => "'sha256-*'"));
-    expect(sources(record.at(-2)?.csp ?? '')).toHaveLength(scripts);
-    expect(sources(record.at(-1)?.csp ?? '')).toHaveLength(scripts);
+    // Every script the manifest names: the guard, the bootstrap, Mermaid's, and one enhance bundle for each layout.
+    const scripts = Object.values(FRAME_MANIFEST).filter((a) => a.csp !== null).length;
+    expect(scripts).toBe(3 + FRAME_LAYOUTS.length);
+    const INLINED = 4;
+    for (const l of FRAME_LAYOUTS) {
+      const policy = frameCsp(l);
+      expect(sources(policy), l).toHaveLength(INLINED);
+      expect(sources(policy).every((t) => HASH_SOURCE.test(t)), l).toBe(true);
+      expect(sources(maskedCsp(policy)), l).toEqual(Array.from({ length: INLINED }, () => "'sha256-*'"));
+      // The four are the guard, the bootstrap, that layout's enhance bundle and Mermaid's, in that order, and no other layout's.
+      expect(sources(policy), l).toEqual([FRAME_MANIFEST.guard.csp, FRAME_MANIFEST.bootstrap.csp, FRAME_MANIFEST[LAYOUT_ENTRIES[l].enhance].csp, FRAME_MANIFEST.mermaid.csp]);
+      expect(sources(cspOf(record.at(-1), l) ?? ''), l).toHaveLength(INLINED);
+    }
+    // The enhance hashes differ from one another, so a policy of one layout cannot stand for another's.
+    expect(new Set(FRAME_LAYOUTS.map((l) => FRAME_MANIFEST[LAYOUT_ENTRIES[l].enhance].csp)).size).toBe(FRAME_LAYOUTS.length);
   });
 });
 

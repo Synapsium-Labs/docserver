@@ -1,0 +1,171 @@
+h1
+  "Tables"
+p
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+h2
+  "1. Status columns"
+p
+  "A named status column marks each cell's "…
+div .stack.table-wrapper
+  table
+    thead
+      tr
+        th
+          "#"
+        th
+          "Decision"
+        th
+          "Why"
+        th
+          "Status"
+    tbody
+      tr
+        td data-label="#"
+          "D1"
+        td data-label="Decision"
+          "Keep the palette"
+        td data-label="Why"
+          "Readers know it"
+        td data-label="Status"
+          span .ok.pill chrome
+            "Agreed"
+      tr
+        td data-label="#"
+          "D2"
+        td data-label="Decision"
+          "Fold by default"
+        td data-label="Why"
+          "Long pages stay short"
+        td data-label="Status"
+          span .pill.wait chrome
+            "Pending review"
+      tr
+        td data-label="#"
+          "D3"
+        td data-label="Decision"
+          "A rules index"
+        td data-label="Why"
+          "Out of scope here"
+        td data-label="Status"
+          span .info.pill chrome
+            "Deferred"
+p
+  "A column of short answers reads as a sta"…
+div .stack.table-wrapper
+  table
+    thead
+      tr
+        th
+          "Item"
+        th
+          "Answer"
+        th
+          "Note"
+    tbody
+      tr
+        td data-label="Item"
+          "Q1"
+        td data-label="Answer"
+          span .ok.pill chrome
+            "Done"
+        td data-label="Note"
+          "Shipped"
+      tr
+        td data-label="Item"
+          "Q2"
+        td data-label="Answer"
+          span .pill.wait chrome
+            "Open"
+        td data-label="Note"
+          "Next week"
+      tr
+        td data-label="Item"
+          "Q3"
+        td data-label="Answer"
+          span .no.pill chrome
+            "Rejected"
+        td data-label="Note"
+          "Too costly"
+h2
+  "2. Shapes"
+p
+  "Two columns keep to the reading column."
+div .cols-2.table-wrapper
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "Fold"
+        td
+          "A section shown as its heading only"
+      tr
+        td
+          "Mark"
+        td
+          "A coloured status label"
+p
+  "A row whose only filled cell is the firs"…
+div .stack.table-wrapper
+  table
+    thead
+      tr
+        th
+          "Area"
+        th
+          "Owner"
+        th
+          "State"
+    tbody
+      tr .group
+        td data-label="Area"
+          "Reading"
+        td data-label="Owner"
+        td data-label="State"
+      tr
+        td data-label="Area"
+          "Title block"
+        td data-label="Owner"
+          "project-a team"
+        td data-label="State"
+          span .ok.pill chrome
+            "Done"
+      tr
+        td data-label="Area"
+          "Facts panel"
+        td data-label="Owner"
+          "project-a team"
+        td data-label="State"
+          span .pill.wait chrome
+            "Open"
+h2
+  "3. Not a status column"
+p
+  "The first column never marks, and a long"…
+div .cols-2.table-wrapper
+  table
+    thead
+      tr
+        th
+          "Status"
+        th
+          "Summary"
+    tbody
+      tr
+        td
+          "Agreed"
+        td
+          "The first column holds words that are st"…
+      tr
+        td
+          "Open"
+        td
+          "A second column of long sentences that s"…

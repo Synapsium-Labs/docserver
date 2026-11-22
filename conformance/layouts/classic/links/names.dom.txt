@@ -1,0 +1,60 @@
+h1
+  "Hostile names"
+p
+  strong
+    "Spec"
+  "· 2026-10-20 · Status: Draft"
+h2
+  "Glossary"
+div
+  table
+    thead
+      tr
+        th
+          "Term"
+        th
+          "Meaning"
+    tbody
+      tr
+        td
+          "__proto__"
+        td
+          "A name a plain object would read as its "…
+      tr
+        td
+          "constructor"
+        td
+          "A name every object answers"
+      tr
+        td
+          "toString"
+        td
+          "Another one"
+      tr
+        td
+          "C++ (cpp)"
+        td
+          "A name with pattern characters, and its "…
+      tr
+        td
+          "a.b*c"
+        td
+          "Dots and a star, matched as written"
+      tr
+        td
+          "R12"
+        td
+          "An ID, never a term"
+      tr
+        td
+          "AB-CD"
+        td
+          "A rule ID, never a term"
+h2
+  "1. Mentions"
+p
+  "The __proto__ link, the constructor link"…
+p
+  "C++ links, and so does cpp, its alias. T"…
+p
+  "R12 and AB-CD stay text."

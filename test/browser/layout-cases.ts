@@ -9,14 +9,56 @@
 // `scope` is the snapshot's (a non-empty list of class names, `[attribute]` and `tag[attribute]` entries). The
 // ratchet (scripts/ratchet.mjs) holds every case: a changed .dom.txt is named in a `Layout-moved:` trailer, and a
 // hostile case is never removed and its .md and options never change. `UPDATE_LAYOUT=1` writes the expected files
-// (updateRequested); CI never sets it, and fails when a run leaves conformance/layout/ changed.
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+// (updateRequested); CI never sets it, and fails when a run leaves conformance/layout/ or conformance/layouts/ changed.
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect } from 'vitest';
+import { LAYOUT_TABLE, type LayoutName } from '../../scripts/build-frame.mjs';
 import { SCOPE_ENTRY } from './page/snapshot.js';
 
 export const LAYOUT_DIR = fileURLToPath(new URL('../../conformance/layout/', import.meta.url));
+
+/**
+ * Each layout beside `default` has its own snapshots of the same cases (docserver parity Task 9):
+ * conformance/layouts/<name>/<slug>/<id>.dom.txt, the inputs staying the shared .md and .options.json of LAYOUT_DIR.
+ * The ratchet holds each one, named `<name>/<slug>/<id>` in a `Layout-moved:` trailer (scripts/ratchet.mjs).
+ */
+export const LAYOUTS_DIR = fileURLToPath(new URL('../../conformance/layouts/', import.meta.url));
+
+/** The layouts besides `default`, in table order. */
+export const OWN_LAYOUT_NAMES = (Object.keys(LAYOUT_TABLE) as LayoutName[]).filter((n) => n !== 'default');
+
+/**
+ * Every shipped non-default layout must have a snapshot directory. Create the empty layout directory first when
+ * introducing a layout; UPDATE_LAYOUT=1 then creates its slug directories and snapshots. Stray entries are errors.
+ */
+export function layoutsWithSnapshots(dir: string = LAYOUTS_DIR): Exclude<LayoutName, 'default'>[] {
+  const found = existsSync(dir) ? readdirSync(dir).sort() : [];
+  const unknown = found.filter((n) => !(OWN_LAYOUT_NAMES as string[]).includes(n) || !statSync(path.join(dir, n)).isDirectory());
+  if (unknown.length > 0) throw new Error(`conformance/layouts/ holds ${JSON.stringify(unknown)}, which is no layout's directory (${OWN_LAYOUT_NAMES.join(', ')})`);
+  const missing = OWN_LAYOUT_NAMES.filter((n) => !found.includes(n));
+  if (missing.length > 0) throw new Error(`conformance/layouts/ missing directories: ${missing.join(', ')} (create them before UPDATE_LAYOUT=1)`);
+  return [...OWN_LAYOUT_NAMES];
+}
+
+/**
+ * The cases of `shared` as layout `layout` runs them: the same inputs, each with its expected snapshot under
+ * `dir/<layout>/<slug>/<id>.dom.txt`. A snapshot file that belongs to no case of `shared` is an error.
+ */
+export function loadLayoutCasesFor(layout: string, shared: string = LAYOUT_DIR, dir: string = LAYOUTS_DIR): LayoutCase[] {
+  const base = path.join(dir, layout);
+  const cases = loadLayoutCases(shared).map((c) => ({ ...c, expected: path.join(base, `${c.id}.dom.txt`) }));
+  if (existsSync(base)) {
+    const known = new Set(cases.map((c) => c.expected));
+    for (const slug of readdirSync(base).sort()) {
+      for (const f of readdirSync(path.join(base, slug)).sort()) {
+        if (!known.has(path.join(base, slug, f))) throw new Error(`layout snapshot ${layout}/${slug}/${f} belongs to no case of conformance/layout/`);
+      }
+    }
+  }
+  return cases;
+}
 
 export interface LayoutCase {
   /** `<slug>/<id>`, as the ratchet and a `Layout-moved:` trailer name it. */
@@ -113,6 +155,8 @@ export function compareOrWrite(actual: string, expected: string, update: boolean
   const have = existsSync(expected) ? readFileSync(expected, 'utf8') : null;
   if (have === actual) return 'same';
   if (update) {
+    // A layout's first snapshot of a case makes its directory (conformance/layouts/<name>/<slug>/).
+    mkdirSync(path.dirname(expected), { recursive: true });
     writeFileSync(expected, actual);
     return 'written';
   }

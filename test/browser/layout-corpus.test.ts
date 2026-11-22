@@ -14,12 +14,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type OpenHow } from './harness.js';
+import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenHow } from './harness.js';
 import {
   compareOrWrite,
   holdClean,
   holdSnapshot,
+  layoutsWithSnapshots,
   loadLayoutCases,
+  loadLayoutCasesFor,
+  OWN_LAYOUT_NAMES,
   parseCaseFile,
   snapshotHold,
   updateRequested,
@@ -29,6 +32,8 @@ import {
 const UPDATE = updateRequested(process.env);
 const CASES = loadLayoutCases();
 const hold = snapshotHold(UPDATE);
+/** Every shipped non-default layout has a snapshot directory and runs every shared case. */
+const SNAPSHOTTED = layoutsWithSnapshots();
 
 /** The ids the two clobbering cases give their headings and anchors. */
 const CLOBBERING = ['jump', 'keys', 'xcard', 'toc-contents', '__proto__', 'constructor', 'toString', 'data-docreader-root'];
@@ -67,9 +72,17 @@ function cueState(): CueState | null {
   })();
 }
 
-async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>): Promise<void> {
+async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc>>, layout?: HarnessLayout): Promise<void> {
   const expected = CUE_SCOPES[c.id];
   if (expected === undefined) return;
+  if (layout === 'classic' || layout === 'editorial') {
+    // Both alternate layouts draw and control figures but omit definition previews.
+    // Wait for tool wiring before asserting absence; don't accept an undrawn source.
+    await doc.page.locator('figure.drawn svg').first().waitFor();
+    await doc.page.locator('figure.drawn .tools[data-diagram-tools="true"]').getByRole('button', { name: 'Full screen' }).first().waitFor();
+    expect(await doc.page.evaluate(cueState), c.id).toEqual({ targets: 0, boxes: [], rings: [], dots: [] });
+    return;
+  }
   try {
     await doc.page.waitForFunction((count) => {
       const targets = Array.from(document.querySelectorAll<SVGGElement>('main[data-harness-root] figure svg g.dnode'));
@@ -89,15 +102,35 @@ async function waitForCues(c: LayoutCase, doc: Awaited<ReturnType<typeof openDoc
 
 afterAll(closeBrowsers);
 
-function how(c: LayoutCase): Omit<OpenHow, 'browser'> {
-  return { ...(c.viewport === undefined ? {} : { viewport: c.viewport }), ...(c.csp === undefined ? {} : { csp: c.csp }) };
+function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
+  return {
+    ...(c.viewport === undefined ? {} : { viewport: c.viewport }),
+    ...(c.csp === undefined ? {} : { csp: c.csp }),
+    ...(layout === undefined ? {} : { layout }),
+  };
 }
 
-/** One case in one browser: the page is clean (holdClean), then its snapshot is held to the expected file. */
-async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void): Promise<void> {
-  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c) });
+/**
+ * One case in one browser: the page is clean (holdClean), then its snapshot is held to the expected file. With a `layout` the
+ * reader is bundled for it (the harness's layout option) and the snapshot is that layout's.
+ */
+async function runCase(c: LayoutCase, browser: BrowserName, holdIt: (id: string, actual: string, expected: string) => void, layout?: HarnessLayout): Promise<void> {
+  const classicPlan = layout === 'classic' && c.id === 'rail/plan-marks';
+  // Keep the initial heading well below the Classic reading line; at 900px it straddles the line as fonts settle.
+  const viewport = classicPlan ? { viewport: { width: 1440, height: 600 } } : {};
+  const doc = await openDoc(c.markdown, c.options, { browser, ...how(c, layout), ...viewport });
   try {
-    await waitForCues(c, doc);
+    await waitForCues(c, doc, layout);
+    if (classicPlan) {
+      await doc.page.waitForFunction(() => {
+        const root = document.querySelector<HTMLElement>('main[data-harness-root]');
+        const heading = root?.querySelector<HTMLElement>('h2[id="1-work"]');
+        const rail = root?.querySelector('.doc-toc');
+        return heading !== null && heading !== undefined
+          && heading.getBoundingClientRect().top > 200
+          && rail !== null && rail !== undefined && rail.querySelector('a[aria-current], li.open') === null;
+      });
+    }
     const snap = await doc.snapshot(c.scope);
     holdClean(c.id, { violations: await doc.violations(), aborted: doc.aborted, missing: doc.missing });
     holdIt(c.id, snap, c.expected);
@@ -180,6 +213,60 @@ describe('the Level 2 cases', () => {
     }
   });
 
+  it('a missing shipped layout snapshot directory is refused', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'layout-missing-'));
+    try {
+      const own = path.join(dir, 'layouts');
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*classic.*editorial/i);
+      mkdirSync(path.join(own, 'classic'), { recursive: true });
+      expect(() => layoutsWithSnapshots(own)).toThrow(/missing.*editorial/i);
+      mkdirSync(path.join(own, 'editorial'));
+      expect(layoutsWithSnapshots(own)).toEqual(OWN_LAYOUT_NAMES);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a layout's snapshots are conformance/layouts/<name>/<slug>/<id>.dom.txt over the shared inputs; a stray name or file is an error, and an update writes the directory", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'docserver-layouts-'));
+    try {
+      const shared = path.join(dir, 'shared');
+      const own = path.join(dir, 'layouts');
+      mkdirSync(path.join(shared, 'x'), { recursive: true });
+      writeFileSync(path.join(shared, 'x', 'a.md'), '# A\n');
+      writeFileSync(path.join(shared, 'x', 'a.options.json'), '{"options":{},"scope":["byline"]}');
+      mkdirSync(path.join(own, 'editorial'), { recursive: true });
+      mkdirSync(path.join(own, 'classic'));
+      expect(layoutsWithSnapshots(own)).toEqual(['classic', 'editorial']);
+      mkdirSync(path.join(own, 'plain'));
+      expect(() => layoutsWithSnapshots(own)).toThrow('"plain"');
+      // The same case, a snapshot of its own under each layout; the inputs are the shared ones.
+      const [c] = loadLayoutCasesFor('editorial', shared, own);
+      expect(c?.id).toBe('x/a');
+      expect(c?.expected).toBe(path.join(own, 'editorial', 'x', 'a.dom.txt'));
+      expect(c?.markdown).toBe('# A\n');
+      expect(loadLayoutCasesFor('classic', shared, own)[0]?.expected).toBe(path.join(own, 'classic', 'x', 'a.dom.txt'));
+      // An update writes the file, and its directory when the layout's first snapshot of a slug makes it; no update writes nothing.
+      const file = path.join(own, 'classic', 'x', 'a.dom.txt');
+      expect(compareOrWrite('one\n', file, false)).toBe('missing');
+      expect(existsSync(file)).toBe(false);
+      expect(compareOrWrite('one\n', file, true)).toBe('written');
+      expect(readFileSync(file, 'utf8')).toBe('one\n');
+      // Two layouts update the same case under their own ids: each is written once, neither holds the other's file.
+      const a = snapshotHold(true);
+      const b = snapshotHold(true);
+      const other = path.join(own, 'editorial', 'x', 'a.dom.txt');
+      a('classic/x/a', 'one\n', file);
+      b('editorial/x/a', 'two\n', other);
+      expect([readFileSync(file, 'utf8'), readFileSync(other, 'utf8')]).toEqual(['one\n', 'two\n']);
+      // A file that belongs to no shared case is an error.
+      writeFileSync(path.join(own, 'editorial', 'x', 'stray.dom.txt'), '');
+      expect(() => loadLayoutCasesFor('editorial', shared, own)).toThrow('layout snapshot editorial/x/stray.dom.txt belongs to no case');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('a case page that was refused something, reached another origin or asked for an unserved file fails', () => {
     const clean = { violations: [], aborted: [], missing: [] };
     expect(() => holdClean('x/a', clean)).not.toThrow();
@@ -247,3 +334,19 @@ describeBrowsers((browser) => {
     });
   }
 });
+
+// Each layout besides the default runs the same cases with its own snapshots. UPDATE_LAYOUT=1 writes them only
+// after the layout's directory exists; a newly shipped layout must create that directory first.
+for (const layout of SNAPSHOTTED) {
+  describe(`layout ${layout}`, () => {
+    const own = loadLayoutCasesFor(layout);
+    const holdLayout = snapshotHold(UPDATE);
+    describeBrowsers((browser) => {
+      for (const c of own) {
+        it(c.id, async () => {
+          await runCase(c, browser, (id, actual, expected) => holdLayout(`${layout}/${id}`, actual, expected), layout);
+        });
+      }
+    });
+  });
+}

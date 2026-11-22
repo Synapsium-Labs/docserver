@@ -22,6 +22,7 @@ import { buildFrame } from '../scripts/build-frame.mjs';
 import { frameCsp } from '../src/frame/csp.js';
 import { frameDocument, type FrameAssets, type RenderInput } from '../src/frame/document.js';
 import { MERMAID_GATE_DEFAULTS } from '../src/frame/gate.js';
+import { FRAME_LAYOUTS } from '../src/frame/layouts.js';
 import { SEED_HTML_MAX_CHARS } from '../src/frame/seed.js';
 import { CHANGES_MAX_DELETIONS, CHANGES_MAX_RANGES } from '../src/frame-runtime/inbound.js';
 import { mountDocFrame, type DocFrame, type FallbackReason, type HostAdapters } from '../src/host/index.js';
@@ -45,6 +46,8 @@ vi.mock('../src/frame/document.js', async (importOriginal) => {
 
 let assets: FrameAssets;
 let mermaidText: string;
+/** Each layout besides `default`: the assets its frame inlines in place of the default's (parity Task 9). */
+let layoutAssets: Record<'classic' | 'editorial', { enhance: string; layoutCss: string }>;
 
 /** jsdom ships no types; its one constructor this file uses, typed here. */
 const { JSDOM } = createRequire(import.meta.url)('jsdom') as { JSDOM: new (html: string) => { readonly window: unknown } };
@@ -56,6 +59,10 @@ beforeAll(async () => {
   const built = await buildFrame();
   assets = { guard: built.files.guard.text, bootstrap: built.files.bootstrap.text, enhance: built.files.enhance.text, css: built.files.css.text };
   mermaidText = built.files.mermaid.text;
+  layoutAssets = {
+    classic: { enhance: built.files.enhanceClassic.text, layoutCss: built.files.cssClassic.text },
+    editorial: { enhance: built.files.enhanceEditorial.text, layoutCss: built.files.cssEditorial.text },
+  };
 }, 300_000);
 
 // ───────── the frame's side: a fake channel, a recording contentWindow ─────────
@@ -2116,18 +2123,23 @@ describe('appearance contract, host half (spec §10 test 2): adapters.appearance
     expect(seedAppearance(lastSrcdoc())).toEqual({ mode: 'dark' });
   });
 
-  it("test 9: the srcdoc's CSP meta and the iframe's csp attribute of a mount with an appearance and both faces equal those of the same mount without them", () => {
-    const plain = mount();
-    const hosted = mount(PLAIN, { appearance: COLOUR, assets: { ...assets, fonts: { sans: GOOD, mono: OTHER } } });
-    const meta = (srcdoc: string): string => /^<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(srcdoc)?.[1] ?? '';
-    const plainDoc = plain.iframe.getAttribute('srcdoc') ?? '';
-    const hostedDoc = hosted.iframe.getAttribute('srcdoc') ?? '';
-    expect(seedOf(hostedDoc)['fonts']).toEqual({ sans: GOOD, mono: OTHER });
-    expect(meta(hostedDoc)).not.toBe('');
-    expect(meta(hostedDoc)).toBe(meta(plainDoc));
-    expect(hosted.iframe.getAttribute('csp')).toBe(plain.iframe.getAttribute('csp'));
-    expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp());
-  });
+  for (const layout of FRAME_LAYOUTS) {
+    it(`test 9, ${layout}: the srcdoc's CSP meta and the iframe's csp attribute of a mount with an appearance and both faces equal those of the same mount without them`, () => {
+      const base = layout === 'default' ? assets : { ...assets, ...layoutAssets[layout] };
+      const plain = mount(PLAIN, { layout, assets: base });
+      const hosted = mount(PLAIN, { layout, appearance: COLOUR, assets: { ...base, fonts: { sans: GOOD, mono: OTHER } } });
+      const meta = (srcdoc: string): string => /^<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(srcdoc)?.[1] ?? '';
+      const plainDoc = plain.iframe.getAttribute('srcdoc') ?? '';
+      const hostedDoc = hosted.iframe.getAttribute('srcdoc') ?? '';
+      expect(plain.fallbacks()).toEqual([]);
+      expect(hosted.fallbacks()).toEqual([]);
+      expect(seedOf(hostedDoc)['fonts']).toEqual({ sans: GOOD, mono: OTHER });
+      expect(meta(hostedDoc)).not.toBe('');
+      expect(meta(hostedDoc)).toBe(meta(plainDoc));
+      expect(hosted.iframe.getAttribute('csp')).toBe(plain.iframe.getAttribute('csp'));
+      expect(hosted.iframe.getAttribute('csp')).toBe(frameCsp(layout));
+    });
+  }
 });
 
 // ───────── docserver parity T2: places, goto, close-overlay and print figures ─────────
@@ -3165,4 +3177,76 @@ describe('docserver parity T5: adapters.changesBase seeds the comparison base', 
       expect(JSON.stringify(ours[0]), bad).not.toContain(bad === '' ? '\u0000' : bad);
     }
   });
+});
+
+// ───────── docserver parity T9: the layout adapter ─────────
+
+describe('docserver parity T9: HostAdapters.layout', () => {
+  const OWN = ['classic', 'editorial'] as const;
+  const srcdocOf = (m: Mounted): string => m.iframe.getAttribute('srcdoc') ?? '';
+  /** A srcdoc with its fresh nonce replaced, so two mounts of one document can be compared byte for byte. */
+  const fixed = (m: Mounted): string => srcdocOf(m).replace(NONCE_RE, '"nonce":"0"');
+
+  it('a host that names no layout, and one that names `default`, get the default layout\'s exact srcdoc and policy', () => {
+    const none = mount();
+    const named = mount(PLAIN, { layout: 'default' });
+    expect(fixed(none)).toBe(fixed(named));
+    expect(none.iframe.getAttribute('csp')).toBe(frameCsp());
+    expect(named.iframe.getAttribute('csp')).toBe(frameCsp('default'));
+    expect(srcdocOf(none).includes(assets.enhance)).toBe(true);
+    expect(none.fallbacks()).toEqual([]);
+    expect(named.fallbacks()).toEqual([]);
+    // The default frame carries no layout stylesheet: its style element is reader.css alone.
+    expect(srcdocOf(named).includes(`${assets.css}\n`)).toBe(false);
+  });
+
+  for (const layout of OWN) {
+    it(`${layout}: mounts with its own bundle and stylesheet under its own policy, and inlines no other layout's`, () => {
+      const own = layoutAssets[layout];
+      const m = mount(PLAIN, { layout, assets: { ...assets, ...own } });
+      expect(m.fallbacks()).toEqual([]);
+      expect(m.iframe.getAttribute('csp')).toBe(frameCsp(layout));
+      const doc = srcdocOf(m);
+      expect(doc.includes(`<script>${own.enhance}</script>`)).toBe(true);
+      expect(doc.includes(`<style>${assets.css}\n${own.layoutCss}</style>`)).toBe(true);
+      expect(doc.includes(`<script>${assets.enhance}</script>`)).toBe(false);
+      for (const other of OWN.filter((o) => o !== layout)) {
+        expect(doc.includes(layoutAssets[other].enhance), `${other}'s bundle`).toBe(false);
+        expect(doc.includes(layoutAssets[other].layoutCss), `${other}'s stylesheet`).toBe(false);
+      }
+    });
+  }
+
+  it('a value that is not a layout name is a TypeError at mount, before any iframe (null and the empty string included)', () => {
+    for (const bad of ['', 'Default', 'classic ', 'plain', '__proto__', 'constructor', null, 0, true, {}, ['classic']]) {
+      const before = iframes();
+      expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { layout: bad } as never) }), String(bad)).toThrow(TypeError);
+      // The adapter's own check refuses it, with its own words, before the policy is built (frameCsp refuses a bad name too, and
+      // would be the only guard if this one went).
+      expect(() => mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor({ events: [] }, { layout: bad } as never) }), String(bad)).toThrow(/adapters\.layout must be one of the frame layouts/);
+      expect(iframes(), String(bad)).toBe(before);
+    }
+  });
+
+  it('a layout with the default layout\'s assets, or the default with a layout\'s, falls back as `assets` with no iframe', () => {
+    for (const [name, over] of [
+      ['a layout with the default assets', { layout: 'editorial' }],
+      ['a layout with its bundle and no stylesheet', { layout: 'editorial', assets: { ...assets, enhance: layoutAssets.editorial.enhance } }],
+      ['a layout with another layout\'s stylesheet', { layout: 'editorial', assets: { ...assets, ...layoutAssets.editorial, layoutCss: layoutAssets.classic.layoutCss } }],
+      ['the default with a layout\'s bundle', { assets: { ...assets, enhance: layoutAssets.editorial.enhance } }],
+      ['the default with a stylesheet of its own', { assets: { ...assets, layoutCss: layoutAssets.editorial.layoutCss } }],
+    ] as const) {
+      const before = iframes();
+      const m = mountDocFrameFallback(over);
+      expect(m, name).toEqual(['assets']);
+      expect(iframes(), name).toBe(before);
+    }
+  });
+
+  /** Mount with `over` and return the fallback reasons it gave; no iframe is made when it gave one. */
+  function mountDocFrameFallback(over: Partial<Record<keyof HostAdapters, unknown>>): unknown[] {
+    const seen: Seen = { events: [] };
+    mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor(seen, over) });
+    return seen.events.filter(([n]) => n === 'fallback').map(([, v]) => v);
+  }
 });

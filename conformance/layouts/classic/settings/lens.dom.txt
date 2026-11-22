@@ -1,0 +1,73 @@
+h1
+  "Product lens"
+p
+  strong
+    "Spec"
+  "· 2026-10-21 · Status: Draft"
+h2
+  "1. Detail"
+div
+  pre
+    code
+      span
+        "const"
+      "detail = ["
+      span
+        "'one'"
+      ","
+      span
+        "'two'"
+      ","
+      span
+        "'three'"
+      ", ];"
+div
+  pre
+    code
+      span
+        "const"
+      "brief = ["
+      span
+        "'one'"
+      ","
+      span
+        "'two'"
+      ", ];"
+div
+  table
+    thead
+      tr
+        th
+          "Field"
+        th
+          "Path"
+        th
+          "Type"
+    tbody
+      tr
+        td
+          "One"
+        td
+          code
+            "src/item.ts"
+        td
+          code
+            "string"
+      tr
+        td
+          "Two"
+        td
+          code
+            "src/list.ts"
+        td
+          code
+            "number"
+      tr
+        td
+          "Three"
+        td
+          code
+            "src/view.ts"
+        td
+          code
+            "boolean"

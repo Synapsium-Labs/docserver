@@ -1,0 +1,72 @@
+h1
+  "A directive that restyles"
+p
+  "A flowchart whose init directive asks fo"…
+figure .drawn
+  pre
+    "%%{init: {\"themeCSS\": \".label, .nodeLabe"…
+  svg role="img" aria-label="Figure 1. Restyled by its directive."
+    style
+    g
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        polygon
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        circle
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      marker
+        path
+      g
+        g
+        g
+          path
+        g
+          g
+            g
+              foreignObject
+                div
+                  span
+        g
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+          g
+            rect
+            g
+              rect
+              foreignObject
+                div
+                  span
+                    p
+    defs
+      filter
+        feDropShadow
+    defs
+      filter
+        feDropShadow
+    linearGradient
+      stop
+      stop
+  figcaption
+    "Figure 1. Restyled by its directive."

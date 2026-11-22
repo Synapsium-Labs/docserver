@@ -1,0 +1,123 @@
+nav .doc-toc chrome aria-label="Contents"
+  div .toc-head chrome
+    span .toc-title chrome
+      "Contents"
+    button chrome
+      "Collapse"
+    button .toc-close chrome hidden=""
+      "Close"
+  ul chrome
+    li chrome
+      a chrome
+        "1. Work"
+      ul chrome
+        li chrome
+          a chrome
+            "Task 1: Prepare"
+    li chrome
+      a chrome
+        "2. Notes"
+    li chrome
+      a chrome
+        "3. Close"
+h1
+  "Delivery plan"
+p
+  "This introduction leaves the first work "…
+p
+  "The rail starts neutral until the reader"…
+h2 aria-label="1. Work"
+  "1. Work"
+p
+  "The plan has enough steps for outline mo"…
+h3 aria-label="Task 1: Prepare"
+  "Task 1: Prepare"
+ul
+  li
+    input
+    strong
+      "Step 1: Read the brief"
+  li
+    input
+    strong
+      "Step 2: Make a note"
+  li
+    input
+    strong
+      "Step 3: Check the input"
+  li
+    input
+    strong
+      "Step 4: Share the draft"
+  li
+    input
+    strong
+      "Step 5: Review the change"
+  li
+    input
+    strong
+      "Step 6: Close the task"
+  li
+    input
+    strong
+      "Step 7: Record the result"
+  li
+    input
+    strong
+      "Step 8: Confirm the work"
+  li
+    input
+    strong
+      "Step 9: Send the note"
+  li
+    input
+    strong
+      "Step 10: Keep the record"
+  li
+    input
+    strong
+      "Step 11: Finish the pass"
+  li
+    input
+    strong
+      "Step 12: Compare the outcome"
+  li
+    input
+    strong
+      "Step 13: Note the decision"
+  li
+    input
+    strong
+      "Step 14: Check the evidence"
+  li
+    input
+    strong
+      "Step 15: Share the result"
+  li
+    input
+    strong
+      "Step 16: Review the notes"
+  li
+    input
+    strong
+      "Step 17: Prepare the close"
+  li
+    input
+    strong
+      "Step 18: Confirm the record"
+  li
+    input
+    strong
+      "Step 19: Publish the update"
+  li
+    input
+    strong
+      "Step 20: Finish the plan"
+h2 aria-label="2. Notes"
+  "2. Notes"
+p
+  "A normal section follows the outlineable"…
+h2 aria-label="3. Close"
+  "3. Close"
+p
+  "The final section completes the document"…

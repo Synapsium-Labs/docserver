@@ -1,0 +1,45 @@
+h1
+  "Anchors"
+p hidden=""
+  strong
+    "Spec"
+  "· · Status:"
+"2026-10-20Draft"
+p
+  "Each anchor below has an id that a page,"…
+h2 aria-label="First section"
+  "First section"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to First section"
+      "#"
+span .doc-anchor
+p
+  "An anchor named like the quick jump."
+h2 aria-label="Second section"
+  "Second section"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Second section"
+      "#"
+span .doc-anchor
+span .doc-anchor
+p
+  "Two anchors named like the keys sheet an"…
+h2 aria-label="Third section"
+  "Third section"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Third section"
+      "#"
+span .doc-anchor
+span .doc-anchor
+span .doc-anchor
+p
+  "Named like the contents rail and two pro"…
+h2 aria-label="Fourth section"
+  "Fourth section"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Fourth section"
+      "#"
+span .doc-anchor
+span .doc-anchor
+p
+  "Named like an inherited property and the"…

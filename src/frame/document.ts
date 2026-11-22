@@ -6,9 +6,13 @@
 //   <script>{guard.js}</script>
 //   <script type="application/json">{seed}</script>
 //   <script>{bootstrap.js}</script>
-//   <style>{frame/reader.css}</style>
-//   <script>{enhance.js}</script>
+//   <style>{frame/reader.css}{STYLE_JOIN}{layout stylesheet}</style>   the join and the layout's stylesheet only for a layout that has one
+//   <script>{enhance.js}</script>              the chosen layout's enhance bundle (FrameOptions.layout, default 'default')
 //   <script>{mermaid.frame.js}</script>        only when FrameOptions.mermaid is non-null and its draw is not 'after-ready'
+//
+// A frame carries one layout (docserver parity Task 9; src/frame/layouts.ts): its enhance bundle in place of the default's, and
+// its own stylesheet, when it has one, inside the same style element after reader.css, so the element order the guard and the
+// bootstrap expect does not change. For the default layout nothing differs from a frame with no layout.
 //
 // No doctype (a srcdoc document is never in quirks mode), no html, head or body tag: every element lands in the
 // implied head, and the implied body stays empty until the bootstrap appends the content root at DOMContentLoaded. The
@@ -42,6 +46,7 @@ import { MERMAID_LIMIT_CEILINGS } from './gate.js';
 import { FRAME_MANIFEST } from './manifest.generated.js';
 import { isFragmentId } from './fragment.js';
 import { ITEM_LIMITS, itemsWhy, type ItemLink } from './items.js';
+import { isFrameLayout, LAYOUT_ENTRIES, type FrameLayout } from './layouts.js';
 import { vocabularyOk } from './vocabulary.js';
 import { FRAME_PREF_VALUES, isFullSha, type BridgeStoreKey } from './protocol.js';
 import {
@@ -123,8 +128,14 @@ export interface RenderInput {
 export interface FrameAssets {
   readonly guard: string;
   readonly bootstrap: string;
+  /** The enhance bundle of the chosen layout (FrameOptions.layout): assets/frame/enhance.js for `default`, else assets/frame/enhance-<name>.js. */
   readonly enhance: string;
   readonly css: string;
+  /**
+   * assets/frame/layout-<name>.css, the chosen layout's own stylesheet: required (else `missing-asset`) when that layout has
+   * one, and refused (`asset-mismatch`) when it has none, `default` included. Verified against the layout's manifest entry.
+   */
+  readonly layoutCss?: string;
   /** assets/mermaid/mermaid.frame.js; required when FrameOptions.mermaid is non-null, unless its draw is 'after-ready'. */
   readonly mermaid?: string;
   /**
@@ -148,8 +159,13 @@ export interface FrameFeatures {
 }
 
 export interface FrameOptions {
-  /** Must pass checkFrameCsp with every inlined script's hash. */
+  /** Must pass checkFrameCsp with every inlined script's hash (use frameCsp(layout) for the layout chosen below). */
   readonly csp: string;
+  /**
+   * The layout this frame carries (one of FRAME_LAYOUTS), default `'default'`: `assets.enhance` is that layout's bundle,
+   * and `assets.layoutCss` its stylesheet when it has one. A name that is not a layout is refused as invalid-input.
+   */
+  readonly layout?: FrameLayout;
   /** 32 lower-case hex digits, fresh per mount; it lives only in the seed. */
   readonly nonce: string;
   readonly assets: FrameAssets;
@@ -202,7 +218,7 @@ export interface FrameOptions {
    * your comparison". Anything else than a full sha is refused as invalid-input. Absent: no `changesBase` key in the seed.
    */
   readonly changesBase?: string;
-  /** Default MAX_SRCDOC_CHARS_DEFAULT; a host may only lower it. */
+  /** Default maxSrcdocChars(layout) (MAX_SRCDOC_CHARS_DEFAULT for `default`); a host may only lower it. */
   readonly maxSrcdocChars?: number;
 }
 
@@ -213,9 +229,14 @@ interface SrcdocParts {
   readonly seed: string;
   readonly bootstrap: string;
   readonly css: string;
+  /** The chosen layout's own stylesheet, or null (`default`, which has none): joined to `css` by STYLE_JOIN. */
+  readonly layoutCss: string | null;
   readonly enhance: string;
   readonly mermaid: string | null;
 }
+
+/** What joins reader.css and a layout's own stylesheet inside the one style element (scripts/build-frame.mjs's STYLE_JOIN). */
+const STYLE_JOIN = '\n';
 
 /** The srcdoc: Reference §2's fixed skeleton around its parts, on one line. The one place the skeleton is written. */
 function srcdoc(p: SrcdocParts): string {
@@ -224,7 +245,7 @@ function srcdoc(p: SrcdocParts): string {
     `<script>${p.guard}</script>` +
     `<script type="application/json">${p.seed}</script>` +
     `<script>${p.bootstrap}</script>` +
-    `<style>${p.css}</style>` +
+    `<style>${p.css}${p.layoutCss === null ? '' : `${STYLE_JOIN}${p.layoutCss}`}</style>` +
     `<script>${p.enhance}</script>` +
     (p.mermaid === null ? '' : `<script>${p.mermaid}</script>`)
   );
@@ -236,26 +257,35 @@ function srcdoc(p: SrcdocParts): string {
  * (CSP_MAX_CHARS, the floor's single definition). Derived, never written as a number, so a change to the skeleton or
  * to the floor's bound moves it. Internal: Reference §1 does not name it.
  */
-const SKELETON_MAX_CHARS = srcdoc({ policy: '', guard: '', seed: '', bootstrap: '', css: '', enhance: '', mermaid: '' }).length + CSP_MAX_CHARS;
+const SKELETON_MAX_CHARS = srcdoc({ policy: '', guard: '', seed: '', bootstrap: '', css: '', layoutCss: null, enhance: '', mermaid: '' }).length + CSP_MAX_CHARS;
 
 /**
- * The longest srcdoc frameDocument writes by default (Reference §3, FD17): the html cap, every frame asset's length
- * (Mermaid's included) as FRAME_MANIFEST records it, the image URLs' share, every other seed field at its cap, and the
- * skeleton around them at its longest (C92). Derived from those five sources, never written as a number, so a rebuild
- * that moves an asset moves it (FD20), and so does a change to the skeleton or to the policy's bound.
+ * The longest srcdoc frameDocument writes for `layout` (default `'default'`; Reference §3, FD17, parity Task 9): the html
+ * cap, every asset that layout's frame inlines as FRAME_MANIFEST records its length (the guard, the bootstrap, the layout's
+ * enhance bundle, reader.css, Mermaid's, and, for a layout that has one, its own stylesheet with the one character that joins
+ * it to reader.css), the image URLs' share, every other seed field at its cap, and the skeleton around them at its longest
+ * (C92). Derived from those sources, never written as a number, so a rebuild that moves an asset moves it (FD20), and so does
+ * a change to the skeleton or to the policy's bound. A name that is not a layout is a TypeError.
  */
-export const MAX_SRCDOC_CHARS_DEFAULT =
-  SEED_HTML_MAX_CHARS +
-  FRAME_MANIFEST.guard.chars +
-  FRAME_MANIFEST.bootstrap.chars +
-  FRAME_MANIFEST.enhance.chars +
-  FRAME_MANIFEST.css.chars +
-  FRAME_MANIFEST.mermaid.chars +
-  IMAGE_BUDGET_CHARS +
-  SEED_FIELDS_MAX_CHARS +
-  SKELETON_MAX_CHARS;
+export function maxSrcdocChars(layout: FrameLayout = 'default'): number {
+  if (!isFrameLayout(layout)) throw new TypeError('maxSrcdocChars: the layout is not one of FRAME_LAYOUTS');
+  const own = LAYOUT_ENTRIES[layout];
+  return (
+    SEED_HTML_MAX_CHARS +
+    FRAME_MANIFEST.guard.chars +
+    FRAME_MANIFEST.bootstrap.chars +
+    FRAME_MANIFEST[own.enhance].chars +
+    FRAME_MANIFEST.css.chars +
+    (own.css === null ? 0 : STYLE_JOIN.length + FRAME_MANIFEST[own.css].chars) +
+    FRAME_MANIFEST.mermaid.chars +
+    IMAGE_BUDGET_CHARS +
+    SEED_FIELDS_MAX_CHARS +
+    SKELETON_MAX_CHARS
+  );
+}
 
-const SCRIPTS = ['guard', 'bootstrap', 'enhance'] as const;
+/** The longest srcdoc frameDocument writes by default: `maxSrcdocChars('default')`, whose value is what it was before layouts. */
+export const MAX_SRCDOC_CHARS_DEFAULT = /* @__PURE__ */ maxSrcdocChars('default');
 
 /** The most entries any list or record of the seed holds (images, 512): a longer host list is refused unread. */
 const MAX_ENTRIES = SEED_LIMITS.images;
@@ -466,12 +496,12 @@ function bridgeOf(budget: Budget, b: unknown): Seed['bridge'] {
  * against FRAME_MANIFEST (asset-mismatch). The build already holds every shipped asset to the byte rules; this is the
  * second check behind it (Reference §4).
  */
-function verify(name: keyof typeof FRAME_MANIFEST, text: unknown): string {
-  if (typeof text !== 'string') throw new FrameError('asset-mismatch', `frameDocument: assets.${name} is not a string`);
-  const hazards = name === 'css' ? cssHazards(text) : scriptHazards(text);
-  if (hazards.length > 0) throw new FrameError('unsafe-asset', `frameDocument: assets.${name} holds ${hazards.join(', ')}`);
+function verify(name: keyof typeof FRAME_MANIFEST, text: unknown, as: string = name): string {
+  if (typeof text !== 'string') throw new FrameError('asset-mismatch', `frameDocument: assets.${as} is not a string`);
+  const hazards = name.startsWith('css') ? cssHazards(text) : scriptHazards(text);
+  if (hazards.length > 0) throw new FrameError('unsafe-asset', `frameDocument: assets.${as} holds ${hazards.join(', ')}`);
   const m = FRAME_MANIFEST[name];
-  if (hex(sha256Text(text)) !== m.sha256) throw new FrameError('asset-mismatch', `frameDocument: assets.${name} differs from ${m.path}`);
+  if (hex(sha256Text(text)) !== m.sha256) throw new FrameError('asset-mismatch', `frameDocument: assets.${as} differs from ${m.path}`);
   return text;
 }
 
@@ -489,9 +519,14 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   if (html.length > SEED_HTML_MAX_CHARS || escapedHtmlLength(html) > SEED_HTML_MAX_CHARS) {
     throw new FrameError('too-large', `frameDocument: the html is over ${String(SEED_HTML_MAX_CHARS)} characters as the seed carries it`);
   }
-  const maxSrcdocChars: unknown = o.maxSrcdocChars === undefined ? MAX_SRCDOC_CHARS_DEFAULT : o.maxSrcdocChars;
-  if (!Number.isInteger(maxSrcdocChars) || (maxSrcdocChars as number) < 1 || (maxSrcdocChars as number) > MAX_SRCDOC_CHARS_DEFAULT) {
-    invalid(`maxSrcdocChars must be an integer from 1 to ${String(MAX_SRCDOC_CHARS_DEFAULT)}: a host may only lower it`);
+  // The layout, read once: the default when absent; any other name that is not a layout is refused.
+  const layoutName: unknown = o.layout === undefined ? 'default' : o.layout;
+  if (!isFrameLayout(layoutName)) invalid(`layout must be one of the frame's layouts`);
+  const layout: FrameLayout = layoutName as FrameLayout;
+  const layoutCap = maxSrcdocChars(layout);
+  const maxChars: unknown = o.maxSrcdocChars === undefined ? layoutCap : o.maxSrcdocChars;
+  if (!Number.isInteger(maxChars) || (maxChars as number) < 1 || (maxChars as number) > layoutCap) {
+    invalid(`maxSrcdocChars must be an integer from 1 to ${String(layoutCap)}: a host may only lower it`);
   }
   if (typeof meta !== 'object' || meta === null) invalid('result.meta');
   // An initialHash outside FRAGMENT_ID_GRAMMAR is ignored (seeded as null), never refused (ruling R1): a host may
@@ -547,8 +582,18 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const supplied = a as FrameAssets;
   const guard = verify('guard', supplied.guard);
   const bootstrap = verify('bootstrap', supplied.bootstrap);
-  const enhance = verify('enhance', supplied.enhance);
+  const own = LAYOUT_ENTRIES[layout];
+  const enhance = verify(own.enhance, supplied.enhance, 'enhance');
   const css = verify('css', supplied.css);
+  // The layout's own stylesheet: required when the layout has one, refused when it has none (`default` has none).
+  const layoutCssAsset: unknown = supplied.layoutCss;
+  let layoutCss: string | null = null;
+  if (own.css === null) {
+    if (layoutCssAsset !== undefined) throw new FrameError('asset-mismatch', `frameDocument: assets.layoutCss is given, but the ${layout} layout has no stylesheet of its own`);
+  } else {
+    if (layoutCssAsset === undefined) throw new FrameError('missing-asset', `frameDocument: the ${layout} layout needs assets.layoutCss`);
+    layoutCss = verify(own.css, layoutCssAsset, 'layoutCss');
+  }
   // Any supplied asset is verified (Reference §4), Mermaid's whether or not this mount inlines it.
   const mermaidAsset: unknown = supplied.mermaid;
   const mermaidText = mermaidAsset === undefined ? null : verify('mermaid', mermaidAsset);
@@ -557,14 +602,15 @@ export function frameDocument(r: RenderInput, o: FrameOptions): string {
   const late = mermaidOptions !== null && mermaidOptions.draw === 'after-ready';
   if (mermaidOptions !== null && !late && mermaidText === null) throw new FrameError('missing-asset', 'frameDocument: mermaid is on but assets.mermaid is absent');
   const mermaid = mermaidOptions === null || late ? null : mermaidText;
-  const required: string[] = SCRIPTS.map((k) => FRAME_MANIFEST[k].csp);
+  // The chosen layout's hashes: the guard, the bootstrap and that layout's enhance bundle (never another layout's).
+  const required: string[] = [FRAME_MANIFEST.guard.csp, FRAME_MANIFEST.bootstrap.csp, FRAME_MANIFEST[own.enhance].csp];
   if (mermaidOptions !== null) required.push(FRAME_MANIFEST.mermaid.csp);
   // The policy is read once: the string checked is the string emitted.
   const policy: unknown = o.csp;
   const csp = checkFrameCsp(policy as string, required);
   if (!csp.ok) throw new FrameError('csp', `frameDocument: the policy is refused (${csp.why})`);
   const seed = serializeSeed({ ...fields, html });
-  const out = srcdoc({ policy: policy as string, guard, seed, bootstrap, css, enhance, mermaid });
-  if (out.length > (maxSrcdocChars as number)) throw new FrameError('too-large', `frameDocument: the srcdoc is over ${String(maxSrcdocChars)} characters`);
+  const out = srcdoc({ policy: policy as string, guard, seed, bootstrap, css, layoutCss, enhance, mermaid });
+  if (out.length > (maxChars as number)) throw new FrameError('too-large', `frameDocument: the srcdoc is over ${String(maxChars)} characters`);
   return out;
 }

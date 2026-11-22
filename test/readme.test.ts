@@ -211,7 +211,7 @@ describe('README: the L3 sections exist and name their entries', () => {
       ...Object.keys((await import(HOST_ENTRY)) as object),
       ...Object.keys(await import('../src/highlight/index.js')),
     ].sort();
-    expect(names).toHaveLength(40);
+    expect(names).toHaveLength(43);
     expect(names.filter((n) => !README.includes(`\`${n}\``) && !README.includes(`\`${n}(`))).toEqual([]);
   });
 });
@@ -226,6 +226,12 @@ describe('README: Framing (./frame)', () => {
     expect(s).toContain(`\`SEED_HTML_MAX_CHARS\`, ${String(SEED_HTML_MAX_CHARS)}`);
     expect(s).toContain('`MAX_SRCDOC_CHARS_DEFAULT`');
     expect(s).toContain('`maxSrcdocChars`');
+    // The layouts (parity Task 9): the option, the policy, the cap, the stylesheet asset and the host adapter.
+    for (const part of ['`FRAME_LAYOUTS`', '`isFrameLayout(v)`', '`layout`', '`frameCsp(layout)`', '`maxSrcdocChars(layout)`', '`assets.layoutCss`']) {
+      expect(s, part).toContain(part);
+    }
+    // The host adapter is documented in Hosting's adapter table.
+    expect(section('Hosting')).toContain('| `layout` | `HostAdapters.layout`');
     for (const part of ['CSP meta', 'click guard', 'seed', 'bootstrap', 'style', '`enhance.js`', '`mermaid.frame.js`']) expect(s, part).toContain(part);
   });
 });

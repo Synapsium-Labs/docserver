@@ -23,9 +23,11 @@
 // 4. Level 2 of the corpus, conformance/layout/<slug>/<id>.{md,options.json,dom.txt} (docserver L2, Task 6):
 //    checkLayoutMoves: if a case's expected snapshot (<id>.dom.txt) was modified or deleted between the merge
 //    base and HEAD, the commits in <base>..HEAD carry `Layout-moved: <slug>/<id>, ...` trailers naming exactly
-//    those cases (a new case is added, not moved, and needs none). checkLayoutHostile: a case whose options file
-//    at the base says `"hostile": true` is never removed (none of its three files is deleted), and its .md and
-//    options never change; its snapshot may move, named like any other.
+//    those cases (a new case is added, not moved, and needs none). Each layout's own snapshot of a case,
+//    conformance/layouts/<name>/<slug>/<id>.dom.txt (docserver parity Task 9), is held the same way and named
+//    `<name>/<slug>/<id>`; the inputs stay the shared ones above. checkLayoutHostile: a case whose options file
+//    at the base says `"hostile": true` is never removed (none of its three files or existing per-layout snapshots
+//    is deleted), and its .md and options never change; snapshots may move, named like any other.
 // The pure functions are exported for test/ratchet.test.ts; the command runs only when this file is the
 // entry point. Node built-ins only; dev tooling, never shipped.
 import { execFileSync } from 'node:child_process';
@@ -47,6 +49,10 @@ const EXPECTED = 'conformance/expected/';
 const CORPUS = 'conformance/corpus/';
 const LAYOUT = 'conformance/layout/';
 const LAYOUT_FILE = /^conformance\/layout\/([^/]+\/[^/]+?)\.(md|options\.json|dom\.txt)$/;
+// Each layout beside the default has its own snapshots of the same cases: conformance/layouts/<name>/<slug>/<id>.dom.txt, named in a
+// `Layout-moved:` trailer as `<name>/<slug>/<id>` (the inputs stay the shared ones of conformance/layout/).
+const LAYOUTS = 'conformance/layouts/';
+const LAYOUTS_FILE = /^conformance\/layouts\/([^/]+\/[^/]+\/[^/]+?)\.dom\.txt$/;
 
 /** Every way `head` weakens `base` (two parsed hostile.json arrays), one line per problem. */
 export function compareVerdicts(base, head) {
@@ -141,8 +147,9 @@ export function expectedIds(paths) {
 }
 
 /**
- * The changes under conformance/layout/ in `git diff --name-status --no-renames` output, as { status, path, id, kind }:
- * status one letter (A, M, D, T), id `<slug>/<id>`, kind md, options.json or dom.txt. Other paths are left out.
+ * The changes under conformance/layout/ and conformance/layouts/ in `git diff --name-status --no-renames` output, as
+ * { status, path, id, kind }: status one letter (A, M, D, T), id `<slug>/<id>` (or, for a layout's own snapshot under
+ * conformance/layouts/, `<name>/<slug>/<id>`), kind md, options.json or dom.txt. Other paths are left out.
  */
 export function layoutChanges(nameStatus) {
   const out = [];
@@ -152,6 +159,9 @@ export function layoutChanges(nameStatus) {
     const path = line.slice(tab + 1);
     const m = LAYOUT_FILE.exec(path);
     if (m !== null) out.push({ status: line.slice(0, tab).charAt(0), path, id: m[1], kind: m[2] });
+    // A layout's own snapshot of a case: its id is `<name>/<slug>/<id>`.
+    const per = LAYOUTS_FILE.exec(path);
+    if (per !== null) out.push({ status: line.slice(0, tab).charAt(0), path, id: per[1], kind: 'dom.txt' });
   }
   return out;
 }
@@ -195,6 +205,12 @@ export function checkLayoutHostile(hostileIds, changes) {
     if (mine.some((c) => c.status === 'D')) out.push(`${id}: a hostile layout case was removed (a hostile case is never removed)`);
     else if (mine.some((c) => c.kind !== 'dom.txt')) out.push(`${id}: a hostile layout case's input or options changed (add a new case instead)`);
   }
+  for (const c of changes) {
+    const per = LAYOUTS_FILE.exec(c.path);
+    if (per !== null && c.status === 'D' && hostile.has(per[1].split('/').slice(1).join('/'))) {
+      out.push(`${c.id}: a hostile layout case was removed (a hostile case is never removed)`);
+    }
+  }
   return out;
 }
 
@@ -235,7 +251,7 @@ function main(argv) {
     .filter((p) => p.endsWith('.options.json'))
     .map((p) => ({ path: p, text: git(['show', `${base}:${p}`]) }));
   const hostileLayout = hostileLayoutIds(baseLayout);
-  const layout = layoutChanges(git(['diff', '--name-status', '--no-renames', `${base}...HEAD`, '--', LAYOUT]));
+  const layout = layoutChanges(git(['diff', '--name-status', '--no-renames', `${base}...HEAD`, '--', LAYOUT, LAYOUTS]));
   const moved = movedLayoutIds(layout);
   const layoutNamed = parseTrailerIds(git(['log', '--format=%(trailers:key=Layout-moved,valueonly,unfold)%x00', `${base}..HEAD`]));
   const problems = [

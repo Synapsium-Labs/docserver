@@ -19,10 +19,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { frameCsp, frameDocument, type FrameAssets } from '../../src/frame/index.js';
+import { FRAME_LAYOUTS, frameCsp, frameDocument, type FrameAssets } from '../../src/frame/index.js';
 import { APPEARANCE_SLOTS, parseAppearance, SLOT_PROPERTY, type Appearance, type AppearanceColourSlot } from '../../src/enhance/appearance.js';
 import { openFrameHost, openLibHost, type FrameHost } from './frame-host-page.js';
-import { data, figure, freshNonce, input, loadFrame, MEASURE, PLAIN, ROOT, sleep, waitProgress, type BuiltFrame } from './frame-shared.js';
+import { data, figure, freshNonce, input, loadFrame, MEASURE, PLAIN, ROOT, sleep, srcdocFor, waitProgress, type BuiltFrame } from './frame-shared.js';
 import { oldCapDocument } from '../frame-old-cap.js';
 import { browserFor, closeBrowsers, describeBrowsers } from './harness.js';
 
@@ -286,13 +286,14 @@ describeBrowsers((browser) => {
     1_200_000,
   );
 
-  it('test 9 (behaviour): the policy does not depend on an appearance, and 20 ops add no frame-to-parent message', async () => {
+  for (const layout of FRAME_LAYOUTS) {
+  it(`test 9 (behaviour), ${layout}: the policy does not depend on an appearance, and 20 ops add no frame-to-parent message`, async () => {
     const run = async (appearance: Appearance | undefined, ops: number): Promise<{ csp: string | null; kinds: string[]; attr: string }> => {
       const h = await open();
       try {
-        const csp = frameCsp();
+        const csp = frameCsp(layout);
         const nonce = freshNonce();
-        const doc = frameDocument(input(PLAIN()), { csp, nonce, assets: appearance === undefined ? assets : ({ ...assets, fonts: { sans: GOOD_SANS(), mono: GOOD_MONO() } } as FrameAssets), ...(appearance === undefined ? {} : { appearance }) });
+        const doc = srcdocFor(appearance === undefined ? assets : ({ ...assets, fonts: { sans: GOOD_SANS(), mono: GOOD_MONO() } } as FrameAssets), PLAIN(), nonce, appearance === undefined ? {} : { appearance }, layout);
         await h.mount(doc, csp);
         expect(data(await h.waitMessages(1, READY_MS))[0]).toEqual({ t: 'ready', v: 1, nonce });
         for (let i = 0; i < ops; i += 1) await h.send('main', { t: 'appearance', v: 1, appearance: i % 2 === 0 ? LIGHT : DARK });
@@ -311,10 +312,12 @@ describeBrowsers((browser) => {
     const withIt = await run(DARK, 20);
     expect(withIt.csp).toBe(without.csp);
     expect(withIt.attr).toBe(without.attr);
+    expect(withIt.csp).toBe(frameCsp(layout));
     expect(withIt.csp).toContain("default-src 'none'");
     expect(withIt.kinds).toEqual(without.kinds);
     expect(withIt.kinds).toEqual(['ready']);
   }, 240_000);
+  }
 
   it('no built frame asset contains the string ccrc', () => {
     for (const [name, text] of Object.entries({ ...built.assets, mermaid: built.mermaid })) {

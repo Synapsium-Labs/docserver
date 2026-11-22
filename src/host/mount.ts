@@ -11,7 +11,8 @@
 //      the per-fence cap as `maxTextSize`. A document with no scan carries no Mermaid.
 //   3. A fresh nonce: 16 bytes of crypto.getRandomValues, lower-case hex.
 //   4. The snapshot, from the host's store under its prefix (both prefs, and the current document's fields only).
-//   5. frameDocument under frameCsp(). A FrameError calls onFallback once with its reason and no iframe is created:
+//   5. frameDocument under frameCsp(layout), the layout the adapters name (default 'default', whose srcdoc and policy are
+//      what a host that names none always had; a name that is not a layout is a TypeError at step 1). A FrameError calls onFallback once with its reason and no iframe is created:
 //      not-rendered and invalid-input give invalid-input, too-large gives too-large, the asset codes give assets, and
 //      nonce and csp (which ./host's own values never produce) give assets after an internal warning.
 //   6. A new iframe: sandbox exactly allow-scripts, referrerpolicy no-referrer, the csp attribute (the meta's string),
@@ -74,6 +75,7 @@ import { parseAppearance, type Appearance } from '../enhance/appearance.js';
 import { FrameError, fontsOf, frameDocument, type FrameAssets, type FrameErrorCode, type FrameFeatures, type FrameOptions, type RenderInput } from '../frame/document.js';
 import { isFragmentId } from '../frame/fragment.js';
 import { ITEM_LIMITS, itemsWhy, type ItemLink } from '../frame/items.js';
+import { isFrameLayout, type FrameLayout } from '../frame/layouts.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
 import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent, type PlaceKind } from '../frame/protocol.js';
@@ -98,8 +100,17 @@ interface HostChanges {
 }
 
 export interface HostAdapters {
-  /** The exact texts of the shipped frame files; the host reads them, the library never fetches. */
+  /**
+   * The exact texts of the shipped frame files; the host reads them, the library never fetches. With a `layout`, `enhance` is
+   * that layout's bundle and `layoutCss` its stylesheet.
+   */
   readonly assets: FrameAssets;
+  /**
+   * The layout the frame carries (one of FRAME_LAYOUTS), default `'default'`: handed to frameDocument and to frameCsp(layout).
+   * A host that names none gets the default layout's srcdoc and policy exactly. A value that is not a layout name is a
+   * TypeError at mount, before any iframe exists.
+   */
+  readonly layout?: FrameLayout;
   /** Required: from insertion to a valid ready, in ms (1 to 120000). */
   readonly watchdogMs: number;
   /** The host's storage (Web Storage's interface); absent, nothing is stored or seeded. */
@@ -238,7 +249,7 @@ export type ToolCommand = (typeof TOOL_COMMANDS)[number];
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
   'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
-  'onPlace', 'onPrintFigure', 'items', 'changesBase',
+  'onPlace', 'onPrintFigure', 'items', 'changesBase', 'layout',
 ]);
 
 /** The callbacks, each a function when given. */
@@ -368,6 +379,8 @@ interface Checked {
   readonly appearance: Appearance | undefined;
   /** The seeded comparison base: a full sha; undefined when none was given or the one given is not a full sha. */
   readonly changesBase: string | undefined;
+  /** The layout the frame carries (default 'default'). */
+  readonly layout: FrameLayout;
   readonly features: unknown;
   readonly gate: MermaidGateCaps;
   readonly draw: 'auto' | 'on-request' | 'after-ready';
@@ -420,6 +433,9 @@ function check(adapters: unknown): Checked {
     if (!isPlain(a['appearance'])) throw new TypeError('pinax-lib host: adapters.appearance must be a plain object');
     appearance = parseAppearance(a['appearance']).appearance;
   }
+  // Only an absent layout is the default: a null, an empty string or any other value that is not a name is a TypeError.
+  const layout: unknown = a['layout'] === undefined ? 'default' : a['layout'];
+  if (!isFrameLayout(layout)) throw new TypeError('pinax-lib host: adapters.layout must be one of the frame layouts');
   const base = a['changesBase'];
   if (base !== undefined && typeof base !== 'string') throw new TypeError('pinax-lib host: adapters.changesBase must be a string');
   if (base !== undefined && !isFullSha(base)) console.warn('pinax-lib host: adapters.changesBase is not a full sha (40 or 64 lower-case hex digits), so no comparison is seeded');
@@ -437,7 +453,7 @@ function check(adapters: unknown): Checked {
     if (a['storePrefix'] !== undefined && typeof a['storePrefix'] !== 'string') throw new TypeError('pinax-lib host: adapters.storePrefix must be a string');
     if (a['docKey'] !== undefined && typeof a['docKey'] !== 'string') throw new TypeError('pinax-lib host: adapters.docKey must be a string');
   }
-  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, changesBase: base !== undefined && isFullSha(base) ? base : undefined, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
+  return { raw: adapters as object, rawAssets: a['assets'], assets: checkedAssets.value, fontsGiven: checkedAssets.given, watchdogMs: w, store, prefs, appearance, changesBase: base !== undefined && isFullSha(base) ? base : undefined, layout, features: a['features'], gate: gate as MermaidGateCaps, draw: draw as Checked['draw'], mermaidSource, title, focus, callbacks };
 }
 
 /** A changes answer, copied as plain data; null when it is malformed (unavailable). */
@@ -641,7 +657,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     const nonceBytes = new Uint8Array(16);
     win.crypto.getRandomValues(nonceBytes);
     const nonce = Array.from(nonceBytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    const policy = frameCsp();
+    const policy = frameCsp(c.layout);
     let page: string;
     try {
       const scanned: unknown = isPlain(d) ? (d as { scan?: { mermaid?: unknown } }).scan?.mermaid : undefined;
@@ -655,6 +671,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const links = 'links' in answered ? answered.links : undefined;
       const frameOptions: FrameOptions = {
         csp: policy,
+        layout: c.layout,
         nonce,
         assets: assets as FrameAssets,
         prefs: seedPrefs,

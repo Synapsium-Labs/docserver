@@ -24,7 +24,9 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium, webkit, type Browser, type LaunchOptions, type Page } from 'playwright-core';
 import { beforeAll, describe } from 'vitest';
+import { LAYOUT_TABLE, type LayoutName } from '../../scripts/build-frame.mjs';
 import { buildMermaid, OUT_FILE } from '../../scripts/build-mermaid.mjs';
+import { layoutPlugin } from '../../scripts/layout-plugin.mjs';
 import { INSTALL } from '../../scripts/visual/compare.mjs';
 import { render } from '../../src/render/index.js';
 import type { EnhanceOutcome, HarnessApi } from './page/api.js';
@@ -152,20 +154,33 @@ interface Served {
   readonly type: string;
 }
 
-let script: Promise<string> | undefined;
+/** A layout of LAYOUT_TABLE (scripts/build-frame.mjs): `default` is the reader as it was before layouts. */
+export type HarnessLayout = LayoutName;
 
-/** The page script: test/browser/page/bootstrap.ts with ./enhance, bundled once per process. */
-function pageScript(): Promise<string> {
-  script ??= build({
-    entryPoints: [path.join(ROOT, 'test', 'browser', 'page', 'bootstrap.ts')],
-    bundle: true,
-    write: false,
-    format: 'iife',
-    platform: 'browser',
-    target: 'es2022',
-    logLevel: 'silent',
-  }).then((r) => r.outputFiles[0]?.text ?? '');
-  return script;
+const scripts = new Map<HarnessLayout, Promise<string>>();
+
+/**
+ * The page script: test/browser/page/bootstrap.ts with ./enhance, bundled once per process and layout. A layout besides
+ * `default` is bundled with the plugin the frame build uses (scripts/layout-plugin.mjs), which substitutes that layout's feature
+ * list in the lifecycle and nothing else; `default` is bundled with no plugin, as it always was.
+ */
+function pageScript(layout: HarnessLayout = 'default'): Promise<string> {
+  let s = scripts.get(layout);
+  if (s === undefined) {
+    const features = LAYOUT_TABLE[layout].features;
+    s = build({
+      entryPoints: [path.join(ROOT, 'test', 'browser', 'page', 'bootstrap.ts')],
+      bundle: true,
+      write: false,
+      format: 'iife',
+      platform: 'browser',
+      target: 'es2022',
+      logLevel: 'silent',
+      ...(features === null ? {} : { plugins: [layoutPlugin(ROOT, features)] }),
+    }).then((r) => r.outputFiles[0]?.text ?? '');
+    scripts.set(layout, s);
+  }
+  return s;
 }
 
 /** The package's stylesheet and fonts, read from disk, at the paths the stylesheet names them by. */
@@ -194,14 +209,14 @@ function dataJson(value: unknown): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026');
 }
 
-function pageHtml(html: string, options: unknown): string {
+function pageHtml(html: string, options: unknown, layoutCss = false): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>docreader test page</title>
-<link rel="stylesheet" href="/assets/reader.css">
+<link rel="stylesheet" href="/assets/reader.css">${layoutCss ? '\n<link rel="stylesheet" href="/assets/layout.css">' : ''}
 <link rel="stylesheet" href="/page.css">
 <script src="/harness.js"></script>
 </head>
@@ -239,6 +254,11 @@ export interface OpenHow {
    * package's own.
    */
   readonly stylesheet?: string;
+  /**
+   * The layout to bundle the reader for (default `'default'`): its feature list in place of the default's, and its own
+   * stylesheet (assets/layouts/<name>.css), served at /assets/layout.css and linked after reader.css, when it has one.
+   */
+  readonly layout?: HarnessLayout;
 }
 
 export interface OpenedDoc {
@@ -273,8 +293,11 @@ export async function openDoc(markdown: string, options: Readonly<Record<string,
   const policy = POLICIES[how.csp ?? 'strict'];
   const files = assetFiles();
   if (how.stylesheet !== undefined) files.set('/assets/reader.css', { body: how.stylesheet, type: 'text/css' });
-  files.set('/', { body: pageHtml(html, opts), type: 'text/html; charset=utf-8' });
-  files.set('/harness.js', { body: await pageScript(), type: 'text/javascript; charset=utf-8' });
+  const layout = how.layout ?? 'default';
+  const layoutSource = LAYOUT_TABLE[layout].source;
+  if (layoutSource !== null) files.set('/assets/layout.css', { body: readFileSync(path.join(ROOT, layoutSource)), type: 'text/css' });
+  files.set('/', { body: pageHtml(html, opts, layoutSource !== null), type: 'text/html; charset=utf-8' });
+  files.set('/harness.js', { body: await pageScript(layout), type: 'text/javascript; charset=utf-8' });
   files.set('/page.css', { body: 'html, body { margin: 0; }\n', type: 'text/css' });
   if (how.mermaid ?? Object.hasOwn(options, 'mermaid')) files.set(MERMAID_PATH, { body: Buffer.from(await mermaidFile()), type: 'text/javascript; charset=utf-8' });
 

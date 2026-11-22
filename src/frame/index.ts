@@ -22,8 +22,10 @@ export type {
   AppearanceRefusalWhy,
   AppearanceSkinSlot,
 } from './appearance.js';
-export { FrameError, frameDocument, MAX_SRCDOC_CHARS_DEFAULT } from './document.js';
+export { FrameError, frameDocument, MAX_SRCDOC_CHARS_DEFAULT, maxSrcdocChars } from './document.js';
 export type { FrameAssets, FrameErrorCode, FrameFeatures, FrameOptions, RenderInput } from './document.js';
+export { FRAME_LAYOUTS, isFrameLayout } from './layouts.js';
+export type { FrameLayout } from './layouts.js';
 export { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';
 export type { ItemLink } from './items.js';
 export { MERMAID_GATE_DEFAULTS, MERMAID_LIMIT_CEILINGS, mermaidGate } from './gate.js';

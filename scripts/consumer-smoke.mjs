@@ -53,9 +53,9 @@ const EXPORT_KEYS = ['./assets/*', './conformance', './enhance', './frame', './h
 /** The runtime exports of each L3 entry, sorted. */
 const ENTRY_API = {
   frame: [
-    'ANCHOR_LIMITS', 'APPEARANCE_CONTRACT', 'APPEARANCE_LABEL_DEFAULT', 'APPEARANCE_PAIRS', 'APPEARANCE_SLOTS', 'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_ACCEPTS', 'FRAME_MANIFEST',
+    'ANCHOR_LIMITS', 'APPEARANCE_CONTRACT', 'APPEARANCE_LABEL_DEFAULT', 'APPEARANCE_PAIRS', 'APPEARANCE_SLOTS', 'BRIDGE_LIMITS', 'BRIDGE_PROTOCOL', 'CSP_REFUSALS', 'DOC_FIELDS', 'ERROR_WHY', 'FRAGMENT_ID_GRAMMAR', 'FRAME_ACCEPTS', 'FRAME_LAYOUTS', 'FRAME_MANIFEST',
     'FrameError', 'MAX_SRCDOC_CHARS_DEFAULT', 'MERMAID_GATE_DEFAULTS', 'MERMAID_HOSTED_KINDS', 'MERMAID_LIMIT_CEILINGS', 'OP_KEYS', 'PLACE_KINDS', 'PREF_KEYS',
-    'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA', 'checkFrameCsp', 'frameCsp', 'frameDocument', 'isAnchorToken', 'isFragmentId', 'mermaidGate', 'mermaidThemeOf', 'parseAppearance', 'pngBytesOfBase64',
+    'SEED_HTML_MAX_CHARS', 'SEED_SCHEMA', 'checkFrameCsp', 'frameCsp', 'frameDocument', 'isAnchorToken', 'isFragmentId', 'isFrameLayout', 'maxSrcdocChars', 'mermaidGate', 'mermaidThemeOf', 'parseAppearance', 'pngBytesOfBase64',
   ],
   host: ['mountDocFrame'],
   highlight: ['HIGHLIGHT_ENGINE', 'LANGUAGES', 'MAX_DOCUMENT_CHARS', 'MAX_LINE_CHARS', 'MAX_WHOLE_BLOCK_CHARS', 'createHighlighter', 'resolveLanguage'],

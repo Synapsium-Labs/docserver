@@ -19,7 +19,7 @@
 // measurement rows (now test/browser/frame-measure.test.ts), and moved the helpers this file shares with its own files
 // into frame-shared.ts.
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { DOC_FIELDS, frameCsp, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../../src/frame/index.js';
+import { DOC_FIELDS, FRAME_LAYOUTS, frameCsp, frameDocument, FRAME_MANIFEST, type FrameAssets, type RenderInput } from '../../src/frame/index.js';
 import { render } from '../../src/render/index.js';
 import type { Frame } from 'playwright-core';
 import { openFrameHost, type FrameHost, type HostRecord, type InitHow } from './frame-host-page.js';
@@ -37,6 +37,7 @@ import {
   registering,
   replaceScript,
   sleep,
+  srcdocFor,
   STALL_MS,
   svgTexts,
   WAIT_CAP_MS,
@@ -210,6 +211,28 @@ describeBrowsers((browser) => {
       await done();
     }
   });
+
+  for (const layout of FRAME_LAYOUTS) {
+    it(`parity T9 (P9l), ${layout}: the layout's sealed frame boots to ready under its own hash-only policy, runs its own bundle and applies its own stylesheet, with no policy violation`, async () => {
+      await open();
+      try {
+        const nonce = freshNonce();
+        await host.mount(srcdocFor(assets, PLAIN(), nonce, {}, layout), frameCsp(layout));
+        const rec = await host.waitMessages(1, 30_000);
+        expect(data(rec)).toEqual([{ t: 'ready', v: 1, nonce }]);
+        // The layout's bundle ran (its mark is on the root, none on the default's) and its stylesheet is the one in force.
+        const got = await host.frame().evaluate(() => {
+          const root = document.querySelector('[data-docreader-root]');
+          return { root: root !== null, mark: root?.getAttribute('data-docreader-layout') ?? null, property: root === null ? '' : getComputedStyle(root).getPropertyValue('--docreader-layout').trim() };
+        });
+        expect(got, layout).toEqual({ root: true, mark: layout === 'default' ? null : layout, property: layout === 'default' ? '' : layout });
+        expect(host.cspConsole).toEqual([]);
+        expect(host.errors).toEqual([]);
+      } finally {
+        await done();
+      }
+    });
+  }
 
   it('L3.B7 (P6) before enhance: the guard alone keeps every link shape from navigating, stopped clicks and submit included (its guard-less twin navigates on a plain click)', async () => {
     const fixture = [

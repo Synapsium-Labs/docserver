@@ -1,0 +1,27 @@
+h1
+  "Stored"
+p
+  strong
+    "Guide"
+  "· 2026-10-20 · Status: Draft"
+h2
+  "jump"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to jump"
+      "#"
+p
+  "Named like the quick jump. The stored po"…
+h2
+  "constructor"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to constructor"
+      "#"
+p
+  "Named like a prototype key."
+h2
+  "Plain"
+  span .h-ctl chrome
+    a .h-anchor chrome aria-label="Link to Plain"
+      "#"
+p
+  "A heading of its own."

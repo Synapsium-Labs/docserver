@@ -5,7 +5,7 @@
 // and the packed-consumer smoke (npm pack, then scripts/consumer-smoke.mjs on the tarball npm names from
 // package.json). L2 Task 6 installs the pinned browsers, with their system libraries, before the tests, so the
 // layout project runs in Chromium and WebKit; CI never narrows that with DOCREADER_BROWSERS, and fails when the
-// tests leave conformance/layout/ changed. The install command is one constant (scripts/visual/compare.mjs's
+// tests leave conformance/layout/ or conformance/layouts/ changed. The install command is one constant (scripts/visual/compare.mjs's
 // INSTALL, which the layout tests' harness re-exports), and the CI step and the README name it.
 //
 // L3 Task 17 hardens that install against a stalling package mirror (rows L3.CI1 to L3.CI4): apt retries and
@@ -415,9 +415,9 @@ describe('ci.yml: the test job', () => {
     expect(readme).toContain(`\`${INSTALL}\``);
   });
 
-  it('the step after the tests fails when they leave conformance/layout/ changed', () => {
+  it('the step after the tests fails when they leave conformance/layout/ or conformance/layouts/ (the per-layout snapshots) changed', () => {
     const at = steps.findIndex((s) => s.run === './node_modules/.bin/vitest run');
-    expect(steps[at + 1]).toEqual({ name: 'the tests wrote no layout snapshot', run: 'test -z "$(git status --porcelain -- conformance/layout)"' });
+    expect(steps[at + 1]).toEqual({ name: 'the tests wrote no layout snapshot', run: 'test -z "$(git status --porcelain -- conformance/layout conformance/layouts)"' });
   });
 
   it('never runs a bare npx vitest, never sets UPDATE_EXPECTED or UPDATE_LAYOUT, and never narrows the browsers', () => {

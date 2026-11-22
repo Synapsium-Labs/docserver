@@ -54,7 +54,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { APPEARANCE_PAIRS, type AppearanceColourSlot } from '../../src/enhance/appearance.js';
 import { render } from '../../src/render/index.js';
 import { corpusDocuments, ROOT } from './frame-shared.js';
-import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type OpenedDoc } from './harness.js';
+import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenedDoc } from './harness.js';
 import { loadLayoutCases } from './layout-cases.js';
 
 afterAll(closeBrowsers);
@@ -640,7 +640,7 @@ const STYLE_UNDER_TEST = process.env['DOCREADER_STYLE_UNDER_TEST'] === undefined
  * Open a document with the harness, and check that its stylesheet loaded: a page whose stylesheet request failed would be
  * unstyled in both pages of a comparison, and look like an equal pair. It is opened again (twice at most) before a failure.
  */
-async function open(doc: Doc, browser: BrowserName, extra: { options?: Readonly<Record<string, unknown>>; stylesheet?: string }): Promise<OpenedDoc> {
+async function open(doc: Doc, browser: BrowserName, extra: { options?: Readonly<Record<string, unknown>>; stylesheet?: string; layout?: HarnessLayout }): Promise<OpenedDoc> {
   let last = '';
   const stylesheet = extra.stylesheet ?? STYLE_UNDER_TEST;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -650,6 +650,7 @@ async function open(doc: Doc, browser: BrowserName, extra: { options?: Readonly<
       ...(doc.csp === undefined ? {} : { csp: doc.csp }),
       ...(doc.html === undefined ? {} : { html: doc.html }),
       ...(stylesheet === undefined ? {} : { stylesheet }),
+      ...(extra.layout === undefined ? {} : { layout: extra.layout }),
     });
     const rules = await opened.page.evaluate(() => Array.from(document.styleSheets).reduce((n, sheet) => n + sheet.cssRules.length, 0));
     if (rules > 200 && opened.missing.length === 0 && opened.aborted.length === 0) return opened;
@@ -1077,8 +1078,8 @@ describeBrowsers((browser) => {
   const collected = new Map<string, Promise<Collected>>();
 
   /** `docs` under `fixture`, in every state: the elements whose ground is not closed, and the pairs below their floor. */
-  function collect(fixture: Fixture, docs: readonly Doc[], only: readonly string[] | null = null): Promise<Collected> {
-    const key = `${fixture.name}|${docs.length}|${docs[0]?.id ?? ''}|${only === null ? 'all' : only.join(',')}`;
+  function collect(fixture: Fixture, docs: readonly Doc[], only: readonly string[] | null = null, layout: HarnessLayout = 'default'): Promise<Collected> {
+    const key = `${layout}|${fixture.name}|${docs.map((doc) => doc.id).join(',')}|${only === null ? 'all' : only.join(',')}`;
     const got = collected.get(key);
     if (got !== undefined) return got;
     const run = (async (): Promise<Collected> => {
@@ -1090,14 +1091,19 @@ describeBrowsers((browser) => {
         else e.count += 1;
       };
       for (const doc of docs) {
-        const d = await open(doc, browser, { options: { ...doc.options, inShort: true, appearance: { mode: fixture.mode, colour: fixture.colour } } });
+        const d = await open(doc, browser, { layout, options: { ...doc.options, inShort: true, appearance: { mode: fixture.mode, colour: fixture.colour } } });
         try {
           const hosted = await d.page.evaluate(() => {
             const r = document.querySelector('[data-docreader-root]');
-            return r === null ? null : { hosted: r.hasAttribute('data-docreader-hosted'), colours: r.hasAttribute('data-docreader-colours'), bg: getComputedStyle(r).getPropertyValue('--bg').trim().toLowerCase() };
+            return r === null ? null : {
+              hosted: r.hasAttribute('data-docreader-hosted'),
+              colours: r.hasAttribute('data-docreader-colours'),
+              bg: getComputedStyle(r).getPropertyValue('--bg').trim().toLowerCase(),
+              layout: r.getAttribute('data-docreader-layout') ?? 'default',
+            };
           });
-          if (hosted === null || !hosted.hosted || !hosted.colours || hosted.bg !== fixture.colour.bg.toLowerCase()) {
-            result.notHosted.push(`${doc.id}: the appearance was not applied (${JSON.stringify(hosted)})`);
+          if (hosted === null || !hosted.hosted || !hosted.colours || hosted.bg !== fixture.colour.bg.toLowerCase() || hosted.layout !== layout) {
+            result.notHosted.push(`${layout}/${doc.id}: the requested layout and appearance were not applied (${JSON.stringify(hosted)})`);
             continue;
           }
           result.stats.documents += 1;
@@ -1230,4 +1236,37 @@ describeBrowsers((browser) => {
       }, 1_200_000);
     }
   });
+
+  for (const layout of ['classic', 'editorial'] as const) {
+    describe(`(b) and (c): ${layout} hosted appearance`, () => {
+      // Boxes and badges, status pills, a filter, code copy, contents and jump, and figure chrome.
+      const ids = [
+        'corpus/spec-template', 'layout/core/editorial', 'layout/rail/drawer', 'layout/jump/dialogs',
+        'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
+        ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
+      ];
+      const docs = DOCS.filter((doc) => ids.includes(doc.id));
+      const required = [
+        'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
+        ...(layout === 'editorial' ? ['short-headlines'] : []),
+      ];
+      const states = [...required, 'hover', 'focus-visible'];
+
+      for (const fixture of FIXTURES) {
+        it(`${layout}: ${fixture.name}`, async () => {
+          expect(docs.map((doc) => doc.id).sort()).toEqual([...ids].sort());
+          const got = await collect(fixture, docs, states, layout);
+          expect(got.notHosted).toEqual([]);
+          expect(got.stats.documents).toBe(docs.length);
+          const expected = browser === 'chromium' ? states : required;
+          expect(expected.filter((state) => (got.stats.states[state] ?? 0) === 0), `required ${layout} states not reached`).toEqual([]);
+          const failures = [
+            ...(got.closed.size === 0 ? [] : [report(`${fixture.name}: ${layout} text on a ground that is not closed`, got.closed)]),
+            ...(got.contrast.size === 0 ? [] : [report(`${fixture.name}: an ${layout} pair is below its floor`, got.contrast)]),
+          ];
+          if (failures.length > 0) throw new Error(failures.join('\n'));
+        }, 180_000);
+      }
+    });
+  }
 });

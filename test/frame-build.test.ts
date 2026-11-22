@@ -41,7 +41,7 @@ import {
   type FrameAssetName,
 } from '../scripts/build-frame.mjs';
 import { commentTokenHazards } from '../scripts/comment-tokens.mjs';
-import { freeGlobalList, MAX_FREE_GLOBALS, scanFreeGlobals, scanScript } from '../scripts/free-globals.mjs';
+import { freeGlobalList, MAX_FREE_GLOBALS, sameGlobalNames, scanFreeGlobals, scanScript } from '../scripts/free-globals.mjs';
 import { frameCsp, frameDocument, FRAME_MANIFEST, type RenderInput } from '../src/frame/index.js';
 import { pinFreeGlobals, RESERVED_GLOBALS } from '../src/frame-runtime/pin.js';
 import { render } from '../src/render/index.js';
@@ -52,8 +52,17 @@ type Node = DefaultTreeAdapterMap['node'];
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const VERIFY = path.join(ROOT, 'scripts', 'verify-assets.mjs');
 const BUILD = path.join(ROOT, 'scripts', 'build-frame.mjs');
-const NAMES = ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const;
+/** The five assets every layout shares or that are the default layout's. */
+const BASE_NAMES = ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const;
+/** The layouts besides `default`, with their two manifest names (parity Task 9). */
+const OWN = { classic: ['enhanceClassic', 'cssClassic'], editorial: ['enhanceEditorial', 'cssEditorial'] } as const;
+const LAYOUT_BUNDLES = ['enhanceClassic', 'enhanceEditorial'] as const;
+const LAYOUT_STYLES = ['cssClassic', 'cssEditorial'] as const;
+/** Every frame asset, by manifest name, in the order the build writes them. */
+const NAMES = [...BASE_NAMES, 'enhanceClassic', 'cssClassic', 'enhanceEditorial', 'cssEditorial'] as const;
+/** The scripts of the first scan (the list's source), and of the second (the outputs, the layout bundles included). */
 const SCANNED = ['guard', 'bootstrap', 'enhance', 'mermaid'] as const;
+const SCANNED_ALL = [...SCANNED, ...LAYOUT_BUNDLES] as const;
 
 const sha256 = (data: string | Buffer): Buffer => createHash('sha256').update(data).digest();
 
@@ -78,7 +87,12 @@ function bundleOf(b: BuiltFrame, texts: Partial<Record<FrameAssetName, string>> 
   return {
     texts: t,
     mermaidModule: b.mermaidModule.text,
-    inputs: { guard: b.files.guard.inputs ?? [], bootstrap: b.files.bootstrap.inputs ?? [], enhance: b.files.enhance.inputs ?? [] },
+    inputs: {
+      guard: b.files.guard.inputs ?? [],
+      bootstrap: b.files.bootstrap.inputs ?? [],
+      enhance: b.files.enhance.inputs ?? [],
+      ...Object.fromEntries(LAYOUT_BUNDLES.map((n) => [n, b.files[n].inputs ?? []])),
+    } as Bundle['inputs'],
     freeGlobals: { names: b.freeGlobals.names, first: b.freeGlobals.first },
   };
 }
@@ -170,7 +184,7 @@ describe('L3.M14: one reproducible build, and --check', () => {
     const roots = [ROOT.replace(/\/$/, ''), homedir()].flatMap((r) => [r, r.replace(/^\//, '')]);
     for (const n of NAMES) for (const r of roots) expect(b.files[n].text.includes(r), `${n} names ${r}`).toBe(false);
     for (const r of roots) expect(b.mermaidModule.text.includes(r)).toBe(false);
-    for (const n of ['guard', 'bootstrap', 'enhance'] as const) {
+    for (const n of ['guard', 'bootstrap', 'enhance', ...LAYOUT_BUNDLES] as const) {
       const inputs = b.files[n].inputs ?? [];
       expect(inputs.length).toBeGreaterThan(0);
       // esbuild names a define's value as a virtual input, `<define:NAME>`.
@@ -277,12 +291,24 @@ describe('L3.M15: assets.json, FRAME_MANIFEST and prepack', () => {
       ...NAMES.map((n) => [b.files[n].path, Buffer.from(b.files[n].text, 'utf8')] as [string, Buffer]),
       [MERMAID_MODULE, Buffer.from(b.mermaidModule.text, 'utf8')],
     ]);
-    const frameScripts = new Set([FRAME_FILES.guard, FRAME_FILES.bootstrap, FRAME_FILES.enhance, FRAME_FILES.mermaid]);
+    const frameScripts = new Set([FRAME_FILES.guard, FRAME_FILES.bootstrap, FRAME_FILES.enhance, FRAME_FILES.mermaid, ...LAYOUT_BUNDLES.map((n) => FRAME_FILES[n])]);
+    // A layout's asset carries its layout: the default enhance bundle's, every layout bundle's and stylesheet's, and the tracked source of a stylesheet.
+    const layoutOf = new Map<string, string>([
+      [FRAME_FILES.enhance, 'default'],
+      ...Object.entries(OWN).flatMap(([layout, [bundle, sheet]]) => [[FRAME_FILES[bundle], layout], [FRAME_FILES[sheet], layout], [`layouts/${layout}.css`, layout]] as [string, string][]),
+    ]);
     for (const f of b.listed) {
       const data = texts.get(f.path) ?? readFileSync(path.join(ROOT, 'assets', f.path));
       const digest = sha256(data);
       const kind = f.path.endsWith('.mjs') ? 'module' : f.path.endsWith('.js') ? 'script' : f.path.endsWith('.css') ? 'style' : f.path.endsWith('.woff2') ? 'font' : 'text';
-      const want = { path: f.path, sha256: digest.toString('hex'), bytes: data.length, kind, ...(frameScripts.has(f.path) ? { csp: `'sha256-${digest.toString('base64')}'` } : {}) };
+      const want = {
+        path: f.path,
+        sha256: digest.toString('hex'),
+        bytes: data.length,
+        kind,
+        ...(frameScripts.has(f.path) ? { csp: `'sha256-${digest.toString('base64')}'` } : {}),
+        ...(layoutOf.has(f.path) ? { layout: layoutOf.get(f.path) } : {}),
+      };
       expect(f).toEqual(want);
       expect(assetKind(f.path)).toBe(kind);
     }
@@ -294,7 +320,10 @@ describe('L3.M15: assets.json, FRAME_MANIFEST and prepack', () => {
     const b = built();
     for (const n of NAMES) {
       const f = b.files[n];
-      expect(FRAME_MANIFEST[n]).toEqual({ path: f.path, sha256: f.sha256, bytes: f.bytes, chars: f.text.length, csp: f.csp, layout: n === 'enhance' ? 'default' : null });
+      const layout = n === 'enhance' ? 'default' : (Object.entries(OWN).find(([, names]) => (names as readonly string[]).includes(n))?.[0] ?? null);
+      expect(FRAME_MANIFEST[n]).toEqual({ path: f.path, sha256: f.sha256, bytes: f.bytes, chars: f.text.length, csp: f.csp, layout });
+      expect(f.layout, n).toBe(layout);
+      expect(f.csp === null, `${n}: a stylesheet has no CSP hash source, a script has one`).toBe((LAYOUT_STYLES as readonly string[]).includes(n) || n === 'css');
       expect(f.chars).toBe(f.text.length);
       expect(f.bytes).toBe(Buffer.byteLength(f.text, 'utf8'));
     }
@@ -447,7 +476,9 @@ describe('L3.M17: the free-global list', () => {
   it('scans all four bundled scripts, holds at most 512 names, and is what the bootstrap pins', () => {
     const b = built();
     expect(Object.keys(b.freeGlobals.first).sort()).toEqual([...SCANNED].sort());
-    expect(Object.keys(b.freeGlobals.second).sort()).toEqual([...SCANNED].sort());
+    // The second scan, of the final outputs, reads the layout bundles too (parity Task 9); the list is made from the four alone.
+    expect(Object.keys(b.freeGlobals.second).sort()).toEqual([...SCANNED_ALL].sort());
+    for (const n of LAYOUT_BUNDLES) expect(b.freeGlobals.second[n]?.reads.length ?? 0, n).toBeGreaterThan(0);
     for (const n of SCANNED) expect(b.freeGlobals.first[n]?.reads.length ?? 0, n).toBeGreaterThan(0);
     const names = b.freeGlobals.names;
     expect(names.length).toBeLessThanOrEqual(MAX_FREE_GLOBALS);
@@ -541,13 +572,92 @@ describe('L3.M17: the free-global list', () => {
     const b = built();
     const text = b.files.bootstrap.text;
     expect(text.split(JSON.stringify(b.freeGlobals.names))).toHaveLength(2);
-    expect(scanScript('bootstrap', text)).toEqual(b.freeGlobals.first.bootstrap);
-    expect(b.freeGlobals.second).toEqual(b.freeGlobals.first);
+    // The names it reads and writes, never the spelling of an alias, which the minifier may choose differently the second time.
+    const final = scanScript('bootstrap', text);
+    expect(final.reads).toEqual(b.freeGlobals.first.bootstrap.reads);
+    expect(final.writes).toEqual(b.freeGlobals.first.bootstrap.writes);
+    expect(sameGlobalNames(final, b.freeGlobals.first.bootstrap)).toBe(true);
+    for (const n of SCANNED) {
+      expect(b.freeGlobals.second[n].reads, n).toEqual(b.freeGlobals.first[n].reads);
+      expect(b.freeGlobals.second[n].writes, n).toEqual(b.freeGlobals.first[n].writes);
+    }
     // A read added after the list was made: the second scan differs, and the list no longer covers it.
     const p = problems(bundleOf(b, { bootstrap: `${text};lateProbe;\n` }));
     expect(p.some((m) => m.includes('second scan'))).toBe(true);
     const q = problems(bundleOf(b, { enhance: `${b.files.enhance.text};lateEnhanceProbe;\n` }));
     expect(q.some((m) => m.includes('lateEnhanceProbe'))).toBe(true);
+  });
+
+  it("the bootstrap's second scan is compared by the names read and written, never by an alias's spelling", () => {
+    // Helper level: the same code under another local name is the same free globals.
+    const a = scanScript('x', 'const a=window;a.foo;');
+    const c = scanScript('x', 'const b=window;b.foo;');
+    expect(a.aliases).not.toEqual(c.aliases);
+    expect(sameGlobalNames(a, c)).toBe(true);
+    expect(sameGlobalNames(a, scanScript('x', 'const a=window;a.bar;'))).toBe(false);
+    const read = scanScript('x', 'globalThis.injected;');
+    const written = scanScript('x', 'globalThis.injected = 1;');
+    expect(read.reads).toEqual(['globalThis', 'injected']);
+    expect(written.reads).toEqual(read.reads);
+    expect(read.writes).toEqual([]);
+    expect(written.writes).toEqual(['injected']);
+    expect(sameGlobalNames(read, written)).toBe(false);
+    // Build level, the final text: a bootstrap that binds one more alias of `window` (already read) gives a scan whose
+    // aliases differ from the first pass's and whose reads and writes do not; the check reports no free-globals problem.
+    const b = built();
+    const text = b.files.bootstrap.text;
+    const first = b.freeGlobals.first.bootstrap;
+    expect(first.reads).toContain('window');
+    const aliased = `${text};{const zzAliasSpelling=window;}\n`;
+    const scan = scanScript('bootstrap', aliased);
+    expect(scan.aliases).toContain('zzAliasSpelling');
+    expect(scan.aliases).not.toEqual(first.aliases);
+    expect(scan.reads).toEqual(first.reads);
+    expect(scan.writes).toEqual(first.writes);
+    const free = (bundle: Bundle): string[] => problems(bundle).filter((m) => m.startsWith('free-globals: '));
+    expect(free(bundleOf(b, { bootstrap: aliased }))).toEqual([]);
+    // Build level, the first pass's record: the minifier named an alias differently in the first build.
+    const renamed = { ...bundleOf(b), freeGlobals: { names: b.freeGlobals.names, first: { ...b.freeGlobals.first, bootstrap: { ...first, aliases: ['zzFirstPassSpelling'] } } } };
+    expect(free(renamed)).toEqual([]);
+  });
+
+  it("a read or a write that the first pass did not see is refused by the bootstrap's second-scan comparison, each part on its own", () => {
+    const b = built();
+    const text = b.files.bootstrap.text;
+    const first = b.freeGlobals.first.bootstrap;
+    const free = (bundle: Bundle): string[] => problems(bundle).filter((m) => m.startsWith('free-globals: '));
+    const second = "free-globals: the final bootstrap's second scan differs from its first";
+    // A write of an allowlisted name appended to the final text: the pinned list is unchanged (an allowlisted name is never
+    // listed, and `globalThis` is read by another script), so only the second scan can see it.
+    expect(b.freeGlobals.names).toContain('globalThis');
+    expect(b.freeGlobals.names).not.toContain('injected');
+    expect(free(bundleOf(b, { bootstrap: `${text};globalThis.injected = 1;\n` }))).toEqual([second]);
+    const withFirst = (bootstrap: ReturnType<typeof scanScript>, final = text): Bundle => ({
+      ...bundleOf(b, { bootstrap: final }),
+      freeGlobals: { names: b.freeGlobals.names, first: { ...b.freeGlobals.first, bootstrap } },
+    });
+    expect(free(withFirst({ ...first, reads: [...first.reads, 'zzFirstPassRead'] }))).toEqual([second]);
+    // These are real scans with equal reads. Turning only the allowlisted read into a write
+    // must still make the second scan disagree, with the pinned list unchanged.
+    const readText = `${text};globalThis.injected;\n`;
+    const writeText = `${text};globalThis.injected = 1;\n`;
+    const read = scanScript('bootstrap', readText);
+    const written = scanScript('bootstrap', writeText);
+    expect(written.reads).toEqual(read.reads);
+    expect(read.writes).not.toContain('injected');
+    expect(written.writes).toContain('injected');
+    expect(free(withFirst(read, readText))).toEqual([]);
+    expect(free(withFirst(read, writeText))).toEqual([second]);
+  });
+
+  it("a bootstrap whose list leaves out a name the outputs read, or names one they do not, fails the build through the list comparison", () => {
+    const b = built();
+    const names = b.freeGlobals.names;
+    const free = (bundle: Bundle): string[] => problems(bundle).filter((m) => m.startsWith('free-globals: the bootstrap\'s list is not'));
+    const withNames = (list: readonly string[]): Bundle => ({ ...bundleOf(b), freeGlobals: { names: list, first: b.freeGlobals.first } });
+    const dropped = names[0] as string;
+    expect(free(withNames(names.slice(1)))).toEqual([`free-globals: the bootstrap's list is not the outputs' scan (unlisted: ${dropped}; not read: none)`]);
+    expect(free(withNames([...names, 'zzNotRead']))).toEqual(["free-globals: the bootstrap's list is not the outputs' scan (unlisted: none; not read: zzNotRead)"]);
   });
 
   it('a bootstrap that carries the list no times, or twice, fails the build through the embedding check alone (review E3)', () => {
@@ -595,9 +705,22 @@ describe('L3.M18: the size budgets', () => {
     expect(ASSET_BUDGETS).toEqual({ guard: 4096, bootstrap: 32768, enhance: 524288, css: 1048576, mermaid: 4194304, tarball: 8388608 });
   });
 
-  it('each asset is within its budget', () => {
+  it('each asset is within its budget: a layout bundle within enhance\'s, a layout stylesheet within css\'s', () => {
     const b = built();
-    for (const n of NAMES) expect(b.files[n].bytes, n).toBeLessThanOrEqual(ASSET_BUDGETS[n]);
+    for (const n of BASE_NAMES) expect(b.files[n].bytes, n).toBeLessThanOrEqual(ASSET_BUDGETS[n]);
+    for (const n of LAYOUT_BUNDLES) expect(b.files[n].bytes, n).toBeLessThanOrEqual(ASSET_BUDGETS.enhance);
+    for (const n of LAYOUT_STYLES) expect(b.files[n].bytes, n).toBeLessThanOrEqual(ASSET_BUDGETS.css);
+  });
+
+  it('a layout bundle one byte over enhance\'s budget, and a layout stylesheet one byte over css\'s, fail the build, named', () => {
+    const b = built();
+    const over = (n: 'enhanceClassic' | 'cssClassic', budget: number): string[] => {
+      const pad = budget - b.files[n].bytes + 1;
+      // A comment pads a script and a stylesheet alike without changing what either does.
+      return problems(bundleOf(b, { [n]: `${b.files[n].text}\n/*${' '.repeat(pad - 5)}*/` }));
+    };
+    expect(over('enhanceClassic', ASSET_BUDGETS.enhance).filter((m) => m.startsWith('frame/enhance-classic.js: ') && m.includes('over its budget'))).toHaveLength(1);
+    expect(over('cssClassic', ASSET_BUDGETS.css).filter((m) => m.startsWith('frame/layout-classic.css: ') && m.includes('over its budget'))).toHaveLength(1);
   });
 
   it('an asset one byte over its budget fails the build, named', () => {

@@ -268,8 +268,12 @@ describeBrowsers((browser: BrowserName) => {
         await until(near, `the mount's own hash lands the target near ${String(want)}px`, state);
         expect(await barH(host)).toBe(bar ? '48px' : '0px');
         expect(await host.frame().evaluate(() => document.querySelector('[data-docreader-root] .topbar') !== null)).toBe(bar);
+        // A reader action releases the initial-hash pin; a programmatic scroll alone can be undone by a later relayout.
+        await host.page.locator('iframe').focus();
+        await host.page.keyboard.press('Home');
         // Back to the top, then a click on the in-document link to the same section: the same landing.
         await host.frame().evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        await until(async () => (await host.frame().evaluate(() => window.scrollY)) === 0, 'the window is at the top', state);
         await until(async () => (await targetTop(host)) > 300, 'the page is back at the top', state);
         await host.frame().click(`p a[href="#${ID}"]`);
         await until(near, `the link click lands the target near ${String(want)}px`, state);
