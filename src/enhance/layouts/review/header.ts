@@ -49,8 +49,8 @@ export function build(ctx: FeatureContext): void {
   if (skip !== null) {
     journal.listen(skip, 'click', () => {
       journal.setAttribute(title, 'tabindex', '-1');
-      title.scrollIntoView({ block: 'start' });
-      title.focus({ preventScroll: true });
+      (title as HTMLElement).scrollIntoView({ block: 'start' });
+      (title as HTMLElement).focus({ preventScroll: true });
     });
   }
   if (readControls(root).length === 0) return;
