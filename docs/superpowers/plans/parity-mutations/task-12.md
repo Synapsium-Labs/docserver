@@ -4,7 +4,7 @@ The review layout adds no state of its own (no document field, no store key, no 
 
 Every row was measured in place, one at a time, on the review layout's sources as committed at `deb8d3c` (the stylesheet unchanged since `ccff02f`), through the test wrapper, one test file per call, with Chromium selected for browser files. For each file edit the file's bytes were saved first, the edit applied, the test run, and the saved bytes copied back and their SHA-256 checked equal to the one recorded before the edit; no `git checkout` was used. The unmodified files pass every row's test file. The browser rows read the working stylesheet and bundle sources through the layout harness, so no frame rebuild was needed. Lr-d is a pure judge row: a scratch script (outside the tree) pads the review bundle's manifest characters in memory and runs `judge` from `test/size-rules.ts`, as Le-d did; no runtime asset is padded.
 
-Counts: this first table has 30 rows and its JSON fence 31 entries (Lr-d2 is the re-measurement of Lr-d, which has no table row of its own); the fix round's table and fence have 21 each; fix round 2's have 16 each; fix round 3's have 13 each; fix round 4's have 3 each.
+Counts: this first table has 30 rows and its JSON fence 31 entries (Lr-d2 is the re-measurement of Lr-d, which has no table row of its own); the fix round's table and fence have 21 each; fix round 2's have 16 each; fix round 3's have 13 each; fix round 4's have 3 each; landing review fix 1's have 1 each, and it re-measured Lr-h and Lr5-f at its tip.
 
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
@@ -15,7 +15,7 @@ Counts: this first table has 30 rows and its JSON fence 31 entries (Lr-d2 is the
 | Lr-e | The hosted control row applies under a fine pointer only | `@media (pointer: fine)` of the card button's rule becomes `@media all` | Red: `appearance-cues` 1 failed, 45 passed (the review controlRow row); `layout-review` 1 failed, 12 passed (touch measures 56, not 44) |
 | Lr-f | `frameCsp('review')` carries only its own bundle's hash | Add `enhanceClassic`'s hash to the review policy | Red: `frame-layouts` 1 failed, `frame-boundaries` 3 failed, `frame-csp` 1 failed |
 | Lr-g | `checkFrameCsp` knows review's hash | Drop `enhanceReview.csp` from the known list | Red: `frame-csp` 3 failed, `frame-layouts` 7 failed; `frame-boundaries` stays green (22), as it reads emitted policies |
-| Lr-h | The newest policy entry names every shipped layout | Drop `review` from the newest entry of `conformance/frame-boundaries.json` | Red: `frame-boundaries` 4 failed, 18 passed |
+| Lr-h | The newest policy entry names every shipped layout | Drop `review` from the newest entry of `conformance/frame-boundaries.json` | Red: `frame-boundaries` 6 failed, 16 passed. Re-measured at tip `b56668d`: the guided layout's entry is now the newest and holds `review` as well, so the count differs from the original 4 failed, 18 passed (measured when review's was the newest); the verdict is unchanged |
 | Lr-i | An appended entry has its delta row | Drop entry 4's delta row | Red: `frame-boundaries` 1 failed, 21 passed |
 | Lr-j | `review` is a layout the library and `./host` accept | Drop `review` from `FRAME_LAYOUTS` | Red: `host-mount` 1 failed, 209 passed; `frame-layouts` 4 failed, 43 passed |
 | Lr-k | The package ships the compiled review modules | Remove the review modules from the pack test's allowlist | Red: `pack` 1 failed, 14 passed (the packed files are no longer all allowed) |
@@ -51,7 +51,7 @@ Guards that deb8d3c removed as unreachable were wrong for the card's and the tog
   {"id":"Lr-e","file":"assets/layouts/review.css","savedSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","restoredSha256":"6869803e47eb26da03f8c668c39b3bb01ab755401789a5b4549c51e4a0804eb2","runs":[{"tests":"test/browser/appearance-cues.test.ts","rc":1,"failed":1,"passed":45,"skipped":46},{"tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":12,"skipped":13}]},
   {"id":"Lr-f","file":"src/frame/csp.ts","savedSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","restoredSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","runs":[{"tests":"test/frame-layouts.test.ts","rc":1,"failed":1,"passed":52},{"tests":"test/frame-boundaries.test.ts","rc":1,"failed":3,"passed":19},{"tests":"test/frame-csp.test.ts","rc":1,"failed":1,"passed":153}]},
   {"id":"Lr-g","file":"src/frame/csp.ts","savedSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","restoredSha256":"9a4344fe86a6c65cc69934768b0525a87c9873d7be39c088a374e96507c31ded","runs":[{"tests":"test/frame-csp.test.ts","rc":1,"failed":3,"passed":151},{"tests":"test/frame-layouts.test.ts","rc":1,"failed":7,"passed":46},{"tests":"test/frame-boundaries.test.ts","rc":0,"passed":22}]},
-  {"id":"Lr-h","file":"conformance/frame-boundaries.json","savedSha256":"b555973c96f52600cc8ac8d7e8850f3f6d73716a48c9732155215645e897ff75","restoredSha256":"b555973c96f52600cc8ac8d7e8850f3f6d73716a48c9732155215645e897ff75","tests":"test/frame-boundaries.test.ts","rc":1,"failed":4,"passed":18},
+  {"id":"Lr-h","file":"conformance/frame-boundaries.json","savedSha256":"b555973c96f52600cc8ac8d7e8850f3f6d73716a48c9732155215645e897ff75","restoredSha256":"b555973c96f52600cc8ac8d7e8850f3f6d73716a48c9732155215645e897ff75","tests":"test/frame-boundaries.test.ts","rc":1,"failed":6,"passed":16,"note":"re-measured at tip b56668d; the original was 4 failed, 18 passed when review's entry was the newest","savedSha256Tip":"97d0e42975f1e076e0fff48a221ed614456b43152b6e2a8db73a45e502e66a0d"},
   {"id":"Lr-i","file":"test/frame-boundaries.test.ts","savedSha256":"e3f692ac0b903ec5f575213056b9e772112b2e607eabdacae431e8707fccea7d","restoredSha256":"e3f692ac0b903ec5f575213056b9e772112b2e607eabdacae431e8707fccea7d","tests":"test/frame-boundaries.test.ts","rc":1,"failed":1,"passed":21},
   {"id":"Lr-j","file":"src/frame/layouts.ts","savedSha256":"d8e1c3a23c439de1c3eb379fa07b780674ee80ff4fb59d762890eb675d80260e","restoredSha256":"d8e1c3a23c439de1c3eb379fa07b780674ee80ff4fb59d762890eb675d80260e","runs":[{"tests":"test/host-mount.test.ts","rc":1,"failed":1,"passed":209},{"tests":"test/frame-layouts.test.ts","rc":1,"failed":4,"passed":43}]},
   {"id":"Lr-k","file":"test/pack.test.ts","savedSha256":"27490b3d1bb9b8619995143a3f09a93150f0a30042229731b390c9524886b20d","restoredSha256":"27490b3d1bb9b8619995143a3f09a93150f0a30042229731b390c9524886b20d","tests":"test/pack.test.ts","rc":1,"failed":1,"passed":14},
@@ -222,13 +222,27 @@ Measured on `9c05f53`'s `compact.ts` (sha256 `3b8e77c16c62a3b5e18aacfcbc0d6ec741
 | Row | Guard | Mutation | Measured result |
 |---|---|---|---|
 | Lr5-c4 | A row closed by its button is measured at the width it is closed at | Drop the measure after the button closes a row | Red: `layout-review` 1 failed, 27 passed. Re-measured after the CI fix (run 45014869048 failed this row in WebKit only: its 1300 and 900 px were chosen from Chromium's metrics and WebKit's overflow was the same at both, so the precondition reddened). The row now discovers the width pair in the page on the fake clock from a fixed list of desktop widths and rows in identical pairs; in Chromium it found 1300 then 1100 px, first pair; the measure removed reds it. Measured on `compact.ts` sha256 `5e6a447933b56ad16ab5ea89cd655065353f14b16137af23cd7fd555512e4a7a` (the committed version) |
-| Lr5-f | Rows with no box keep their marks | Measure every row | Red: `layout-review` 1 failed, 27 passed (filter, Open all rows twice, clear: 12 clipped rows with their buttons) |
+| Lr5-f | Rows with no box keep their marks | Measure every row | Red: `layout-review` 2 failed, 26 passed (the filter row: filter, Open all rows twice, clear, 12 clipped rows with their buttons; and the hidden-root row, since the root-level check was removed and this is the only guard for a hidden panel). Re-measured at tip `b56668d` (`compact.ts` sha256 `5595f8b490171c8e9db21d4b59bcc77d041d4e2e1d817e1e08617ad795c60f9c`); the original 1 failed, 27 passed was on the version that still had the root check |
 | Lr5-h | The root-level hidden check | Drop it | Green (28 passed): the row-level check covers a hidden root, so the root check was removed; Lr4-h's red result was on the version without the row check |
 
 ```json
 [
   {"id":"Lr5-c4","file":"src/enhance/layouts/review/compact.ts","savedSha256":"5e6a447933b56ad16ab5ea89cd655065353f14b16137af23cd7fd555512e4a7a","restoredSha256":"5e6a447933b56ad16ab5ea89cd655065353f14b16137af23cd7fd555512e4a7a","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28,"note":"re-measured after CI run 45014869048; width pair discovered in the page"},
-  {"id":"Lr5-f","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":1,"failed":1,"passed":27,"skipped":28},
+  {"id":"Lr5-f","file":"src/enhance/layouts/review/compact.ts","savedSha256":"5595f8b490171c8e9db21d4b59bcc77d041d4e2e1d817e1e08617ad795c60f9c","restoredSha256":"5595f8b490171c8e9db21d4b59bcc77d041d4e2e1d817e1e08617ad795c60f9c","tests":"test/browser/layout-review.test.ts","rc":1,"failed":2,"passed":26,"skipped":28,"note":"re-measured at tip b56668d; the original was 1 failed, 27 passed"},
   {"id":"Lr5-h","file":"src/enhance/layouts/review/compact.ts","savedSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","restoredSha256":"3b8e77c16c62a3b5e18aacfcbc0d6ec741377ff4a7e8a5c4c71cba2b5aa0d3ac","tests":"test/browser/layout-review.test.ts","rc":0,"passed":28,"skipped":28,"note":"equivalent: the row-level check covers a hidden root; the root check was removed"}
+]
+```
+
+## Landing review fix 1: Open all rows follows the rows
+
+Measured at `b56668d` (`compact.ts` sha256 `5595f8b490171c8e9db21d4b59bcc77d041d4e2e1d817e1e08617ad795c60f9c`), one file per call. Lr-h and Lr5-f above were re-measured at this tip and say so. Rows: 1 in the table and 1 JSON entry.
+
+| Row | Guard | Mutation | Measured result |
+|---|---|---|---|
+| Lr6-a | Open all rows' pressed state is made true to its table's rows after any row changes | Drop the sync call in the row setter | Red: `enhance-layouts` 2 failed, 82 passed (the new row, and the Open all row that now sees the attribute never set); the new row was also red before the sync existed (1 failed, 83 passed) |
+
+```json
+[
+  {"id":"Lr6-a","file":"src/enhance/layouts/review/compact.ts","savedSha256":"5595f8b490171c8e9db21d4b59bcc77d041d4e2e1d817e1e08617ad795c60f9c","restoredSha256":"5595f8b490171c8e9db21d4b59bcc77d041d4e2e1d817e1e08617ad795c60f9c","tests":"test/enhance-layouts.test.ts","rc":1,"failed":2,"passed":82,"note":"the new row was red first: 1 failed, 83 passed before the sync existed"}
 ]
 ```
