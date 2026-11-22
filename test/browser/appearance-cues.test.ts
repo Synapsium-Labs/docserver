@@ -271,13 +271,14 @@ describeBrowsers((browser) => {
     }
   }, ['default', 'review']);
 
-  // Test 10's painted-geometry rows, for each layout that draws what they measure. The test puts the reader's own classes on the
-  // document's blocks, so what is measured is the layout's stylesheet over them; a layout takes the part its feature list makes
-  // those classes for: `attention` marks table rows (default, guided), `plans` marks task items (default, editorial, review) and
-  // `rules` marks rule paragraphs (default, editorial, review); only the default builds `changes`, which makes the changed run.
-  // Classic builds none of them (its list is editorial's title block, tables, status, code, figures, Contents, jump and diagrams).
+  // Test 10's painted-geometry rows, for each layout whose own features draw what they measure. The test puts the reader's own
+  // classes on the document's blocks by hand (mark), so what is measured is the shared stylesheet's rule (assets/reader.css) as the
+  // layout's own stylesheet leaves it. A layout is registered only for a mark one of its features writes: `attention` writes `attn`
+  // on table rows (default, guided); `plans` writes it on task items (default, review); `attention` also writes it on rule
+  // paragraphs (default only); only the default builds `changes`, which makes the changed run. Editorial writes none (its plans
+  // mark no `attn`), and classic builds none of these modules.
   const ATTENTION: Readonly<Record<string, readonly ('rule' | 'item' | 'row')[]>> = {
-    default: ['rule', 'item', 'row'], editorial: ['rule', 'item'], review: ['rule', 'item'], guided: ['row'],
+    default: ['rule', 'item', 'row'], review: ['item'], guided: ['row'],
   };
   sharedCue('painted geometry: a changed block, item and row (wide) paint two 2px runs and a 2px gap; an attention mark paints one 3px run', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });
@@ -308,7 +309,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  }, ['default', 'editorial', 'review', 'guided']);
+  }, ['default', 'review', 'guided']);
 
   for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
@@ -1123,6 +1124,7 @@ describeBrowsers((browser) => {
     const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
       d.page.evaluate((sel) => {
         const root = document.querySelector(sel) as HTMLElement;
+        root.classList.add('toc-open'); // whatever the reader did on resize (it closes the drawer), the class stands here
         const c = getComputedStyle(root.querySelector('.doc-toc .toc-title') as Element);
         return { row: getComputedStyle(root.querySelector('.doc-toc a') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, mono: String(c.fontFamily.includes('monospace')) };
       }, rootSel);

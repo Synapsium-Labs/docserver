@@ -235,14 +235,41 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
     expect(() => checkScope(`@media screen { ${scope} .doc-toc a:hover, .doc-toc a.active { color: var(--text); } }`, 'classic')).toThrow('.doc-toc a.active');
   });
 
-  /** The named colours a declaration's value uses (a list of the usual names; `transparent`, `currentColor` and `inherit` are none). */
-  const NAMED = 'black|white|red|green|blue|yellow|orange|purple|pink|gray|grey|silver|gold|brown|cyan|magenta|teal|navy|maroon|olive|lime|aqua|fuchsia|indigo|violet|crimson|coral|salmon|tomato|khaki|beige|ivory|lavender|orchid|plum|tan|turquoise|azure|chocolate|firebrick|goldenrod|hotpink|lightblue|lightgray|lightgrey|darkgray|darkgrey|darkblue|darkred|darkgreen|slategray|slategrey|skyblue|steelblue|wheat|snow|linen';
-  const namedColours = (text: string): string[] => Array.from(text.matchAll(new RegExp(`:\\s*[^;{}]*?\\b(${NAMED})\\b`, 'gi')), (m) => (m[1] as string).toLowerCase());
+  /** The 148 CSS Color 4 named colours, and the system colours: every one is a literal colour. */
+  const NAMED = ('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen').split(' ');
+  const SYSTEM = 'canvas canvastext linktext visitedtext activetext buttonface buttontext buttonborder field fieldtext highlight highlighttext selecteditem selecteditemtext mark marktext graytext accentcolor accentcolortext'.split(' ');
+  const LITERAL = new Set([...NAMED, ...SYSTEM]);
+  /**
+   * The named colours the declarations of a stylesheet use. Only the declarations are read (the text inside the braces, so a selector is
+   * not), with strings and `url()` taken out, so a class name, a selector or a custom
+   * property that holds a colour word (`.ok-green`, `a:not(.red)`, `var(--red)`) is none. `transparent`, `currentColor`, `inherit`,
+   * `initial`, `unset` and `revert` are not in the list.
+   */
+  const namedColours = (text: string): string[] => {
+    const out: string[] = [];
+    for (const block of text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\{([^{}]*)\}/g)) {
+      for (const declaration of (block[1] as string).split(';')) {
+        const value = declaration.replace(/"[^"]*"|'[^']*'|url\([^)]*\)/gi, ' ');
+        for (const token of value.split(/[^a-zA-Z0-9_-]+/)) if (LITERAL.has(token.toLowerCase())) out.push(token.toLowerCase());
+      }
+    }
+    return out;
+  };
 
-  it('refuses a CSS named colour in a declaration, and allows transparent, currentColor, inherit and the names inside other words', () => {
+  it('knows the 148 names of CSS Color 4 and the system colours', () => {
+    expect(NAMED.length).toBe(148);
+    expect(new Set(NAMED).size).toBe(148);
+    expect(SYSTEM.length).toBe(19);
+  });
+
+  it('refuses every CSS named and system colour in a declaration, and allows the keywords and the names inside other words, selectors and custom properties', () => {
     expect(namedColours('a { border-color: red; }')).toEqual(['red']);
-    expect(namedColours('a { color: var(--text); background: linear-gradient(white, var(--bg)); }')).toEqual(['white']);
-    expect(namedColours('a { color: transparent; background: currentColor; border-color: inherit; white-space: nowrap; font-variant-numeric: tabular-nums; }')).toEqual([]);
+    expect(namedColours('a { color: rebeccapurple; outline-color: LightGreen; background: Canvas; }')).toEqual(['rebeccapurple', 'lightgreen', 'canvas']);
+    expect(namedColours('@media screen { a { color: var(--text); background: linear-gradient(white, var(--bg)); } }')).toEqual(['white']);
+    expect(namedColours('a { color: transparent; background: currentColor; border-color: inherit; outline-color: initial; fill: unset; stroke: revert; white-space: nowrap; font-variant-numeric: tabular-nums; }')).toEqual([]);
+    // A colour word in a selector, a class, a custom property's name or a reference to one, or a string, is no colour.
+    expect(namedColours('.ok-green:hover, a:not(.red) > .tan { color: var(--red); content: "red"; --green: 1px; background: var(--wait-tint); }')).toEqual([]);
+    expect(namedColours('a { --tint: tan; color: var(--x, red); }')).toEqual(['tan', 'red']);
   });
 
   for (const layout of OWN) {

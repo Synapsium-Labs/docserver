@@ -379,6 +379,18 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('the drawer\'s touch floor is for a drawer: a stale toc-open on a wide screen keeps the docked rail\'s rows at their own height', async () => {
+    const doc = await open({}, { width: 1280, height: 800, touch: true });
+    try {
+      const { page } = doc;
+      const rows = (): Promise<number> => page.locator('.doc-toc a').first().evaluate((el) => el.getBoundingClientRect().height);
+      const docked = await rows();
+      await page.evaluate(() => document.querySelector('[data-docreader-root]')?.classList.add('toc-open'));
+      expect(docked).toBeLessThan(44);
+      expect(await rows()).toBe(docked);
+    } finally { await doc.close(); }
+  });
+
   it('a fine pointer takes the hosted control row on the fold buttons', async () => {
     for (const height of [40, 56]) {
       const doc = await open({ ...GUIDED, appearance: { skin: { controlRow: `${height}px` } } }, { width: 1280, height: 800, touch: false });

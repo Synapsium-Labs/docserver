@@ -1,5 +1,5 @@
 // The guided layout's quieter prose under the Product lens (the reference's `tech-text`): a paragraph or list item of more
-// than sixty characters of which more than a third is code is marked, and the stylesheet quietens it when the lens is Product,
+// than sixty characters of which more than about a third (`SHARE`, 0.32) is code is marked, and the stylesheet quietens it when the lens is Product,
 // as the shared `attention` quietens code blocks, technical tables and file paths. Nothing is hidden.
 //
 // A paragraph or item inside a table, the "In short" box or a figure is left alone. An item's own text is what counts, not a
