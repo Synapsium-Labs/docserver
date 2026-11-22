@@ -137,8 +137,23 @@ function allDocs(): Doc[] {
     csp: undefined,
     html: undefined,
   };
+  // The review layout's compact rows (parity Task 12): a table of seven rows whose rows average well over 240 characters, so the
+  // rows are clipped at rest and "Open all rows" and each row's button are drawn.
+  const long = 'A long cell that runs over several lines of the table, so that the row is clipped until the reader opens it, and says enough to need it.';
+  const compact: Doc = {
+    id: 'synthetic/compact',
+    markdown: [
+      '# Compact rows', '', '## 1. Decisions', '', '| ID | Decision | Why |', '|---|---|---|',
+      ...Array.from({ length: 7 }, (_, i) => `| D${String(i + 1)} | ${long} ${long} | ${long} Agreed |`), '',
+      '## 2. After', '', 'Text.', '', '## 3. Last', '', 'Text.', '',
+    ].join('\n'),
+    options: {},
+    viewport: undefined,
+    csp: undefined,
+    html: undefined,
+  };
   const figure: Doc = { id: 'synthetic/figure', markdown: FIGURE_MARKDOWN, options: {}, viewport: undefined, csp: 'strict', html: (h) => `${h}${DRAWING}` };
-  return [...corpus, ...layout, menu, dots, figure, guided];
+  return [...corpus, ...layout, menu, dots, figure, guided, compact];
 }
 
 /** The documents every fixture appearance is run on: between them every chrome piece, mark, card, table and code block. */
@@ -725,6 +740,29 @@ const STATES: readonly State[] = [
       await page.evaluate(() => {
         document.getElementById('rv-room')?.remove();
         window.scrollTo(0, 0);
+      });
+      await frames(page);
+    },
+  },
+  {
+    // The review layout's compact rows, all opened with "Open all rows".
+    name: 'rv-compact-open',
+    reviewOnly: true,
+    async apply(page) {
+      const found = await page.evaluate(() => {
+        const all = document.querySelector('button.rv-all');
+        if (!(all instanceof HTMLElement)) return false;
+        all.click();
+        return true;
+      });
+      if (!found) return false;
+      await frames(page);
+      return page.evaluate(() => document.querySelector('button.rv-all[aria-pressed="true"]') !== null && document.querySelector('tr.rv-open') !== null);
+    },
+    async clear(page) {
+      await page.evaluate(() => {
+        const all = document.querySelector('button.rv-all[aria-pressed="true"]');
+        if (all instanceof HTMLElement) all.click();
       });
       await frames(page);
     },
@@ -1379,14 +1417,14 @@ describeBrowsers((browser) => {
         'corpus/spec-template', 'layout/core/editorial', 'layout/rail/drawer', 'layout/jump/dialogs',
         'layout/core/tables', 'layout/blocks/filter', 'layout/blocks/code', 'synthetic/figure',
         ...(layout === 'editorial' ? ['layout/ids/rules', 'layout/plans/plan'] : []),
-        ...(layout === 'review' ? ['layout/changes/strip', 'layout/rail/marks-index', 'layout/cards/xrefs', 'layout/ids/id-table', 'layout/plans/plan'] : []),
+        ...(layout === 'review' ? ['layout/changes/strip', 'layout/rail/marks-index', 'layout/cards/xrefs', 'layout/ids/id-table', 'layout/plans/plan', 'synthetic/compact'] : []),
         ...(layout === 'guided' ? ['layout/links/first-mention', 'layout/cards/xrefs', 'synthetic/guided'] : []),
       ];
       const docs = DOCS.filter((doc) => ids.includes(doc.id));
       const required = [
         'rest', 'selection', 'jump', 'figure-overlay', 'figure-tool', 'narrow', 'toc-drawer',
         ...(layout === 'editorial' ? ['short-headlines'] : []),
-        ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines', 'rv-pressed', 'rv-changed'] : []),
+        ...(layout === 'review' ? ['xcard', 'keys', 'short-headlines', 'rv-pressed', 'rv-changed', 'rv-compact-open'] : []),
         ...(layout === 'guided' ? ['tcard', 'gd-folded', 'gd-open', 'gd-lens'] : []),
       ];
       const states = [...required, 'hover', 'focus-visible'];

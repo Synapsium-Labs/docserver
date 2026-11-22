@@ -97,6 +97,100 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  const CELL = 'A long cell that runs over several lines of the table, so that the row is clipped until the reader opens it, and says enough to need it.';
+  const COMPACT = (rows: number, extra = ''): string => `# Title
+
+## 1. First
+
+The decision D3 is the one to read.
+
+## 2. Decisions
+
+| ID | Decision | Why |
+| --- | --- | --- |
+${Array.from({ length: rows }, (_, i) => `| D${String(i + 1)} | ${CELL} ${CELL} ${i === 2 ? extra : ''} | ${CELL} |`).join('\n')}
+
+## 3. Last
+
+Text.
+`;
+  const openCompact = (width = 1280, touch?: boolean, options: Readonly<Record<string, unknown>> = {}, rows = 7, extra = '') =>
+    openDoc(COMPACT(rows, extra), options, { browser, layout: 'review', viewport: { width, height: 900 }, ...(touch === undefined ? {} : { hasTouch: touch }) });
+
+  it('clips long rows, opens one with its button, and all with Open all rows', async () => {
+    const doc = await openCompact();
+    try {
+      const { page } = doc;
+      await page.locator('tr.rv-clipped').first().waitFor();
+      expect(await page.locator('tbody tr.rv-clipped').count()).toBe(7);
+      const first = page.locator('tbody tr').first();
+      const clipped = await first.locator('td .cc').nth(1).evaluate((el) => el.clientHeight);
+      const rx = first.locator('button.rx');
+      expect(await rx.isVisible()).toBe(true);
+      await rx.focus();
+      await page.keyboard.press('Enter');
+      expect(await rx.getAttribute('aria-expanded')).toBe('true');
+      expect(await first.locator('td .cc').nth(1).evaluate((el) => el.clientHeight)).toBeGreaterThan(clipped);
+      await page.locator('button.rv-all').click();
+      expect(await page.locator('tbody tr.rv-open').count()).toBe(7);
+      await page.locator('button.rv-all').click();
+      expect(await page.locator('tbody tr.rv-open').count()).toBe(0);
+    } finally { await doc.close(); }
+  });
+
+  it('clips nothing on a phone, where rows stack as cards', async () => {
+    const doc = await openCompact(412);
+    try {
+      await doc.page.locator('.table-wrapper.rv-compact').waitFor();
+      expect(await doc.page.locator('tr.rv-clipped, .cc.over').count()).toBe(0);
+      expect(await doc.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    } finally { await doc.close(); }
+  });
+
+  it('the filter still matches text a clip hides, and a preview card still copies the cell', async () => {
+    const doc = await openCompact(1280, undefined, {}, 12, 'zebra');
+    try {
+      const { page } = doc;
+      await page.locator('.tbl-tools input').fill('zebra');
+      expect(await page.locator('tbody tr:visible').count()).toBe(1);
+      await page.locator('.tbl-tools input').fill('');
+      const chip = page.locator('h2[id="1-first"] ~ p a.xref', { hasText: 'D3' }).first();
+      await chip.focus();
+      const card = page.locator('.xcard.open');
+      await card.waitFor();
+      expect(await card.innerText()).toContain('zebra');
+      expect(await card.locator('button').count()).toBe(0);
+    } finally { await doc.close(); }
+  });
+
+  it('the row button and Open all rows keep the 44 px touch floor and take the hosted control row under a fine pointer', async () => {
+    const touch = await openCompact(1280, true, { appearance: { skin: { controlRow: '56px' } } });
+    try {
+      await touch.page.locator('tr.rv-clipped').first().waitFor();
+      expect((await touch.page.locator('button.rv-all').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await touch.page.locator('tbody tr button.rx').first().boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    } finally { await touch.close(); }
+    for (const height of [40, 56]) {
+      const fine = await openCompact(1280, false, { appearance: { skin: { controlRow: `${height}px` } } });
+      try {
+        await fine.page.locator('tr.rv-clipped').first().waitFor();
+        expect((await fine.page.locator('button.rv-all').boundingBox())!.height, `controlRow ${height}px`).toBe(height);
+        expect((await fine.page.locator('tbody tr button.rx').first().boundingBox())!.height, `row button ${height}px`).toBe(height);
+      } finally { await fine.close(); }
+    }
+  });
+
+  it('the rail\'s waiting link keeps its own border and padding against the shared rail\'s link rule', async () => {
+    const doc = await open();
+    try {
+      const got = await doc.page.locator('.toc-contents > a.rv-wait').evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { display: s.display, border: s.borderLeftWidth, pad: s.paddingLeft };
+      });
+      expect(got).toEqual({ display: 'flex', border: '1px', pad: '9px' });
+    } finally { await doc.close(); }
+  });
+
   it('the bar\'s Skip to the text link lands on the card\'s title', async () => {
     const doc = await open();
     try {
