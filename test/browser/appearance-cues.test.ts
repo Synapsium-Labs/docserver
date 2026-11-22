@@ -271,27 +271,36 @@ describeBrowsers((browser) => {
     }
   }, ['default', 'review']);
 
-  it('painted geometry: a changed block, item and row (wide) paint two 2px runs and a 2px gap; an attention mark paints one 3px run', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  // Test 10's painted-geometry rows, for each layout that draws what they measure. The test puts the reader's own classes on the
+  // document's blocks, so what is measured is the layout's stylesheet over them; a layout takes the part its feature list makes
+  // those classes for: `attention` marks table rows (default, guided), `plans` marks task items (default, editorial, review) and
+  // `rules` marks rule paragraphs (default, editorial, review); only the default builds `changes`, which makes the changed run.
+  // Classic builds none of them (its list is editorial's title block, tables, status, code, figures, Contents, jump and diagrams).
+  const ATTENTION: Readonly<Record<string, readonly ('rule' | 'item' | 'row')[]>> = {
+    default: ['rule', 'item', 'row'], editorial: ['rule', 'item'], review: ['rule', 'item'], guided: ['row'],
+  };
+  sharedCue('painted geometry: a changed block, item and row (wide) paint two 2px runs and a 2px gap; an attention mark paints one 3px run', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       await mark(doc.page);
-      const at = (s: string): Locator => doc.page.locator(`${rootSel} ${s}`).first();
-      const targets = {
-        block: doc.page.locator(`${rootSel} > p.chg`).first(),
-        item: at('li.chg'),
-        row: at('tr.chg > td:first-child'),
-      };
-      for (const [name, el] of Object.entries(targets)) {
-        const runs = await runsThrough(doc.page, el, HUE.mark, 40, name === 'item' ? 2 : 8);
-        expect(widths(runs), `${name}: ${JSON.stringify(runs)}`).toEqual([2, 2]);
-        expect(Math.abs((runs[1] as Run).edge - (runs[0] as Run).edge - 4), `${name}: the gap`).toBeLessThan(0.5);
+      const at = (sel: string): Locator => doc.page.locator(`${rootSel} ${sel}`).first();
+      if (layout === 'default') {
+        const targets = {
+          block: doc.page.locator(`${rootSel} > p.chg`).first(),
+          item: at('li.chg'),
+          row: at('tr.chg > td:first-child'),
+        };
+        for (const [name, el] of Object.entries(targets)) {
+          const runs = await runsThrough(doc.page, el, HUE.mark, 40, name === 'item' ? 2 : 8);
+          expect(widths(runs), `${name}: ${JSON.stringify(runs)}`).toEqual([2, 2]);
+          expect(Math.abs((runs[1] as Run).edge - (runs[0] as Run).edge - 4), `${name}: the gap`).toBeLessThan(0.5);
+        }
       }
-      const attention = {
-        rule: at('p.rule.attn'),
-        item: at('li.task-list-item.attn'),
-        row: at('tr.attn > td:first-child'),
-        waiting: at('.callout.waiting'),
-      };
+      const where = { rule: 'p.rule.attn', item: 'li.task-list-item.attn', row: 'tr.attn > td:first-child' } as const;
+      const attention: Record<string, Locator> = {};
+      for (const kind of ATTENTION[layout] ?? []) attention[kind] = at(where[kind]);
+      if (layout === 'default') attention['waiting'] = at('.callout.waiting');
+      expect(Object.keys(attention).length, `${layout} draws some attention mark`).toBeGreaterThan(0);
       for (const [name, el] of Object.entries(attention)) {
         const runs = await runsThrough(doc.page, el, HUE.mark);
         expect(widths(runs), `attention ${name}: ${JSON.stringify(runs)}`).toEqual([3]);
@@ -299,7 +308,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'editorial', 'review', 'guided']);
 
   for (const layout of ['classic', 'editorial', 'review', 'guided'] as const) {
     it(`${layout}: a real waiting callout has a painted 3px cue even when the status colours collide`, async () => {
@@ -326,20 +335,23 @@ describeBrowsers((browser) => {
     });
   }
 
-  it('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async () => {
-    const doc = await open(browser, { appearance: COLLISION, width: 390 });
+  // The phone card: an attention card where `attention` marks rows (default, guided); the changed card only where `changes` does.
+  sharedCue('painted geometry on a phone: a changed card paints two 2px runs, an attention card one 3px run', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, width: 390, layout });
     try {
       await mark(doc.page);
       expect(await doc.page.locator(`${rootSel} .table-wrapper.stack`).count()).toBeGreaterThan(0);
-      const changed = await runsThrough(doc.page, doc.page.locator(`${rootSel} .stack tr.chg`).first(), HUE.mark, 12, 8);
-      expect(widths(changed), JSON.stringify(changed)).toEqual([2, 2]);
-      expect(Math.abs((changed[1] as Run).edge - (changed[0] as Run).edge - 4)).toBeLessThan(0.5);
+      if (layout === 'default') {
+        const changed = await runsThrough(doc.page, doc.page.locator(`${rootSel} .stack tr.chg`).first(), HUE.mark, 12, 8);
+        expect(widths(changed), JSON.stringify(changed)).toEqual([2, 2]);
+        expect(Math.abs((changed[1] as Run).edge - (changed[0] as Run).edge - 4)).toBeLessThan(0.5);
+      }
       const attn = await runsThrough(doc.page, doc.page.locator(`${rootSel} .stack tr.attn`).first(), HUE.mark, 12, 8);
       expect(widths(attn), JSON.stringify(attn)).toEqual([3]);
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'guided']);
 
   it('the 2px gap of a changed block shows the ground it sits on: bg in the page, surface in the summary box, wait-soft in a waiting callout', async () => {
     const doc = await open(browser, { appearance: PHOSPHOR_COLOURS() });
@@ -499,8 +511,9 @@ describeBrowsers((browser) => {
     }
   }, ['default', 'review', 'guided']);
 
-  it('a glossary table\'s term cell is its row\'s first cell, at a computed weight of 600', async () => {
-    const doc = await open(browser, { appearance: COLLISION });
+  // The glossary is built by the default and guided layouts; classic, editorial and review have no `glossary` in their lists.
+  sharedCue('a glossary table\'s term cell is its row\'s first cell, at a computed weight of 600', async (layout) => {
+    const doc = await open(browser, { appearance: COLLISION, layout });
     try {
       const got = await doc.page.evaluate((sel) => {
         const cell = document.querySelector(`${sel} td.termcell`) as HTMLTableCellElement;
@@ -510,7 +523,7 @@ describeBrowsers((browser) => {
     } finally {
       await doc.close();
     }
-  });
+  }, ['default', 'guided']);
 
   sharedCue('quick jump\'s selected row has an inset 2px accent bar, and an unselected row has none', async (layout) => {
     const doc = await open(browser, { appearance: COLLISION, layout });
@@ -1083,6 +1096,49 @@ describeBrowsers((browser) => {
       await plain.close();
     }
   }, ['default', 'review']);
+
+  // The guided layout's rail is the Contents-only one (no tabs, no Index): its panel's rows are `.doc-toc a` and its heading `.toc-title`.
+  it('guided: the contents drawer takes controlRow and the section type only as a drawer, never as the wide column', async () => {
+    const skin = { controlRow: '56px', sectionSize: '13px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'none', sectionFamily: 'mono' };
+    const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
+      d.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        const c = getComputedStyle(root.querySelector('.doc-toc .toc-title') as Element);
+        return { row: getComputedStyle(root.querySelector('.doc-toc a') as Element).minHeight, close: getComputedStyle(root.querySelector('.doc-toc .toc-close') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, mono: String(c.fontFamily.includes('monospace')) };
+      }, rootSel);
+    const column = await open(browser, { layout: 'guided', appearance: { mode: 'dark', skin }, width: 1440 });
+    const drawer = await open(browser, { layout: 'guided', appearance: { mode: 'dark', skin }, width: 1000 });
+    try {
+      expect(await probe(column), 'the wide column').toEqual({ row: '0px', close: '0px', size: '11.5px', weight: '700', tracking: '0.805px', transform: 'uppercase', mono: 'false' });
+      await drawer.page.locator(`${rootSel} .toc-btn`).click();
+      expect(await probe(drawer), 'the open drawer').toEqual({ row: '56px', close: '56px', size: '13px', weight: '500', tracking: '1.04px', transform: 'none', mono: 'true' });
+    } finally {
+      await column.close();
+      await drawer.close();
+    }
+  });
+
+  it('guided: a drawer left open and then widened does not style the docked rail: a stale toc-open keeps the column\'s values', async () => {
+    const skin = { controlRow: '56px', sectionSize: '13px', sectionWeight: '500', sectionTracking: '0.08em', sectionCase: 'none', sectionFamily: 'mono' };
+    const probe = (d: OpenedDoc): Promise<Record<string, string>> =>
+      d.page.evaluate((sel) => {
+        const root = document.querySelector(sel) as HTMLElement;
+        const c = getComputedStyle(root.querySelector('.doc-toc .toc-title') as Element);
+        return { row: getComputedStyle(root.querySelector('.doc-toc a') as Element).minHeight, size: c.fontSize, weight: c.fontWeight, tracking: c.letterSpacing, transform: c.textTransform, mono: String(c.fontFamily.includes('monospace')) };
+      }, rootSel);
+    const hosted = await open(browser, { layout: 'guided', appearance: { mode: 'dark', skin }, width: 1000 });
+    const plain = await open(browser, { layout: 'guided', appearance: { mode: 'dark' }, width: 1440 });
+    try {
+      await hosted.page.locator(`${rootSel} .toc-btn`).click();
+      await hosted.page.setViewportSize({ width: 1440, height: 1000 });
+      const baseline = await probe(plain);
+      expect(await probe(hosted)).toEqual(baseline);
+      expect(baseline.row).toBe('0px');
+    } finally {
+      await hosted.close();
+      await plain.close();
+    }
+  });
 
   it('popShadow replaces the shadow of quick jump, the keys sheet and the contents drawer, and the verdict\'s radii reach their boxes', async () => {
     const shadow = 'rgb(95, 105, 124) 0px 0px 0px 3px';

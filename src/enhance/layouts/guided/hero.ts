@@ -60,7 +60,8 @@ export function build(ctx: FeatureContext): void {
   const holds = [sections > 0 ? plural(sections, 'section') : '', figures > 0 ? plural(figures, 'figure') : '', tables > 0 ? plural(tables, 'table') : ''].filter((s) => s !== '');
   if (holds.length > 0) glance.append(item('Contains', doc.createTextNode(holds.join(' · '))));
   const heading = ctx.page.waitBox?.querySelector('h3') ?? null;
-  if (heading !== null) {
+  // A box that holds no list has nothing to count (as the review layout's rail does).
+  if (heading !== null && ctx.page.waiting.length > 0) {
     const n = ctx.page.waiting.length;
     glance.append(chrome(doc, 'a', { className: 'gd-gl gd-wait', attrs: { href: `#${heading.id}` } }, [
       chrome(doc, 'span', { className: 'gd-gk', text: 'Waiting on you' }),

@@ -365,6 +365,20 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('touch keeps the 44 px floor on the drawer\'s links and buttons, whatever the hosted control row says', async () => {
+    const doc = await open({ appearance: { skin: { controlRow: '24px' } } }, { width: 412, height: 915, touch: true });
+    try {
+      const { page } = doc;
+      await page.getByRole('button', { name: 'Contents' }).click();
+      const heights = (selector: string): Promise<number[]> => page.locator(selector).evaluateAll((els) => els.filter((el) => el.getClientRects().length > 0).map((el) => el.getBoundingClientRect().height));
+      for (const selector of ['.toc-open .doc-toc a', '.toc-open .toc-head button']) {
+        const found = await heights(selector);
+        expect(found.length, selector).toBeGreaterThan(0);
+        for (const h of found) expect(h, selector).toBeGreaterThanOrEqual(44);
+      }
+    } finally { await doc.close(); }
+  });
+
   it('a fine pointer takes the hosted control row on the fold buttons', async () => {
     for (const height of [40, 56]) {
       const doc = await open({ ...GUIDED, appearance: { skin: { controlRow: `${height}px` } } }, { width: 1280, height: 800, touch: false });

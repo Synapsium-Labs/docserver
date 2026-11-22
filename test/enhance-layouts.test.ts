@@ -235,11 +235,22 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
     expect(() => checkScope(`@media screen { ${scope} .doc-toc a:hover, .doc-toc a.active { color: var(--text); } }`, 'classic')).toThrow('.doc-toc a.active');
   });
 
+  /** The named colours a declaration's value uses (a list of the usual names; `transparent`, `currentColor` and `inherit` are none). */
+  const NAMED = 'black|white|red|green|blue|yellow|orange|purple|pink|gray|grey|silver|gold|brown|cyan|magenta|teal|navy|maroon|olive|lime|aqua|fuchsia|indigo|violet|crimson|coral|salmon|tomato|khaki|beige|ivory|lavender|orchid|plum|tan|turquoise|azure|chocolate|firebrick|goldenrod|hotpink|lightblue|lightgray|lightgrey|darkgray|darkgrey|darkblue|darkred|darkgreen|slategray|slategrey|skyblue|steelblue|wheat|snow|linen';
+  const namedColours = (text: string): string[] => Array.from(text.matchAll(new RegExp(`:\\s*[^;{}]*?\\b(${NAMED})\\b`, 'gi')), (m) => (m[1] as string).toLowerCase());
+
+  it('refuses a CSS named colour in a declaration, and allows transparent, currentColor, inherit and the names inside other words', () => {
+    expect(namedColours('a { border-color: red; }')).toEqual(['red']);
+    expect(namedColours('a { color: var(--text); background: linear-gradient(white, var(--bg)); }')).toEqual(['white']);
+    expect(namedColours('a { color: transparent; background: currentColor; border-color: inherit; white-space: nowrap; font-variant-numeric: tabular-nums; }')).toEqual([]);
+  });
+
   for (const layout of OWN) {
     it(`${layout}: every rule is scoped under the root's two marks, with no literal colour, no font and no url`, () => {
       const text = css(layout);
       checkScope(text, layout);
       expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix)\s*\(/i);
+      expect(namedColours(text), `${layout}: a named colour`).toEqual([]);
       expect(text).not.toMatch(/url\(|@font-face|@import|<\/style/i);
       expect(text.includes('\r')).toBe(false);
     });
@@ -944,6 +955,14 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     expect(plain.querySelector('.gd-tools .gd-all')).toBeNull();
   });
 
+  it('shows no waiting link in the glance when the waiting box holds no list: there is nothing to count', async () => {
+    pick.layout = 'guided';
+    const root = mount('# T\n\n## A\n\nx\n\n## B\n\nx\n\n## Where things stand\n\n### Waiting on you\n\nNothing yet.\n');
+    await enhance(root);
+    expect(root.querySelector('.callout.waiting')).not.toBeNull();
+    expect(root.querySelector('.gd-wait')).toBeNull();
+  });
+
   it('keeps the lens buttons in step with a lens a host sets', async () => {
     pick.layout = 'guided';
     const root = mount(SPEC);
@@ -1115,6 +1134,19 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
         expect(got.writes.size, value).toBe(0);
         expect(got.folded, value).toEqual(value.includes('"1-first"') && !value.startsWith('[[') ? ['1. First'] : []);
       }
+    });
+    it('a null value reads as unvisited, which is what the default layout leaves when nothing is folded: a long document gets guided\'s first-visit layers, a short one opens in full', async () => {
+      pick.layout = 'guided';
+      const state = async (md: string, extra: Record<string, string>): Promise<string[]> => {
+        const s = stored({ 'docreader:doc:doc:folds': 'null', ...extra });
+        const root = mount(md);
+        await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+        expect(s.writes.size).toBe(0);
+        return Array.from(root.querySelectorAll('.gd-btn'), (b) => b.getAttribute('aria-expanded') as string);
+      };
+      expect(await state(SPEC.replace(WORDS(340), WORDS(3600)), {})).toEqual(['false', 'false']);
+      expect(await state(SPEC, {})).toEqual(['true', 'true']);
+      expect(await state(SPEC, { 'docreader:ui': '{"layers":"guided"}' })).toEqual(['false', 'false']);
     });
     it('the default layout\'s own fold writes only the ids it owns: an id only guided has a layer for is dropped (a known effect of the shared field)', async () => {
       pick.layout = 'default';
