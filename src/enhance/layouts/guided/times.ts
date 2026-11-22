@@ -11,7 +11,9 @@ import {
   memberContribution,
   type ReadingContribution,
 } from '../../reading.js';
+import { CHROME_ATTR } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
+import { stops } from './sections.js';
 
 /** Words of code a minute under the Product lens: skimmed. */
 const PRODUCT_CODE_RATE = 2000;
@@ -24,6 +26,8 @@ interface Stamped {
 
 interface Held {
   readonly sections: Map<Element, ReadingContribution>;
+  /** The title and the blocks before the first section, which the byline's time counts and no section does. */
+  readonly preamble: ReadingContribution;
   readonly stamped: Stamped[];
 }
 
@@ -48,7 +52,18 @@ export function build(ctx: FeatureContext): void {
     }
     sections.set(u.heading, [prose, code, figures]);
   }
-  const record: Held = { sections, stamped: [] };
+  let prose = 0;
+  let code = 0;
+  let figures = 0;
+  for (const child of Array.from(ctx.root.children)) {
+    if (stops(child)) break;
+    if (child.hasAttribute(CHROME_ATTR)) continue;
+    const [p, c, f] = child.localName === 'h1' ? headingContribution(child) : memberContribution(child);
+    prose += p;
+    code += c;
+    figures += f;
+  }
+  const record: Held = { sections, preamble: [prose, code, figures], stamped: [] };
   (held ??= new WeakMap()).set(ctx, record);
   ctx.journal.defer(ctx.events.on('prefs', () => {
     for (const s of record.stamped) s.node.textContent = s.say(minutesUnder(ctx, s.c));
@@ -60,11 +75,9 @@ export function contributionOf(ctx: FeatureContext, heading: Element): ReadingCo
   return (held?.get(ctx) as Held).sections.get(heading) as ReadingContribution;
 }
 
-/** Every section's contributions, added. */
+/** Every section's contributions and the preamble's, added: the document, as the byline's time counts it (under the lens in force). */
 export function wholeDocument(ctx: FeatureContext): ReadingContribution {
-  let prose = 0;
-  let code = 0;
-  let figures = 0;
+  let [prose, code, figures] = (held?.get(ctx) as Held).preamble;
   for (const [p, c, f] of (held?.get(ctx) as Held).sections.values()) {
     prose += p;
     code += c;

@@ -11,8 +11,11 @@
 // The members are the root's own children, so nothing is wrapped: folding sets hidden="until-found" on each (through the
 // journal, only on a block the author had not hidden), so find-in-page still reaches a folded block and opens its section
 // (`beforematch`), as src/enhance/folds.ts does for the default layout. A jump, a link or a quick-jump hit opens the section
-// that holds its target through the reveal service. The state is the folds' own field, `folds`: the folded sections'
-// ids, so a document read in either layout keeps one answer; an expand or collapse writes the whole list, and the
+// that holds its target through the reveal service. The state is the shared `folds` field (ccrc D-8881: the bootstrap's
+// budget leaves no room for a field of the layout's own): the folded sections' ids, in the shape the default layout reads.
+// It is one field for two layouts, so a section folded in one reads as folded in the other; each layout ignores what it does
+// not own and never rewrites it on a read, and this one keeps every id it does not own in each write. Only the reader's own
+// fold, unfold, Expand all or Collapse all writes (a reveal or a find never does, even when something was remembered). The
 // reader's choice of layers is the UI memory's `layers` ('full' or 'guided'), which decides a document with nothing
 // remembered: with none, one of at least FULL_BELOW minutes opens guided and a shorter one in full.
 //
@@ -20,9 +23,9 @@
 // lens (the reader's `lens` pref: Product quiets implementation detail, Engineering is "all") and, with layers, the two
 // buttons. Only with the bar. Print shows everything the reader had folded.
 //
-// Built after `attention` (the lens's classes and peek bars) and `scroll`. A page that is not a document, or a host that
-// asked for no folds, gets no layers and no lens control.
-import { CHROME_ATTR, chrome } from '../../journal.js';
+// Built after `attention` (the lens's classes and peek bars) and `scroll`. A page that is not a document gets neither; a host
+// that asked for no folds gets the lens and no layers.
+import { chrome } from '../../journal.js';
 import { formatMinutes, memberContribution, words, type ReadingContribution } from '../../reading.js';
 import type { FeatureContext } from '../../types.js';
 import { bare, isStand, membersOf, stops } from './sections.js';
@@ -142,7 +145,7 @@ export function build(ctx: FeatureContext): void {
     if (l.folded) {
       // Its members, its own end row and the peek bars of its members: never what another step put at the root's end.
       for (let n: Element | null = l.first; n !== null && !stops(n); n = n.nextElementSibling) {
-        const mine = l.members.has(n) || n === l.endRow || (n.classList.contains('peek-bar') && n.hasAttribute(CHROME_ATTR) && l.members.has(n.previousElementSibling as Element));
+        const mine = l.members.has(n) || n === l.endRow || (n.classList.contains('peek-bar') && l.members.has(n.previousElementSibling as Element));
         if (mine && !n.hasAttribute('hidden')) {
           journal.setAttribute(n, 'hidden', 'until-found');
           l.hid.add(n);

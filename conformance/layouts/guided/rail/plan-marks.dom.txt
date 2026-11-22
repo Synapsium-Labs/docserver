@@ -10,7 +10,6 @@ nav .doc-toc chrome aria-label="Contents"
     li chrome
       a chrome
         "1. Work"
-        span .gd-rt chrome
       ul chrome
         li chrome
           a chrome
@@ -18,11 +17,9 @@ nav .doc-toc chrome aria-label="Contents"
     li chrome
       a chrome
         "2. Notes"
-        span .gd-rt chrome
     li chrome
       a chrome
         "3. Close"
-        span .gd-rt chrome
 h1
   "Delivery plan"
 p

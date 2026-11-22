@@ -26,9 +26,12 @@ export function membersOf(heading: Element): Element[] {
   return out;
 }
 
-/** A node of the reader's chrome with none of the document in it: what a step appends at the root's end. */
+/**
+ * A node of the reader's chrome with none of the document in it: what a step appends at the root's end. The lens's peek bar
+ * is the exception: it belongs to the block before it, so it stays a member.
+ */
 function isTail(node: Element): boolean {
-  return node.hasAttribute(CHROME_ATTR) && node.querySelector(':not([data-docreader-chrome])') === null;
+  return node.hasAttribute(CHROME_ATTR) && !node.classList.contains('peek-bar') && node.querySelector(':not([data-docreader-chrome])') === null;
 }
 
 /** What ends a section: a level-2 heading, or a box that holds one ("In short"). */

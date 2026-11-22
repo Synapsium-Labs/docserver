@@ -691,7 +691,7 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     const root = mount(SPEC.replace(WORDS(340), WORDS(600)));
     await enhance(root);
     const times = Array.from(root.querySelectorAll('.doc-toc > ul > li > a')).map((a) => [a.getAttribute('href'), a.querySelector('.gd-rt')?.textContent ?? null]);
-    expect(times).toEqual([['#in-short', ''], ['#1-first', ''], ['#2-second', ''], ['#3-third', '3 min'], ['#where-things-stand', '']]);
+    expect(times).toEqual([['#in-short', null], ['#1-first', null], ['#2-second', null], ['#3-third', '3 min'], ['#where-things-stand', null]]);
     const bare = mount(SPEC);
     await enhance(bare, { chrome: { rail: false } });
     expect(bare.querySelector('.doc-toc, .gd-rt')).toBeNull();
@@ -1039,6 +1039,91 @@ describe('guided: the hero, the layers, the reading tools and the times in Conte
     await enhance(root);
     const marked = Array.from(root.querySelectorAll('.tech-text'), (e) => `${e.localName}${e.closest('.short') !== null ? ' short' : ''}`);
     expect(marked).toEqual(['p', 'li', 'li']);
+  });
+
+  it('keeps the peek bars the lens made before the layers: a section ending in a long code block, Product stored at load, folds with its bar and its end row after it', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}', 'docreader:prefs': '{"lens":"product"}' });
+    const code = '```ts\nconst a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;\n```';
+    const root = mount(mini(`${WORDS(300)}\n\n${code}`));
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    const bars = Array.from(root.querySelectorAll('.peek-bar'));
+    expect(bars.length).toBe(1);
+    expect(bars[0]?.getAttribute('hidden')).toBe('until-found');
+    expect(bars[0]?.nextElementSibling?.classList.contains('gd-end-row')).toBe(true);
+    // The same at the end of the document.
+    const last = mount(`# T\n\n## A\n\nx\n\n## B\n\nx\n\n## C\n\nx\n\n## D\n\nOne.\n\nTwo.\n\n${WORDS(300)}\n\n${code}\n`);
+    await enhance(last, { storage: s.storage, storageKey: s.storageKey });
+    const tail = last.querySelector('.peek-bar') as HTMLElement;
+    expect(tail.getAttribute('hidden')).toBe('until-found');
+    expect(tail.nextElementSibling?.classList.contains('gd-end-row')).toBe(true);
+  });
+
+  it('keeps a rule that ends a section as a member: a section ending in a thematic break folds it too', async () => {
+    pick.layout = 'guided';
+    const s = stored({ 'docreader:ui': '{"layers":"guided"}' });
+    const root = mount(`# T\n\n## A\n\nx\n\n## B\n\nx\n\n## C\n\nx\n\n## D\n\nOne.\n\nTwo.\n\n${WORDS(300)}\n\n---\n`);
+    await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+    expect(root.querySelector('hr')?.getAttribute('hidden')).toBe('until-found');
+  });
+
+  it('counts the title and what comes before the first section in the whole document\'s time, as the byline does', async () => {
+    pick.layout = 'guided';
+    const root = mount(`# T\n\n${WORDS(460)}\n\n## A\n\nx\n\n## B\n\nx\n\n## C\n\nx\n`);
+    await enhance(root);
+    expect(root.querySelector('.gd-glance .gd-gl')?.textContent).toBe('Whole document2 min');
+  });
+
+  it('leaves the reader\'s own chrome out of the whole document\'s time: a long eyebrow is not reading', async () => {
+    pick.layout = 'guided';
+    const root = mount('# T\n\n## A\n\nx\n\n## B\n\nx\n\n## C\n\nx\n');
+    await enhance(root, { info: { frontList: [{ key: 'type', list: false, vals: [WORDS(460)] }] } });
+    expect(root.querySelector('.eyebrow')).not.toBeNull();
+    expect(root.querySelector('.gd-glance .gd-gl')?.textContent).toBe('Whole document1 min');
+  });
+
+  it('skips a code block in a list item\'s own text', async () => {
+    pick.layout = 'guided';
+    const root = mount(`# T\n\n## A\n\n- An item with some words of its own\n\n  \`\`\`ts\n  ${WORDS(80)}\n  \`\`\`\n\n## B\n\nx\n\n## C\n\nx\n`);
+    await enhance(root);
+    expect(root.querySelector('.tech-text')).toBeNull();
+  });
+
+  describe('the shared folds field, read in each direction (ccrc D-8881)', () => {
+    const HOSTILE = ['null', '7', '"text"', '{"a":1}', '[5,null,{"x":1},["n"],"1-first","no-such-section"]', '[]', '[["1-first"]]'];
+    const read = async (layout: string, value: string): Promise<{ folded: string[]; writes: Map<string, string | null> }> => {
+      pick.layout = layout;
+      const s = stored({ 'docreader:doc:doc:folds': value, 'docreader:ui': '{"layers":"full"}' });
+      const root = mount(SPEC);
+      await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+      const folded = layout === 'guided'
+        ? Array.from(root.querySelectorAll('.gd-btn[aria-expanded="false"]'), (b) => (b.getAttribute('aria-label') ?? '').replace(/^.*: /, ''))
+        : Array.from(root.querySelectorAll('h2.folded'), (h) => h.getAttribute('aria-label') ?? '');
+      return { folded, writes: s.writes };
+    };
+    it('guided reads whatever the default layout (or anything) wrote: no throw, unknown entries ignored, nothing written by the read', async () => {
+      for (const value of HOSTILE) {
+        const got = await read('guided', value);
+        expect(got.writes.size, value).toBe(0);
+        const known = value.includes('"1-first"') && value.startsWith('[5');
+        expect(got.folded, value).toEqual(known ? ['First'] : []);
+      }
+    });
+    it('the default layout reads whatever guided wrote (its own ids, foreign ids, non-strings): no throw, unknown entries ignored, nothing written by the read', async () => {
+      for (const value of [...HOSTILE, '["1-first","guided-only-id"]']) {
+        const got = await read('default', value);
+        expect(got.writes.size, value).toBe(0);
+        expect(got.folded, value).toEqual(value.includes('"1-first"') && !value.startsWith('[[') ? ['1. First'] : []);
+      }
+    });
+    it('the default layout\'s own fold writes only the ids it owns: an id only guided has a layer for is dropped (a known effect of the shared field)', async () => {
+      pick.layout = 'default';
+      const s = stored({ 'docreader:doc:doc:folds': '["3-third","gone"]' });
+      const root = mount(SPEC);
+      await enhance(root, { storage: s.storage, storageKey: s.storageKey });
+      (root.querySelector('h2[id="1-first"] .h-fold') as HTMLElement).click();
+      expect(JSON.parse(s.writes.get(FOLDS_KEY) as string)).toEqual(['1-first', '3-third']);
+    });
   });
 
   it('has direction C\'s features and none of the default\'s that direction C lacks (the Index tab, IDs and their previews, the strip, marks, changes, the keys sheet, the settings menu)', async () => {

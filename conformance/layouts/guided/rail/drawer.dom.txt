@@ -12,15 +12,12 @@ nav .doc-toc chrome aria-label="Contents"
     li .open chrome
       a .active chrome aria-current="location"
         "1. Start"
-        span .gd-rt chrome
     li chrome
       a chrome
         "2. Middle"
-        span .gd-rt chrome
     li chrome
       a chrome
         "3. End"
-        span .gd-rt chrome
 h1
   "Drawer notes"
 h2 aria-label="1. Start"

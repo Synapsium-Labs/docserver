@@ -10,15 +10,12 @@ nav .doc-toc chrome aria-label="Contents"
     li chrome
       a chrome
         "__proto__"
-        span .gd-rt chrome
     li chrome
       a chrome
         "constructor"
-        span .gd-rt chrome
     li chrome
       a chrome
         "3. Stable"
-        span .gd-rt chrome
 h1
   "Hostile marks"
 h2 aria-label="__proto__"

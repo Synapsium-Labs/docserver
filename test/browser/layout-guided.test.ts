@@ -247,6 +247,23 @@ describeBrowsers((browser) => {
     } finally { await doc.close(); }
   });
 
+  it('technical prose is quieter under Product and as it was under Engineering', async () => {
+    const tech = 'Run `aaa bbb ccc ddd` and `eee fff ggg` then `hhh iii` today ok, thanks.';
+    const doc = await open({}, { markdown: `# Title\n\n## A\n\n${tech}\n\nPlain prose of the same sort of length, with no code in it at all, nothing.\n\n## B\n\nx\n\n## C\n\nx\n` });
+    try {
+      const { page } = doc;
+      const probe = (): Promise<string[]> => page.evaluate(() => Array.from(document.querySelectorAll('h2[id="a"] ~ p')).slice(0, 2).map((p) => `${getComputedStyle(p).fontSize} ${getComputedStyle(p).color}`));
+      const before = await probe();
+      expect(before[0]).toBe(before[1]);
+      await page.getByRole('button', { name: 'Product', exact: true }).click();
+      const quiet = await probe();
+      expect(quiet[1]).toBe(before[1]);
+      expect(quiet[0]).not.toBe(before[0]);
+      await page.getByRole('button', { name: 'Engineering', exact: true }).click();
+      expect(await probe()).toEqual(before);
+    } finally { await doc.close(); }
+  });
+
   it('a peek bar made by the lens after the sections folded stays out of sight with its folded section', async () => {
     const doc = await open(GUIDED);
     try {
@@ -264,8 +281,8 @@ describeBrowsers((browser) => {
       const times = (await doc.page.locator('.doc-toc > ul > li > a .gd-rt').allInnerTexts()).filter((t) => t !== '');
       expect(times.length).toBeGreaterThan(0);
       for (const t of times) expect(t).toMatch(/^\d+ min$/);
-      // A section under a minute shows no time and takes no room for one.
-      expect(await doc.page.locator('.doc-toc > ul > li > a .gd-rt:empty').first().evaluate((el) => getComputedStyle(el).display)).toBe('none');
+      // A section under a minute has no span at all.
+      expect(await doc.page.locator('.doc-toc > ul > li > a .gd-rt:empty').count()).toBe(0);
     } finally { await doc.close(); }
   });
 
