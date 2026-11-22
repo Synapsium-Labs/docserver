@@ -7,7 +7,7 @@ p
 "2026-10-21Draft"
 h2
   "1. Detail"
-div .tech
+div
   table
     thead
       tr
@@ -22,7 +22,7 @@ div .tech
         td
           "One"
         td
-          code .path
+          code
             "src/item.ts"
         td
           code
@@ -31,7 +31,7 @@ div .tech
         td
           "Two"
         td
-          code .path
+          code
             "src/list.ts"
         td
           code
@@ -40,11 +40,8 @@ div .tech
         td
           "Three"
         td
-          code .path
+          code
             "src/view.ts"
         td
           code
             "boolean"
-div .peek-bar chrome
-  button .peek-btn chrome aria-expanded="false"
-    "Show engineering detail - 3 rows"

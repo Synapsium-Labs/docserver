@@ -7,7 +7,7 @@ p
 "2026-10-20Draft"
 h2
   "Glossary"
-div .glossary
+div
   table
     thead
       tr
@@ -17,62 +17,45 @@ div .glossary
           "Meaning"
     tbody
       tr
-        td .termcell
+        td
           "__proto__"
         td
           "A name a plain object would read as its "…
       tr
-        td .termcell
+        td
           "constructor"
         td
           "A name every object answers"
       tr
-        td .termcell
+        td
           "toString"
         td
           "Another one"
       tr
-        td .termcell
+        td
           "C++ (cpp)"
         td
           "A name with pattern characters, and its "…
       tr
-        td .termcell
+        td
           "a.b*c"
         td
           "Dots and a star, matched as written"
       tr
-        td .termcell
+        td
           "R12"
         td
           "An ID, never a term"
       tr
-        td .termcell
+        td
           "AB-CD"
         td
           "A rule ID, never a term"
 h2
   "1. Mentions"
 p
-  "The"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "__proto__"
-  "link, the"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "constructor"
-  "link and the"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "toString"
-  "link are ordinary terms."
+  "The __proto__ link, the constructor link"…
 p
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "C++"
-  "links, and so does"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "cpp"
-  ", its alias. The"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "a.b*c"
-  "name links, and aXbbc does not."
+  "C++ links, and so does cpp, its alias. T"…
 p
   "R12 and AB-CD stay text."

@@ -29,6 +29,8 @@ nav .doc-toc chrome aria-label="Contents and index"
               "✓"
   div .toc-index.toc-panel chrome role="tabpanel" hidden=""
   div .toc-foot chrome
+    span .rv-foot-read chrome
+      "2 of 3 read"
     button .keys-btn.linkish chrome
       "Keys"
 h1

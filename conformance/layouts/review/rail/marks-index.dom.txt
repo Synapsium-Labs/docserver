@@ -52,6 +52,8 @@ nav .doc-toc chrome aria-label="Contents and index"
             "A second decision"
           span .dot.none chrome aria-hidden="true"
   div .toc-foot chrome
+    span .rv-foot-read chrome
+      "1 of 3 read"
     button .keys-btn.linkish chrome
       "Keys"
 h1

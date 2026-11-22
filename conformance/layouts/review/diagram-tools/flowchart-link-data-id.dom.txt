@@ -51,14 +51,12 @@ figure
         g
           path
         g
-          g .dnode
+          g
             g
               foreignObject
                 div
                   span
                     p
-            rect .dn-ring chrome
-            circle .dn-dot chrome
         g
           g
             rect

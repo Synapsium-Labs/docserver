@@ -8,31 +8,16 @@ p
 h2
   "In short"
 p
-  "The"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "fold"
-  "and the"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "read mark"
-  "are each linked once in this box."
+  "The fold and the read mark are each link"…
 h2
   "1. Reading"
 p
-  "A"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "fold"
-  "hides a section, and the next fold here "…
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "read mark"
-  "is linked; a second read mark is not."
+  "A fold hides a section, and the next fol"…
 p
   "A new paragraph in the same section: the"…
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "marker"
-  ". Only the marker is new here."
 h2
   "2. Words used here"
-div .glossary
+div
   table
     thead
       tr
@@ -42,44 +27,29 @@ div .glossary
           "What it says"
     tbody
       tr
-        td .termcell
+        td
           "Fold"
         td
           "A section shown as its heading only; a f"…
       tr
-        td .termcell
+        td
           "Read mark (marker)"
         td
           "A mark on a section the reader has read"
       tr
-        td .termcell
+        td
           "Box, Pill and Tag"
         td
           "Small labels, each a name matched as spe"…
 h2
   "3. Another section"
 p
-  "A"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "fold"
-  ", a"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "read mark"
-  "and a"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "marker"
-  "are linked again: a new section starts o"…
+  "A fold, a read mark and a marker are lin"…
 p
-  "A"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "Box"
-  "and a"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "Tag"
-  "are linked; a box and a tag in lower cas"…
+  "A Box and a Tag are linked; a box and a "…
 h2
   "4. A glossary by its headers"
-div .glossary
+div
   table
     thead
       tr
@@ -89,12 +59,9 @@ div .glossary
           "Meaning"
     tbody
       tr
-        td .termcell
+        td
           "Lantern"
         td
           "A light, defined in a table headed Term "…
 p
-  "A"
-  a .term chrome aria-expanded="false" aria-haspopup="dialog"
-    "lantern"
-  "is linked once in this section, and a la"…
+  "A lantern is linked once in this section"…
