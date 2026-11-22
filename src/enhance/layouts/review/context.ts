@@ -6,9 +6,11 @@
 // read-mark control (marks.ts), which toggles, stores and emits. So the stored marks, the heading's control, the Contents
 // rail's marks and the card's counts are always one answer. The `m` key stays the marks feature's.
 //
-// Only with the bar (ctx.slots), for a document (which always has read marks); otherwise it builds nothing.
+// Only with the bar (ctx.slots), for a document whose sections the marks feature marked; otherwise it builds nothing. The
+// tool takes the tray's first slot (the one the change stepper has in the default, which this layout leaves out).
 import { chrome } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
+import { readControls } from './header.js';
 
 /** A heading's label: its accessible label when it has one, else its text. */
 function label(heading: Element): string {
@@ -18,10 +20,11 @@ function label(heading: Element): string {
 /** Build the context tool. */
 export function build(ctx: FeatureContext): void {
   const { slots, root, journal } = ctx;
-  if (slots === null || !ctx.info.isDocument) return;
+  if (slots === null || !ctx.info.isDocument || readControls(root).length === 0) return;
   const doc = root.ownerDocument;
   const button = chrome(doc, 'button', { className: 'rv-mark', attrs: { type: 'button', disabled: '' } });
-  journal.insert(button, slots.tools, slots.tools.firstChild);
+  // The tray's slot for the change stepper, which this layout does not build: `tool` keeps the bar's landmark in step.
+  slots.tool('changes', button);
   let unit: HTMLElement | null = null;
   const control = (): HTMLElement | null => unit?.querySelector<HTMLElement>('button.h-mark') ?? null;
   const paint = (): void => {
@@ -34,7 +37,8 @@ export function build(ctx: FeatureContext): void {
     journal.toggleClass(button, 'changed', stale);
     journal.setAttribute(button, 'aria-label', unit === null || held === null ? 'Mark read' : `${read ? 'Mark unread' : 'Mark read'}: ${label(unit)}`);
   };
-  journal.listen(button, 'click', () => control()?.click());
+  // The button is disabled while no unit is being read, so a click always has a control.
+  journal.listen(button, 'click', () => (control() as HTMLElement).click());
   journal.defer(ctx.events.on('spy', ({ unit: now }) => {
     unit = now;
     paint();

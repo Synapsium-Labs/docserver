@@ -1,20 +1,28 @@
 // The review layout's header card: the title block (the eyebrow, the title, the byline, the review strip and the facts
 // panel the shared editorial and strip features built) moved into one card, and under it the reader's own progress:
-// how many sections are read, how many changed since they were, and a button to the next one still unread.
+// how many sections are read, how many changed since they were, and a button to the next one still unread. The key `n`
+// goes to that section too (the reference workbench's next-unread key; this layout has no change stepper, which would
+// otherwise hold `n`), and is listed on the keys sheet.
 //
 // Nothing here reads the document again. The card moves the block's own nodes (journal.wrap) and reads the read marks
 // from the shared marks feature's controls (`button.h-mark`, whose classes it paints before it emits `marks`), so the
 // counts are the marks' and no state of this layout's own exists: the marks are stored by marks.ts, as the default's.
 //
-// Built after `strip` (the strip is in the block by then) and after `marks` (the controls exist). A document with no
-// title of its own at the top of the root gets no card. A document always has read marks (the marks feature builds a control
-// for every section but "In short"), so the card needs no case for a page without any.
+// Built after `strip` (the strip is in the block by then) and after `marks` (the controls exist). A page that is not a
+// document gets no card. A document whose headings give the marks nothing to mark (an "In short" box that holds all the
+// sub-headings of a one-section page) gets the card without the progress row, and no key. The bar's "Skip to the text" link,
+// which the bar sends to the first node that is not chrome, is sent on to the title, which the card now holds.
 import { CHROME_ATTR, chrome, siblingRun } from '../../journal.js';
 import type { FeatureContext } from '../../types.js';
 
 /** A heading's text as the reader gives it: its label when it has one (numbered headings keep their number in it). */
 function label(heading: Element): string {
   return (heading.getAttribute('aria-label') ?? heading.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** The read-mark controls of the root, in document order (the marks feature's: none when it marked nothing). */
+export function readControls(root: Element): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>('button.h-mark'));
 }
 
 /** Build the header card. */
@@ -37,7 +45,15 @@ export function build(ctx: FeatureContext): void {
   const card = chrome(doc, 'header', { className: 'rv-card' });
   journal.wrap(siblingRun(first, last.nextSibling), card);
 
-  const controls = (): HTMLElement[] => Array.from(root.querySelectorAll<HTMLElement>('button.h-mark'));
+  const skip = ctx.slots?.skip ?? null;
+  if (skip !== null) {
+    journal.listen(skip, 'click', () => {
+      journal.setAttribute(title, 'tabindex', '-1');
+      title.scrollIntoView({ block: 'start' });
+      title.focus({ preventScroll: true });
+    });
+  }
+  if (readControls(root).length === 0) return;
   const count = chrome(doc, 'b', { className: 'rv-n' });
   const of = chrome(doc, 'span', { className: 'rv-of' });
   const changed = chrome(doc, 'span', { className: 'rv-changed' });
@@ -49,11 +65,10 @@ export function build(ctx: FeatureContext): void {
 
   let target: HTMLElement | null = null;
   const paint = (): void => {
-    const all = controls();
+    const all = readControls(root);
     const read = all.filter((c) => c.classList.contains('on')).length;
     const stale = all.filter((c) => c.classList.contains('changed')).length;
-    const open = all.find((c) => !c.classList.contains('on'));
-    target = open?.closest<HTMLElement>('h2, h3, h4, h5, h6') ?? null;
+    target = all.find((c) => !c.classList.contains('on'))?.closest<HTMLElement>('h2, h3, h4, h5, h6') ?? null;
     count.textContent = String(read);
     of.textContent = ` of ${String(all.length)} read`;
     changed.textContent = stale > 0 ? `${String(stale)} changed since you read ${stale > 1 ? 'them' : 'it'}` : '';
@@ -61,9 +76,10 @@ export function build(ctx: FeatureContext): void {
     next.textContent = target === null ? 'All read' : read > 0 || stale > 0 ? `Next unread: ${ctx.text.clip(label(target), 34)}` : 'Start reading';
     journal.setAttribute(next, 'disabled', target === null ? '' : null);
   };
-  journal.listen(next, 'click', () => {
-    if (target !== null) ctx.nav.goTo(target, { push: true });
-  });
+  // The button is disabled, and the key does not apply, when nothing is unread, so neither reaches `goTo` without a target.
+  const go = (): void => ctx.nav.goTo(target as HTMLElement, { push: true });
+  journal.listen(next, 'click', go);
+  ctx.keys.bind({ key: 'n', label: 'Next unread section', when: () => target !== null, run: go });
   journal.defer(ctx.events.on('marks', paint));
   paint();
 }

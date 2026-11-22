@@ -29,10 +29,19 @@ const pick = vi.hoisted(() => ({ layout: 'default' }));
 
 vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/enhance/features.js')>();
+  const markBuild = (await import('../src/enhance/layouts/mark.js')).markFeature('review').build;
+  const marksBuild = (await import('../src/enhance/marks.js')).build;
+  const contextBuild = (await import('../src/enhance/layouts/review/context.js')).build;
   const lists = {
     classic: (await import('../src/enhance/layouts/classic/features.js')).features,
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features,
     review: (await import('../src/enhance/layouts/review/features.js')).features,
+    // Not a layout: the review toggle alone, so the bar holds no other tool.
+    'toggle-only': () => Object.freeze([
+      { name: 'layout-mark', build: markBuild },
+      { name: 'marks', build: marksBuild },
+      { name: 'review-context', build: contextBuild },
+    ]),
   } as Record<string, () => readonly Feature[]>;
   return { ...real, features: (): readonly Feature[] => (pick.layout === 'default' ? real.features() : (lists[pick.layout] as () => readonly Feature[])()) };
 });
@@ -287,12 +296,86 @@ describe('review: the header card and the context tool', () => {
     expect(bare.querySelector('header.rv-card')).not.toBeNull();
   });
 
+  it('puts the toggle in the bar through the tray\'s slot, so a bar holding only the toggle is a labelled landmark', async () => {
+    pick.layout = 'toggle-only';
+    const root = mount(SPEC);
+    await enhance(root);
+    const bar = root.querySelector('nav.topbar') as HTMLElement;
+    expect(bar.querySelectorAll('.bar-tools > *').length).toBe(1);
+    expect(bar.querySelector('.bar-tools > button.rv-mark')).not.toBeNull();
+    expect(bar.hasAttribute('role')).toBe(false);
+    expect(bar.getAttribute('aria-label')).toBe('Document tools');
+  });
+
+  it('a document whose marks mark nothing gets the card without progress, and no toggle, rail addition or n key', async () => {
+    pick.layout = 'review';
+    const root = mount('# T\n\n## In short\n\n### a\n\nx\n\n### b\n\nx\n\n### c\n\nx\n\n### d\n\nx\n');
+    await enhance(root);
+    expect(root.querySelector('button.h-mark')).toBeNull();
+    expect(root.querySelector('header.rv-card > h1')).not.toBeNull();
+    expect(root.querySelector('.rv-read, .rv-mark, .rv-foot-read')).toBeNull();
+    root.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true }));
+    expect(root.querySelector('.flash')).toBeNull();
+  });
+
+  it('binds n to the next unread section, listed on the keys sheet, and it follows the marks', async () => {
+    pick.layout = 'review';
+    const root = mount(SPEC);
+    await enhance(root);
+    const press = (key: string): void => void root.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    press('n');
+    expect(root.querySelector('h2[id="1-first"]')?.classList.contains('flash')).toBe(true);
+    (root.querySelector('h2[id="1-first"] button.h-mark') as HTMLElement).click();
+    (root.querySelector('h2[id="1-first"]') as HTMLElement).classList.remove('flash');
+    press('n');
+    expect(root.querySelector('h2[id="2-second"]')?.classList.contains('flash')).toBe(true);
+    for (const id of ['2-second', 'where-things-stand']) (root.querySelector(`h2[id="${id}"] button.h-mark`) as HTMLElement).click();
+    root.querySelectorAll('.flash').forEach((e) => e.classList.remove('flash'));
+    press('n');
+    expect(root.querySelector('.flash')).toBeNull();
+    press('?');
+    expect(root.querySelector('.keys')?.textContent).not.toContain('Next unread section');
+    (root.querySelector('h2[id="1-first"] button.h-mark') as HTMLElement).click();
+    press('Escape');
+    press('?');
+    expect(root.querySelector('.keys')?.textContent).toContain('Next unread section');
+  });
+
+  it('adds a waiting link and a read count to the shared rail, and only what the page has', async () => {
+    pick.layout = 'review';
+    const root = mount(SPEC);
+    await enhance(root);
+    const link = root.querySelector('.toc-contents > a.rv-wait') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('#waiting-on-you');
+    expect(link.textContent).toBe('Waiting on you1');
+    expect(root.querySelector('.toc-contents')?.firstElementChild).toBe(link);
+    const foot = root.querySelector('.toc-foot > .rv-foot-read') as HTMLElement;
+    expect(foot.textContent).toBe('0 of 3 read');
+    (root.querySelector('h2[id="1-first"] button.h-mark') as HTMLElement).click();
+    expect(foot.textContent).toBe('1 of 3 read');
+    const bare = mount('# A title\n\n## First\n\nText.\n\n## Second\n\nText.\n\n## Third\n\nText.\n');
+    await enhance(bare);
+    expect(bare.querySelector('.rv-wait')).toBeNull();
+    expect(bare.querySelector('.rv-foot-read')?.textContent).toBe('0 of 3 read');
+  });
+
+  it('a source node classed eyebrow that is not the reader\'s chrome stays outside the card', async () => {
+    pick.layout = 'review';
+    const root = mount(SPEC);
+    const own = document.createElement('div');
+    own.className = 'eyebrow';
+    root.prepend(own);
+    await enhance(root);
+    expect(own.parentElement).toBe(root);
+    expect(root.querySelector('header.rv-card > .eyebrow')).toBeNull();
+  });
+
   it('builds neither card nor tool for a page that is not a document', async () => {
     pick.layout = 'review';
     for (const markdown of ['Just a paragraph.\n', '# A title\n\nOne paragraph and no sections.\n']) {
       const root = mount(markdown);
       await enhance(root);
-      expect(root.querySelector('.rv-card, .rv-read, .rv-mark'), markdown).toBeNull();
+      expect(root.querySelector('.rv-card, .rv-read, .rv-mark, .rv-wait, .rv-foot-read'), markdown).toBeNull();
     }
   });
 });
@@ -303,7 +386,7 @@ describe('review: the scrub scan', () => {
 
   it('its sources and its stylesheet hold none of the shapes of a private detail (an absolute home or mount path, a private host or address, an e-mail, a credential) and no URL', () => {
     expect(files.map((f) => path.relative(ROOT, f))).toEqual([
-      'src/enhance/layouts/review/context.ts', 'src/enhance/layouts/review/features.ts', 'src/enhance/layouts/review/header.ts', 'assets/layouts/review.css',
+      'src/enhance/layouts/review/context.ts', 'src/enhance/layouts/review/features.ts', 'src/enhance/layouts/review/header.ts', 'src/enhance/layouts/review/rail.ts', 'assets/layouts/review.css',
     ]);
     for (const f of files) {
       const text = readFileSync(f, 'utf8');

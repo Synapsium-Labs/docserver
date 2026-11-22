@@ -16,16 +16,18 @@
 [data-docreader-root][data-docreader-layout="review"] .rv-changed:empty { display: none; }
 [data-docreader-root][data-docreader-layout="review"] .rv-bar { flex: 1 1 8em; min-width: 6em; max-width: 16em; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
 [data-docreader-root][data-docreader-layout="review"] .rv-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] a.xref:hover { background: var(--surface2); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] a.xref[aria-expanded="true"] { background: var(--surface2); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] .rv-wait { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 .6em; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; }
+[data-docreader-root][data-docreader-layout="review"] .rv-wait:hover { border-color: var(--accent); }
+[data-docreader-root][data-docreader-layout="review"] .rv-count { color: var(--text-muted); font-weight: 400; }
+[data-docreader-root][data-docreader-layout="review"] .rv-foot-read { margin-right: auto; color: var(--text-muted); }
 [data-docreader-root][data-docreader-layout="review"] .rv-next { margin-left: auto; max-width: 100%; font: inherit; font-weight: 600; padding: 5px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; overflow-wrap: anywhere; text-align: left; }
 [data-docreader-root][data-docreader-layout="review"] .rv-next:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 [data-docreader-root][data-docreader-layout="review"] .rv-next:disabled { color: var(--text-muted); cursor: default; }
 [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark[aria-pressed="true"] { color: var(--text); border-color: var(--border); }
 [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark.changed { color: var(--text); border-color: var(--chg); }
 [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark:disabled { cursor: default; }
-[data-docreader-root][data-docreader-layout="review"] p a.xref,
-[data-docreader-root][data-docreader-layout="review"] li a.xref,
-[data-docreader-root][data-docreader-layout="review"] blockquote a.xref { padding: 0 .45em; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); text-decoration: none; }
-[data-docreader-root][data-docreader-layout="review"] a.xref:hover, [data-docreader-root][data-docreader-layout="review"] a.xref[aria-expanded="true"] { border-color: var(--id); }
 @media screen and (max-width: 700px) {
   [data-docreader-root][data-docreader-layout="review"] .rv-card { padding: .9em 1em .8em; border-radius: 8px; }
   [data-docreader-root][data-docreader-layout="review"] .rv-next { flex: 1 1 100%; margin-left: 0; }
@@ -39,6 +41,7 @@
   [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark { min-height: 44px; }
 }
 @media screen and (max-width: 1239px) and (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"].toc-open .rv-wait,
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-tabs button,
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-contents a,
   [data-docreader-root][data-docreader-layout="review"].toc-open .toc-index a.ix { min-height: 44px; }
