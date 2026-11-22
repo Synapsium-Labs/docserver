@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { LINE_MIN, LINE_SHARE } from '../../src/enhance/scroll.js';
 import { closeBrowsers, describeBrowsers, openDoc, type BrowserName, type HarnessLayout, type OpenHow } from './harness.js';
 import {
   compareOrWrite,
@@ -112,21 +113,31 @@ function how(c: LayoutCase, layout?: HarnessLayout): Omit<OpenHow, 'browser'> {
 
 /**
  * The plan-marks case reads the rail before the reader has reached any section, so the snapshot must wait for the settled
- * neutral state, whatever the layout: the fonts are loaded (their relayout re-measures the headings), the first work heading
- * sits below the reading line the scroll spy uses (the larger of 150px and 30% of the window's height), and the rail holds no
- * active entry (the default's and the alternate layouts' rails mark one the same way). Read from the page; no layout is named.
+ * neutral state, whatever the layout. First one animation-frame pair passes: the reader queues its start relayout (the first
+ * spy run of the default layout) while it enhances, so after the pair the spy has run at least once, and a neutral rail is a
+ * result and not a spy that has not run yet. Then the page is read until the first heading sits at or below the scroll spy's
+ * reading line (the larger of LINE_MIN and LINE_SHARE of the window's height, the constants of src/enhance/scroll.ts) and the
+ * rail holds no active entry (the default's and the alternate layouts' rails mark one the same way). No layout is named.
  */
 async function waitForNeutralRail(page: Awaited<ReturnType<typeof openDoc>>['page']): Promise<void> {
-  await page.waitForFunction(() => {
+  await page.evaluate(() => new Promise<void>((resolve) => { requestAnimationFrame(() => { requestAnimationFrame(() => { resolve(); }); }); }));
+  // With `report` the state itself, else only whether it is settled: waitForFunction takes the truthiness of what it returns.
+  const read = ([min, share, report]: readonly [number, number, boolean]): boolean | { top: number | null; line: number; active: string[] } => {
     const root = document.querySelector<HTMLElement>('main[data-harness-root]');
     const heading = root?.querySelector<HTMLElement>('h2');
     const rail = root?.querySelector('.doc-toc');
-    if (heading === null || heading === undefined || rail === null || rail === undefined) return false;
-    const line = Math.max(150, window.innerHeight * 0.3);
-    return document.fonts.status === 'loaded'
-      && heading.getBoundingClientRect().top >= line
-      && rail.querySelector('a[aria-current], a.active, li.open') === null;
-  });
+    const line = Math.max(min, window.innerHeight * share);
+    const top = heading === null || heading === undefined ? null : heading.getBoundingClientRect().top;
+    const active = rail === null || rail === undefined ? [] : Array.from(rail.querySelectorAll('a[aria-current], a.active, li.open'), (el) => el.className || el.localName);
+    if (report) return { top, line, active };
+    return top !== null && rail !== null && rail !== undefined && top >= line && active.length === 0;
+  };
+  try {
+    await page.waitForFunction(read, [LINE_MIN, LINE_SHARE, false] as const);
+  } catch (error) {
+    const state = await page.evaluate(read, [LINE_MIN, LINE_SHARE, true] as const);
+    throw new Error(`plan-marks: the rail did not settle neutral ${JSON.stringify(state)}`, { cause: error });
+  }
 }
 
 /**
