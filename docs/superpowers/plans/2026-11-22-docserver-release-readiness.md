@@ -34,7 +34,7 @@ The measured row is the one D-8824 defines: the default layout, mounted through 
 Binding on every task:
 
 - **Public-ready** text in every tracked file, commit message and PR body: no product, host, person, account or private repository names, no local paths, no tracker ids. The consumer is "the first consumer", its design cited by its public GitHub path, its departures as "ccrc D-n" only.
-- **No asset, golden or snapshot moves.** No layout stylesheet, `src/` file or frame asset changes for a test-only carry. `node scripts/build-frame.mjs --check` stays green and `assets/assets.json` and `src/frame/manifest.generated.ts` do not move. A move is a stop-and-ask.
+- **No asset, golden or snapshot moves.** No layout stylesheet, `src/` file or frame asset changes for a test-only carry. The one exception is Task 5's repair, as amended (the coordinator's ruling). `node scripts/build-frame.mjs --check` stays green and `assets/assets.json` and `src/frame/manifest.generated.ts` do not move. A move is a stop-and-ask.
 - **Required CI stays as it is:** the `test` job's name, matrix, timeout, steps and env; the `workflow_call` with no inputs and no secrets; `permissions: contents: read` with no job widening it; every remote action pinned by full commit sha with its tag in a trailing comment; no local `uses:` in `ci.yml`.
 - **Tests** run through the fleet's test wrapper, `ccrc test -- ./node_modules/.bin/vitest run --maxWorkers=2 <file>`, one file at a time, foreground. Browser rows locally with `DOCREADER_BROWSERS=chromium`; WebKit runs only on GitHub's runners. Never `DOCREADER_MEASURE=1` on the shared slice.
 - **No timing gates added, no threshold widened, no blind retry.** A new browser row waits on a deterministic condition. Timing figures are printed, not asserted, unless an existing bound is kept as it is.
@@ -84,6 +84,10 @@ Binding on every task:
 
 **Contract:** at the existing seam, tests show which `changes` request records the comparison base and which do not (the last-visit measure and the day views), so the rule is no longer ambiguous on the wire as the landing A record says. No new op, key or payload field; if one turns out necessary, stop and report.
 
+**Amended 2026-11-22 (the coordinator's ruling on this wave's finding):** in the sealed frame, a seeded `changesBase` plus a prior visit lost the last-visit measure: both requests were made before `ready`, and the outbox before it opens keeps only the newer, so the host received only the base and the "Changed since your last visit" notice never appeared (measured in Chromium; `./enhance` alone sends both). The repair is built in this wave: the reader asks for the seeded base only once the last-visit measure has settled, and a pick the reader made in the meantime keeps its place. It is the one exception to "no asset moves": the default, `classic` and `editorial` enhance bundles move, with the manifests, their policy hashes, the derived srcdoc caps, the CHANGELOG's hash bullets and one `x2` growth row, and the pull request's line is `Size-Design: x2`. The bootstrap, the outbox's pre-ready rule, the wire and every golden and snapshot stay as they are.
+
+**Files (amended):** `src/enhance/since.ts`; its unit tests and a sealed-frame browser row; the regenerated `assets/assets.json` and `src/frame/manifest.generated.ts`; `conformance/size/growth.json`; README and CHANGELOG.
+
 ### Task 6: The byline's live Range, Selection and observer, and its cost in WebKit
 
 **Files:** `test/browser/byline-many.test.ts` and a browser row of its own if needed.
@@ -100,7 +104,7 @@ Binding on every task:
 
 **Files:** this plan's Results, `docs/superpowers/programs/docserver/release-readiness.md`, README and CHANGELOG only where a known limit's text changes.
 
-**Contract:** the gate is dispatched on the pushed tip, both legs; the record holds the run and job links, the exact tested tip, the browser versions, the `old-cap figures:` and `frame-figure:` lines (old-base and built counts, the applicable cap, `srcdocChars`, time to `ready`), and which layout mounted. A leg that is skipped or killed is unmeasured; a leg that completes without `ready`, or with a fallback, fails the gate. Each carry is written up as fixed, measured with no change, still open or blocked. The pull request carries one `Size-Design: none` line.
+**Contract:** the gate is dispatched on the pushed tip, both legs; the record holds the run and job links, the exact tested tip, the browser versions, the `old-cap figures:` and `frame-figure:` lines (old-base and built counts, the applicable cap, `srcdocChars`, time to `ready`), and which layout mounted. A leg that is skipped or killed is unmeasured; a leg that completes without `ready`, or with a fallback, fails the gate. Each carry is written up as fixed, measured with no change, still open or blocked. The pull request carries one `Size-Design: x2` line (Task 5's repair moves the default, `classic` and `editorial` enhance bundles).
 
 ## Results
 
