@@ -1,0 +1,49 @@
+/* Review: the header card, the reader's progress, the bar's mark toggle and the ID chips, on the reader's tokens and the host's slots. */
+[data-docreader-root][data-docreader-layout="review"] { --docreader-layout: review; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card { margin: 0 0 2.2em; padding: 1.1em 1.3em 1em; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); }
+[data-docreader-root][data-docreader-layout="review"] .rv-card > h1 { margin-top: .25em; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card .byline { margin: .6em 0 0; padding: .7em 0 0; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card .review-strip,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .doc-facts,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .byline + .doc-facts,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .byline + .review-strip + .doc-facts,
+[data-docreader-root][data-docreader-layout="review"] .rv-card .doc-facts + .review-strip { margin: .8em 0 0 !important; }
+[data-docreader-root][data-docreader-layout="review"] .rv-card .doc-facts { border-bottom: 0; }
+[data-docreader-root][data-docreader-layout="review"] .rv-read { display: flex; flex-wrap: wrap; align-items: center; gap: .4em .9em; margin: 1em 0 0; padding: .85em 0 0; border-top: 1px solid var(--border); font-family: var(--sans); font-size: calc(.88 * var(--rem)); color: var(--text-muted); }
+[data-docreader-root][data-docreader-layout="review"] .rv-n { color: var(--text); font-size: calc(1.1 * var(--rem)); }
+[data-docreader-root][data-docreader-layout="review"] .rv-of { margin-left: -.7em; }
+[data-docreader-root][data-docreader-layout="review"] .rv-changed { color: var(--text); font-weight: 600; }
+[data-docreader-root][data-docreader-layout="review"] .rv-changed:empty { display: none; }
+[data-docreader-root][data-docreader-layout="review"] .rv-bar { flex: 1 1 8em; min-width: 6em; max-width: 16em; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+[data-docreader-root][data-docreader-layout="review"] .rv-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+[data-docreader-root][data-docreader-layout="review"] .rv-next { margin-left: auto; max-width: 100%; font: inherit; font-weight: 600; padding: 5px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+[data-docreader-root][data-docreader-layout="review"] .rv-next:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+[data-docreader-root][data-docreader-layout="review"] .rv-next:disabled { color: var(--text-muted); cursor: default; }
+[data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark[aria-pressed="true"] { color: var(--text); border-color: var(--border); }
+[data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark.changed { color: var(--text); border-color: var(--chg); }
+[data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark:disabled { cursor: default; }
+[data-docreader-root][data-docreader-layout="review"] p a.xref,
+[data-docreader-root][data-docreader-layout="review"] li a.xref,
+[data-docreader-root][data-docreader-layout="review"] blockquote a.xref { padding: 0 .45em; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); text-decoration: none; }
+[data-docreader-root][data-docreader-layout="review"] a.xref:hover, [data-docreader-root][data-docreader-layout="review"] a.xref[aria-expanded="true"] { border-color: var(--id); }
+@media screen and (max-width: 700px) {
+  [data-docreader-root][data-docreader-layout="review"] .rv-card { padding: .9em 1em .8em; border-radius: 8px; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-next { flex: 1 1 100%; margin-left: 0; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-mark { padding-left: 6px; padding-right: 6px; }
+}
+@media (pointer: fine) {
+  [data-docreader-root][data-docreader-layout="review"][data-docreader-skin~="controlRow"] .rv-next { min-height: var(--dr-control-row); }
+}
+@media (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"] .rv-next,
+  [data-docreader-root][data-docreader-layout="review"] .bar-tools .rv-mark { min-height: 44px; }
+}
+@media screen and (max-width: 1239px) and (pointer: coarse) {
+  [data-docreader-root][data-docreader-layout="review"].toc-open .toc-tabs button,
+  [data-docreader-root][data-docreader-layout="review"].toc-open .toc-contents a,
+  [data-docreader-root][data-docreader-layout="review"].toc-open .toc-index a.ix { min-height: 44px; }
+}
+@media print {
+  [data-docreader-root][data-docreader-layout="review"] .rv-read, [data-docreader-root][data-docreader-layout="review"] .rv-mark { display: none; }
+  [data-docreader-root][data-docreader-layout="review"] .rv-card { border: 0; padding: 0; background: none; }
+}

@@ -3,7 +3,7 @@
 // names are mirrored in scripts/build-frame.mjs's LAYOUT_TABLE, and test/frame-layouts.test.ts holds the two equal, with
 // the manifest entries named below (and that each entry's `layout` mark is the layout that names it). Pure: declarations only.
 /** Every layout, `default` first. */
-export const FRAME_LAYOUTS = ['default', 'classic', 'editorial'] as const;
+export const FRAME_LAYOUTS = ['default', 'classic', 'editorial', 'review'] as const;
 
 export type FrameLayout = (typeof FRAME_LAYOUTS)[number];
 
@@ -13,9 +13,9 @@ export function isFrameLayout(v: unknown): v is FrameLayout {
 }
 
 /** The manifest names of the enhance bundles. */
-export type LayoutBundleEntry = 'enhance' | 'enhanceClassic' | 'enhanceEditorial';
+export type LayoutBundleEntry = 'enhance' | 'enhanceClassic' | 'enhanceEditorial' | 'enhanceReview';
 /** The manifest names of the layouts' own stylesheets. */
-export type LayoutStyleEntry = 'cssClassic' | 'cssEditorial';
+export type LayoutStyleEntry = 'cssClassic' | 'cssEditorial' | 'cssReview';
 
 /**
  * The manifest entries of each layout: its enhance bundle, and its own stylesheet (null when it has none: `default`'s
@@ -25,4 +25,5 @@ export const LAYOUT_ENTRIES: Readonly<Record<FrameLayout, { readonly enhance: La
   default: { enhance: 'enhance', css: null },
   classic: { enhance: 'enhanceClassic', css: 'cssClassic' },
   editorial: { enhance: 'enhanceEditorial', css: 'cssEditorial' },
+  review: { enhance: 'enhanceReview', css: 'cssReview' },
 };

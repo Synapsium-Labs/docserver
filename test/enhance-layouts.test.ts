@@ -31,6 +31,7 @@ vi.mock('../src/enhance/features.js', async (importOriginal) => {
   const lists = {
     classic: (await import('../src/enhance/layouts/classic/features.js')).features,
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features,
+    review: (await import('../src/enhance/layouts/review/features.js')).features,
   } as Record<string, () => readonly Feature[]>;
   return { ...real, features: (): readonly Feature[] => (pick.layout === 'default' ? real.features() : (lists[pick.layout] as () => readonly Feature[])()) };
 });
@@ -60,6 +61,7 @@ async function lists(): Promise<Record<string, readonly Feature[]>> {
     default: defaultFeatures(),
     classic: (await import('../src/enhance/layouts/classic/features.js')).features(),
     editorial: (await import('../src/enhance/layouts/editorial/features.js')).features(),
+    review: (await import('../src/enhance/layouts/review/features.js')).features(),
   };
 }
 
@@ -68,6 +70,7 @@ describe('the layouts\' feature lists', () => {
     const mods = {
       classic: await import('../src/enhance/layouts/classic/features.js'),
       editorial: await import('../src/enhance/layouts/editorial/features.js'),
+      review: await import('../src/enhance/layouts/review/features.js'),
     };
     for (const [name, m] of Object.entries(mods)) {
       const a = m.features();
@@ -228,4 +231,65 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
       expect(text.includes('\r')).toBe(false);
     });
   }
+});
+
+describe('review: the header card and the context tool', () => {
+  const SPEC = '# A title\n\nSome words.\n\n## In short\n\nSummary.\n\n## 1. First\n\nText.\n\n## 2. Second\n\nText.\n\n## Where things stand\n\n### Waiting on you\n\n- A question.\n';
+
+  it('moves the title block into one card, with the progress after it, and puts the card first', async () => {
+    pick.layout = 'review';
+    const root = mount(SPEC);
+    await enhance(root);
+    const card = root.querySelector('header.rv-card');
+    expect(card).not.toBeNull();
+    expect(root.querySelector(':scope > h1')).toBeNull();
+    expect(card?.querySelector(':scope > h1')?.textContent).toBe('A title');
+    expect(card?.querySelector(':scope > .review-strip')).not.toBeNull();
+    expect(card?.lastElementChild?.classList.contains('rv-read')).toBe(true);
+    expect(Array.from(root.children).find((c) => !c.hasAttribute('data-docreader-chrome') || c.matches('header'))).toBe(card);
+  });
+
+  it('counts the read marks from the marks feature\'s controls and follows them', async () => {
+    pick.layout = 'review';
+    const root = mount(SPEC);
+    await enhance(root);
+    const read = root.querySelector('.rv-read') as HTMLElement;
+    const text = (): string => `${read.querySelector('.rv-n')?.textContent}${read.querySelector('.rv-of')?.textContent}`;
+    expect(text()).toBe('0 of 3 read');
+    const next = read.querySelector('button.rv-next') as HTMLButtonElement;
+    expect(next.textContent).toBe('Start reading');
+    (root.querySelector('h2[id="1-first"] button.h-mark') as HTMLElement).click();
+    expect(text()).toBe('1 of 3 read');
+    expect(next.textContent).toBe('Next unread: 2. Second');
+    expect((read.querySelector('.rv-bar > i') as HTMLElement).style.width).toBe('33%');
+    (root.querySelector('h2[id="2-second"] button.h-mark') as HTMLElement).click();
+    expect(text()).toBe('2 of 3 read');
+    expect(next.textContent).toBe('Next unread: Where things stand');
+    (root.querySelector('h2[id="where-things-stand"] button.h-mark') as HTMLElement).click();
+    expect(text()).toBe('3 of 3 read');
+    expect(next.textContent).toBe('All read');
+    expect(next.disabled).toBe(true);
+  });
+
+  it('adds a mark toggle to the bar\'s tray, disabled until a section is being read, and nothing without the bar', async () => {
+    pick.layout = 'review';
+    const root = mount(SPEC);
+    await enhance(root);
+    const tray = root.querySelector('.bar-tools') as HTMLElement;
+    const toggle = tray.querySelector('button.rv-mark') as HTMLButtonElement;
+    expect(tray.firstElementChild).toBe(toggle);
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    const bare = mount(SPEC);
+    await enhance(bare, { chrome: { bar: false } });
+    expect(bare.querySelector('.rv-mark')).toBeNull();
+    expect(bare.querySelector('header.rv-card')).not.toBeNull();
+  });
+
+  it('builds neither card nor tool for a page that is not a document', async () => {
+    pick.layout = 'review';
+    const root = mount('Just a paragraph.\n');
+    await enhance(root);
+    expect(root.querySelector('.rv-card, .rv-read, .rv-mark')).toBeNull();
+  });
 });

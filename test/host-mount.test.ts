@@ -47,7 +47,7 @@ vi.mock('../src/frame/document.js', async (importOriginal) => {
 let assets: FrameAssets;
 let mermaidText: string;
 /** Each layout besides `default`: the assets its frame inlines in place of the default's (parity Task 9). */
-let layoutAssets: Record<'classic' | 'editorial', { enhance: string; layoutCss: string }>;
+let layoutAssets: Record<'classic' | 'editorial' | 'review', { enhance: string; layoutCss: string }>;
 
 /** jsdom ships no types; its one constructor this file uses, typed here. */
 const { JSDOM } = createRequire(import.meta.url)('jsdom') as { JSDOM: new (html: string) => { readonly window: unknown } };
@@ -62,6 +62,7 @@ beforeAll(async () => {
   layoutAssets = {
     classic: { enhance: built.files.enhanceClassic.text, layoutCss: built.files.cssClassic.text },
     editorial: { enhance: built.files.enhanceEditorial.text, layoutCss: built.files.cssEditorial.text },
+    review: { enhance: built.files.enhanceReview.text, layoutCss: built.files.cssReview.text },
   };
 }, 300_000);
 
@@ -3182,7 +3183,7 @@ describe('docserver parity T5: adapters.changesBase seeds the comparison base', 
 // ───────── docserver parity T9: the layout adapter ─────────
 
 describe('docserver parity T9: HostAdapters.layout', () => {
-  const OWN = ['classic', 'editorial'] as const;
+  const OWN = ['classic', 'editorial', 'review'] as const;
   const srcdocOf = (m: Mounted): string => m.iframe.getAttribute('srcdoc') ?? '';
   /** A srcdoc with its fresh nonce replaced, so two mounts of one document can be compared byte for byte. */
   const fixed = (m: Mounted): string => srcdocOf(m).replace(NONCE_RE, '"nonce":"0"');
