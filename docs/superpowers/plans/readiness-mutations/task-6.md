@@ -13,6 +13,8 @@ Rows R1 to R6 mutate `src/enhance/editorial.ts` (the two journaled moves that br
 | R5 | a move's undo puts the node back | In `move`'s undo, drop the `from.insertBefore(node, next)` and return | L red: 2 failed (the paragraph keeps its text after the undo); M red: 3 failed |
 | R6 | the paragraph is put back once | Do the second move twice | L red: 2 failed (the paragraph is removed once: expected 2 to be 1); M green |
 
+Fix round 1: the asserted range is a range of its own that is never added to the Selection (a second range with the same boundaries is the Selection's, and the Selection is only printed), so no range row depends on an engine's treatment of a selection. All six rows were measured again after that change, each restored with sha256 checked, with the same results as above (same failing counts and first messages).
+
 Assertions that pin only what the DOM standard says of an engine, so no source mutant applies: the range is collapsed in the parent, outside the paragraph, with no text, after the build and after the undo (R3 turns it red only because the library then never takes the paragraph out); the observer's removal comes before its insertion (a mutant that reorders the two moves would not keep the undo; no source mutant of it is built, the order is the standard's). The Selection and the transient records inside the paragraph are printed, not asserted.
 
 ```json

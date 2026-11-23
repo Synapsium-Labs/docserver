@@ -10,6 +10,8 @@
 //  - a childList observer with `subtree` on the parent records the paragraph's removal and its insertion, in that order, each
 //    exactly once per phase (a count, never a timing);
 //  - the library's own invariants: nothing throws, the paragraph's text content and the root's html are what they were.
+// The asserted range is never added to the Selection (a second range with the same boundaries is); the engine's treatment of a
+// selection cannot reach the range rows.
 // What an engine decides for itself is printed and not asserted: the document Selection (whether it keeps a range over hidden
 // content, and where), the transient records of the changes made inside the paragraph while it is off the document, and the
 // records of the other chrome's moves. One `byline-live` line per phase carries them, per case.
@@ -102,14 +104,20 @@ async function measureLive(name: BrowserName, k: number, fragments: number): Pro
         const beforeParagraphText = p.textContent ?? '';
         const beforeHtml = api.root.innerHTML;
 
-        // (a) a live range from inside the bold text to inside the last text node; (b) the selection on it.
+        // (a) a live range from inside the bold text to inside the last text node, never given to the Selection: it is the one
+        // whose boundaries are asserted, so what an engine does to a selection's own range cannot reach the assertions. (b) A
+        // second range with the same boundaries, which is the Selection's; the Selection is only printed.
+        const endAt = Math.max(1, (last as Text).data.length - 2);
         const range = document.createRange();
         range.setStart(strong.firstChild, 1);
-        range.setEnd(last, Math.max(1, (last as Text).data.length - 2));
+        range.setEnd(last, endAt);
+        const picked = document.createRange();
+        picked.setStart(strong.firstChild, 1);
+        picked.setEnd(last, endAt);
         const selection = window.getSelection();
         if (selection === null) throw new Error('no selection');
         selection.removeAllRanges();
-        selection.addRange(range);
+        selection.addRange(picked);
 
         const nodeName = (n: Node | null): string => (n === null ? 'null' : n.nodeName.toLowerCase());
         const where = (n: Node | null, offset: number): Where => ({
@@ -134,7 +142,7 @@ async function measureLive(name: BrowserName, k: number, fragments: number): Pro
         // (c) the observer on the paragraph's parent. Records reach the callback in a microtask; takeRecords at the end of a
         // phase collects what has not been delivered, and the phase holds both, in order.
         let current: MutationRecord[] = [];
-              const observer = new MutationObserver((records) => {
+        const observer = new MutationObserver((records) => {
           current.push(...records);
         });
         observer.observe(parent, { childList: true, subtree: true, characterData: true });

@@ -168,7 +168,9 @@ describeBrowsers((name: BrowserName) => {
 
   // A like fixture for the two engines: 10 000 separators in 2 text nodes, which is what WebKit's own parser makes of the large
   // case, here made on every engine. The build and the undo are printed apart, so a WebKit leg's line sets against Chromium's
-  // and against the README's table; the bounds are the file's counts and its backstop, no new clock.
+  // and against the README's table; the bounds are the file's counts and its backstop, no new clock. In WebKit this is nearly
+  // the large case above (its parser already cuts 10 000 separators into 2 text nodes, so the extra cut makes 3): it is kept so
+  // that the like-for-like line against landing A's table prints under its own label on every engine.
   it(`${name}: ${String(LIKE_K)} separators in ${String(LIKE_FRAGMENTS)} text nodes are cut and joined with a bounded count of DOM operations`, async () => {
     const out = await measure(name, LIKE_K, LIKE_FRAGMENTS);
     console.info(`byline-many ${name} k=${String(LIKE_K)} fragments=${String(LIKE_FRAGMENTS)}: texts=${String(out.texts)} enhanceMs=${out.enhanceMs.toFixed(0)} destroyMs=${out.destroyMs.toFixed(0)}`);
