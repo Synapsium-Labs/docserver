@@ -226,14 +226,16 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
 // ───────── 2. the default frame, unmoved ─────────
 
 /**
- * The five entries the default frame inlines, as Landing A's merge (1c2120d) records them: the sha256 of
+ * The five entries the default frame inlines, as Landing A's merge (1c2120d) records them, with the one move since: the enhance
+ * bundle, rebuilt by the seeded base's wait for the last-visit measure (docserver readiness T5; the guard, the bootstrap, the
+ * stylesheet and Mermaid are Landing A's own): the sha256 of
  * each asset's text. Literals on purpose: a layout, its plugin or any change of the build must leave every one in place (the
  * orchestrator's ruling R1), and a test that read them from the manifest it checks could not tell.
  */
 const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid', string>> = {
   guard: 'ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d',
   bootstrap: '47d310d29e5eb9487b66a8250ebddacbb15392cc6380b9424dd03cb33cc76d3d',
-  enhance: 'cc9613b7ed73b16789fee72a4b7263d9071bfbd143a16acaef1ea682b52670fe',
+  enhance: '22bf8ad1bca38e15f6373617d50977ce6d9f7e07b301acf0a28622218e855759',
   css: '367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2',
   mermaid: '7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3',
 };
@@ -241,18 +243,19 @@ const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' 
 /** frameCsp() at landing A, whole. */
 const DEFAULT_CSP =
   "default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-R9MQ0p5euUh7ZqglDr3ay7FTksxjgLlCTdA8szzHbT0=' " +
-  "'sha256-zJYTt+1zsWeJ/ucqS3Jj2Qcb+9FDoWrK7x6mgrUmcP4=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
+  "'sha256-Ir+K0byjjhX2NzYX1Ql3zm2ffgezAazwooYiIY6FV1k=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
   "style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'";
 
 /**
  * The default srcdoc of two fixed renders at landing A's code, measured before this task changed anything (the same render
  * results, nonces, options and assets): the sha256 of the string and its length. `plain` is FIXTURE with nonce `a`x32 and no option
  * but the policy and the assets; `rich` is the same document with Mermaid on, rules and no keyboard, a dark theme, and `progress`
- * and `places` on, nonce `b`x32.
+ * and `places` on, nonce `b`x32. Re-measured at the readiness wave's tip, after the enhance bundle was rebuilt (docserver readiness T5): 94 characters
+ * longer than landing A's, the same render and options.
  */
 const DEFAULT_SRCDOC = {
-  plain: { sha256: 'c7c1a4bac6ac17a4361705e6b75bef8b7a8cac37a47fd374c833d9e6da6e969a', length: 826006 },
-  rich: { sha256: 'c4c5ecd6da199b3bba4e6c47209c3827fce37456b3f229c0a9f160d80da91fd9', length: 4573027 },
+  plain: { sha256: 'e8087b8ca364b238180d756bf08d2fa458ab90feb45705d8ff3d26abb3ee9c22', length: 826100 },
+  rich: { sha256: 'ee1887e63a9e71e0da5e5aee6efeed9b0f256a7edc6d0bcf06f66239e2f94275', length: 4573121 },
 } as const;
 
 /** The two default srcdocs, with `layout` as given (undefined: the option left out). */
@@ -273,14 +276,14 @@ function defaultSrcdocs(layout: FrameLayout | undefined): { plain: string; rich:
 }
 
 describe('the default frame is unmoved by the layouts (R1)', () => {
-  it('the five assets the default frame inlines have the sha256 landing A built, in the build and in the committed manifest', () => {
+  it('the five assets the default frame inlines have the pinned sha256 (landing A\'s, with the enhance bundle\'s one move), in the build and in the committed manifest', () => {
     for (const name of ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const) {
       expect(built.files[name].sha256, `${name} built`).toBe(DEFAULT_SHA256[name]);
       expect(FRAME_MANIFEST[name].sha256, `${name} manifest`).toBe(DEFAULT_SHA256[name]);
       expect(sha(built.files[name].text), `${name} text`).toBe(DEFAULT_SHA256[name]);
     }
     // The default enhance bundle's size, which the layouts are measured against (test 8's layout row).
-    expect(FRAME_MANIFEST.enhance.chars).toBe(225709);
+    expect(FRAME_MANIFEST.enhance.chars).toBe(225803);
     expect(FRAME_MANIFEST.enhance.layout).toBe('default');
   });
 
@@ -293,23 +296,23 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     }
   });
 
-  it('frameCsp() is landing A\'s policy, byte for byte, and frameCsp(\'default\') is it', () => {
+  it('frameCsp() is the pinned policy (landing A\'s, with the enhance bundle\'s one move), byte for byte, and frameCsp(\'default\') is it', () => {
     expect(frameCsp()).toBe(DEFAULT_CSP);
     expect(frameCsp('default')).toBe(DEFAULT_CSP);
     expect(frameCsp()).toBe(frameCsp('default'));
   });
 
-  it('MAX_SRCDOC_CHARS_DEFAULT is maxSrcdocChars(\'default\'), and keeps landing A\'s value', () => {
+  it('MAX_SRCDOC_CHARS_DEFAULT is maxSrcdocChars(\'default\'), and has the value of landing A\'s formula at this tip', () => {
     expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(maxSrcdocChars('default'));
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
-    // Its value at landing A: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
+    // Its value at landing A's formula, at this tip: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
     // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
-    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_224_259);
+    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_224_353);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);
   });
 
-  it('the default srcdoc of two fixed documents is the string landing A\'s code wrote, whether `layout` is left out or is \'default\'', () => {
+  it('the default srcdoc of two fixed documents is the pinned string (landing A\'s render, with the enhance bundle\'s one move), whether `layout` is left out or is \'default\'', () => {
     for (const layout of [undefined, 'default'] as const) {
       const d = defaultSrcdocs(layout);
       for (const k of ['plain', 'rich'] as const) {

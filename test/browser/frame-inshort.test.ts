@@ -12,6 +12,13 @@ import { browserFor, closeBrowsers, describeBrowsers } from './harness.js';
 const DOC = '# Title\n\n**Spec** · 2026-10-12 · Status: Draft\n\n## In short\n\n- **One.** The first point, with more words.\n- The second point. And a tail after it.\n\n## Scope\n\nBody.\n\n## Design\n\nMore.\n';
 const HEAD = 'a'.repeat(40);
 const BASE = '1234567890abcdef1234567890abcdef12345678';
+const SEEN = 'c'.repeat(40);
+const OLDER = 'b'.repeat(40);
+const ONLY = 'd'.repeat(40);
+// A long document, so that a scroll would show. Its hash target is the last section, and the place the host marks is a filler
+// paragraph in the middle, away from the top and away from the hash target: a jump to the first place moves the reader from either.
+const LONG = `${DOC}\n${Array.from({ length: 120 }, (_, i) => `Filler paragraph ${String(i + 1)}, with enough words to take a line or two of the page.\n`).join('\n')}\n## Late section\n\nThe end.\n`;
+const LONG_LINE = LONG.split('\n').findIndex((line) => line.startsWith('Filler paragraph 60,')) + 1;
 const VERSION = {
   sha: HEAD,
   draft: false,
@@ -34,12 +41,13 @@ afterAll(closeBrowsers);
 describeBrowsers((browser) => {
   let host: FrameHost;
 
-  async function mountReady(over: Partial<FrameOptions>): Promise<void> {
+  async function mountReady(over: Partial<FrameOptions>, how: { readonly markdown?: string; readonly only?: string; readonly hash?: string } = {}): Promise<void> {
     host = await openFrameHost(await browserFor(browser));
     const nonce = freshNonce();
     const csp = frameCsp();
-    const r = render(DOC);
-    const input = { result: { outcome: r.outcome, html: r.html, meta: { title: r.meta.title, frontList: r.meta.frontList } }, version: VERSION };
+    const r = render(how.markdown ?? DOC);
+    const version = how.only === undefined ? VERSION : { ...VERSION, only: how.only };
+    const input = { result: { outcome: r.outcome, html: r.html, meta: { title: r.meta.title, frontList: r.meta.frontList } }, version, ...(how.hash === undefined ? {} : { initialHash: how.hash }) };
     await host.mount(frameDocument(input, { csp, nonce, assets, ...over }), csp);
     expect(data(await host.waitMessages(1, 90_000))[0]).toEqual({ t: 'ready', v: 1, nonce });
   }
@@ -110,6 +118,230 @@ describeBrowsers((browser) => {
       await settle(600);
       const asks = (await sent('changes')) as { sha: string }[];
       expect(asks.filter((m) => m.sha === BASE)).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  // The last visit and the comparison base together (docserver readiness T5). Both are asked at the reader's start, before
+  // `ready`, and the frame's outbox holds one `changes` request there, so the reader asks for the base only once the last-visit
+  // measure has settled; the host then sees both, the measure's first. The rows answer each request by hand, so every wait is
+  // on a condition of the page, and none is a time.
+  const SEEN_AT_ANOTHER_SHA = { 'doc:seen': JSON.stringify({ sha: SEEN, at: 0 }) } as const;
+  const until = async (what: string, ready: () => Promise<boolean>): Promise<void> => {
+    for (let i = 0; i < 1200; i += 1) {
+      if (await ready()) return;
+      await settle(25);
+    }
+    throw new Error(`never reached: ${what}`);
+  };
+  const askedShas = async (): Promise<string[]> => ((await sent('changes')) as { sha: string }[]).map((m) => m.sha);
+  const answerSet = (sha: string): Promise<void> => host.send('main', { t: 'changes.result', sha, ranges: [[3, 12]] });
+  /** The notice, the trigger's label and the menu's rows; with `open` false the menu is left shut (opening it scrolls its first row into view). */
+  const readerState = (open = true): Promise<{ notice: string | null; label: string | null; rows: string[] }> =>
+    host.frame().evaluate((opening) => {
+      if (opening) (document.querySelector('.chg-trig') as HTMLElement | null)?.click();
+      return {
+        notice: document.querySelector('.rs-notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+        label: document.querySelector('.chg-trig .ct-label')?.textContent ?? null,
+        rows: Array.from(document.querySelectorAll('[role="menuitemradio"]')).map((el) => el.getAttribute('data-key') ?? ''),
+      };
+    }, open);
+
+  it('a prior visit and a seeded base: the host gets both shas, the last visit\'s first, and the notice and the menu\'s visit row appear', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      expect(await askedShas()).toEqual([SEEN]);
+      await answerSet(SEEN);
+      await until('the second changes request', async () => (await askedShas()).length >= 2);
+      expect(await askedShas()).toEqual([SEEN, BASE]);
+      await answerSet(BASE);
+      await until('the base shown', async () => (await readerState()).label === 'Since the base commit');
+      const state = await readerState();
+      expect(state.notice).toMatch(/^Changed since your last visit \(.*\) · 1 place · Show$/);
+      expect(state.rows).toContain('visit');
+      expect(await askedShas()).toEqual([SEEN, BASE]);
+      expect(host.errors).toEqual([]);
+      expect(host.cspConsole).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  it('a prior visit alone: the host gets the last visit\'s sha only, and the notice and the visit row appear', async () => {
+    await mountReady({ snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      await answerSet(SEEN);
+      await until('the notice', async () => (await readerState()).notice !== null);
+      const state = await readerState();
+      expect(state.notice).toContain('Changed since your last visit');
+      expect(state.rows).toContain('visit');
+      expect(state.label).toBe('Changes since…');
+      expect(await askedShas()).toEqual([SEEN]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  it('a seeded base alone: the host gets the base only, and there is no notice and no visit row', async () => {
+    await mountReady({ changesBase: BASE, bridge: { changes: true } });
+    try {
+      await until('the base request', async () => (await askedShas()).length >= 1);
+      expect(await askedShas()).toEqual([BASE]);
+      await answerSet(BASE);
+      await until('the base shown', async () => (await readerState()).label === 'Since the base commit');
+      const state = await readerState();
+      expect(state.notice).toBeNull();
+      expect(state.rows).not.toContain('visit');
+      expect(await askedShas()).toEqual([BASE]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  const answerNone = (sha: string): Promise<void> => host.send('main', { t: 'changes.result', sha, unavailable: true });
+  const answerDeep = (sha: string): Promise<void> => host.send('main', { t: 'changes.result', sha, ranges: [[LONG_LINE, LONG_LINE + 2]] });
+  const scrollNow = (): Promise<number> => host.frame().evaluate(() => Math.max(window.scrollY, document.scrollingElement?.scrollTop ?? 0, document.body.scrollTop));
+  /** Round trip into the frame: when it answers, the frame has run every task queued before it. */
+  const idle = (): Promise<void> => host.frame().evaluate(() => new Promise<void>((resolve) => { setTimeout(resolve, 0); })).then(() => undefined);
+
+  it('a measure that got no answer still lets the seeded base be asked and shown, without a notice', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      await answerNone(SEEN);
+      await until('the second changes request', async () => (await askedShas()).length >= 2);
+      expect(await askedShas()).toEqual([SEEN, BASE]);
+      await answerSet(BASE);
+      await until('the base shown', async () => (await readerState()).label === 'Since the base commit');
+      const state = await readerState();
+      expect(state.notice).toBeNull();
+      expect(state.rows).not.toContain('visit');
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  it('a measure that is slow to answer holds the base back and loses nothing: the frame is idle and unmarked until it answers', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      await idle();
+      await idle();
+      expect(await askedShas()).toEqual([SEEN]);
+      expect((await readerState()).label).toBe('Changes since…');
+      await answerSet(SEEN);
+      await until('the second changes request', async () => (await askedShas()).length >= 2);
+      await answerSet(BASE);
+      await until('the base shown', async () => (await readerState()).label === 'Since the base commit');
+      expect((await readerState()).notice).toContain('Changed since your last visit');
+      expect(await askedShas()).toEqual([SEEN, BASE]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  it('a comparison the reader picks while the measure is in flight is not overwritten by the late base', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      const picked = await host.frame().evaluate(() => {
+        (document.querySelector('.chg-trig') as HTMLElement).click();
+        const rows = Array.from(document.querySelectorAll('[role="menuitemradio"][data-key^="day:"]')) as HTMLElement[];
+        rows[rows.length - 1]?.click();
+        return document.querySelector('.chg-trig .ct-label')?.textContent ?? null;
+      });
+      expect(picked).not.toBeNull();
+      expect(picked).not.toBe('Changes since…');
+      expect(picked).not.toBe('Since the base commit');
+      await answerSet(SEEN);
+      await until('the measure settled', async () => (await readerState()).notice !== null);
+      await until('the pick asked', async () => (await askedShas()).length >= 2);
+      expect(await askedShas()).toEqual([SEEN, OLDER]);
+      await answerSet(OLDER);
+      await until('the pick shown', async () => (await host.frame().evaluate(() => document.querySelectorAll('.chg, .chg-del').length)) > 0);
+      const state = await readerState();
+      expect(state.label).toBe(picked);
+      expect(state.rows).toContain('visit');
+      expect(await askedShas()).toEqual([SEEN, OLDER]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  it('a one-day version asks for its own day only, whatever it is seeded with: no measure, no base, no menu', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true, versions: true } }, { only: ONLY });
+    try {
+      await until('the day request', async () => (await askedShas()).length >= 1);
+      expect(await askedShas()).toEqual([ONLY]);
+      await answerSet(ONLY);
+      await until('the banner\'s Show', async () => host.frame().evaluate(() => document.querySelector('.ver-show')?.hasAttribute('hidden') === false));
+      await idle();
+      expect(await askedShas()).toEqual([ONLY]);
+      expect(await host.frame().evaluate(() => [document.querySelector('.chg-trig') === null, document.querySelector('.rs-notice') === null])).toEqual([true, true]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
+    }
+  });
+
+  for (const hash of [null, 'late-section']) {
+    it(`applying the late base does not move the reader: the scroll position is the same ${hash === null ? 'at the top' : 'at an initial hash'}`, async () => {
+      await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } }, { markdown: LONG, ...(hash === null ? {} : { hash }) });
+      try {
+        await until('the first changes request', async () => (await askedShas()).length >= 1);
+        expect(await host.frame().evaluate(() => document.documentElement.scrollHeight > window.innerHeight * 2), 'the page scrolls').toBe(true);
+        if (hash !== null) {
+          let last = -1;
+          await until('the hash landed and held', async () => { const now = await scrollNow(); const held = now > 0 && now === last; last = now; return held; });
+        }
+        // The notice, once drawn, holds the reader's place by itself (it adds a line above the hash target); the late base follows it.
+        await answerDeep(SEEN);
+        await until('the notice drawn', async () => (await readerState(false)).notice !== null);
+        await until('the second changes request', async () => (await askedShas()).length >= 2);
+        let last = -1;
+        await until('the position held', async () => { const now = await scrollNow(); const held = now === last; last = now; return held; });
+        const before = await scrollNow();
+        expect(before > 0, String(hash)).toBe(hash !== null);
+        await answerDeep(BASE);
+        await until('the base shown', async () => (await readerState(false)).label === 'Since the base commit');
+        await idle();
+        expect(await host.frame().evaluate(() => document.querySelectorAll('.chg, .chg-del').length), 'the base is marked').toBeGreaterThan(0);
+        expect(await scrollNow(), String(hash)).toBe(before);
+      } finally {
+        await host.close().catch(() => undefined);
+      }
+    });
+  }
+
+  // In the frame the hide cannot come before the measure settles: one request is in flight at a time, so the pick's reply follows the
+  // measure's. This row therefore pins what a reader can see (a pick, then its hide, and the base is never asked); the unit file pins the race.
+  it('a comparison the reader picked and then hid: the base is never asked in that mount', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      const picked = await host.frame().evaluate(() => {
+        (document.querySelector('.chg-trig') as HTMLElement).click();
+        const rows = Array.from(document.querySelectorAll('[role="menuitemradio"][data-key^="day:"]')) as HTMLElement[];
+        rows[rows.length - 1]?.click();
+        return document.querySelector('.chg-trig .ct-label')?.textContent ?? null;
+      });
+      expect(picked).not.toBe('Changes since…');
+      await answerSet(SEEN);
+      await until('the pick asked', async () => (await askedShas()).length >= 2);
+      await answerSet(OLDER);
+      await until('the pick shown', async () => (await host.frame().evaluate(() => document.querySelector('.chg-nav .hide') !== null && document.querySelectorAll('.chg, .chg-del').length > 0)));
+      await host.frame().evaluate(() => (document.querySelector('.chg-nav .hide') as HTMLElement).click());
+      await until('the pick hidden', async () => (await readerState(false)).label === 'Changes since…');
+      await idle();
+      expect(await askedShas()).toEqual([SEEN, OLDER]);
+      expect(host.errors).toEqual([]);
     } finally {
       await host.close().catch(() => undefined);
     }

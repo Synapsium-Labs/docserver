@@ -238,28 +238,56 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
   /** The 148 CSS Color 4 named colours, and the system colours: every one is a literal colour. */
   const NAMED = ('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen').split(' ');
   const SYSTEM = 'canvas canvastext linktext visitedtext activetext buttonface buttontext buttonborder field fieldtext highlight highlighttext selecteditem selecteditemtext mark marktext graytext accentcolor accentcolortext'.split(' ');
-  const LITERAL = new Set([...NAMED, ...SYSTEM]);
+  /** The 23 deprecated system colours of CSS Color 4 section 6.2 (`ActiveBorder` to `WindowText`); browsers still resolve them, so each is a literal colour. */
+  const DEPRECATED = 'activeborder activecaption appworkspace background buttonhighlight buttonshadow captiontext inactiveborder inactivecaption inactivecaptiontext infobackground infotext menu menutext scrollbar threeddarkshadow threedface threedhighlight threedlightshadow threedshadow window windowframe windowtext'.split(' ');
+  const LITERAL = new Set([...NAMED, ...SYSTEM, ...DEPRECATED]);
   /**
-   * The named colours the declarations of a stylesheet use. Only the declarations are read (the text inside the braces, so a selector is
-   * not), with strings and `url()` taken out, so a class name, a selector or a custom
-   * property that holds a colour word (`.ok-green`, `a:not(.red)`, `var(--red)`) is none. `transparent`, `currentColor`, `inherit`,
-   * `initial`, `unset` and `revert` are not in the list.
+   * The named colours the declarations of a stylesheet use, at any nesting depth. The text is cut into statements by one walk over its
+   * braces, after comments, strings and `url()` are replaced by a space (so a brace or a semicolon inside one cannot move a cut).
+   * Text that ends at `{` is a prelude (a selector, an `&` selector or an at-rule) and is never read. Text that ends at `;` or at `}`
+   * inside a block is a declaration, so a nesting parent's own declarations before, between and after its nested rules are read; only
+   * the part after the declaration's first `:` is read, so a property named like a colour (`background: var(--x)`) is none. A
+   * top-level statement (`@import ...;`) and a segment with no `:` are not declarations. Any value word, such as a grid area or a container name,
+   * that is a colour keyword is reported, including `background` in `transition: background .2s` (a deprecated system colour that is also
+   * a property name), `grid-area: menu` and `container-name: window`: the scan does not know which properties take a colour, so the false
+   * positive is visible, never silent. `transparent`, `currentColor`, `inherit`, `initial`,
+   * `unset` and `revert` are not in the list.
    */
   const namedColours = (text: string): string[] => {
     const out: string[] = [];
-    for (const block of text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\{([^{}]*)\}/g)) {
-      for (const declaration of (block[1] as string).split(';')) {
-        const value = declaration.replace(/"[^"]*"|'[^']*'|url\([^)]*\)/gi, ' ');
-        for (const token of value.split(/[^a-zA-Z0-9_-]+/)) if (LITERAL.has(token.toLowerCase())) out.push(token.toLowerCase());
-      }
+    // A string runs to its closing quote, over an escaped character (an escaped newline too, so `[\s\S]` and not `.`), and ends at an unescaped
+    // newline or at the end of the text if it never closes (invalid CSS: the rest is read as CSS reads it). A `url()` may hold a quoted argument.
+    const clean = text.replace(
+      /\/\*[\s\S]*?\*\/|url\(\s*(?:"(?:[^"\\\n\r\f]|\\[\s\S])*"|'(?:[^'\\\n\r\f]|\\[\s\S])*'|[^)]*)\s*\)|"(?:[^"\\\n\r\f]|\\[\s\S])*(?:"|(?=[\n\r\f])|$)|'(?:[^'\\\n\r\f]|\\[\s\S])*(?:'|(?=[\n\r\f])|$)/gi,
+      ' ',
+    );
+    const read = (declaration: string): void => {
+      const colon = declaration.indexOf(':');
+      if (colon < 0) return;
+      for (const token of declaration.slice(colon + 1).split(/[^a-zA-Z0-9_-]+/)) if (LITERAL.has(token.toLowerCase())) out.push(token.toLowerCase());
+    };
+    let depth = 0;
+    let buffer = '';
+    for (const ch of clean) {
+      if (ch === '{') {
+        depth += 1;
+        buffer = '';
+      } else if (ch === ';' || ch === '}') {
+        if (depth > 0) read(buffer);
+        buffer = '';
+        if (ch === '}' && depth > 0) depth -= 1;
+      } else buffer += ch;
     }
     return out;
   };
 
-  it('knows the 148 names of CSS Color 4 and the system colours', () => {
+  it('knows the 148 names of CSS Color 4, the 19 system colours and the 23 deprecated system colours', () => {
     expect(NAMED.length).toBe(148);
     expect(new Set(NAMED).size).toBe(148);
     expect(SYSTEM.length).toBe(19);
+    expect(DEPRECATED.length).toBe(23);
+    expect(new Set(DEPRECATED).size).toBe(23);
+    expect(LITERAL.size).toBe(148 + 19 + 23);
   });
 
   it('refuses every CSS named and system colour in a declaration, and allows the keywords and the names inside other words, selectors and custom properties', () => {
@@ -271,6 +299,66 @@ describe('the layouts\' stylesheets (assets/layouts/<name>.css)', () => {
     expect(namedColours('.ok-green:hover, a:not(.red) > .tan { color: var(--red); content: "red"; --green: 1px; background: var(--wait-tint); }')).toEqual([]);
     expect(namedColours('a { --tint: tan; color: var(--x, red); }')).toEqual(['tan', 'red']);
     expect(namedColours('a { background: url(red.png); color: var(--x); /* tan */ }')).toEqual([]);
+  });
+
+  it('reads a nesting parent\'s own declarations before, between and after its nested rules, at any depth', () => {
+    expect(namedColours('a { color: red; & b { color: var(--x); } }')).toEqual(['red']);
+    expect(namedColours('a { & b { color: var(--x); } color: tan; }')).toEqual(['tan']);
+    expect(namedColours('a { color: red; & b { color: var(--x); } border-color: navy; & i { color: var(--y); } outline-color: gold }')).toEqual(['red', 'navy', 'gold']);
+    expect(namedColours('@media screen { a { & b { & c { color: var(--x); fill: teal; } stroke: plum; } } }')).toEqual(['teal', 'plum']);
+    // The last declaration of a block needs no semicolon, and a block after a closed one does not inherit its text.
+    expect(namedColours('a { & b { color: var(--x) } } c { color: var(--y) }')).toEqual([]);
+  });
+
+  it('refuses a deprecated system colour, in any case, and counts a literal colour inside a value list', () => {
+    expect(namedColours('a { color: WindowText; background: Window; border-color: ThreeDFace; }')).toEqual(['windowtext', 'window', 'threedface']);
+    expect(namedColours('a { color: infotext; outline-color: ActiveBorder; fill: menu; stroke: SCROLLBAR; }')).toEqual(['infotext', 'activeborder', 'menu', 'scrollbar']);
+    expect(namedColours('a { box-shadow: 0 0 1px var(--x), 0 0 2px ButtonShadow; }')).toEqual(['buttonshadow']);
+  });
+
+  it('reads values only: no prelude, no comment and no property name is a colour', () => {
+    // A colour word in a nested selector, in an `&` prelude, in an at-rule prelude, or in a comment.
+    expect(namedColours('a { color: var(--x); &.red, & .tan > b:not(.navy) { color: var(--y); } }')).toEqual([]);
+    expect(namedColours('a { & .window:hover { color: var(--x); } }')).toEqual([]);
+    expect(namedColours('@media (prefers-color-scheme: dark) { a { color: var(--x); } }')).toEqual([]);
+    expect(namedColours('@container menu (min-width: 10px) { a { color: var(--x); } } @import "red.css"; @import url(tan.css);')).toEqual([]);
+    expect(namedColours('a { /* color: red; */ color: var(--x); /* & b { color: tan } */ }')).toEqual([]);
+    // A property whose name is a colour word (`background` is a deprecated system colour), and a custom property named like one.
+    expect(namedColours('a { background: var(--x); background-color: var(--y); --red: 1px; }')).toEqual([]);
+    expect(namedColours('a { & b { background: var(--x); } background: var(--y) }')).toEqual([]);
+    // A top-level statement is no declaration, even with a colon and a colour word in it. A stray closing brace does not hide the next block.
+    expect(namedColours('@import "a.css" supports(color: red); a { color: var(--x); }')).toEqual([]);
+    expect(namedColours('} a { color: red; }')).toEqual(['red']);
+    // A segment with no colon is no declaration.
+    expect(namedColours('a { red; & b { color: var(--x); } }')).toEqual([]);
+    // A brace or a semicolon inside a string or a url() cannot move a cut.
+    expect(namedColours('a { content: "}; color: tan"; background: url(a;b}.png); color: var(--x); }')).toEqual([]);
+    expect(namedColours('a { content: "{"; color: red; }')).toEqual(['red']);
+    // A single-quoted string, and a string with an escaped quote, are no colour.
+    expect(namedColours("a { content: 'red'; quotes: 'tan' 'navy'; color: var(--x); }")).toEqual([]);
+    expect(namedColours('a { content: "say \\"red\\" now"; color: var(--x); }')).toEqual([]);
+    // An escaped newline stays inside its string (`.` does not match a newline), in either quote: the closing quote does not open a false string.
+    expect(namedColours('a { content: "a\\\nb"; color: red; content: "c"; }')).toEqual(['red']);
+    expect(namedColours("a { content: 'a\\\nb'; color: tan; content: 'c'; }")).toEqual(['tan']);
+    // A quoted url() argument may hold a closing parenthesis; an unquoted one ends at the first.
+    expect(namedColours('a { background: url("a)b"); color: red; content: "z"; }')).toEqual(['red']);
+    expect(namedColours("a { background: url( 'a)b' ); color: tan; content: 'z'; }")).toEqual(['tan']);
+    expect(namedColours('a { background: url(a.png); color: red; background: url(red.png) }')).toEqual(['red']);
+    // A string that never closes ends at the newline (or the end of the text), so it swallows no later declaration.
+    expect(namedColours('a { content: "abc\n color: red; content: "z"; }')).toEqual(['red']);
+    expect(namedColours("a { content: 'abc\n color: tan; content: 'z'; }")).toEqual(['tan']);
+    expect(namedColours('a { content: "red\n color: tan; }')).toEqual(['tan']);
+    expect(namedColours("a { content: 'red\n color: tan; }")).toEqual(['tan']);
+    expect(namedColours('a { content: "red; }')).toEqual([]);
+    expect(namedColours("a { content: 'red; }")).toEqual([]);
+  });
+
+  it('flags a deprecated system colour that is a value word in `transition`: a visible false positive, chosen over a per-property list', () => {
+    // The scan does not know which properties take a colour. `background` in `transition` is also a deprecated system colour, so it is
+    // reported (visibly, as a red row naming the word) and the author writes `background-color` or a custom property. The real sheets
+    // name only `opacity` and `transform` there.
+    expect(namedColours('a { transition: background .2s; }')).toEqual(['background']);
+    expect(namedColours('a { transition: opacity .2s, transform .2s; }')).toEqual([]);
   });
 
   for (const layout of OWN) {

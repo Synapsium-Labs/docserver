@@ -2513,6 +2513,9 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
       expect(frameBound(m)).toEqual([{ t: 'command', name: 'print-figures' }, { t: 'command', name: 'print-figures' }]);
     });
 
+    /** The decoded bytes of the figures handed on to the consumer, replaced copies included. */
+    const handedBytes = (figures: readonly unknown[]): number => figures.reduce<number>((t, f) => t + ((f as { png: string }).png.length * 3) / 4 - ((f as { png: string }).png.match(/=*$/)?.[0].length ?? 0), 0);
+
     describe('a reopened run: printFigures() while the previous run is unfinished (review 3081 F2)', () => {
       const sizeOf = (f: unknown): number => (f as { png: string }).png.length;
 
@@ -2661,7 +2664,6 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
           };
           return m;
         };
-        const handedBytes = (figures: readonly unknown[]): number => figures.reduce<number>((t, f) => t + ((f as { png: string }).png.length * 3) / 4 - ((f as { png: string }).png.match(/=*$/)?.[0].length ?? 0), 0);
 
         it('the honest worst case: a full earlier run of 16 MiB queued at the host, then a full new run of 16 MiB, each index replaced once, passes whole with no refusal', async () => {
           const { c, over } = calls();
@@ -2804,6 +2806,152 @@ describe('docserver parity T2: the adapters, the seed and the three commands', (
         expect(c.figures).toHaveLength(17);
         m.say(fig(16, 17, pngOf(524288)));
         expect(c.figures).toHaveLength(18);
+      });
+    });
+
+    describe('the refusal budget across a host-caused stale delivery (docserver readiness T4)', () => {
+      // printFigures() while figures are still in the port makes the host's run stale: the frame answers the earlier call with copies the
+      // host has already moved past. What those copies cost is pinned here, with the real mount, parser and limiter and the fake clock.
+      // No run token is on the wire: the host judges every figure against the run it holds, and a refusal never decays on a mount.
+      const MiB = 1048576;
+      const BIG = pngOf(MiB);
+      type Fig = readonly [number, number, string];
+      const span = (from: number, to: number, n: number, png: string): Fig[] => Array.from({ length: to - from }, (_, k) => [from + k, n, png] as const);
+
+      /** Ready on the fake clock, every message 63 ms after the last (the pacer's sixteen a second), so the buckets never refuse. */
+      function budgeted() {
+        const { c, over } = calls();
+        const m = readyFake(over);
+        const say = (d: unknown): void => {
+          m.say(d);
+          vi.advanceTimersByTime(63);
+        };
+        /** Each figure's fate in order: h handed on, r refused, R the refusal that closed the frame, x sent after it closed. */
+        const deliver = (figs: readonly Fig[]): string =>
+          figs
+            .map(([i, n, png]) => {
+              if (m.fallbacks().length > 0) {
+                say(fig(i, n, png));
+                return 'x';
+              }
+              const before = c.figures.length;
+              say(fig(i, n, png));
+              return c.figures.length > before ? 'h' : m.fallbacks().length > 0 ? 'R' : 'r';
+            })
+            .join('');
+        /** What was counted: sixteen less the forged refusals (an op that is no op, whatever the run holds) it takes to close the frame. */
+        const counted = (): number => {
+          for (let k = 1; k <= 16; k += 1) {
+            say({ t: 'not-an-op' });
+            if (m.fallbacks().length > 0) return 16 - k;
+          }
+          return -1;
+        };
+        /** The last copy handed on of each index: what the consumer keeps. */
+        const latest = (): Map<number, string> => {
+          const k = new Map<number, string>();
+          for (const f of c.figures as { i: number; png: string }[]) k.set(f.i, f.png);
+          return k;
+        };
+        return { m, c, deliver, counted, latest };
+      }
+
+      it('an honest run that is not interrupted counts no refusal, and the next run after a complete one counts none either', async () => {
+        const { m, deliver, counted } = budgeted();
+        m.frame.printFigures();
+        expect(deliver(span(0, 20, 20, PNG))).toBe('h'.repeat(20));
+        m.frame.printFigures();
+        expect(deliver(span(0, 20, 20, pngOf(9)))).toBe('h'.repeat(20));
+        expect(counted()).toBe(0);
+      });
+
+      it('one interruption with six figures in flight counts no refusal: the stale six and the new run are all handed on, the new copies last', async () => {
+        const { m, deliver, counted, latest } = budgeted();
+        m.frame.printFigures();
+        expect(deliver(span(0, 8, 20, PNG))).toBe('h'.repeat(8));
+        m.frame.printFigures();
+        expect(deliver(span(8, 14, 20, PNG))).toBe('h'.repeat(6));
+        expect(deliver(span(0, 20, 20, pngOf(9)))).toBe('h'.repeat(20));
+        expect(counted()).toBe(0);
+        expect([...latest().values()].every((png) => png === pngOf(9))).toBe(true);
+        expect(latest().size).toBe(20);
+      });
+
+      it('stale copies larger than their replacements: the oversize edge refuses four honest copies and counts them, and the consumer keeps the earlier ones', async () => {
+        const { m, deliver, counted, latest } = budgeted();
+        m.frame.printFigures();
+        expect(deliver(span(0, 10, 20, PNG))).toBe('h'.repeat(10));
+        m.frame.printFigures();
+        // the earlier run's own copies, drawn before an appearance change: 10 MiB, within that run's cap
+        expect(deliver(span(10, 20, 20, BIG))).toBe('h'.repeat(10));
+        // the new run's: index 5 brings the live total to exactly 16 MiB, so 6 to 9 are refused oversize; the small 10 to 19 replace the stale copies
+        expect(deliver([...span(0, 10, 20, BIG), ...span(10, 20, 20, PNG)])).toBe('hhhhhhrrrrhhhhhhhhhh');
+        for (const i of [6, 7, 8, 9]) expect(latest().get(i)).toBe(PNG);
+        expect(counted()).toBe(4);
+      });
+
+      it('the oversize edge in an extreme skew: the sixteenth refusal is the new run\'s own copy of index 15 and closes the frame', async () => {
+        const { m, deliver } = budgeted();
+        m.frame.printFigures();
+        expect(deliver(span(0, 16, 32, PNG))).toBe('h'.repeat(16));
+        m.frame.printFigures();
+        // stale copies of indexes the new run never replaces: 16 MiB - 128 bytes, so the earlier run's frame total is exactly 16 MiB
+        expect(deliver(span(16, 32, 32, pngOf(MiB - 8)))).toBe('h'.repeat(16));
+        // the frame skips 16 to 31 at its own 16 MiB, so the new run sends 0 to 15 only
+        expect(deliver(span(0, 16, 32, BIG))).toBe('r'.repeat(15) + 'R');
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('three runs in flight: each third copy of an index is refused and counted, the refused copy is the run\'s own, and the consumer keeps the stale one', async () => {
+        const { m, deliver, counted, latest } = budgeted();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        expect(deliver(span(0, 5, 20, PNG))).toBe('hhhhh');
+        expect(deliver(span(0, 5, 20, pngOf(9)))).toBe('hhhhh');
+        expect(deliver(span(0, 20, 20, pngOf(10)))).toBe('rrrrr' + 'h'.repeat(15));
+        // 0 to 4 stay at the second run's copy, because the third run's own were refused
+        for (const i of [0, 1, 2, 3, 4]) expect(latest().get(i)).toBe(pngOf(9));
+        expect(counted()).toBe(5);
+      });
+
+      it('three runs in flight: the sixteenth refused third copy closes the frame, and what is sent after it is dropped', async () => {
+        const { m, deliver } = budgeted();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        expect(deliver(span(0, 16, 20, PNG))).toBe('h'.repeat(16));
+        expect(deliver(span(0, 16, 20, pngOf(9)))).toBe('h'.repeat(16));
+        expect(deliver(span(0, 20, 20, pngOf(10)))).toBe('r'.repeat(15) + 'R' + 'xxxx');
+        expect(m.fallbacks()).toEqual(['refusals']);
+      });
+
+      it('three runs whose figure sizes change between them: the handed cap of twice the run total refuses four honest copies, and they are counted', async () => {
+        const { m, c, deliver, counted } = budgeted();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        expect(deliver(span(0, 5, 20, BIG))).toBe('h'.repeat(5));
+        // the colours changed: small copies of 0 to 4, large of 5 to 19; 20 MiB and 40 bytes handed so far, 15 MiB and 40 bytes live
+        expect(deliver([...span(0, 5, 20, PNG), ...span(5, 20, 20, BIG)])).toBe('h'.repeat(20));
+        expect(handedBytes(c.figures)).toBe(20 * MiB + 40);
+        // 0 to 4 are third copies (type); 5 to 15 replace, taking the handed total to 31 MiB and 40 bytes; 16 to 19 would each pass 32 MiB (oversize)
+        expect(deliver([...span(0, 5, 20, PNG), ...span(5, 20, 20, BIG)])).toBe('rrrrr' + 'h'.repeat(11) + 'rrrr');
+        expect(handedBytes(c.figures)).toBe(31 * MiB + 40);
+        expect(counted()).toBe(9);
+      });
+
+      it('the same three runs with constant figure sizes reach exactly the handed cap and no more: only the five third copies are refused and counted', async () => {
+        const { m, c, deliver, counted } = budgeted();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        m.frame.printFigures();
+        expect(deliver(span(0, 5, 20, BIG))).toBe('h'.repeat(5));
+        // the frame skips 16 to 19 at its own 16 MiB
+        expect(deliver(span(0, 16, 20, BIG))).toBe('h'.repeat(16));
+        expect(deliver(span(0, 16, 20, BIG))).toBe('rrrrr' + 'h'.repeat(11));
+        expect(handedBytes(c.figures)).toBe(2 * 16 * MiB);
+        expect(counted()).toBe(5);
       });
     });
 

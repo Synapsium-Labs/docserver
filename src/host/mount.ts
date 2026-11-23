@@ -146,10 +146,12 @@ export interface HostAdapters {
    */
   readonly appearance?: Appearance;
   /**
-   * The comparison base (parity Task 5): the commit the host recorded when the frame asked `changes` for it (a full sha, 40 or 64
-   * lower-case hex digits), handed back so the frame asks for it once at its start and shows the comparison as "Changes since"
-   * shows one. Seeded into every mount, and used only when `changes` is given. A value that is not a string is a TypeError; a
-   * string that is not a full sha is logged once and not seeded (the document still mounts). The host sets it, and nothing else does.
+   * The comparison base (parity Task 5): the commit of the last comparison the reader picked that reached the host as a
+   * `changes` request, which the host recorded (README, "Which request to record"; a full sha, 40 or 64 lower-case hex digits),
+   * handed back so the frame asks for it once at its start and shows the comparison as "Changes since" shows one. A pick whose
+   * base the host seeded is answered from the reader's cache and sends nothing, so it is not seen. Seeded into every mount, and
+   * used only when `changes` is given. A value that is not a string is a TypeError; a string that is not a full sha is logged
+   * once and not seeded (the document still mounts). The host sets it, and nothing else does.
    */
   readonly changesBase?: string;
   /** ./host never navigates or opens a window: the host decides. */

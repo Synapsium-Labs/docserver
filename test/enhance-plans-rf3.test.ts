@@ -7,7 +7,8 @@
 // cases of test/enhance-plans.test.ts stay quick and untimed. The two sizes are measured in turn, run by run, and each
 // keeps its best run: a busy machine slows both sizes alike, rather than one more than the other.
 //
-// The feature list is mocked with a pass-through that times plans' build.
+// The feature list is mocked with a pass-through that times plans' build, and each root's own `children` is a plain
+// array (mount, below), so a toggle times the outline and not jsdom's upkeep of a live list of the root's children.
 import { afterEach, expect, it, vi } from 'vitest';
 import { destroyEnhancement, enhance } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
@@ -41,6 +42,20 @@ function mount(md: string): HTMLElement {
   const root = document.createElement('main');
   root.append(...Array.from(parsed.body.childNodes).map((n) => document.importNode(n, true)));
   document.body.append(root);
+  // jsdom keeps an element's live `children` list once anything has read it, and rebuilds it on every attribute change
+  // of that element (a browser brings it up to date when it is next read). The features read the root's children
+  // (`Array.from(root.children)`), so an outline toggle, a class on the root, made jsdom re-walk all 1,709 or 3,385 of
+  // them: about 98 % of the toggle's time, at a cost per child that depends on where that copy of the plan lies in
+  // memory (up to 1.8 times between two copies), which flaked the toggle ratio (docserver readiness Task 3). Here the
+  // root's `children` is a fresh array of its element children, so jsdom never makes the live list.
+  Object.defineProperty(root, 'children', {
+    configurable: true,
+    get(): Element[] {
+      const out: Element[] = [];
+      for (let c = root.firstElementChild; c !== null; c = c.nextElementSibling) out.push(c);
+      return out;
+    },
+  });
   mounted.push(root);
   return root;
 }
@@ -101,9 +116,9 @@ it('RF3: the build and an outline toggle stay within a measured budget, and a 2Ã
   expect([a.steps, b.steps]).toEqual([1000, 2000]);
   // Measured in jsdom on a heavily loaded machine (load average 30 to 60), best of four: the build about 400 ms on the
   // large plan and 750 ms on the plan twice its size (a ratio under 1.9); a toggle (on and off), timed in batches of
-  // TOGGLES, about 0.6 ms on the large plan and 0.7 to 1.0 ms on the plan twice its size (ratios 1.1 to 1.8), so its
-  // ratio needs no floor. The budgets leave room for a slower machine; the ratios are what catch a cost that grows
-  // faster than the plan.
+  // TOGGLES, about 0.02 ms on either plan (ratios 0.97 to 1.08 on Node 24), its time the outline's own now that the
+  // root has no live list of children (mount), so its ratio needs no floor. The budgets leave room for a slower
+  // machine; the ratios are what catch a cost that grows faster than the plan.
   expect(a.build).toBeLessThan(1500);
   expect(a.toggle).toBeLessThan(50);
   expect(b.build).toBeLessThanOrEqual(2.5 * a.build);
