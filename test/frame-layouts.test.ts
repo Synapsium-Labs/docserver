@@ -250,8 +250,8 @@ const DEFAULT_CSP =
  * The default srcdoc of two fixed renders at landing A's code, measured before this task changed anything (the same render
  * results, nonces, options and assets): the sha256 of the string and its length. `plain` is FIXTURE with nonce `a`x32 and no option
  * but the policy and the assets; `rich` is the same document with Mermaid on, rules and no keyboard, a dark theme, and `progress`
- * and `places` on, nonce `b`x32. Re-measured once, when the enhance bundle was rebuilt (docserver readiness T5): 94 characters
- * longer, the same render and options.
+ * and `places` on, nonce `b`x32. Re-measured at the readiness wave's tip, after the enhance bundle was rebuilt (docserver readiness T5): 94 characters
+ * longer than landing A's, the same render and options.
  */
 const DEFAULT_SRCDOC = {
   plain: { sha256: 'e8087b8ca364b238180d756bf08d2fa458ab90feb45705d8ff3d26abb3ee9c22', length: 826100 },
@@ -276,7 +276,7 @@ function defaultSrcdocs(layout: FrameLayout | undefined): { plain: string; rich:
 }
 
 describe('the default frame is unmoved by the layouts (R1)', () => {
-  it('the five assets the default frame inlines have the sha256 landing A built, in the build and in the committed manifest', () => {
+  it('the five assets the default frame inlines have the pinned sha256 (landing A\'s, with the enhance bundle\'s one move), in the build and in the committed manifest', () => {
     for (const name of ['guard', 'bootstrap', 'enhance', 'css', 'mermaid'] as const) {
       expect(built.files[name].sha256, `${name} built`).toBe(DEFAULT_SHA256[name]);
       expect(FRAME_MANIFEST[name].sha256, `${name} manifest`).toBe(DEFAULT_SHA256[name]);
@@ -296,23 +296,23 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     }
   });
 
-  it('frameCsp() is landing A\'s policy, byte for byte, and frameCsp(\'default\') is it', () => {
+  it('frameCsp() is the pinned policy (landing A\'s, with the enhance bundle\'s one move), byte for byte, and frameCsp(\'default\') is it', () => {
     expect(frameCsp()).toBe(DEFAULT_CSP);
     expect(frameCsp('default')).toBe(DEFAULT_CSP);
     expect(frameCsp()).toBe(frameCsp('default'));
   });
 
-  it('MAX_SRCDOC_CHARS_DEFAULT is maxSrcdocChars(\'default\'), and keeps landing A\'s value', () => {
+  it('MAX_SRCDOC_CHARS_DEFAULT is maxSrcdocChars(\'default\'), and has the value of landing A\'s formula at this tip', () => {
     expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(maxSrcdocChars('default'));
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
-    // Its value at landing A: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
+    // Its value at landing A's formula, at this tip: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
     // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
     expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_224_353);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);
   });
 
-  it('the default srcdoc of two fixed documents is the string landing A\'s code wrote, whether `layout` is left out or is \'default\'', () => {
+  it('the default srcdoc of two fixed documents is the pinned string (landing A\'s render, with the enhance bundle\'s one move), whether `layout` is left out or is \'default\'', () => {
     for (const layout of [undefined, 'default'] as const) {
       const d = defaultSrcdocs(layout);
       for (const k of ['plain', 'rich'] as const) {

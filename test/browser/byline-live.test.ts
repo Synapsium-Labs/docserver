@@ -1,5 +1,5 @@
 // What a live Range, the document Selection and a MutationObserver see across the screen byline's off-document build and its
-// undo, in a real browser (review 3160 M5, recorded as cosmetic; readiness Task 6). The build takes the meta paragraph out of
+// undo, in a real browser (landing A's review, recorded as cosmetic; readiness Task 6). The build takes the meta paragraph out of
 // its parent into a fragment, cuts and gathers it there, and puts it back (two journaled moves); destroy undoes them in reverse
 // (out again, the cut joined, back). So a boundary inside the paragraph leaves it when it is taken out, and a childList
 // observer on the parent sees the paragraph removed and added back, in the build and again in the undo.

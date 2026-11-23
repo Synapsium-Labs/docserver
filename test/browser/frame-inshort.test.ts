@@ -261,7 +261,7 @@ describeBrowsers((browser) => {
       expect(picked).not.toBe('Since the base commit');
       await answerSet(SEEN);
       await until('the measure settled', async () => (await readerState()).notice !== null);
-      await idle();
+      await until('the pick asked', async () => (await askedShas()).length >= 2);
       expect(await askedShas()).toEqual([SEEN, OLDER]);
       await answerSet(OLDER);
       await until('the pick shown', async () => (await host.frame().evaluate(() => document.querySelectorAll('.chg, .chg-del').length)) > 0);
