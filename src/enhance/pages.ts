@@ -13,18 +13,19 @@
 //                   pointers through), measured before the scroll and again after it (a table head pins only once the table reaches
 //                   the top); the target is corrected once.
 //   The band        one element of the reader's ground over the line the bottom edge cuts, from its top to the bottom, until the next
-//                   scroll; drawn only when that line's top is inside the reading area and the line is under a third of a screen, so a
+//                   scroll or relayout; drawn only when that line's top is inside the reading area and the line is under a third of a screen, so a
 //                   block stepped through is never covered. It lets pointers through, so a caret at the edge sees the line under it.
 //   Taps, Figure 4  a primary pointer up within 10 px and 500 ms of its down; not on an interactive target (`interactive`), not with a
-//                   non-empty selection (now, or when the press began), not while an overlay is open (when the press began: it may be that press which closes it). The top band (the top 15% of
+//                   non-empty selection (now, or when the press began), not while an overlay is open (when the press began: it may be that press which closes it), and not once the mode has turned off since. The top band (the top 15% of
 //                   the view, at least 48 px) sends `menu`; the left third turns back, the rest forward.
 //   Swipes          touch, at least 48 px, at least twice as wide as tall, under 600 ms: right to left forward, left to right back; not
 //                   from inside a box that scrolls sideways (a wide table, a block of code), whose own scroll it is.
 //   Keys            ArrowRight, PageDown, Space forward; ArrowLeft, PageUp, Shift+Space back (unlisted); a key on an interactive target
 //                   or with Shift (but Space) is the browser's.
-//   After a layout  a resize, a rotation, a width or face change (the relayout reasons resize and prefs): the place the reader held
+//   After a layout  a resize, a rotation, a width, face or text size change (the relayout reasons resize and prefs): the place the reader held
 //                   before the change (nav's anchor, noted at each scroll that stopped, each turn and the mode change) is restored after
-//                   layout and the top snapped to a whole line.
+//                   layout and the top snapped to a whole line. A relayout of any reason takes the band away (it was drawn for the layout
+//                   before it), and the band is not printed.
 //
 // Made by the lifecycle (createPages), with the other shared services, so it is in every layout's bundle (reader mode reads only in the default).
 // The caret is caretPositionFromPoint, or caretRangeFromPoint where only that exists (WebKit). Standard files, slug `pages`:
@@ -261,7 +262,7 @@ export function createPages(ctx: FeatureContext): void {
     const e = ev as PointerEvent;
     const d = down;
     down = null;
-    if (d === null || interactive(e.target) || d.s || selected() || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_PX || e.timeStamp - d.t > TAP_MS) return;
+    if (d === null || reader.mode() === 'off' || interactive(e.target) || d.s || selected() || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_PX || e.timeStamp - d.t > TAP_MS) return;
     const { w, h } = env.viewport();
     if (e.clientY < Math.max(BAND_PX, h * BAND_SHARE)) reader.act('menu');
     else if (on()) turn(e.clientX < w / 3 ? -1 : 1);
@@ -269,9 +270,9 @@ export function createPages(ctx: FeatureContext): void {
 
   // ── swipes
   let swipe: { readonly x: number; readonly y: number; readonly t: number } | null = null;
-  /** Whether `n` is in a box that scrolls sideways. */
+  /** Whether `n` is in a box that scrolls sideways (env.computed answers '' outside the root, so the walk stops being true there). */
   const sideways = (n: Element | null): boolean => {
-    for (; n !== null && root.contains(n); n = n.parentElement) if (n.scrollWidth > n.clientWidth + 1 && /^(?:auto|scroll)$/.test(env.computed(n, 'overflow-x'))) return true;
+    for (; n !== null; n = n.parentElement) if (n.scrollWidth > n.clientWidth + 1 && /^(?:auto|scroll)$/.test(env.computed(n, 'overflow-x'))) return true;
     return false;
   };
   journal.listen(
@@ -319,10 +320,10 @@ export function createPages(ctx: FeatureContext): void {
   // ── after a layout change, and when the mode changes
   events.on('relayout', (e) => {
     if (!on()) return;
+    hide();
     if (e.reasons.some((r) => r === 'resize' || r === 'prefs')) {
       if (last !== null) place.restore(last);
       snap();
-      hide();
     }
     last = place.anchor();
   });

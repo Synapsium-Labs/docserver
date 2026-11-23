@@ -620,7 +620,7 @@ const itemsOk = (v: unknown): boolean => listOf(v, 50, (i) => isPlain(i) && same
  */
 const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['changesBase', isFullSha], ['fonts', fontsOk], ['items', itemsOk]] as const;
 
-/** The keys a seed may leave out: the appearance, the comparison base, the faces and the item links. A mount that gives none of them writes a seed with none of these four keys (its `bridge` still carries all 8 of its own keys). */
+/** The keys a seed may leave out: the appearance, the comparison base, the faces and the item links. A mount that gives none of them writes a seed with none of these four keys (its `bridge` still carries all 9 of its own keys). */
 export const OPTIONAL_SEED_KEYS: readonly string[] = freeze(OPTIONAL_CHECKS.map((c) => c[0]));
 
 /** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */

@@ -7,6 +7,8 @@
 //   T1c  the same where only caretRangeFromPoint, or only caretPositionFromPoint, exists
 //   T2   after a turn the line the bottom edge cuts is covered by the ground band, which a scroll removes; the line it
 //        covers is the first one the next turn shows
+//   T2c  the band is not printed (print media hides it)
+//   T2d  a relayout of any reason removes the band, with no scroll (a lens change)
 //   T3   a block taller than the screen (an image, a block of code) is stepped through with one line of overlap, and a turn
 //        that steps through an image draws no band and shows the image to the bottom edge
 //   T4   a table of 60 rows taller than the screen: each forward turn puts the next row's top at the pinned head's bottom
@@ -15,11 +17,14 @@
 //   T5   a card's pinned head and a figure's pinned tools offset the target the same way
 //   T6   every turn moves at least a third of a screen (a block cut near the top), and the end and the start do nothing
 //   T7   a tap on a link, a button, a Render button, a summary and a card never turns; a plain tap turns, right or left third
+//   T7e  a press that began on text and is released on a control within 10 px is not a tap
 //   T8   a non-empty selection, a press that started a selection, a drag and a long press never turn
 //   T9   the top band sends `menu` in both modes and never while off, its height is the larger of 48 px and 15% of the view,
 //        and taps on it at ten a second never close the bridge
+//   T9d  a press that began on the top band and ends after the mode turned off sends no menu
 //   T10  a swipe turns on its thresholds only; a swipe that starts in a wide table never turns (and, with real touch on
-//        Chromium, scrolls the table)
+//        Chromium, scrolls the table); T10d a box that does not scroll sideways (one px over, overflow hidden, a parent
+//        outside the root) is not one that stops a swipe
 //   T11  turns are instant with and without reduced motion, even under `scroll-behavior: smooth`
 //   T12  a resize and a width change keep the place and land on a whole line
 //   T12b a change of text size keeps the place in screens mode: the first line shown stays the first line shown, whole
@@ -275,6 +280,12 @@ const swipe = (host: LibHost, from: { x: number; y: number }, dx: number, dy: nu
 
 /** The frame's viewport size. */
 const viewport = (host: LibHost): Promise<{ w: number; h: number }> => host.frame().evaluate(() => ({ w: innerWidth, h: innerHeight }));
+
+/** Turn forward until the ground band is on screen (at most six turns), and say so. */
+async function drawBand(host: LibHost): Promise<void> {
+  for (let k = 0; k < 6 && !(await probe<{ shown: boolean }>(host, 'band')).shown; k += 1) await turn(host, 'ArrowRight');
+  expect((await probe<{ shown: boolean }>(host, 'band')).shown, 'a band is on screen').toBe(true);
+}
 
 /** Add a block to the root, before the first element matching `before`. */
 const inject = (host: LibHost, kind: string, before: string): Promise<void> =>
@@ -570,6 +581,42 @@ describeBrowsers((browser: BrowserName) => {
         scrollBy(0, 7);
       });
       await until(async () => !(await probe<{ shown: boolean }>(host, 'band')).shown, 'a scroll removes the band');
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
+  it('T2c (default layout): the band is not printed: in print media it is hidden', async () => {
+    const host = await open(browser, LINES);
+    try {
+      await screens(host);
+      await drawBand(host);
+      // read at once: the print resize would take the band away by a relayout a moment later (the debounce), and it is the stylesheet's rule that is judged
+      await host.page.emulateMedia({ media: 'print' });
+      const look = await host.frame().evaluate(() => {
+        const el = document.querySelector('.page-band') as HTMLElement;
+        return { print: matchMedia('print').matches, hidden: el.hasAttribute('hidden'), display: getComputedStyle(el).display };
+      });
+      expect(look, 'a drawn band (not hidden by the reader) does not print').toEqual({ print: true, hidden: false, display: 'none' });
+    } finally {
+      await host.page.emulateMedia({ media: null }).catch(() => undefined);
+      await host.close();
+    }
+  }, 240_000);
+
+  it('T2d (default layout): a relayout of any reason removes the band, with no scroll: a figure drawn below the screen leaves the text where it is', async () => {
+    const host = await open(browser, MER, { document: { ...input(MER), scan: { mermaid: scanRefs(MER).mermaid } }, assets: { ...assets, mermaid }, mermaidDraw: 'on-request' });
+    try {
+      await until(() => host.frame().evaluate(() => document.querySelector('.fig-render-btn') !== null), 'the Render button is there');
+      await screens(host);
+      await drawBand(host);
+      const y = await P.y(host);
+      await host.frame().evaluate(() => {
+        (document.querySelector('.fig-render-btn') as HTMLElement).click();
+      });
+      await until(() => host.frame().evaluate(() => document.querySelector('.mermaid-figure svg') !== null), 'the figure is drawn');
+      await until(async () => !(await probe<{ shown: boolean }>(host, 'band')).shown, 'the relayout removes the band');
+      expect(await P.y(host), 'nothing scrolled: the relayout alone removed the band').toBe(y);
     } finally {
       await host.close();
     }
@@ -999,6 +1046,33 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 240_000);
 
+  it('T7e (default layout): a press that began on text and is released on a control, within 10 px, is not a tap', async () => {
+    const host = await open(browser, LINES);
+    try {
+      await inject(host, 'controls', 'p:nth-of-type(8)');
+      await screens(host);
+      const { h } = await viewport(host);
+      await scrollToEl(host, '.test-controls button', h * 0.5);
+      await sleep(200);
+      const b = (await host.frame().evaluate(() => {
+        const r = (document.querySelector('.test-controls button') as HTMLElement).getBoundingClientRect();
+        const control = (y: number): boolean => document.elementFromPoint(r.left + r.width / 2, y)?.closest('a[href],button') != null;
+        return { x: r.left + r.width / 2, top: r.top, above: control(r.top - 3), below: control(r.top + 3) };
+      })) as { x: number; top: number; above: boolean; below: boolean };
+      expect([b.above, b.below], 'the press is on text just above the button and the release on the button').toEqual([false, true]);
+      const o = await frameBox(host);
+      const y0 = await P.y(host);
+      await host.page.mouse.move(o.x + b.x, o.y + b.top - 3);
+      await host.page.mouse.down();
+      await host.page.mouse.move(o.x + b.x, o.y + b.top + 3, { steps: 2 });
+      await host.page.mouse.up();
+      await sleep(500);
+      expect(await P.y(host), 'a press released on a button does not turn').toBe(y0);
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
   it('T7b (default layout): a tap that moves more than 10 px, or lasts longer than 500 ms, is not a tap', async () => {
     const host = await open(browser, LINES);
     try {
@@ -1146,6 +1220,30 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 240_000);
 
+  it('T9d (default layout): a press that began on the top band in screens mode, and ends after the mode turned off, sends no menu', async () => {
+    const host = await open(browser, LINES);
+    try {
+      await screens(host);
+      const { w } = await viewport(host);
+      const o = await frameBox(host);
+      const n = (await acts(host)).length;
+      await host.page.mouse.move(o.x + w * 0.5, o.y + 20);
+      await host.page.mouse.down();
+      await host.setReading('off');
+      await until(() => host.frame().evaluate(() => document.querySelector('[data-docreader-root]')?.hasAttribute('data-reading') === false), 'reader mode is off');
+      await sleep(200);
+      await host.page.mouse.up();
+      await sleep(600);
+      expect((await acts(host)).length, 'the press ended while off: no menu').toBe(n);
+      // the same press with the mode on sends it
+      await screens(host);
+      await tap(host, w * 0.5, 20);
+      await until(async () => (await acts(host)).length === n + 1, 'a tap on the top band sends menu while on');
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
   it('T9c (default layout): taps on the top band at ten a second for five seconds never close the bridge', async () => {
     const host = await open(browser, LINES);
     try {
@@ -1241,6 +1339,47 @@ describeBrowsers((browser: BrowserName) => {
       await sleep(150);
       await swipe(host, { x: w * 0.5, y: h * 0.2 }, -140, 4, 150);
       expect(await settle(host)).toBeGreaterThan(0);
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
+  it('T10d (default layout): a swipe from inside a box that does not scroll sideways turns: one px over, overflow hidden, and a scrolling parent outside the root', async () => {
+    const host = await open(browser, LINES);
+    try {
+      await host.frame().evaluate(() => {
+        const root = document.querySelector('[data-docreader-root]') as HTMLElement;
+        const at = root.querySelector('p:nth-of-type(8)');
+        const box = (cls: string, overflow: string, inner: number): void => {
+          const el = document.createElement('div');
+          el.className = cls;
+          el.style.cssText = `width: 300px; overflow-x: ${overflow};`;
+          const x = document.createElement('div');
+          x.className = 'in';
+          x.style.cssText = `width: ${String(inner)}px; height: 24px;`;
+          x.textContent = 'inside';
+          el.append(x);
+          root.insertBefore(el, at);
+        };
+        box('test-edge', 'auto', 301); // scrollWidth is one px over clientWidth: rounding, not a box to scroll
+        box('test-clip', 'hidden', 900); // wider inside, but nothing to scroll
+        box('test-plain', 'auto', 200); // control: fits
+        const outside = root.parentElement as HTMLElement;
+        outside.style.overflowX = 'auto'; // a parent of the root that scrolls sideways is not a box of the text
+        const wide = document.createElement('div');
+        wide.style.cssText = 'width: 3000px; height: 1px;';
+        outside.append(wide);
+      });
+      await screens(host);
+      const { h } = await viewport(host);
+      for (const name of ['test-edge', 'test-clip', 'test-plain']) {
+        await scrollToEl(host, `.${name}`, h * 0.4);
+        await sleep(200);
+        const at = (await centre(host, `.${name}`)) as { x: number; y: number }; // inside the 300 px box, where `.in` may be wider
+        const y1 = await P.y(host);
+        await swipe(host, at, -140, 4, 150);
+        expect(await settle(host), `a swipe from inside .${name} turns`).toBeGreaterThan(y1);
+      }
     } finally {
       await host.close();
     }

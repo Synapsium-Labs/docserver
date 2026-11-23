@@ -235,15 +235,15 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
 const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid', string>> = {
   guard: 'ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d',
   bootstrap: 'd0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63',
-  enhance: '4ba182f688142a4b5763923bc4d9b6d466acaee137eab7539f51b2c7cad02d83',
-  css: '7353de5780f826376bb8bd4afb7364a9fe3073d0ba12e581fcd418d723d131ce',
+  enhance: '2aa6b29fc1c1ff68f19cb22f297dcc9413c169293c353b9e851d1039e7d30802',
+  css: '7f264d9363d96863de00a08585c176cc412255764f7d5721943e45ec00f5de72',
   mermaid: '7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3',
 };
 
 /** frameCsp() at landing A, whole. */
 const DEFAULT_CSP =
   "default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM=' " +
-  "'sha256-S6GC9ogUKktXY5I7xNm21GasruE36rdTn1Gyx8rQLYM=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
+  "'sha256-Kqayn8HB/2jxnLIvKX3MlBPBaSk8NTuehR0QOefTCAI=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
   "style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'";
 
 /**
@@ -254,8 +254,8 @@ const DEFAULT_CSP =
  * longer than landing A's, the same render and options.
  */
 const DEFAULT_SRCDOC = {
-  plain: { sha256: 'dbd4cd05a5cb08a6b7325ecf683817a58351c894306a3f503e8213ae4708e587', length: 834710 },
-  rich: { sha256: 'a860e04e8db84535da1d9497abde5128f2871ae0475fffa7498b148d381ba5a4', length: 4581731 },
+  plain: { sha256: '1188e4c48eea95e923c2f6cea2670fb576c7bd28285a9d2457e0378f829ef6bc', length: 834746 },
+  rich: { sha256: '7fe5e4857ef459fbb42457b323120c40b265822922c7ee11c14709e9bef52c9f', length: 4581767 },
 } as const;
 
 /** The two default srcdocs, with `layout` as given (undefined: the option left out). */
@@ -307,7 +307,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
     // Its value at landing A's formula, at this tip: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
     // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
-    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_232_963);
+    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_232_999);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);
   });

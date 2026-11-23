@@ -43,7 +43,7 @@ function corpusCases(): { id: string; input: string; options: RenderOptions }[] 
 
 const cases = corpusCases();
 
-describe('meta.readingMinutes equals the byline\'s minutes', () => {
+describe('meta.readingMinutes equals the byline\'s minutes (default layout)', () => {
   it('has the corpus to read', () => {
     expect(cases.length).toBeGreaterThan(30);
   });

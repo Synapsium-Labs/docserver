@@ -49,42 +49,42 @@
     },
     {
       "path": "frame/enhance-classic.js",
-      "sha256": "0c79c3b68e889e301b7f0794bb2b9acb13aaefb88695483c4fabd78240915b8f",
+      "sha256": "361f27810a2b7b27dc91e16b229431c9b3bdc23cbfeffb922a7d979a7847f16b",
       "bytes": 149554,
       "kind": "script",
-      "csp": "'sha256-DHnDto6InjAbfweUuyuayxOq77iGlUg8T6vXgkCRW48='",
+      "csp": "'sha256-Nh8ngQoreyfckeFrIpQxybO9wjy/7/uSKn2XmnhH8Ws='",
       "layout": "classic"
     },
     {
       "path": "frame/enhance-editorial.js",
-      "sha256": "840562105c589cd2c724d4d16d83cddb5744e5e7f7954d7a6b13b0ca36d3474d",
+      "sha256": "141c46bc07112ae6f5a9dc739838729497f148c50606d942de366ac0ce5d56b9",
       "bytes": 170330,
       "kind": "script",
-      "csp": "'sha256-hAViEFxYnNLHJNTRbYPN21dE5ef3lU16axOwyjbTR00='",
+      "csp": "'sha256-FBxGvAcRKub1qdxzmDhylJfxSMUGBtlC3jZqwM5dVrk='",
       "layout": "editorial"
     },
     {
       "path": "frame/enhance-guided.js",
-      "sha256": "8a35c3bbe4b4e82f1ea831a198164a91d40772722bb2a9d1466af3d2c029d6f1",
+      "sha256": "dce9d5d49e2505b994761a614df46c74446e467ee38f1bd798cfe5d2a421cb79",
       "bytes": 188524,
       "kind": "script",
-      "csp": "'sha256-ijXDu+S06C8eqDGhmBZKkdQHcnIrsqnRRmrz0sAp1vE='",
+      "csp": "'sha256-3OnV1J4lBbmUdhphTfRsdERuRn7jjxvXmM/l0qQhy3k='",
       "layout": "guided"
     },
     {
       "path": "frame/enhance-review.js",
-      "sha256": "c8d4b425d40b6605ba38f39d36df9957ce722afe421e66f02c0477f1502fdd6d",
+      "sha256": "328d6f7ed0558facc3749548cd2336d46a31be4b0e3efce3c85e4265b8d2f1bf",
       "bytes": 199397,
       "kind": "script",
-      "csp": "'sha256-yNS0JdQLZgW6OPOdNt+ZV85yKv5CHmbwLAR38VAv3W0='",
+      "csp": "'sha256-Mo1vftBVj6zDdJVIzSM21GoxvksOPvzjyF5CZbjS8b8='",
       "layout": "review"
     },
     {
       "path": "frame/enhance.js",
-      "sha256": "4ba182f688142a4b5763923bc4d9b6d466acaee137eab7539f51b2c7cad02d83",
+      "sha256": "2aa6b29fc1c1ff68f19cb22f297dcc9413c169293c353b9e851d1039e7d30802",
       "bytes": 232875,
       "kind": "script",
-      "csp": "'sha256-S6GC9ogUKktXY5I7xNm21GasruE36rdTn1Gyx8rQLYM='",
+      "csp": "'sha256-Kqayn8HB/2jxnLIvKX3MlBPBaSk8NTuehR0QOefTCAI='",
       "layout": "default"
     },
     {
@@ -124,8 +124,8 @@
     },
     {
       "path": "frame/reader.css",
-      "sha256": "7353de5780f826376bb8bd4afb7364a9fe3073d0ba12e581fcd418d723d131ce",
-      "bytes": 566179,
+      "sha256": "7f264d9363d96863de00a08585c176cc412255764f7d5721943e45ec00f5de72",
+      "bytes": 566215,
       "kind": "style"
     },
     {
@@ -177,8 +177,8 @@
     },
     {
       "path": "reader.css",
-      "sha256": "c8448ea455a9a688554d8794b6b2219ea8914b15701869319f818be23f6a3f88",
-      "bytes": 152677,
+      "sha256": "c91516c93a98bf76dd02fd6c66eef67d30e766c2da29700f1a39561385ac3fd0",
+      "bytes": 152713,
       "kind": "style"
     }
   ]

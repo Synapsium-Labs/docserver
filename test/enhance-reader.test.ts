@@ -55,7 +55,7 @@ describe('the wire twins', () => {
   });
 });
 
-describe('setEnhancementReading: in place, with no remount', () => {
+describe('setEnhancementReading: in place, with no remount (default layout)', () => {
   it('data-reading follows the mode, and off takes it away', async () => {
     const { root } = await reading();
     expect(root.hasAttribute('data-reading')).toBe(false);
@@ -114,6 +114,30 @@ describe('setEnhancementReading: in place, with no remount', () => {
     expect(bare.root.classList.contains('has-toc')).toBe(false);
   });
 
+  it('the rail class is read again at each entry from off: a root that lost it between two sessions does not get it back', async () => {
+    const { root } = await reading({}, `${DOC}\n\n## 4. Four\n\nText.\n\n## 5. Five\n\nText.\n`);
+    setEnhancementReading(root, 'screens');
+    setEnhancementReading(root, 'off');
+    expect(root.classList.contains('has-toc')).toBe(true);
+    root.classList.remove('has-toc'); // a layout took the rail away while reader mode was off
+    setEnhancementReading(root, 'screens');
+    setEnhancementReading(root, 'off');
+    expect(root.classList.contains('has-toc')).toBe(false);
+  });
+
+  it('after a destroy the service is dead: set keeps the mode it had, and act says no and tells the host nothing', async () => {
+    const { root, acts } = await reading();
+    const r = contextOf(root)?.reader;
+    setEnhancementReading(root, 'screens');
+    await destroyEnhancement(root);
+    acts.length = 0;
+    r?.set('scroll');
+    expect(r?.mode()).toBe('screens');
+    expect(r?.act('menu')).toBe(false);
+    expect(r?.act('active')).toBe(false);
+    expect(acts).toEqual([]);
+  });
+
   it('destroy puts everything back: no data-reading and the rail class as the first build left it', async () => {
     const { root } = await reading({}, `${DOC}\n\n## 4. Four\n\nText.\n\n## 5. Five\n\nText.\n`);
     setEnhancementReading(root, 'screens');
@@ -144,7 +168,7 @@ describe('setEnhancementReading: in place, with no remount', () => {
   });
 });
 
-describe('the keys: r and Escape, only with onReader', () => {
+describe('the keys: r and Escape, only with onReader (default layout)', () => {
   it('r sends toggle while the mode is off and exit while it is on', async () => {
     const { root, acts } = await reading();
     const e = key(root, 'r');
@@ -236,7 +260,7 @@ describe('the keys: r and Escape, only with onReader', () => {
   });
 });
 
-describe('act: the host hears onReader, never while it is not given', () => {
+describe('act: the host hears onReader, never while it is not given (default layout)', () => {
   it('menu, exit and toggle go through in any mode; active only while the mode is not off', async () => {
     const { root, acts } = await reading();
     const r = contextOf(root)?.reader;
@@ -258,7 +282,7 @@ describe('act: the host hears onReader, never while it is not given', () => {
   });
 });
 
-describe('active: a box scrolled sideways while reader mode is on, and a figure panned or zoomed in full screen', () => {
+describe('active: a box scrolled sideways while reader mode is on, and a figure panned or zoomed in full screen (default layout)', () => {
   /** A table block whose box scrolls sideways (jsdom lays nothing out: the widths are the test's). */
   function sideways(root: HTMLElement): HTMLElement {
     const box = root.querySelector('.table-wrapper') ?? root.querySelector('table')?.parentElement;

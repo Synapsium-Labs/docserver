@@ -127,7 +127,7 @@ export function createKeys(args: KeysArgs): Keys {
     const k = e.key;
     if (k === 'Escape') {
       const b = bound.get(k);
-      if (!overlays.close() && b !== undefined && keyboard && !e.ctrlKey && !e.metaKey && !e.altKey && !editable(e.target)) runIt(b, e);
+      if (!overlays.close() && b !== undefined && !e.ctrlKey && !e.metaKey && !e.altKey && !editable(e.target)) runIt(b, e);
       return;
     }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === 'k') {

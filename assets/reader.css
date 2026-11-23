@@ -1355,7 +1355,8 @@ html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip,
   [data-docreader-root] .peek-bar,
   [data-docreader-root] .short-view,
   [data-docreader-root] .h-ctl,
-  [data-docreader-root] .skip-link { display: none !important; }
+  [data-docreader-root] .skip-link,
+  [data-docreader-root] .page-band { display: none !important; }
   [data-docreader-root][data-docreader-root]:not(i) > [hidden] { content-visibility: visible !important; display: revert !important; }
   [data-docreader-root] .tech { max-height: none !important; -webkit-mask-image: none !important; mask-image: none !important; }
   [data-docreader-root] .short.headlines .rest,
