@@ -65,6 +65,16 @@ const FITS = ['# Table', '', paragraphs(6, 3).join('\n\n'), '', '| ID | What | S
 /** 60 rows with unbreakable wide cells: it scrolls sideways, so its head does not pin. */
 const WIDE = ['# Wide', '', paragraphs(6, 4).join('\n\n'), '', '| A | B | C | D |', '|---|---|---|---|', ...Array.from({ length: 60 }, (_, i) => `| ${'a'.repeat(60)}${String(i)} | ${'b'.repeat(60)} | ${'c'.repeat(60)} | ${'d'.repeat(60)} |`), '', paragraphs(8, 6).join('\n\n'), ''].join('\n');
 const CODE = ['# Code', '', paragraphs(6, 8).join('\n\n'), '', '```text', ...Array.from({ length: 160 }, (_, i) => `line ${String(i)} of a long block of code`), '```', '', paragraphs(8, 9).join('\n\n'), ''].join('\n');
+/** Paragraphs whose lines carry raised `sup` marks and `code` runs of another size, so line boxes are taller than the nominal line height and the lines no longer tile the paragraph. */
+const MIXED = [
+  '# Mixed',
+  '',
+  ...paragraphs(70, 21).map((p, i) => {
+    const w = p.split(' ');
+    return w.map((x, k) => (k % 9 === 4 ? `\`${x}()\`` : k % 11 === 7 ? `${x}<sup>${String(i % 7)}</sup>` : k % 17 === 3 ? `<kbd>${x}</kbd>` : x)).join(' ') + '\n';
+  }),
+].join('\n');
+
 const MER = ['# Figure', '', paragraphs(30, 13).join('\n\n'), '', '```mermaid', 'flowchart LR', '  A[Start] --> B[Stop]', '```', '', '*Figure 1. Start to stop.*', '', paragraphs(30, 14).join('\n\n'), ''].join('\n');
 
 async function until(fn: () => Promise<boolean>, label: string, capMs = 30_000): Promise<void> {
@@ -131,6 +141,19 @@ function installProbe(): void {
       return { t: r.top, b: r.bottom, l: r.left, r: r.right };
     },
     /** The top block (a paragraph with a data-line, else the nearest one) at the reading line, by its text's first word. */
+    /** The text fragments (a line's share of one text node) that the edge `y` cuts through their glyph boxes by more than half a pixel. */
+    textCut: (y: number): { t: number; b: number; text: string }[] => {
+      const out: { t: number; b: number; text: string }[] = [];
+      const walk = document.createTreeWalker(root(), NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n !== null; n = walk.nextNode()) {
+        const p = (n as Text).parentElement;
+        if (p === null || p.closest('p') === null || (n.textContent ?? '').trim() === '') continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        for (const r of Array.from(range.getClientRects())) if (r.height > 0 && r.top < y - 0.5 && r.bottom > y + 0.5) out.push({ t: r.top, b: r.bottom, text: (n.textContent ?? '').slice(0, 12) });
+      }
+      return out;
+    },
     topWord: (): string => {
       for (let y = 4; y < 200; y += 6) {
         const el = document.elementFromPoint(innerWidth / 2, y)?.closest('p');
@@ -156,6 +179,7 @@ interface Probe {
   pinned(sel: string): number;
   rows(sel: string): { i: number; t: number; b: number }[];
   rect(sel: string): { t: number; b: number; l: number; r: number } | null;
+  textCut(y: number): { t: number; b: number; text: string }[];
   topWord(): string;
   scrollTo(y: number): void;
 }
@@ -472,6 +496,25 @@ describeBrowsers((browser: BrowserName) => {
       }
     }, 240_000);
   }
+
+  it('T1d (default layout): in paragraphs with raised sup marks, code and kbd runs, turns still land on whole lines (no sliver above, no clipped target)', async () => {
+    const host = await open(browser, MIXED, {}, { width: 720, height: 844 });
+    try {
+      await screens(host);
+      for (let k = 0; k < 8; k += 1) {
+        const t = await turn(host, 'ArrowRight');
+        expect(t.after).toBeGreaterThan(t.before);
+        expect(await probe<unknown[]>(host, 'textCut', 0), `forward turn ${String(k)}: no text is cut at the top`).toEqual([]);
+      }
+      for (let k = 0; k < 6; k += 1) {
+        const t = await turn(host, 'ArrowLeft');
+        expect(t.after).toBeLessThan(t.before);
+        expect(await probe<unknown[]>(host, 'textCut', 0), `back turn ${String(k)}: no text is cut at the top`).toEqual([]);
+      }
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
 
   it('T2 (default layout): the line the bottom edge cuts is covered by the ground band until a scroll, and it is the first line the next turn shows', async () => {
     const host = await open(browser, LINES);

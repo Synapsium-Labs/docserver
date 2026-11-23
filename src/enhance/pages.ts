@@ -45,6 +45,8 @@ const BAND_PX = 48;
 const BAND_SHARE = 0.15;
 /** Overlays sit at this z-index and above (the stylesheet's); nothing at or above it is pinned text chrome. */
 const OVERLAY_Z = 1000;
+/** How far the line height's tiling may be from the glyph boxes' halfway edge and still be taken as the exact line edge, in px. */
+const AGREE = 1.6;
 /** How long scrolling must stop before the place is noted, in milliseconds. */
 const IDLE_MS = 120;
 
@@ -130,23 +132,42 @@ export function createPages(ctx: FeatureContext): void {
     const p = d.caretPositionFromPoint?.(x, y);
     const q = p == null ? d.caretRangeFromPoint?.(x, y) : null;
     const node = (p?.offsetNode ?? q?.startContainer) as Text | undefined;
-    const off = p?.offset ?? q?.startOffset ?? 0;
     if (node?.nodeType !== 3 || node.parentElement === null) return null;
-    // the line box: lines tile the block's content box at its line height, so the character's middle names its line
+    // the block's lines, from the real boxes of its text: a raised mark or a run of another size makes a line taller, so lines then do not tile
+    // the block at its line height. Between two lines the line box edge is halfway between their glyph boxes (a pixel or so off); where the
+    // tiling at the line height agrees with that to within `AGREE` px it is the exact one (plain text), else the halfway edge stands
     let bl = node.parentElement;
     while (/^inline/.test(env.computed(bl, 'display')) && bl.parentElement !== null) bl = bl.parentElement;
     const lh = lhOf(bl);
     const px = (p: string): number => parseFloat(env.computed(bl, p)) || 0;
-    const ct = bl.getBoundingClientRect().top + px('padding-top') + px('border-top-width');
-    if (off >= node.length) return null; // the end of the text: a short last line, where the column's edge finds it
-    const g = doc.createRange();
-    g.setStart(node, off);
-    g.setEnd(node, off + 1);
-    const r = g.getClientRects()[0];
-    if (r === undefined || r.height === 0) return null;
-    const t = ct + Math.floor((r.top + r.height / 2 - ct) / lh) * lh;
-    const end = bl.getBoundingClientRect().bottom - px('padding-bottom') - px('border-bottom-width');
-    return y >= t - 0.5 && y < t + lh + 0.5 ? { t, b: t + lh, k: false, lh, n: t + lh >= end - 1 ? bl.nextElementSibling : null } : null;
+    const rs: DOMRect[] = [];
+    for (const w = doc.createTreeWalker(bl, 4); w.nextNode(); ) {
+      const g = doc.createRange();
+      g.selectNodeContents(w.currentNode);
+      for (const r of Array.from(g.getClientRects())) if (r.height > 0) rs.push(r);
+    }
+    const ls: { t: number; b: number }[] = [];
+    for (const r of rs.sort((u, v) => u.top - v.top)) {
+      const l = ls[ls.length - 1];
+      if (l !== undefined && r.top < l.b) l.b = Math.max(l.b, r.bottom);
+      else ls.push({ t: r.top, b: r.bottom });
+    }
+    const box = bl.getBoundingClientRect();
+    /** The edge before line `j` (`ls.length`: after the last): the block's content edge at its ends, else halfway between the glyph boxes. */
+    const edge = (j: number): number => {
+      const u = ls[j - 1];
+      const v = ls[j];
+      if (v === undefined) return Math.max(u?.b ?? 0, Math.min(box.bottom - px('padding-bottom') - px('border-bottom-width'), (u?.b ?? 0) + lh / 2));
+      return u === undefined ? Math.min(v.t, Math.max(box.top + px('padding-top') + px('border-top-width'), v.t - lh / 2)) : (u.b + v.t) / 2;
+    };
+    const ct = box.top + px('padding-top') + px('border-top-width');
+    const tile = (j: number): number => ct + Math.floor(((ls[j]?.t ?? 0) / 2 + (ls[j]?.b ?? 0) / 2 - ct) / lh) * lh;
+    const pick = (e: number, nom: number): number => (Math.abs(nom - e) <= AGREE ? nom : e);
+    const top = (j: number): number => (j < ls.length ? pick(edge(j), tile(j)) : pick(edge(j), tile(j - 1) + lh));
+    for (let j = 0; j < ls.length; j += 1) {
+      if (y >= top(j) - 0.5 && y < top(j + 1) + 0.5) return { t: top(j), b: top(j + 1), k: false, lh, n: j === ls.length - 1 ? bl.nextElementSibling : null };
+    }
+    return null;
   };
 
   /** The line or block at height `y`: read in the middle of the view, and at the column's left edge where a block there is narrower (an image). */
