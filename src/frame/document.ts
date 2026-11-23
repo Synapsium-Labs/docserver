@@ -213,7 +213,8 @@ export interface FrameOptions {
   readonly items?: readonly ItemLink[];
   /**
    * The comparison base (parity Task 5): a full sha (40 or 64 lower-case hex), the commit of the last comparison the reader
-   * picked, which the host recorded from a `changes` request (README, "Which request to record"). With the bridge's `changes` on,
+   * picked that reached the host as a `changes` request, which the host recorded (README, "Which request to record"; a pick
+   * whose base the host seeded is answered from the reader's cache and sends nothing). With the bridge's `changes` on,
    * the reader asks `changes` for it once when it starts and shows the comparison as "Changes since" shows one, labelled by that
    * commit when `commits` names it, else "Since your comparison". Anything else than a full sha is refused as invalid-input.
    * Absent: no `changesBase` key in the seed.
