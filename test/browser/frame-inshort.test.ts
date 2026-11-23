@@ -15,9 +15,10 @@ const BASE = '1234567890abcdef1234567890abcdef12345678';
 const SEEN = 'c'.repeat(40);
 const OLDER = 'b'.repeat(40);
 const ONLY = 'd'.repeat(40);
-// A long document, so that a scroll would show: its changed places and its hash target are far down.
+// A long document, so that a scroll would show. Its hash target is the last section, and the place the host marks is a filler
+// paragraph in the middle, away from the top and away from the hash target: a jump to the first place moves the reader from either.
 const LONG = `${DOC}\n${Array.from({ length: 120 }, (_, i) => `Filler paragraph ${String(i + 1)}, with enough words to take a line or two of the page.\n`).join('\n')}\n## Late section\n\nThe end.\n`;
-const LONG_LINE = LONG.split('\n').length - 4;
+const LONG_LINE = LONG.split('\n').findIndex((line) => line.startsWith('Filler paragraph 60,')) + 1;
 const VERSION = {
   sha: HEAD,
   draft: false,
@@ -158,7 +159,7 @@ describeBrowsers((browser) => {
       await answerSet(BASE);
       await until('the base shown', async () => (await readerState()).label === 'Since the base commit');
       const state = await readerState();
-      expect(state.notice).toMatch(/^Changed since your last visit .* 1 place Show$|^Changed since your last visit .*·.*Show$/);
+      expect(state.notice).toMatch(/^Changed since your last visit \(.*\) · 1 place · Show$/);
       expect(state.rows).toContain('visit');
       expect(await askedShas()).toEqual([SEEN, BASE]);
       expect(host.errors).toEqual([]);
@@ -290,8 +291,8 @@ describeBrowsers((browser) => {
     }
   });
 
-  it('applying the late base does not move the reader: the scroll position is the same at the top and at an initial hash', async () => {
-    for (const hash of [null, 'late-section']) {
+  for (const hash of [null, 'late-section']) {
+    it(`applying the late base does not move the reader: the scroll position is the same ${hash === null ? 'at the top' : 'at an initial hash'}`, async () => {
       await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } }, { markdown: LONG, ...(hash === null ? {} : { hash }) });
       try {
         await until('the first changes request', async () => (await askedShas()).length >= 1);
@@ -316,6 +317,33 @@ describeBrowsers((browser) => {
       } finally {
         await host.close().catch(() => undefined);
       }
+    });
+  }
+
+  // In the frame the hide cannot come before the measure settles: one request is in flight at a time, so the pick's reply follows the
+  // measure's. This row therefore pins what a reader can see (a pick, then its hide, and the base is never asked); the unit file pins the race.
+  it('a comparison the reader picked and then hid: the base is never asked in that mount', async () => {
+    await mountReady({ changesBase: BASE, snapshot: SEEN_AT_ANOTHER_SHA, bridge: { changes: true } });
+    try {
+      await until('the first changes request', async () => (await askedShas()).length >= 1);
+      const picked = await host.frame().evaluate(() => {
+        (document.querySelector('.chg-trig') as HTMLElement).click();
+        const rows = Array.from(document.querySelectorAll('[role="menuitemradio"][data-key^="day:"]')) as HTMLElement[];
+        rows[rows.length - 1]?.click();
+        return document.querySelector('.chg-trig .ct-label')?.textContent ?? null;
+      });
+      expect(picked).not.toBe('Changes since…');
+      await answerSet(SEEN);
+      await until('the pick asked', async () => (await askedShas()).length >= 2);
+      await answerSet(OLDER);
+      await until('the pick shown', async () => (await host.frame().evaluate(() => document.querySelector('.chg-nav .hide') !== null && document.querySelectorAll('.chg, .chg-del').length > 0)));
+      await host.frame().evaluate(() => (document.querySelector('.chg-nav .hide') as HTMLElement).click());
+      await until('the pick hidden', async () => (await readerState(false)).label === 'Changes since…');
+      await idle();
+      expect(await askedShas()).toEqual([SEEN, OLDER]);
+      expect(host.errors).toEqual([]);
+    } finally {
+      await host.close().catch(() => undefined);
     }
   });
 });

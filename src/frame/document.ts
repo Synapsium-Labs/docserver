@@ -212,10 +212,11 @@ export interface FrameOptions {
    */
   readonly items?: readonly ItemLink[];
   /**
-   * The comparison base (parity Task 5): a full sha (40 or 64 lower-case hex), the commit of the last comparison the reader picked,
-   * which the host recorded from a `changes` request (README, "Which request to record"). With the bridge's `changes` on, the reader asks `changes` for it once when it
-   * starts and shows the comparison as "Changes since" shows one, labelled by that commit when `commits` names it, else "Since
-   * your comparison". Anything else than a full sha is refused as invalid-input. Absent: no `changesBase` key in the seed.
+   * The comparison base (parity Task 5): a full sha (40 or 64 lower-case hex), the commit of the last comparison the reader
+   * picked, which the host recorded from a `changes` request (README, "Which request to record"). With the bridge's `changes` on,
+   * the reader asks `changes` for it once when it starts and shows the comparison as "Changes since" shows one, labelled by that
+   * commit when `commits` names it, else "Since your comparison". Anything else than a full sha is refused as invalid-input.
+   * Absent: no `changesBase` key in the seed.
    */
   readonly changesBase?: string;
   /** Default maxSrcdocChars(layout) (MAX_SRCDOC_CHARS_DEFAULT for `default`); a host may only lower it. */

@@ -39,6 +39,8 @@ interface SinceState {
   readonly daysId: string;
   readonly actions: Map<string, MenuAction>;
   selected: { readonly key: string; readonly what: string } | null;
+  /** True once the reader has picked a comparison from the menu (set by `show` alone, and kept when the pick is hidden). */
+  picked: boolean;
   visit: Visit | null;
 }
 
@@ -182,6 +184,7 @@ function position(ctx: FeatureContext, state: SinceState): void {
 function show(ctx: FeatureContext, state: SinceState, what: string, base: string, key: string): void {
   close(ctx, state, false);
   const selected = { key, what };
+  state.picked = true;
   state.selected = selected;
   sync(state);
   void showChanges(ctx, base, { what, onHide: () => {
@@ -437,8 +440,9 @@ function baseLabel(ctx: FeatureContext, base: string): string {
 
 /**
  * The comparison the host seeded (`options.changesBase`, with the host's `changes` and a commit version): asked of the host
- * once, here (after the last-visit measure has settled, when there is one: see `build`), and shown as the menu shows one, without a jump (a reader who opens a document is not moved). The picker's own
- * state, when it exists, shows it as chosen. No other source sets it.
+ * once, here (after the last-visit measure has settled, when there is one: see `build`), and shown as the menu shows one,
+ * without a jump (a reader who opens a document is not moved). The picker's own state, when it exists, shows it as chosen. No
+ * other source sets it.
  */
 function showBase(ctx: FeatureContext, state: SinceState | null): void {
   const base = ctx.options.changesBase;
@@ -510,20 +514,20 @@ export function build(ctx: FeatureContext): void {
   ]);
   const menu = chrome(doc, 'div', { className: 'chg-menu', attrs: { id: menuId, role: 'menu', 'aria-label': 'Show what changed', hidden: '' } });
   wrap.append(trigger, menu);
-  const state: SinceState = { wrap, trigger, menu, groups, daysId: ctx.chromeId('changes-days'), actions: new Map(), selected: null, visit: null };
+  const state: SinceState = { wrap, trigger, menu, groups, daysId: ctx.chromeId('changes-days'), actions: new Map(), selected: null, picked: false, visit: null };
   (states ??= new WeakMap()).set(ctx, state);
   ctx.journal.defer(() => {
     if (states?.get(ctx) === state) states.delete(ctx);
   });
   bindKeys(ctx, state);
   if (commits.length >= 2 || groups.length >= 2 || onlyActions) attachPicker(ctx, state);
-  // The seeded base is asked after the measure has settled, whatever its outcome (a set, none, no places, a failure), not beside
-  // it: in the sealed frame the outbox keeps one `changes` request before `ready` and the newer supersedes the older, so asking
-  // both at once would lose the measure. A comparison the reader picks meanwhile keeps its place (`selected`), and the late base
-  // does not take it; shown without a jump, as ever, so it does not move the reader either.
+  // The seeded base is asked after the measure has settled, whatever its outcome (a set, none, no places, a failure), not
+  // beside it: in the sealed frame the outbox keeps one `changes` request before `ready` and the newer supersedes the older, so
+  // asking both at once would lose the measure. A comparison the reader picks meanwhile is a choice of theirs, hidden or not
+  // (`picked`), and the late base is not asked in that mount; shown without a jump, as ever, so it does not move the reader.
   const measured = hasPrior ? addNotice(ctx, state, prior as { sha: string; at: number }) : null;
   if (measured === null) showBase(ctx, state);
-  else void measured.finally(() => { if (ctx.live() && state.selected === null) showBase(ctx, state); });
+  else void measured.finally(() => { if (ctx.live() && !state.picked) showBase(ctx, state); });
 }
 
 /** The second phase follows changes.ts's initial day view and gives the banner the winning show ticket. */

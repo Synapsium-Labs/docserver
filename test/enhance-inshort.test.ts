@@ -529,6 +529,21 @@ describe('which `changes` request is a comparison the reader chose (docserver re
       expect((seen as Error[]).map((reason) => reason.message)).toEqual(['the notice failed']);
     });
 
+    it('a comparison the reader picked and then hid while the measure was in flight is a choice too: the late base is not asked', async () => {
+      const { root, asked, answer } = await held();
+      await pick(root, () => days(root)[2]);
+      expect(asked).toEqual([SEEN, OLDER]);
+      expect(label(root)).not.toBe('Changes since…');
+      (root.querySelector('.chg-nav .hide') as HTMLButtonElement).click();
+      await flush();
+      expect(label(root)).toBe('Changes since…');
+      answer(SET);
+      await flush();
+      expect(asked).toEqual([SEEN, OLDER]);
+      expect(label(root)).toBe('Changes since…');
+      expect(root.querySelector('.rs-notice')).not.toBeNull();
+    });
+
     it('a mount destroyed while the measure is in flight asks no base and touches nothing', async () => {
       const { root, asked, answer } = await held();
       const picker = trigger(root);
