@@ -48,8 +48,8 @@ export interface KeyBinding {
   readonly label: string;
   /** Whether the key applies now; default always. */
   readonly when?: () => boolean;
-  /** Do it: the default is prevented unless this returns false. */
-  readonly run: () => boolean | void;
+  /** Do it, given the key's event: the default is prevented unless this returns false. */
+  readonly run: (e: KeyboardEvent) => boolean | void;
   /** False keeps it off the sheet; default true. */
   readonly listed?: boolean;
 }
@@ -120,7 +120,7 @@ export function createKeys(args: KeysArgs): Keys {
   const applies = (b: KeyBinding): boolean => b.when === undefined || b.when();
   const runIt = (b: KeyBinding, e: KeyboardEvent): void => {
     if (!applies(b)) return;
-    if (b.run() !== false) e.preventDefault();
+    if (b.run(e) !== false) e.preventDefault();
   };
 
   const handle = (e: KeyboardEvent): void => {

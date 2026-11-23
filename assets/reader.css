@@ -1395,3 +1395,5 @@ html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip,
 [data-docreader-root][data-docreader-root][data-docreader-root][data-reading] .topbar-inner { height: 0; padding: 0; background: none; box-shadow: none; }
 [data-docreader-root][data-docreader-root][data-docreader-root][data-reading] :is(.running-head, .aa-btn, .bar-tools > :not(.aa-wrap)),
 [data-docreader-root][data-docreader-root][data-docreader-root][data-reading] > :is(.doc-progress, .doc-toc, .toc-scrim) { display: none; }
+/* screen pages (LX6.2): the ground over the line the bottom edge cuts, drawn by the turn, removed by the next scroll */
+[data-docreader-root][data-docreader-root][data-docreader-root] > .page-band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; background: var(--bg); pointer-events: none; }

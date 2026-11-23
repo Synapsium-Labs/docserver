@@ -235,15 +235,15 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
 const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid', string>> = {
   guard: 'ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d',
   bootstrap: 'd0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63',
-  enhance: '9bd236ac860b5dcbf4638195bfc1515f24a0eb0b6639d24ed1b609bca7a069ef',
-  css: '82d492d1ebf2fac9509d9bc9d38decd318579809f9d89e72b9c0ce954266a412',
+  enhance: 'dcbdf934829e1645a0e520538fc9a44260e9c13f19d1aba99bd3b07f012ca650',
+  css: 'c1b898ec8106d8a95c3c59bbb7c0fb7479b5220f400970f3926e3541af731c1a',
   mermaid: '7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3',
 };
 
 /** frameCsp() at landing A, whole. */
 const DEFAULT_CSP =
   "default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM=' " +
-  "'sha256-m9I2rIYLXcv0Y4GVv8FRXySg6wtmOdJO0bYJvKegae8=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
+  "'sha256-3L35NIKeFkWg5SBTj8mkQmDpwT8Z0aupm9OwfwEsplA=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
   "style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'";
 
 /**
@@ -254,8 +254,8 @@ const DEFAULT_CSP =
  * longer than landing A's, the same render and options.
  */
 const DEFAULT_SRCDOC = {
-  plain: { sha256: '9fcec444f0b76e31e4c5a9bd27baabf64e369fc715b28ed4d6b3e1fc6c6436e6', length: 828293 },
-  rich: { sha256: '774b8f489fe95cae9a546522b0d3142e5ef78c9c7b289a3c26c7cf71214f4eb4', length: 4575314 },
+  plain: { sha256: '620207bf908658bfd5890d6ac53afd86d8844b01ae0728e2c7278f4bfb024aff', length: 833525 },
+  rich: { sha256: 'c42f9e0a4af8ee3a27834765f98fcafda33b7b09d8ff6256b1ef45adc6f58ed2', length: 4580546 },
 } as const;
 
 /** The two default srcdocs, with `layout` as given (undefined: the option left out). */
@@ -283,7 +283,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
       expect(sha(built.files[name].text), `${name} text`).toBe(DEFAULT_SHA256[name]);
     }
     // The default enhance bundle's size, which the layouts are measured against (test 8's layout row).
-    expect(FRAME_MANIFEST.enhance.chars).toBe(227226);
+    expect(FRAME_MANIFEST.enhance.chars).toBe(232151);
     expect(FRAME_MANIFEST.enhance.layout).toBe('default');
   });
 
@@ -307,7 +307,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
     // Its value at landing A's formula, at this tip: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
     // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
-    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_226_546);
+    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_231_778);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);
   });

@@ -72,6 +72,7 @@ import { createHost } from './host.js';
 import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { createKeys } from './keys.js';
 import { createNavigation, createPosition } from './nav.js';
+import { createPages } from './pages.js';
 import { createReader } from './reader.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
 import { createOverlays, OVERLAY_ORDER } from './overlays.js';
@@ -437,6 +438,8 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     },
   };
   inst.ctx = ctx;
+  // Screen pages (LX6.2, pages.ts): a shared service like the reader's, in every layout's bundle, inert until the host sends `reading`.
+  createPages(ctx);
   // A setEnhancementReading call made before the context existed (reader mode LX6.1): the reader judges the mode.
   const reading = inst.pendingReading;
   inst.pendingReading = undefined;

@@ -81,8 +81,8 @@ export interface Env {
   reducedMotion(): boolean;
   /** The window's width and height and its scroll position, frozen; zeros without a window. */
   viewport(): Viewport;
-  /** Scroll the window to `top`: smoothly only when asked and the reader allows motion. A top that is not finite is ignored. */
-  scrollTo(top: number, smooth?: boolean): void;
+  /** Scroll the window to `top`: smoothly only when asked (`true`) and the reader allows motion, at once whatever the page asks for (`'instant'`), else as the page asks (`auto`). A top that is not finite is ignored. */
+  scrollTo(top: number, how?: boolean | 'instant'): void;
   onScroll(fn: () => void): Cancel;
   onResize(fn: () => void): Cancel;
   /** `fn(true)` when printing starts, `fn(false)` when it ends. */
@@ -408,9 +408,9 @@ export function createEnv(root: HTMLElement, journal: Journal, live: () => boole
 
     viewport: () => Object.freeze(view === null ? { w: 0, h: 0, scrollY: 0 } : { w: view.innerWidth, h: view.innerHeight, scrollY: view.scrollY }),
 
-    scrollTo: (top, smooth = false) => {
+    scrollTo: (top, how = false) => {
       if (view === null || !Number.isFinite(top) || !live()) return;
-      view.scrollTo({ top, behavior: smooth && !matches('(prefers-reduced-motion: reduce)') ? 'smooth' : 'auto' });
+      view.scrollTo({ top, behavior: how === 'instant' ? 'instant' : how && !matches('(prefers-reduced-motion: reduce)') ? 'smooth' : 'auto' });
     },
 
     onScroll: (fn) => listen('scroll', fn),
