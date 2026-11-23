@@ -25,6 +25,9 @@
 //   onProgress   progress: the share (0 to 1) as a string of thousandths, rounded and clamped to 0..1000; a value that is
 //                not a finite number sends nothing (batch 1.1, C108)
 //
+//   onReader     reader: the act (a READER_ACTS member, anything else sends nothing); sent only with the seed's `bridge.reader`
+//                (reader mode, LX6.1); the outbox paces it (outbox.ts)
+//
 // Each callback but storage exists only when the seed's `bridge` allows its op (links, hash, copy, changes, versions,
 // progress),
 // so L2 builds no control whose op the parent does not answer.
@@ -45,7 +48,7 @@
 // Reference §11.5, ruling R7).
 import { isAnchorToken } from '../frame/anchor.js';
 import { isFragmentId } from '../frame/fragment.js';
-import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, type BridgeStoreKey, type PlaceKind } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, DOC_FIELDS, isBridgeStoreKey, isFullSha, PREF_KEYS, READER_ACTS, type BridgeStoreKey, type PlaceKind, type ReaderAct } from '../frame/protocol.js';
 import type { Seed, SeedMermaid } from '../frame/seed.js';
 import type { ChangesAnswer, Outbox, QueuedOp } from './outbox.js';
 
@@ -112,6 +115,8 @@ export interface FrameAdapters {
   readonly openVersion?: (v: { readonly sha: string | null; readonly only: string | null }) => void;
   /** Only when the seed's bridge asks for progress (its default is false): the share read so far, 0 to 1. */
   readonly onProgress?: (share: number) => void;
+  /** Only when the seed's bridge asks for reader (its default is false): one act of reader mode. */
+  readonly onReader?: (act: ReaderAct) => void;
   /** Only when the seed's bridge asks for places (its default is false): the figure overlay opened or closed. */
   readonly onPlace?: (kind: PlaceKind) => void;
   /**
@@ -195,6 +200,13 @@ export function createAdapters(outbox: Outbox, seed: Pick<Seed, 'snapshot' | 'br
           onProgress: (share: number): void => {
             if (typeof share !== 'number' || !Number.isFinite(share)) return;
             outbox.send({ t: 'progress', p: String(Math.min(1000, Math.max(0, Math.round(share * 1000)))) });
+          },
+        }
+      : {}),
+    ...(b.reader === true
+      ? {
+          onReader: (act: ReaderAct): void => {
+            if ((READER_ACTS as readonly unknown[]).includes(act)) outbox.send({ t: 'reader', act });
           },
         }
       : {}),

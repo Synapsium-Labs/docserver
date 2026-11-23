@@ -338,7 +338,7 @@ describe('options: no host function runs while the options are read', () => {
 
   it('neither normalizeOptions nor the whole startup touches a function option, mermaid.load included', async () => {
     const log: string[] = [];
-    const names = ['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'onPlace', 'onPrintFigure'];
+    const names = ['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'itemLink', 'onProgress', 'onPlace', 'onPrintFigure', 'onReader'];
     const options = { ...Object.fromEntries(names.map((n) => [n, watched(log, n)])), mermaid: { load: watched(log, 'load') } };
     normalizeOptions(options);
     expect(log).toEqual([]);
@@ -548,10 +548,11 @@ function callAll(h: ReturnType<typeof harness>['host']): unknown[] {
     h.onProgress(0.5),
     h.onPlace('overlay'),
     h.onPrintFigure({ i: 0, n: 1, png: 'iVBORw0KGgo=' }),
+    h.onReader('menu'),
   ];
 }
 
-const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink', 'onProgress', 'onPlace'];
+const SYNC: readonly HostCallback[] = ['openVersion', 'onLink', 'onHash', 'itemLink', 'onProgress', 'onPlace', 'onReader'];
 /** The callbacks whose wrapper answers a promise of what the host returned, once settled (docserver parity T6: onPrintFigure). */
 
 describe('host: one wrapper per host callback', () => {
@@ -638,8 +639,9 @@ describe('host: one wrapper per host callback', () => {
       onProgress: () => 'ignored',
       onPlace: () => 'ignored',
       onPrintFigure: () => 'ignored',
+      onReader: () => 'ignored',
     });
-    expect(await Promise.all(callAll(host))).toEqual([undefined, { changed: [[1, 2]] }, undefined, undefined, undefined, 'https://tracker.example/KEY-1', { default: 'module' }, undefined, undefined, undefined]);
+    expect(await Promise.all(callAll(host))).toEqual([undefined, { changed: [[1, 2]] }, undefined, undefined, undefined, 'https://tracker.example/KEY-1', { default: 'module' }, undefined, undefined, undefined, undefined]);
     const plain = harness({ copy: noop, changes: () => 7, mermaid: () => 'sync' });
     expect(await Promise.all([plain.host.copy('t'), plain.host.changes(SHA40), plain.host.loadMermaid()])).toEqual([undefined, 7, 'sync']);
   });

@@ -8,10 +8,12 @@
 // The reader's own font wait (src/enhance/relayout.ts, through env.fonts) already asks for the regular faces, so a
 // browser row cannot tell the probe apart; the italic faces and this independence are the probe's. Bundled into the
 // bootstrap; the timer it uses is read when the bootstrap's bundle starts.
+import { freeze } from '../frame/freeze.js';
+
 const later = setTimeout;
 
 /** The four faces of the frame stylesheet, as `FontFaceSet.load` takes them. */
-export const FACES: readonly string[] = Object.freeze([
+export const FACES: readonly string[] = freeze([
   'normal 400 1em "Docreader Serif"',
   'italic 400 1em "Docreader Serif"',
   'normal 400 1em "Docreader Sans"',

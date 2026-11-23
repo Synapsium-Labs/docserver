@@ -12,7 +12,7 @@
 //   - turns a throw, or a rejection of what an asynchronous callback returned, into null. Nothing it returns ever
 //     throws or rejects.
 //   - answers `unknown`: a feature checks the shape of whatever comes back. A callback the host declares as void
-//     (copy, openVersion, onLink, onHash, onProgress, onPlace) answers undefined when it returned, whatever it returned, so for those
+//     (copy, openVersion, onLink, onHash, onProgress, onPlace, onReader) answers undefined when it returned, whatever it returned, so for those
 //     null means only that it was absent, not live or failed. A callback that returns a value (changes, itemLink,
 //     mermaid's load) answers that value, null included. The synchronous void wrappers never look at what
 //     the host returned: a promise one of them returns is the host's own, and its rejection is the host's.
@@ -31,10 +31,10 @@
 // settling with it, so the machinery reads that object's `then` again, as it does for any value.
 //
 // Import-inert: declarations only, and createHost runs when the lifecycle calls it.
-import type { PlaceKind, PrintFigure } from './types.js';
+import type { PlaceKind, PrintFigure, ReaderAct } from './types.js';
 
 /** The host callbacks, in the order `present.names` lists them. `mermaid` is the `load` of options.mermaid. */
-export const HOST_CALLBACKS = ['copy', 'changes', 'openVersion', 'onLink', 'onHash', 'itemLink', 'mermaid', 'onProgress', 'onPlace', 'onPrintFigure'] as const;
+export const HOST_CALLBACKS = ['copy', 'changes', 'openVersion', 'onLink', 'onHash', 'itemLink', 'mermaid', 'onProgress', 'onPlace', 'onPrintFigure', 'onReader'] as const;
 
 export type HostCallback = (typeof HOST_CALLBACKS)[number];
 
@@ -76,6 +76,8 @@ export interface Host {
   onProgress(share: number): unknown;
   /** Tell the host the full-screen figure opened or closed (docserver parity T3; types.ts PlaceKind): undefined when the host returned, else null. */
   onPlace(kind: PlaceKind): unknown;
+  /** Tell the host an act of reader mode (reader mode LX6.1; reader.ts): undefined when the host returned, else null. */
+  onReader(act: ReaderAct): unknown;
   /**
    * Hand the host one figure of a print run as a PNG (docserver parity T6; types.ts PrintFigure): settles once the host's
    * callback returned and what it returned (a promise: the figure is on its way) settled, with undefined; null when the host
@@ -161,6 +163,7 @@ export function createHost(callbacks: HostCallbacks, live: () => boolean, operat
     loadMermaid: () => callAsync('mermaid', [], true),
     onProgress: (share: number) => done(call('onProgress', [share])),
     onPlace: (kind: PlaceKind) => done(call('onPlace', [kind])),
+    onReader: (act: ReaderAct) => done(call('onReader', [act])),
     onPrintFigure: (f: PrintFigure) => callAsync('onPrintFigure', [Object.freeze({ i: f.i, n: f.n, png: f.png })], false),
   });
 }

@@ -129,7 +129,7 @@ function frameOver(
     limits: BRIDGE_LIMITS,
   });
   outbox.open();
-  const adapters = createAdapters(outbox, { snapshot: [], bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures } });
+  const adapters = createAdapters(outbox, { snapshot: [], bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures, reader: false } });
   const draw = (): Promise<string | null> => Promise.resolve('<svg viewBox="0 0 10 10"></svg>');
   const runner = createPrintRunner({
     live: () => true,

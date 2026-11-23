@@ -11,6 +11,7 @@ import type { Keys } from './keys.js';
 import type { Nav, Position } from './nav.js';
 import type { FeatureOptions } from './options.js';
 import type { Overlays } from './overlays.js';
+import type { ReaderAct, Reader } from './reader.js';
 import type { Block, Events, Figures, IdIndex, PageSlot, PlanSlot, RelayoutReason, Terms } from './registry.js';
 import type { ReaderState } from './state.js';
 import type { TextTools } from './text.js';
@@ -27,6 +28,9 @@ export interface Prefs {
   /** The reading lens: 'all' shows everything; 'product' quiets implementation detail, never removing it. */
   lens: 'all' | 'product';
 }
+
+/** What `onReader` is told: an act of reader mode (the frame wire's ReaderAct, held equal by test). */
+export type { ReaderAct, ReadingMode } from './reader.js';
 
 /** What `onPlace` reports: the full-screen figure opened or closed (the frame wire's PlaceKind, held equal by test). */
 export type PlaceKind = 'overlay' | 'overlay-closed';
@@ -266,6 +270,14 @@ export interface EnhanceOptions {
    */
   onProgress?(share: number): void;
   /**
+   * Reader mode, told to the host (reader mode LX6.1; reader.ts): `menu` (a tap on the top band), `exit` (Escape with no overlay open,
+   * or `r`, while reader mode is on), `toggle` (`r` while it is off) and `active` (a table, block of code or figure scrolled sideways,
+   * or a figure panned or zoomed in full screen, while it is on). Every call is made as it happens: pacing is the host's (the frame's
+   * outbox keeps `menu`, `exit` and `toggle` to a window of 250 ms, and `active` to one a minute). Giving it also binds `r` and Escape's
+   * exit, and lists `r` on the keys sheet. Absent: none of that.
+   */
+  onReader?(act: ReaderAct): void;
+  /**
    * The full-screen figure opened (`'overlay'`) or closed (`'overlay-closed'`), so a host that keeps a history entry for it
    * can drop the entry when it closes. Closed by a host's own `close-overlay` command: no report. Only the figure is a place;
    * the keys sheet, the quick jump, settings and the rest are not. Absent: nothing is reported.
@@ -446,6 +458,8 @@ export interface FeatureContext {
   readonly headCtl: HeadCtl;
   /** The bar's skeleton: bar, tools, running head, progress, skip link (bar.ts); null without chrome.bar. */
   readonly slots: BarSlots | null;
+  /** Reader mode: its state, its acts to the host, and the 'reading' event (reader.ts). */
+  readonly reader: Reader;
   /** The commands a host runs with runEnhancementCommand: the bar's tools without the bar (commands.ts). */
   readonly commands: Commands;
   /** The folds' members API (folds.ts): empty without folds. */

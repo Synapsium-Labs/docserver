@@ -8,12 +8,13 @@
 // IDs of L2's default ID grammar with a dot (`D2.1a`) and rule IDs (`AB-12-C`). Combining marks are admitted with the
 // letters they follow. An id outside it arises only from an exotic custom ID prefix or an unassigned code point in a
 // slug: it is never sent and never thrown on.
+import { freeze } from './freeze.js';
 
 /**
  * The grammar: 1 to 256 UTF-16 code units of Unicode letters, marks and numbers, `_`, `.`, `:` and `-`. The length is
  * counted in code units (`s.length`), apart from the pattern, so 129 astral letters (258 code units) are refused.
  */
-export const FRAGMENT_ID_GRAMMAR = Object.freeze({
+export const FRAGMENT_ID_GRAMMAR = freeze({
   source: '^[\\p{L}\\p{M}\\p{N}_.:-]+$',
   flags: 'u',
   maxCodeUnits: 256,

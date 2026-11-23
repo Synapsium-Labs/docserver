@@ -1389,3 +1389,9 @@ html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip,
   [data-docreader-root] .codehilite * { color: #111 !important; background: transparent !important; }
   [data-docreader-root] .codehilite pre { background: #f5f3ee !important; white-space: pre-wrap; }
 }
+/* ─── reader mode: data-reading hides the chrome in place; the bar stays, with no height (the inner row is 0 high), so the settings command still opens its menu ─── */
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] { --bar-h: 0px !important; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading]:not(i) { padding-top: 8px; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] .topbar-inner { height: 0; padding: 0; background: none; box-shadow: none; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] :is(.running-head, .aa-btn, .bar-tools > :not(.aa-wrap)),
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] > :is(.doc-progress, .doc-toc, .toc-scrim) { display: none; }

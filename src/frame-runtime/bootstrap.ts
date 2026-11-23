@@ -426,6 +426,7 @@ interface EnhanceApi extends ReaderApi<HTMLElement> {
         ...(adapters.openVersion === undefined ? {} : { openVersion: adapters.openVersion }),
         ...(adapters.onProgress === undefined ? {} : { onProgress: adapters.onProgress }),
         ...(adapters.onPlace === undefined ? {} : { onPlace: adapters.onPlace }),
+        ...(adapters.onReader === undefined ? {} : { onReader: adapters.onReader }),
         ...adapters.itemOption,
         ...adapters.printOption,
         ...(seed.changesBase === undefined ? {} : { changesBase: seed.changesBase }),

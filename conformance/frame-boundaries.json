@@ -146,5 +146,36 @@
       "review": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
       "guided": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"
     }
+  },
+  {
+    "frameOps": [
+      "ready",
+      "error",
+      "store.set",
+      "navigate",
+      "copy",
+      "changes",
+      "hash",
+      "version",
+      "progress",
+      "place",
+      "print-figure",
+      "reader"
+    ],
+    "frameAccepts": [
+      "prefs",
+      "changes.result",
+      "mermaid",
+      "command",
+      "appearance",
+      "reading"
+    ],
+    "csp": {
+      "default": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
+      "classic": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
+      "editorial": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
+      "review": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
+      "guided": "default-src 'none'; script-src 'sha256-*' 'sha256-*' 'sha256-*' 'sha256-*'; style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"
+    }
   }
 ]

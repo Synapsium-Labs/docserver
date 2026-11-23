@@ -8,6 +8,8 @@
 // The list is the build's (DOCSERVER_FREE_GLOBALS, Task 6's scan of the four bundled scripts); the bootstrap passes it.
 // A second function below reserves the two names Mermaid writes while it evaluates (reserveGlobals).
 // The built-ins this file uses are read when the bootstrap's bundle starts, before any other code of the frame runs.
+import { freeze } from '../frame/freeze.js';
+
 const hasOwn = Object.prototype.hasOwnProperty;
 const define = Object.defineProperty;
 
@@ -27,7 +29,7 @@ export function pinFreeGlobals(win: object, names: readonly string[]): void {
  * either name would already be a named property of the window and the write would land on it; so every mode reserves
  * them in Phase S (BD5; C107).
  */
-export const RESERVED_GLOBALS: readonly string[] = Object.freeze(['fastdom', 'injected']);
+export const RESERVED_GLOBALS: readonly string[] = freeze(['fastdom', 'injected']);
 
 /**
  * Reserve each of `names` on `win`: a name that is already an own property is left as it is; any other is defined as an

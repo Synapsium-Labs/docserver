@@ -718,9 +718,9 @@ describe("test 7: the frame runtime's entry (the html mark and the registered me
     for (const p of ['--dr-tip-bg', '--dr-tip-fg', '--dr-tip-edge']) html.style.removeProperty(p);
   });
 
-  it('registers the reader api with the two new members', async () => {
+  it('registers the reader api with the two appearance members and the reader mode member', async () => {
     const api = await register();
-    expect(Object.keys(api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs']);
+    expect(Object.keys(api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs', 'setEnhancementReading']);
   });
 
   it('an op with a colour group marks html and sets the three tooltip properties from surface, text and border', async () => {

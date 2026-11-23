@@ -72,6 +72,7 @@ import { createHost } from './host.js';
 import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { createKeys } from './keys.js';
 import { createNavigation, createPosition } from './nav.js';
+import { createReader } from './reader.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
 import { createOverlays, OVERLAY_ORDER } from './overlays.js';
 import { sectionMinutes } from './reading.js';
@@ -103,6 +104,8 @@ interface Instance {
   state: ReaderState | null;
   /** setEnhancementPrefs changes made before startup created the state; applied as soon as it exists. */
   pendingPrefs: Partial<Prefs> | null;
+  /** The newest setEnhancementReading mode made before startup built the context: applied (judged by the reader) as soon as it exists. */
+  pendingReading: unknown;
   /** The newest setEnhancementAppearance verdict made before startup created the state: hosted, over the options', as soon as it exists. */
   pendingAppearance: Appearance | null;
   /** The context features were built with, once startup made it. */
@@ -423,6 +426,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     onRelayout: relayout.onRelayout,
     headCtl: createHeadCtl({ root, journal }),
     slots: bar?.slots ?? null,
+    reader: createReader({ root, journal, host, keys, events, position, relayout: relayout.relayout, keyboard: options.keyboard, live }),
     commands: createCommands(live),
     folds: createFolds(root),
     setPrefs: (change) => {
@@ -433,6 +437,10 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     },
   };
   inst.ctx = ctx;
+  // A setEnhancementReading call made before the context existed (reader mode LX6.1): the reader judges the mode.
+  const reading = inst.pendingReading;
+  inst.pendingReading = undefined;
+  if (reading !== undefined) ctx.reader.set(reading);
   // The host's history moved to an entry of this document (commands.ts: `goto`): the export goToHash, as a command.
   ctx.commands.register('goto', (args) => {
     const { id, from } = (typeof args === 'object' && args !== null ? args : {}) as { id?: unknown; from?: unknown };
@@ -623,6 +631,7 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
     state: null,
     pendingPrefs: null,
     pendingAppearance: null,
+    pendingReading: undefined,
     ctx: null,
     built: [],
     destroyed: null,
@@ -703,6 +712,22 @@ export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): v
       return;
     }
     changePrefs(inst, change);
+  });
+}
+
+/**
+ * Reader mode (LX6.1; reader.ts): switch the root to `screens`, `scroll` or `off`, in place and at once: while it is not `off` the root
+ * carries `data-reading` and the reader's chrome is hidden (no remount: the same elements, the same nonce). A mode that is not one of
+ * the three changes nothing, as does a root that is not enhanced (or no longer). Never throws. A call made while `enhance` is still
+ * starting is kept (the newest wins) and applied as soon as the context exists.
+ */
+export function setEnhancementReading(root: HTMLElement, mode: unknown): void {
+  if (!isElement(root)) return;
+  const inst = findByRoot(root);
+  if (inst === undefined) return;
+  operate(inst, () => {
+    if (inst.ctx === null) inst.pendingReading = mode;
+    else inst.ctx.reader.set(mode);
   });
 }
 

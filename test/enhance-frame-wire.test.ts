@@ -53,7 +53,7 @@ describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", ()
 });
 
 describe("the frame's registered reader api (C-F4)", () => {
-  it('the enhance entry registers exactly the seven members, runEnhancementCommand and the two appearance members among them', async () => {
+  it('the enhance entry registers exactly the eight members, runEnhancementCommand, the two appearance members and setEnhancementReading among them', async () => {
     const script = document.createElement('script');
     const seen: unknown[] = [];
     script.addEventListener('docserver:register', (e) => void seen.push((e as CustomEvent).detail));
@@ -67,14 +67,14 @@ describe("the frame's registered reader api (C-F4)", () => {
     expect(seen).toHaveLength(1);
     const detail = seen[0] as { name: string; api: Record<string, unknown> };
     expect(detail.name).toBe('enhance');
-    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs']);
+    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs', 'setEnhancementReading']);
     expect(typeof detail.api['runEnhancementCommand']).toBe('function');
   });
 });
 
 describe('the place wire: the reader reports its figure overlay (docserver parity T3)', () => {
   const TOKEN = JSON.stringify({ line: '12-14', offset: 40, y: 560 });
-  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false } as const;
+  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false } as const;
 
   function sentBy(bridge: typeof BRIDGE | (Omit<typeof BRIDGE, 'places'> & { places: boolean })): { sent: QueuedOp[]; a: ReturnType<typeof createAdapters> } {
     const sent: QueuedOp[] = [];
@@ -259,7 +259,7 @@ describe('the place wire: the reader reports its figure overlay (docserver parit
 });
 
 describe('the print wire: the adapter forwards a figure only under bridge.printFigures (docserver parity T6)', () => {
-  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: true } as const;
+  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: true, reader: false } as const;
   const PNG = 'iVBORw0KGgo=';
 
   function printBy(bridge: typeof BRIDGE | (Omit<typeof BRIDGE, 'printFigures'> & { printFigures: boolean })): { sent: QueuedOp[]; dones: number; a: ReturnType<typeof createAdapters> } {
@@ -339,7 +339,7 @@ describe('the item link of the frame: seeded hrefs, drawn by the reader (docserv
     return (seen[0] as { api: Api }).api;
   }
 
-  const SEED_BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false } as const;
+  const SEED_BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false } as const;
   const adaptersOf = (items?: readonly { value: string; href: string }[]): ReturnType<typeof createAdapters> =>
     createAdapters({ send: () => undefined } as unknown as Outbox, { snapshot: [], bridge: SEED_BRIDGE, ...(items === undefined ? {} : { items }) });
 

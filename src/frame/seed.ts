@@ -24,6 +24,7 @@
 import { APPEARANCE_SLOTS, type AppearanceSkinSlot } from '../enhance/appearance.js';
 import type { FrontEntry } from '../render/types.js';
 import { FRAGMENT_ID_GRAMMAR, isFragmentId } from './fragment.js';
+import { freeze } from './freeze.js';
 import { ITEM_LIMITS } from './items.js';
 import {
   BRIDGE_LIMITS,
@@ -46,7 +47,7 @@ const DOC_MAX_BYTES = 2097152;
  * front matter by (`cpSlice`). The copies of L2's and render()'s caps are held equal to their originals by
  * test/frame-seed.test.ts.
  */
-export const SEED_LIMITS = Object.freeze({
+export const SEED_LIMITS = freeze({
   /** The spec's document cap, in markdown UTF-8 bytes. */
   docMaxBytes: DOC_MAX_BYTES,
   /** The title: the text of a heading of the document, so never more code units than the document has bytes. */
@@ -89,10 +90,10 @@ export const SEED_LIMITS = Object.freeze({
 } as const);
 
 /** The faces a host may hand over, by role: the frame's sans (and chrome) and its mono. */
-export const FONT_ROLES = Object.freeze(['sans', 'mono'] as const);
+export const FONT_ROLES = freeze(['sans', 'mono'] as const);
 
 /** The image types the seed carries, as the data-URL grammar names them. */
-export const IMAGE_TYPES = Object.freeze(['png', 'jpeg', 'gif', 'webp', 'avif', 'svg+xml'] as const);
+export const IMAGE_TYPES = freeze(['png', 'jpeg', 'gif', 'webp', 'avif', 'svg+xml'] as const);
 
 /** An image's value: a base64 data URL of one of IMAGE_TYPES (Reference 3). */
 export const IMAGE_DATA_URL_SOURCE = `^data:image/(${IMAGE_TYPES.map((t) => t.replace('+', '\\+')).join('|')});base64,[A-Za-z0-9+/]*={0,2}$`;
@@ -103,32 +104,32 @@ export const SECURE_KEY_SOURCE = '^[A-Za-z][A-Za-z0-9_]{0,63}$';
 const SECURE_KEY = new RegExp(SECURE_KEY_SOURCE);
 
 /** How Mermaid draws: every figure after enhance, one figure on its Render tap (FD13), or every figure once load() answers, after ready (C107). */
-export const MERMAID_DRAW = Object.freeze(['auto', 'on-request', 'after-ready'] as const);
+export const MERMAID_DRAW = freeze(['auto', 'on-request', 'after-ready'] as const);
 export type MermaidDraw = (typeof MERMAID_DRAW)[number];
 
 /**
  * The ops the parent answers, each a boolean in the seed (FrameOptions.bridge: each defaults to true but `progress`,
- * `places` and `printFigures`, which default to false, because a parent that never asked for progress, places or print
- * figures should never be sent them; batch 1.1, C108, and the parity wire). `places` adds the `place` op and the `push` and
- * `from` of `hash`; `printFigures` adds the `print-figure` op.
+ * `places`, `printFigures` and `reader`, which default to false, because a parent that never asked for progress, places,
+ * print figures or reader mode should never be sent them; batch 1.1, C108, the parity wire and reader mode). `places` adds the
+ * `place` op and the `push` and `from` of `hash`; `printFigures` adds the `print-figure` op; `reader` adds the `reader` op.
  */
-export const BRIDGE_KEYS = Object.freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures'] as const);
+export const BRIDGE_KEYS = freeze(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures', 'reader'] as const);
 
 /**
  * The keys of `features`: three flags, `chrome`'s flags and `vocabulary`'s word lists, in groups (`status`,
  * `attention`, `plan`), in ID grammars (`ids`, which may also be false, and `ruleIds`, each `{ prefixes }`) and alone.
  * The same lists as L2's normalizeOptions reads (src/enhance/options.ts; held equal by test/frame-seed.test.ts).
  */
-export const FEATURE_KEYS = Object.freeze({
-  flags: Object.freeze(['rules', 'folds', 'keyboard', 'inShort'] as const),
-  chrome: Object.freeze(['bar', 'rail', 'settings', 'topSpace'] as const),
-  groups: Object.freeze({
-    status: Object.freeze(['ok', 'wait', 'no', 'info'] as const),
-    attention: Object.freeze(['status', 'who', 'question', 'openAnswers', 'blocking', 'risk', 'openStatus'] as const),
-    plan: Object.freeze(['task', 'step', 'who'] as const),
+export const FEATURE_KEYS = freeze({
+  flags: freeze(['rules', 'folds', 'keyboard', 'inShort'] as const),
+  chrome: freeze(['bar', 'rail', 'settings', 'topSpace'] as const),
+  groups: freeze({
+    status: freeze(['ok', 'wait', 'no', 'info'] as const),
+    attention: freeze(['status', 'who', 'question', 'openAnswers', 'blocking', 'risk', 'openStatus'] as const),
+    plan: freeze(['task', 'step', 'who'] as const),
   }),
-  grammars: Object.freeze(['ids', 'ruleIds'] as const),
-  lists: Object.freeze(['statusHeaders', 'rulingHeaders', 'qualifiers', 'addressees', 'itemFields', 'itemHeadings'] as const),
+  grammars: freeze(['ids', 'ruleIds'] as const),
+  lists: freeze(['statusHeaders', 'rulingHeaders', 'qualifiers', 'addressees', 'itemFields', 'itemHeadings'] as const),
 });
 
 /** The reader prefs the bridge carries: theme, width and font, each optional (FRAME_PREF_VALUES). */
@@ -620,10 +621,10 @@ const itemsOk = (v: unknown): boolean => listOf(v, 50, (i) => isPlain(i) && same
 const OPTIONAL_CHECKS = [['appearance', appearanceOk], ['changesBase', isFullSha], ['fonts', fontsOk], ['items', itemsOk]] as const;
 
 /** The keys a seed may leave out: the appearance, the comparison base, the faces and the item links. A mount that gives none of them writes a seed with none of these four keys (its `bridge` still carries all 8 of its own keys). */
-export const OPTIONAL_SEED_KEYS: readonly string[] = Object.freeze(OPTIONAL_CHECKS.map((c) => c[0]));
+export const OPTIONAL_SEED_KEYS: readonly string[] = freeze(OPTIONAL_CHECKS.map((c) => c[0]));
 
 /** The seed's keys, sorted: schema 1 has exactly these, the optional ones (OPTIONAL_SEED_KEYS) absent or present. */
-export const SEED_KEYS: readonly string[] = Object.freeze(
+export const SEED_KEYS: readonly string[] = freeze(
   ['bridge', 'features', 'frontList', 'html', 'images', 'initialHash', 'lang', 'mermaid', 'nonce', 'prefs', 's', 'snapshot', 'title', 'version', ...OPTIONAL_SEED_KEYS].sort(),
 );
 

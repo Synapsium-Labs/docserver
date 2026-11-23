@@ -356,7 +356,7 @@ function recordingOutbox(): { box: Outbox; sent: FrameToParent[]; copies: string
   return { box, sent, copies, asked };
 }
 
-const ALL = { links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false } as const;
+const ALL = { links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false, reader: false } as const;
 const SHA40 = 'a'.repeat(40);
 
 describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.3; row L3.B8 unit half)', () => {
@@ -442,7 +442,7 @@ describe('adapters: the enhance callbacks over the outbox (Reference §8.1, §8.
 
   it('each callback exists only when the seed\'s bridge allows it; storage always does', () => {
     const { box, sent } = recordingOutbox();
-    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false } });
+    const a = createAdapters(box, { snapshot: [], bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false, reader: false } });
     expect([a.onLink, a.onHash, a.copy, a.changes, a.openVersion, a.onProgress]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
     a.link('x.md');
     expect(sent).toEqual([]);

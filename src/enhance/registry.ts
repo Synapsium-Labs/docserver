@@ -36,6 +36,7 @@
 import type { Appearance } from './appearance.js';
 import type { Cancel } from './env.js';
 import { CHROME_ATTR } from './journal.js';
+import type { ReadingMode } from './reader.js';
 import { before, inOrder } from './text.js';
 import type { Prefs } from './types.js';
 import type { StatusRole } from './vocab.js';
@@ -251,12 +252,14 @@ export interface EventMap {
   changes: { readonly sections: readonly HTMLElement[] };
   /** reveal() showed an element. */
   reveal: { readonly target: Element };
+  /** Reader mode changed (reader.ts): the new mode, never the same one twice running. */
+  reading: ReadingMode;
 }
 
 export type EventName = keyof EventMap;
 
 /** The events, in the order the header lists them. */
-export const EVENT_NAMES: readonly EventName[] = ['prefs', 'relayout', 'spy', 'marks', 'changes', 'reveal', 'appearance'];
+export const EVENT_NAMES: readonly EventName[] = ['prefs', 'relayout', 'spy', 'marks', 'changes', 'reveal', 'appearance', 'reading'];
 
 export interface Events {
   /** Listen; the cancel stops it. Throws for a name not in EVENT_NAMES. */

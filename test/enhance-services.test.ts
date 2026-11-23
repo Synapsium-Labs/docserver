@@ -396,7 +396,7 @@ describe('events', () => {
     events.emit('spy', { section: null, unit: null });
     expect(got).toEqual(['a:1-scope', 'b', 'a:undefined']);
     expect(() => events.on('nope' as 'spy', () => undefined)).toThrow(/events.on/);
-    expect(EVENT_NAMES).toEqual(['prefs', 'relayout', 'spy', 'marks', 'changes', 'reveal', 'appearance']);
+    expect(EVENT_NAMES).toEqual(['prefs', 'relayout', 'spy', 'marks', 'changes', 'reveal', 'appearance', 'reading']);
   });
 
   it('a throwing listener does not stop the next; the first throw is thrown again after all ran', async () => {
