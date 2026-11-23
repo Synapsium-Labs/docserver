@@ -35,13 +35,13 @@ describe("src/frame/wire-types.ts: exactly L2's shapes, with no DOM (finding C1)
     // Reference §1's FramePrefs, `Pick<EnhancePrefs, 'theme' | 'width' | 'font'>`, taken from wire-types.ts.
     expectTypeOf<Wire.FramePrefs>().toEqualTypeOf<Pick<Prefs, 'theme' | 'width' | 'font'>>();
     expectTypeOf<Required<FramePrefValues>>().toEqualTypeOf<Pick<Prefs, 'theme' | 'width' | 'font'>>();
-    expectTypeOf<keyof typeof FRAME_PREF_VALUES>().toEqualTypeOf<Exclude<keyof Prefs, 'lens'>>();
+    expectTypeOf<keyof typeof FRAME_PREF_VALUES>().toEqualTypeOf<Exclude<keyof Prefs, 'lens' | 'size'>>();
   });
 });
 
-describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", () => {
+describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the reader-local prefs, the lens (finding C3) and the text size (LX6.3)", () => {
   it('the same prefs, in the same order, each with the same values in the same order (the first the default)', () => {
-    const l2 = Object.fromEntries(Object.entries(PREF_VALUES).filter(([k]) => k !== 'lens'));
+    const l2 = Object.fromEntries(Object.entries(PREF_VALUES).filter(([k]) => k !== 'lens' && k !== 'size'));
     expect(Object.keys(FRAME_PREF_VALUES)).toEqual(Object.keys(l2));
     expect(FRAME_PREF_VALUES).toEqual(l2);
   });
@@ -49,6 +49,11 @@ describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", ()
   it("the lens is L2's and stays out (its control: PREF_VALUES does carry one)", () => {
     expect(Object.keys(PREF_VALUES)).toContain('lens');
     expect(Object.keys(FRAME_PREF_VALUES)).not.toContain('lens');
+  });
+
+  it("the text size is L2's too and stays out (LX6.3): PREF_VALUES carries one, the bridge's prefs op does not", () => {
+    expect(Object.keys(PREF_VALUES)).toContain('size');
+    expect(Object.keys(FRAME_PREF_VALUES)).not.toContain('size');
   });
 });
 

@@ -22,7 +22,9 @@
 //        Chromium, scrolls the table)
 //   T11  turns are instant with and without reduced motion, even under `scroll-behavior: smooth`
 //   T12  a resize and a width change keep the place and land on a whole line
+//   T12b a change of text size keeps the place in screens mode: the first line shown stays the first line shown, whole
 //   T13  `scroll` and `off` turn nothing: no band, no prevented keys, taps and swipes do nothing
+//   T14  the text sizes (LX6.3): s, m, l and xl are 16, 18, 20 and 22 px of body text, absent reads m, and rem parts follow
 //
 // Waits are polls on a condition; a row that must see something NOT happen waits a fixed beat after an ordered command.
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -421,6 +423,12 @@ const scrollToEl = (host: LibHost, sel: string, top: number): Promise<void> =>
     },
     [sel, top] as const,
   );
+
+/** Choose a text size in the frame's Aa row, as a reader's click does (the size is the reader's own pref, not on the bridge). */
+const chooseSize = (host: LibHost, size: string): Promise<void> =>
+  host.frame().evaluate((v) => {
+    (document.querySelector(`input[data-pref="size"][value="${v}"]`) as HTMLInputElement).click();
+  }, size);
 
 const WIDTHS = [390, 720, 1200] as const;
 const FONTS = ['serif', 'sans'] as const;
@@ -1333,6 +1341,108 @@ describeBrowsers((browser: BrowserName) => {
       // the next turn still goes forward from there
       const t = await turn(host, 'ArrowRight');
       expect(t.after).toBeGreaterThan(t.before);
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
+  it('T12b (default layout): a change of text size keeps the place in screens mode: the first line shown stays the first line shown, whole', async () => {
+    const host = await open(browser, LINES);
+    try {
+      await host.frame().evaluate(() => {
+        document.documentElement.style.overflowAnchor = 'none'; // so that only the library keeps the place
+        document.body.style.overflowAnchor = 'none';
+      });
+      await screens(host);
+      for (let k = 0; k < 2; k += 1) await turn(host, 'ArrowRight');
+      // a paragraph's first line at the top: the first line shown starts with its marker, whatever the size wraps it to
+      await host.frame().evaluate(() => {
+        const ps = Array.from(document.querySelectorAll('[data-docreader-root] p')).filter((p) => /^P\d+ /.test(p.textContent ?? ''));
+        const next = ps.find((p) => p.getBoundingClientRect().top > 300) as HTMLElement;
+        scrollTo({ top: next.getBoundingClientRect().top + scrollY, behavior: 'instant' });
+      });
+      await sleep(500);
+      const word = await probe<string>(host, 'topWord');
+      expect(word).toMatch(/^P\d+$/);
+      const firstLine = (): Promise<{ top: number; lh: number } | null> =>
+        host.frame().evaluate((w) => {
+          const p = Array.from(document.querySelectorAll('[data-docreader-root] p')).find((e) => (e.textContent ?? '').startsWith(`${w} `));
+          if (p === undefined || p.firstChild === null) return null;
+          const range = document.createRange();
+          range.setStart(p.firstChild, 0);
+          range.setEnd(p.firstChild, w.length);
+          return { top: range.getBoundingClientRect().top, lh: parseFloat(getComputedStyle(p).lineHeight) };
+        }, word);
+      const before = await firstLine();
+      expect(before?.top, 'the marker starts the first line shown').toBeGreaterThanOrEqual(-1);
+      expect(before?.top).toBeLessThan((before?.lh ?? 0) * 0.9);
+      const heights: number[] = [];
+      for (const size of ['xl', 's', 'l', 'm'] as const) {
+        await chooseSize(host, size);
+        await sleep(900);
+        heights.push(await host.frame().evaluate(() => parseFloat(getComputedStyle(document.querySelector('[data-docreader-root]') as Element).fontSize)));
+        expect(await probe<string>(host, 'topWord'), `after size ${size}`).toBe(word);
+        const now = await firstLine();
+        expect(now?.top, `after size ${size}: the marker still starts the first line shown`).toBeGreaterThanOrEqual(-1);
+        expect(now?.top, `after size ${size}: and that line is the first one`).toBeLessThan((now?.lh ?? 0) * 0.9);
+        expect(await probe<unknown[]>(host, 'cut', 0), `after size ${size}: no line is cut at the top`).toEqual([]);
+      }
+      expect(heights, 'the sizes did take effect').toEqual([22, 16, 20, 18]);
+      // the next turn still goes forward from there
+      const t = await turn(host, 'ArrowRight');
+      expect(t.after).toBeGreaterThan(t.before);
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
+  it('T14 (default layout): the sizes s, m, l and xl are 16, 18, 20 and 22 px of body text; absent reads m; the rem parts and the column follow', async () => {
+    const host = await open(browser, LINES);
+    try {
+      const read = (): Promise<{ body: number; h2: number; measure: number; size: string | null; checked: string[] }> =>
+        host.frame().evaluate(() => {
+          const root = document.querySelector('[data-docreader-root]') as HTMLElement;
+          const col = root.querySelector(':scope > p') as HTMLElement;
+          return {
+            body: parseFloat(getComputedStyle(root).fontSize),
+            h2: parseFloat(getComputedStyle(root.querySelector('h2, h1') as Element).fontSize),
+            measure: col.getBoundingClientRect().width,
+            size: root.getAttribute('data-size'),
+            checked: Array.from(root.querySelectorAll<HTMLInputElement>('input[data-pref="size"]')).filter((i) => i.checked).map((i) => i.value),
+          };
+        });
+      await host.page.setViewportSize({ width: 1400, height: 900 });
+      await sleep(400);
+      const m = await read();
+      expect(m.body, 'absent reads m: 18 px').toBe(18);
+      expect([m.size, m.checked], 'absent reads m').toEqual([null, ['m']]);
+      for (const [size, px] of [['s', 16], ['l', 20], ['xl', 22], ['m', 18]] as const) {
+        await chooseSize(host, size);
+        await sleep(500);
+        const r = await read();
+        expect(r.body, `size ${size}`).toBe(px);
+        expect(r.checked).toEqual([size]);
+        expect(r.size).toBe(size === 'm' ? null : size);
+        expect(r.h2 / m.h2, `size ${size}: the headings (rem parts) follow`).toBeCloseTo(px / 18, 2);
+        expect(r.measure / m.measure, `size ${size}: the column follows`).toBeCloseTo(px / 18, 2);
+      }
+      // the sans face (its own 17.5 px at m) and a phone view (its own 17 px at m) take the same four sizes
+      await host.setPrefs({ font: 'sans' });
+      await sleep(500);
+      expect((await read()).body, 'sans at m keeps its own size').toBe(17.5);
+      for (const [size, px] of [['s', 16], ['l', 20], ['xl', 22]] as const) {
+        await chooseSize(host, size);
+        await sleep(400);
+        expect((await read()).body, `sans, size ${size}`).toBe(px);
+      }
+      await host.setPrefs({ font: 'serif' });
+      await host.page.setViewportSize({ width: 390, height: 844 });
+      await sleep(600);
+      for (const [size, px] of [['xl', 22], ['s', 16], ['m', 17]] as const) {
+        await chooseSize(host, size);
+        await sleep(400);
+        expect((await read()).body, `phone, size ${size}`).toBe(px);
+      }
     } finally {
       await host.close();
     }

@@ -198,8 +198,9 @@ describe('meta: figures and mermaidKinds, against the reference', () => {
   it("mermaid-figures: the meta is the case's expected meta (its html waits for Task 7's captions)", () => {
     const c = loadCorpus().find((x) => x.id === 'mermaid-figures');
     expect(c).toBeDefined();
-    // `items` (the item values of a render given a `reader`) is this library's own key, not the goldens': empty here, as the corpus runner reads it.
-    const { items, ...reference } = render(c?.input ?? '', c?.options).meta;
+    // `items` (the item values of a render given a `reader`) and `readingMinutes` are this library's own keys, not the goldens': `items` empty here, as the corpus runner reads them.
+    const { items, readingMinutes, ...reference } = render(c?.input ?? '', c?.options).meta;
+    expect(readingMinutes).toBeGreaterThan(0);
     expect(items).toEqual([]);
     expect(`${JSON.stringify(reference, null, 2)}\n`).toBe(c?.expected?.meta);
   });

@@ -105,6 +105,7 @@ export const PREF_VALUES = {
   width: ['standard', 'wide'],
   font: ['serif', 'sans'],
   lens: ['all', 'product'],
+  size: ['m', 's', 'l', 'xl'],
 } as const;
 
 /** The names of the prefs, in PREF_VALUES order. */

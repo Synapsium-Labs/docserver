@@ -16,6 +16,7 @@ const EMPTY = {
   tables: 0,
   mermaidKinds: [],
   items: [],
+  readingMinutes: 0,
 };
 
 /** An engine whose core chain throws once it has parsed: the fault injection for the fallback. */
@@ -91,7 +92,7 @@ describe('render: the html bound (ruling C20)', () => {
     const src = `[r]: /${'u'.repeat(50)}\n\n[r] [r] [r] [r] \u00e9\n`;
     const html = render(src).html;
     const bytes = utf8(src);
-    expect(render(src, { maxHtmlBytes: utf8(html) })).toEqual({ html, outcome: 'rendered', bytes, meta: EMPTY });
+    expect(render(src, { maxHtmlBytes: utf8(html) })).toEqual({ html, outcome: 'rendered', bytes, meta: { ...EMPTY, readingMinutes: 5 / 230 } });
     const r = render(src, { maxHtmlBytes: utf8(html) - 1 });
     expect(r).toEqual({ html: `${FALLBACK_OPEN}${src}</pre>`, outcome: 'output-over-limit', bytes, meta: EMPTY });
     expect(r.meta).toBe(EMPTY_META);
@@ -192,7 +193,7 @@ describe('render: the failure fallback', () => {
 describe('render: options and state', () => {
   it('a rendered result has outcome rendered and a fresh meta', () => {
     const r = render('a\n');
-    expect(r).toEqual({ html: '<p data-line="1-1">a</p>\n', outcome: 'rendered', bytes: 2, meta: EMPTY });
+    expect(r).toEqual({ html: '<p data-line="1-1">a</p>\n', outcome: 'rendered', bytes: 2, meta: { ...EMPTY, readingMinutes: 1 / 230 } });
     expect(r.meta).not.toBe(EMPTY_META);
   });
 

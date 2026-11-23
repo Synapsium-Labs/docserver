@@ -483,7 +483,7 @@ function changePrefs(inst: Instance, change: Partial<Prefs>): void {
   if (!changed || ctx === null) return;
   const now = state.prefs;
   ctx.events.emit('prefs', Object.freeze({ ...now }));
-  if (now.width !== was.width || now.font !== was.font) ctx.relayout('prefs');
+  if (now.width !== was.width || now.font !== was.font || now.size !== was.size) ctx.relayout('prefs');
   if (now.lens !== was.lens) ctx.relayout('lens');
 }
 

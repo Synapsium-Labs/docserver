@@ -27,6 +27,8 @@ export interface Prefs {
   font: 'serif' | 'sans';
   /** The reading lens: 'all' shows everything; 'product' quiets implementation detail, never removing it. */
   lens: 'all' | 'product';
+  /** The text size: 16, 18 (the default), 20 or 22 px. Reader-local, like the lens: it never rides the bridge's `prefs` op. */
+  size: 's' | 'm' | 'l' | 'xl';
 }
 
 /** What `onReader` is told: an act of reader mode (the frame wire's ReaderAct, held equal by test). */

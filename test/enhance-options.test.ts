@@ -823,7 +823,7 @@ describe('host: the lifecycle wires it to the instance', () => {
 describe('prefs: lens, the fourth pref (LD12)', () => {
   it('defaults to all, the first of its values', () => {
     expect(PREF_VALUES.lens).toEqual(['all', 'product']);
-    expect(defaultPrefs()).toEqual({ theme: 'auto', width: 'standard', font: 'serif', lens: 'all' });
+    expect(defaultPrefs()).toEqual({ theme: 'auto', width: 'standard', font: 'serif', lens: 'all', size: 'm' });
   });
 
   it('a stored lens is restored; an invalid one is ignored; an explicit one wins', async () => {
