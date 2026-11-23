@@ -19,7 +19,7 @@ Reader mode, the library's half (a minor when released). Bridge protocol 1 and s
 - **`reading` (parent to frame).** `DocFrame.setReading(mode)`, `'screens'`, `'scroll'` or `'off'`, posts `{ t: 'reading', mode }` once ready (queued before it, the latest wins) and seeds every later mount, which posts it at its own ready; a mode outside the three is a `TypeError`. The reader's `setEnhancementReading(root, mode)` is its entry: while the mode is not `'off'` the root carries `data-reading` and the bar, running head, progress line, contents rail, settings button and top space are hidden in place, with no remount (the same iframe, nonce and elements); the `settings` command still opens the menu. `FRAME_ACCEPTS` gains `reading`; the frame ignores an unknown mode.
 - **`reader` (frame to parent).** `HostAdapters.onReader(act)`, `act` one of `'menu'`, `'exit'`, `'toggle'` and `'active'` (`READER_ACTS`); giving it sets the seed's new `bridge.reader` (off unless asked for), the enhance option `onReader` and the keys: `r` sends `toggle` (`exit` while reader mode is on), Escape with no overlay open sends `exit` while it is on, and the keys sheet lists `r`. The frame paces the op itself: `menu`, `exit` and `toggle` over `BRIDGE_LIMITS.readerWindowMs` (250 ms, leading edge, the latest act of the window at its end) and `active`, a sideways scroll of a table or code block or a figure panned or zoomed in full screen, over `BRIDGE_LIMITS.readerActiveMs` (60 s) on a window of its own, so the host's bucket never refuses a well-paced frame and an `active` never replaces another act. `FRAME_OPS` gains `reader`; the host parser refuses an unknown act as `type` and another key as `keys`.
 - **Screen pages (`'screens'` mode).** A new shared enhance module (`src/enhance/pages.ts`, made by the lifecycle, so in every layout's bundle and inert until the host sends `reading`) turns the page: taps (left third back, the rest forward, the top 15% of the view and at least 48 px sends `menu`, in `'screens'` and `'scroll'`), touch swipes, and ArrowRight, PageDown and Space (forward), ArrowLeft, PageUp and Shift+Space (back). A turn lands on a whole line below what is pinned at the top, covers the line the bottom edge cuts with a band of the reader's ground until the next scroll, steps through a block taller than the screen one screen less one line at a time, moves at least a third of a screen, and scrolls instantly, with or without reduced motion. The place is kept and the top snapped after a resize or a width or face change. `Env.scrollTo(top, how)` takes `'instant'`, and a key binding's `run` receives the key's event.
-- **Text size.** A new reader pref, `size`: `'m'` (the default, 18 px), `'s'` (16), `'l'` (20) or `'xl'` (22), with an Aa row beside width and font (`enhance` option `prefs`, `setEnhancementPrefs`, and the stored prefs object, which gains a `size` field; an absent or unknown stored value reads as `'m'`). The root carries `data-size` for `s`, `l` and `xl` (none for `m`), and the stylesheet sets the body size and `--rem` with it, so every `rem` part and the column follow; a change keeps the place and, in screen pages, lands on a whole line again. It is the reader's own, like the lens: `FRAME_PREF_VALUES` and the `prefs` op are unchanged (a `prefs` message that names a size is refused as before), and the bootstrap does not move.
+- **Text size.** A new reader pref, `size`: `'m'` (the default, 18 px), `'s'` (16), `'l'` (20) or `'xl'` (22), with an Aa row beside width and font (`enhance` option `prefs`, `setEnhancementPrefs`, and the stored prefs object, which gains a `size` field; an absent or unknown stored value reads as `'m'`). The root carries `data-size` for `s`, `l` and `xl` (none for `m`), and the stylesheet sets the body size and `--rem` with it, so every `rem` part and the column follow (on screen only: print keeps its 11 pt baseline and unscaled `rem`, whatever size the reader chose); a change keeps the place and, in screen pages, lands on a whole line again. It is the reader's own, like the lens: `FRAME_PREF_VALUES` and the `prefs` op are unchanged (a `prefs` message that names a size is refused as before), and the bootstrap does not move.
 - **Reading time in `render()`'s meta.** `meta.readingMinutes`, the document's reading time in minutes (unrounded), by the byline's rule (230 words a minute of prose, 520 of code, half a minute a figure), so a host that shows a time left agrees with the byline, which shows this number rounded. A test holds it equal to the enhance step's figure for every document of the corpus and for bylines built over rounding edges. It is this library's own key: the conformance goldens leave it out, as they leave out an empty `items`, so no golden moved.
 - **Frame assets.** The bootstrap's frozen tables use one `freeze` alias (`src/frame/freeze.ts`) to make room: no behaviour moves. Every enhance bundle gains the reader-mode module (inert until the host sends `reading`) and `reader.css` a block keyed on `data-reading`. The text size adds a small block to `reader.css` (keyed on `data-size`) and about 110 to 190 characters to each enhance bundle.
 - **Goldens.** None moved. `conformance/bridge-cases.json` gains 18 cases for the two ops, `conformance/frame-boundaries.json` one entry (`reading` accepted, `reader` sent, the policies unchanged), and `conformance/frame-mutants/*.html` carry the seed's new `reader` switch.
@@ -75,8 +75,8 @@ The frame assets' sizes are now held by two append-only tables, `conformance/siz
 
 - `assets/frame/bootstrap.js`: `d0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63`, csp `'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM='`
 - `assets/frame/enhance.js`: `4ba182f688142a4b5763923bc4d9b6d466acaee137eab7539f51b2c7cad02d83`, csp `'sha256-S6GC9ogUKktXY5I7xNm21GasruE36rdTn1Gyx8rQLYM='`
-- `assets/frame/reader.css`: `561134a03bff3a0a416050df7de847291426db51ec20d3da55836fc2fdfd020e`
-- `assets/reader.css`: `c7d0aa5de1246ffb6fc93363ea3abe6180f367cc0761ea59c9c3bd3a3cdc8a03`
+- `assets/frame/reader.css`: `7353de5780f826376bb8bd4afb7364a9fe3073d0ba12e581fcd418d723d131ce`
+- `assets/reader.css`: `c8448ea455a9a688554d8794b6b2219ea8914b15701869319f818be23f6a3f88`
 - `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`
 
 ## 1.1.0
@@ -118,8 +118,8 @@ The assets that moved, each with the sha256 that `assets/assets.json` records (`
 
 - `assets/frame/bootstrap.js`: `dc49ce7dffeb1d2f9ebba065ec6a53ecbdf3ab1439f67c63c17763dda459c424`, csp `'sha256-3EnOff/rHS+eu6Bl7GpT7L3zqxQ59nxjwXdj3aRZxCQ='`
 - `assets/frame/enhance.js`: `4ba182f688142a4b5763923bc4d9b6d466acaee137eab7539f51b2c7cad02d83`, csp `'sha256-S6GC9ogUKktXY5I7xNm21GasruE36rdTn1Gyx8rQLYM='`
-- `assets/frame/reader.css`: `561134a03bff3a0a416050df7de847291426db51ec20d3da55836fc2fdfd020e`
-- `assets/reader.css`: `c7d0aa5de1246ffb6fc93363ea3abe6180f367cc0761ea59c9c3bd3a3cdc8a03`
+- `assets/frame/reader.css`: `7353de5780f826376bb8bd4afb7364a9fe3073d0ba12e581fcd418d723d131ce`
+- `assets/reader.css`: `c8448ea455a9a688554d8794b6b2219ea8914b15701869319f818be23f6a3f88`
 
 ## 1.0.0
 
@@ -143,10 +143,10 @@ Its assets, each with the sha256 that `assets/assets.json` records:
 - `assets/frame/bootstrap.js`: `7660d62d5edc48db520205fd2d24041f409b35270b2739d5f43497abef06310c`
 - `assets/frame/enhance.js`: `4ba182f688142a4b5763923bc4d9b6d466acaee137eab7539f51b2c7cad02d83`
 - `assets/frame/guard.js`: `ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d`
-- `assets/frame/reader.css`: `561134a03bff3a0a416050df7de847291426db51ec20d3da55836fc2fdfd020e`
+- `assets/frame/reader.css`: `7353de5780f826376bb8bd4afb7364a9fe3073d0ba12e581fcd418d723d131ce`
 - `assets/mermaid/mermaid.frame.js`: `7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3`
 - `assets/mermaid/mermaid.mjs`: `dfba66fc5c75e030c35bf16d5e7a62bbee7be5496cabec94ec93f85d626b38df`
-- `assets/reader.css`: `c7d0aa5de1246ffb6fc93363ea3abe6180f367cc0761ea59c9c3bd3a3cdc8a03`
+- `assets/reader.css`: `c8448ea455a9a688554d8794b6b2219ea8914b15701869319f818be23f6a3f88`
 
 ## 0.0.0-reserve
 

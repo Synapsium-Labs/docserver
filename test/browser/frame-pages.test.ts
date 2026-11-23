@@ -24,6 +24,7 @@
 //   T12  a resize and a width change keep the place and land on a whole line
 //   T12b a change of text size keeps the place in screens mode: the first line shown stays the first line shown, whole
 //   T13  `scroll` and `off` turn nothing: no band, no prevented keys, taps and swipes do nothing
+//   T14p the text size is a screen control: in print media every size keeps the 11pt baseline and the unscaled rem (LX6.3 fix round 1)
 //   T14  the text sizes (LX6.3): s, m, l and xl are 16, 18, 20 and 22 px of body text, absent reads m, and rem parts follow
 //
 // Waits are polls on a condition; a row that must see something NOT happen waits a fixed beat after an ordered command.
@@ -1392,6 +1393,45 @@ describeBrowsers((browser: BrowserName) => {
       const t = await turn(host, 'ArrowRight');
       expect(t.after).toBeGreaterThan(t.before);
     } finally {
+      await host.close();
+    }
+  }, 240_000);
+
+  it('T14p (default layout): the text size is a screen control: in print media every size prints at the 11 pt baseline with the rem parts unscaled', async () => {
+    const host = await open(browser, LINES);
+    try {
+      const read = (): Promise<{ print: boolean; body: number; h2: number; measure: number }> =>
+        host.frame().evaluate(() => {
+          const root = document.querySelector('[data-docreader-root]') as HTMLElement;
+          return {
+            print: matchMedia('print').matches,
+            body: parseFloat(getComputedStyle(root).fontSize),
+            h2: parseFloat(getComputedStyle(root.querySelector('h2, h1') as Element).fontSize),
+            measure: (root.querySelector(':scope > p') as HTMLElement).getBoundingClientRect().width,
+          };
+        });
+      await host.page.setViewportSize({ width: 1400, height: 900 });
+      const screenXl = await (async () => {
+        await chooseSize(host, 'xl');
+        await sleep(400);
+        return read();
+      })();
+      expect([screenXl.print, screenXl.body], 'on screen xl is 22 px').toEqual([false, 22]);
+      await host.page.emulateMedia({ media: 'print' });
+      await sleep(400);
+      let base: { body: number; h2: number; measure: number } | null = null;
+      for (const size of ['m', 's', 'l', 'xl'] as const) {
+        await chooseSize(host, size);
+        await sleep(400);
+        const r = await read();
+        expect(r.print, 'the frame is in print media').toBe(true);
+        expect(r.body, `print, size ${size}: 11 pt`).toBeCloseTo(11 * (96 / 72), 3);
+        base ??= r;
+        expect(r.h2, `print, size ${size}: the rem parts are not scaled`).toBeCloseTo(base.h2, 3);
+        expect(r.measure, `print, size ${size}: the column is not scaled`).toBeCloseTo(base.measure, 1);
+      }
+    } finally {
+      await host.page.emulateMedia({ media: null }).catch(() => undefined);
       await host.close();
     }
   }, 240_000);
