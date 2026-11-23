@@ -14,6 +14,8 @@
 //   T4   a table of 60 rows taller than the screen: each forward turn puts the next row's top at the pinned head's bottom
 //        (within 1 px), never under it, and every row is wholly shown on some page forward and back, with the head pinned
 //        (`.fits`) and without it (a wide table)
+//   T4b  a back turn from the page whose first whole row is the table's first (its head cut above) lands the new top in the
+//        text above the table: that top is snapped to a whole line, so the row lies below the bottom edge by less than one line
 //   T5   a card's pinned head and a figure's pinned tools offset the target the same way
 //   T6   every turn moves at least a third of a screen (a block cut near the top), and the end and the start do nothing
 //   T7   a tap on a link, a button, a Render button, a summary and a card never turns; a plain tap turns, right or left third
@@ -285,6 +287,29 @@ const viewport = (host: LibHost): Promise<{ w: number; h: number }> => host.fram
 async function drawBand(host: LibHost): Promise<void> {
   for (let k = 0; k < 6 && !(await probe<{ shown: boolean }>(host, 'band')).shown; k += 1) await turn(host, 'ArrowRight');
   expect((await probe<{ shown: boolean }>(host, 'band')).shown, 'a band is on screen').toBe(true);
+}
+
+/**
+ * After a back turn whose first wholly shown row was table row `i`: that row is now the first below the bottom edge. Where the
+ * new top lies inside the table (its top at or above the view's), what the top cuts is a row, a block that is never snapped, so the
+ * row sits at the edge (1.5 px: a scroll position is whole pixels). Where the new top lies in the text above the table, spec 5.3
+ * then snaps that top to a whole line, which lowers the row by the part of the line the top had cut: so the line at the top is
+ * whole and starts at the top, and the row lies below the edge by less than that one line.
+ */
+async function rowBelowEdge(host: LibHost, i: number, h: number, label: string): Promise<void> {
+  const now = (await probe<{ t: number }[]>(host, 'rows', 'tbody tr'))[i] as { t: number };
+  const msg = `${label}: row ${String(i)} is the first below the bottom edge`;
+  if (((await probe<{ t: number } | null>(host, 'rect', 'table')) as { t: number }).t <= 0.5) {
+    expect(Math.abs(now.t - h), msg).toBeLessThanOrEqual(1.5);
+    return;
+  }
+  expect(await probe<unknown[]>(host, 'cut', 0), `${label}: no line is cut at the top`).toEqual([]);
+  const top = (await probe<{ t: number; b: number }[]>(host, 'whole', 0, 0.01))[0];
+  expect(top, `${label}: a whole line of the text above the table is at the top`).toBeDefined();
+  const { t, b } = top as { t: number; b: number };
+  expect(now.t - h, msg).toBeGreaterThanOrEqual(-1.5);
+  expect(now.t - h, `${msg}, lowered by less than the line snapped at the top`).toBeLessThan(b - t);
+  if (now.t - h > 1.5) expect(t, `${label}: the snapped line starts at the top`).toBeLessThanOrEqual(1.2);
 }
 
 /** Add a block to the root, before the first element matching `before`. */
@@ -743,8 +768,7 @@ describeBrowsers((browser: BrowserName) => {
           await collect();
           if (after === before) break;
           if (tbl !== null && tbl.t < 0 && tbl.b > h && first !== undefined && after > 20) {
-            const now = (await probe<{ i: number; t: number; b: number }[]>(host, 'rows', 'tbody tr'))[first.i] as { t: number };
-            expect(Math.abs(now.t - h), `back turn ${String(k)}: row ${String(first.i)} is the first below the bottom edge`).toBeLessThanOrEqual(1.5);
+            await rowBelowEdge(host, first.i, h, `back turn ${String(k)}`);
             stepped += 1;
           }
         }
@@ -755,6 +779,25 @@ describeBrowsers((browser: BrowserName) => {
       }
     }, 300_000);
   }
+
+  it('T4b (default layout): in a wide table, a back turn from the page whose first whole row is the first, its head cut above, puts that row just below the bottom edge, the top snapped to a whole line of the text above', async () => {
+    const host = await open(browser, WIDE, {}, { width: 1000, height: 844 });
+    try {
+      await screens(host);
+      const h = await probe<number>(host, 'h');
+      for (const off of [1, 5, 12, 20, 30]) {
+        const r0 = (await probe<{ t: number }[]>(host, 'rows', 'tbody tr'))[0] as { t: number };
+        await probe(host, 'scrollTo', (await P.y(host)) + r0.t - off);
+        await settle(host);
+        expect(((await probe<{ t: number } | null>(host, 'rect', 'table')) as { t: number }).t, 'the head is cut above the top').toBeLessThan(0);
+        const { before, after } = await turn(host, 'ArrowLeft');
+        expect(before - after, `${String(off)} px: the back turn moves at least a third of a screen`).toBeGreaterThanOrEqual(h / 3);
+        await rowBelowEdge(host, 0, h, `row 0 at ${String(off)} px`);
+      }
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
 
   it("T5 (default layout): a card's pinned head offsets the target of each turn", async () => {
     const host = await open(browser, LINES);
