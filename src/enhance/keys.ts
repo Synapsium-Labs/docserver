@@ -19,7 +19,8 @@
 //   - a key whose default was already prevented (by the page, or a feature's own handler) is left alone;
 //   - Escape closes that instance's top overlay (overlays.ts), whatever the target and `keyboard`; with none open, a binding of
 //     "Escape" runs instead (reader mode's exit: reader.ts), under the rules of any other key (not in a field, not with Ctrl, Cmd or
-//     Alt, not with `keyboard: false`);
+//     Alt). This layer does not read `keyboard` for it: the binding exists only because its owner made it, and reader.ts binds
+//     Escape only with `keyboard` on (and an onReader), so with `keyboard: false` there is nothing here to run;
 //   - Ctrl or Cmd with K (never with Alt) runs the CHORD binding, from an editable field too, unless `keyboard` is
 //     false or a dialog is open (overlays.any());
 //   - any other key with Ctrl, Cmd or Alt, any key with `keyboard: false`, a key in an editable field (input,
