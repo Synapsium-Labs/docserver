@@ -408,18 +408,30 @@ describe('entering reader mode closes what it hides, and only that (default layo
     }
   });
 
-  it('a drawer a host command opened inside reader mode (hidden, with the rail class off) is closed by the next mode change, so it never shows up open on restoring', async () => {
-    const { root } = await reading({}, MANY);
+  it('while a reader mode is on nothing opens the hidden drawer: the contents command and the i key do nothing, and with the mode off they open it as before', async () => {
+    const rows = (n: number, p: string): string => ['| ID | State | Status | Decision |', '| --- | --- | --- | --- |', ...Array.from({ length: n }, (_, i) => `| ${p}${String(i)} | Blocked | Agreed | ${p} decision ${String(i)}. |`)].join('\n');
+    const indexed = ['# Index doc', '', '## 1. A', '', rows(2, 'A'), '', '## 2. B', '', rows(3, 'B'), '', '## 3. C', '', rows(4, 'C'), '', '## 4. D', '', 'Text.', ''].join('\n');
+    const { root, acts } = await reading({}, indexed);
     const ctx = contextOf(root);
-    setEnhancementReading(root, 'screens');
-    expect(ctx?.commands.run('contents')).toBe(true);
-    expect(ctx?.overlays.isOpen('drawer')).toBe(true);
-    setEnhancementReading(root, 'scroll');
-    expect(ctx?.overlays.isOpen('drawer')).toBe(false);
-    expect(ctx?.commands.run('contents')).toBe(true);
+    expect(ctx?.keys.bindings().some((b) => b.key === 'i'), 'the document has an index, so the i key is bound').toBe(true);
+    key(root, 'i');
+    expect(ctx?.overlays.isOpen('drawer'), 'mode off: the i key opens the drawer').toBe(true);
+    ctx?.overlays.close('drawer');
+    for (const mode of ['screens', 'scroll'] as const) {
+      setEnhancementReading(root, mode);
+      expect(ctx?.commands.run('contents'), `${mode}: the contents command refuses`).toBe(false);
+      key(root, 'i');
+      expect(ctx?.overlays.isOpen('drawer'), `${mode}: nothing is open`).toBe(false);
+      expect(root.classList.contains('toc-open')).toBe(false);
+      expect(ctx?.overlays.any()).toBe(false);
+    }
+    key(root, 'Escape');
+    expect(acts, 'Escape is the reader\'s').toEqual(['exit']);
     setEnhancementReading(root, 'off');
+    expect(ctx?.commands.run('contents'), 'mode off: the command opens it again').toBe(true);
+    expect(ctx?.overlays.isOpen('drawer')).toBe(true);
+    expect(ctx?.commands.run('contents'), 'and an open drawer is closed by it, as before').toBe(true);
     expect(ctx?.overlays.isOpen('drawer')).toBe(false);
-    expect(root.classList.contains('toc-open')).toBe(false);
   });
 
   it('the changes menu open in the bar tools is closed too, and the menu button reads closed', async () => {

@@ -14,7 +14,8 @@
 //   R5   a table scrolled sideways sends `active` once while the mode is on (the one-a-minute window is the unit rows'),
 //        and none while it is off.
 //   R7   at 390 px, entering reader mode from an open Contents drawer (screens, then scroll) closes the drawer: the top band
-//        sends `menu`, a tap turns the screen in `screens` and not in `scroll`, and Escape sends `exit` (review fix F1)
+//        sends `menu`, a tap turns the screen in `screens` and not in `scroll`, the host's contents command then opens nothing, and
+//        Escape sends `exit` (review fix F1)
 //   R8   a real remount (update()) after setReading('screens'): the new frame reaches data-reading once it is ready (the latest mode
 //        replayed over its port at that ready, not carried in its seed, so the chrome shows until then), and setReading('off')
 //        restores the chrome it built in place; a mount that left the rail out has none to restore (review fix D-8950)
@@ -313,6 +314,10 @@ describeBrowsers((browser: BrowserName) => {
       await host.setReading('scroll');
       await until(async () => (await reading(host)) === 'scroll', 'scroll mode is on');
       await sleep(350);
+      expect((await drawer()).open).toBe(false);
+      // the host's own Contents button does nothing while the mode hides the drawer (nothing hidden opens to swallow the taps)
+      await host.command('contents');
+      await sleep(300);
       expect((await drawer()).open).toBe(false);
       const menus = (await acts(host)).filter((a) => a === 'menu').length;
       await tapAt(0.5, 20);

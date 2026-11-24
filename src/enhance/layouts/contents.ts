@@ -83,7 +83,7 @@ export function build(ctx: FeatureContext, mode: 'classic' | 'editorial' = 'clas
   journal.listen(button, 'click', () => { if (opened) close(); else open(button); });
   ctx.commands.register('contents', () => {
     if (opened) { close(); return true; }
-    if (ctx.env.viewport().w >= 1240 || ctx.overlays.any()) return false;
+    if (ctx.env.viewport().w >= 1240 || ctx.overlays.any() || ctx.reader.mode() !== 'off') return false;
     open(doc.activeElement as HTMLElement | null);
     return true;
   });

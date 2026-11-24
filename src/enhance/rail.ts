@@ -267,8 +267,8 @@ export function build(ctx: FeatureContext): void {
       close();
       return true;
     }
-    // Where the rail is shown there is no drawer to toggle; and no drawer opens over another dialog.
-    if (ctx.env.viewport().w >= RAIL_MIN_WIDTH || ctx.overlays.any()) return false;
+    // Where the rail is shown there is no drawer to toggle; no drawer opens over another dialog; and none opens while a reader mode hides it.
+    if (ctx.env.viewport().w >= RAIL_MIN_WIDTH || ctx.overlays.any() || ctx.reader.mode() !== 'off') return false;
     open();
     return true;
   });
@@ -312,7 +312,7 @@ export function build(ctx: FeatureContext): void {
   ctx.keys.bind({
     key: 'i',
     label: 'Open index',
-    when: () => tabByName.has('index'),
+    when: () => tabByName.has('index') && ctx.reader.mode() === 'off',
     run: () => {
       setTab('index', true);
       if (!ctx.live()) return;

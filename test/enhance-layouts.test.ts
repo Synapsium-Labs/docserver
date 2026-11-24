@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { findShapes } from '../scripts/public-shapes.mjs';
-import { destroyEnhancement, enhance, runEnhancementCommand, setEnhancementPrefs } from '../src/enhance/index.js';
+import { destroyEnhancement, enhance, runEnhancementCommand, setEnhancementPrefs, setEnhancementReading } from '../src/enhance/index.js';
 import type { Feature } from '../src/enhance/features.js';
 import { features as defaultFeatures } from '../src/enhance/features.js';
 import { FRAME_LAYOUTS } from '../src/frame/layouts.js';
@@ -183,6 +183,21 @@ it('classic: the host opens Contents without a reader bar and Escape restores th
   document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   expect(root.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(host);
+});
+
+it('classic and editorial: while a reader mode is on the contents command opens nothing (the drawer is hidden), and with it off it opens as before', async () => {
+  for (const layout of ['classic', 'editorial']) {
+    pick.layout = layout;
+    const root = mount(`${DOC}\n## Third\n\nMore words.\n`);
+    await enhance(root, { chrome: { bar: false } });
+    setEnhancementReading(root, 'screens');
+    expect(runEnhancementCommand(root, 'contents'), `${layout}: refused in reader mode`).toBe(false);
+    expect(root.querySelector('[role="dialog"]'), layout).toBeNull();
+    setEnhancementReading(root, 'off');
+    expect(runEnhancementCommand(root, 'contents'), `${layout}: opens with the mode off`).toBe(true);
+    expect(root.querySelector('[role="dialog"][aria-modal="true"]'), layout).not.toBeNull();
+    await destroyEnhancement(root);
+  }
 });
 
 it('editorial: standing links count only top-level list items in each populated callout', async () => {
