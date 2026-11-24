@@ -49,42 +49,42 @@
     },
     {
       "path": "frame/enhance-classic.js",
-      "sha256": "608037f6acd409299b19fa32b65c2488dd8bbf276da3d182d38a298d9c5af86a",
-      "bytes": 149675,
+      "sha256": "08bdf0772a89d885656718d3a0c899bceb66b615e82f38c83c97b0a98c42468e",
+      "bytes": 150217,
       "kind": "script",
-      "csp": "'sha256-YIA39qzUCSmbGfoytlwkiN2Lvydto9GC04opjZxa+Go='",
+      "csp": "'sha256-CL3wdyqJ2IVlZxjToMiZvOtmthXoLzjIPJewqYxCRo4='",
       "layout": "classic"
     },
     {
       "path": "frame/enhance-editorial.js",
-      "sha256": "91948b8a6af0c8f0c30b36a5a935f71c727fdb386e1f6ce58ee4a4be38f66edd",
-      "bytes": 170451,
+      "sha256": "5db19158cb920343a83e4ada2bfe2cf05693eb8e7a69479f024d7e3fabd89c15",
+      "bytes": 170993,
       "kind": "script",
-      "csp": "'sha256-kZSLimrwyPDDCzalqTX3HHJ/2zhuH2zljuSkvjj2bt0='",
+      "csp": "'sha256-XbGRWMuSA0OoPkraK/4s8FaT6456aUefAk1+P6vYnBU='",
       "layout": "editorial"
     },
     {
       "path": "frame/enhance-guided.js",
-      "sha256": "152934356f24ee2286a67176d0497213c97825fe36b1344622df46fc26273a14",
-      "bytes": 188645,
+      "sha256": "f2bee83bd0683e04e82f02dc9874c89fee9e709e76cec3f171677a8c5fb931ee",
+      "bytes": 189187,
       "kind": "script",
-      "csp": "'sha256-FSk0NW8k7iKGpnF20ElyE8l4Jf42sTRGIt9G/CYnOhQ='",
+      "csp": "'sha256-8r7oO9BoPgToLwLcmHTIn+6ecJ52zsPxcWd6jF+5Me4='",
       "layout": "guided"
     },
     {
       "path": "frame/enhance-review.js",
-      "sha256": "920c60b298691f8293b79df9208e96f4a54cf4260a7f4501bf4ee30aa51a51a3",
-      "bytes": 199543,
+      "sha256": "c8dae8026fd6b4b6655706a231b3eb49d2c027b40e925bf288c17efc84fd8851",
+      "bytes": 200085,
       "kind": "script",
-      "csp": "'sha256-kgxgsphpH4KTt535II6W9KVM9CYKf0UBv07jCqUaUaM='",
+      "csp": "'sha256-yNroAm/WtLZlVwaiMbPrSdLAJ7QOklvyiMF+/IT9iFE='",
       "layout": "review"
     },
     {
       "path": "frame/enhance.js",
-      "sha256": "0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef",
-      "bytes": 233021,
+      "sha256": "8b2fb2c60ad6d52fef435cf7030a5564f8f5fdab05f119f9cf2f36ae7d6ee87c",
+      "bytes": 233563,
       "kind": "script",
-      "csp": "'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8='",
+      "csp": "'sha256-iy+yxgrW1S/vQ1z3AwpVZPj1/asF8Rn5zy82rn1u6Hw='",
       "layout": "default"
     },
     {

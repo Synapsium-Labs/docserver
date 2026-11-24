@@ -117,7 +117,7 @@ describe('test 3: the seed paints before the first yield', () => {
 
   it('a bad colour value drops the whole colour group, keeps the skin and stays hosted', async () => {
     const root = mount();
-    await enhance(root, { appearance: { mode: 'light', colour: { ...PHOSPHOR.colour, bg: 'red' }, skin: { radius: '3px' } } });
+    await enhance(root, { appearance: { mode: 'light', colour: { ...PHOSPHOR.colour, bg: 'blue' }, skin: { radius: '3px' } } }); // a name outside the table (D-9019)
     expect(root.hasAttribute('data-docreader-hosted')).toBe(true);
     expect(root.hasAttribute('data-docreader-colours')).toBe(false);
     expect(set(root, COLOUR_PROPS)).toEqual([]);

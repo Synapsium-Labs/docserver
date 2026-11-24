@@ -109,8 +109,8 @@ describe('test 1: parseAppearance leaves out what the grammar refuses, naming ea
     ['an alpha of 0.5555', '0 0 rgba(0, 0, 0, 0.5555)'],
     ['rgb()', '0 0 rgb(0, 0, 0)'],
     ['RGBA in upper case', '0 0 RGBA(0, 0, 0, 1)'],
-    ['a named colour', '0 0 red'],
-    ['a 3-digit hex', '0 0 #000'],
+    ['a named colour outside the name table (D-9019)', '0 0 blue'],
+    ['a 5-digit hex (a 3-digit one is accepted since D-9019)', '0 0 #00000'],
     ['a length with a unit other than px', '0 0em #000000'],
     ['five lengths', '0 0 0 0 0 #000000'],
     ['one length', '0 #000000'],
@@ -151,7 +151,7 @@ describe('test 1: parseAppearance leaves out what the grammar refuses, naming ea
       ['sectionFamily', 'serif'], ['sectionFamily', 'Sans'],
       ['sectionSize', '9px'], ['sectionSize', '17px'], ['sectionSize', '1px'], ['sectionSize', '12'],
       ['sectionWeight', '50'], ['sectionWeight', '950'], ['sectionWeight', '1000'], ['sectionWeight', '650'], ['sectionWeight', 'bold'],
-      ['sectionTracking', '0.08'], ['sectionTracking', '.08em'], ['sectionTracking', '+0.08em'], ['sectionTracking', '1em'],
+      ['sectionTracking', '0.08'], ['sectionTracking', '.0800em'], ['sectionTracking', '+0.08em'], ['sectionTracking', '1em'],
       ['sectionCase', 'capitalize'], ['sectionCase', 'UPPERCASE'],
     ] as const) {
       expect(accepted(slot, value), `${slot} ${value}`).toBe(false);
@@ -160,8 +160,8 @@ describe('test 1: parseAppearance leaves out what the grammar refuses, naming ea
     }
   });
 
-  it('colour slots refuse a 3-digit hex, rgb(), var(, url(, a semicolon and an out-of-range length, each named, without throwing', () => {
-    for (const bad of ['#fff', 'rgb(0, 0, 0)', 'var(--x)', 'url(x)', '#000000;', '10px', '#00000', '#0000000', '#000000ff', '#gggggg', 'red', '']) {
+  it('colour slots refuse a 4-digit hex, rgb(), var(, url(, a semicolon and an out-of-range length, each named, without throwing', () => {
+    for (const bad of ['#ffff', 'rgb(0, 0, 0)', 'var(--x)', 'url(x)', '#000000;', '10px', '#00000', '#0000000', '#000000ff', '#gggggg', 'blue', '']) {
       const c = { ...colours(), text: bad };
       expect(parseAppearance({ mode: 'dark', colour: c }), bad).toEqual({
         appearance: { mode: 'dark' },
@@ -236,8 +236,9 @@ describe('test 1: whitespace and digits', () => {
     }
     expect(accepted('popShadow', '0 0 #000000,  0 0 #111111')).toBe(false);
     expect(accepted('popShadow', '0 0 #000000 , 0 0 #111111')).toBe(false);
-    expect(accepted('popShadow', '0 0 #000000,0 0 #111111')).toBe(false);
-    expect(accepted('popShadow', '0 0 rgba(0,0,0,1)')).toBe(false);
+    // D-9019: a comma with no space after it, in the list and in an rgba(), is a minifier's spelling and is accepted.
+    expect(accepted('popShadow', '0 0 #000000,0 0 #111111')).toBe(true);
+    expect(accepted('popShadow', '0 0 rgba(0,0,0,1)')).toBe(true);
     expect(accepted('popShadow', '0 0 rgba(0, 0,  0, 1)')).toBe(false);
     expect(accepted('popShadow', '0 0 rgba(0, 0, 0, 1)')).toBe(true);
   });

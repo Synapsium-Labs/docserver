@@ -180,6 +180,69 @@ describeBrowsers((browser) => {
     }
   });
 
+  it("D-9019: a minifier's short spellings give the computed values of their long spellings, seeded and by an op", async () => {
+    // The colours each slot paints and the two skin values a minifier rewrites, read through probes on the root: a colour as
+    // `color`, the tracking as `letter-spacing`, the shadow as `box-shadow`. The long and the short appearance are equivalent.
+    const shadowLong = '0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px #00000088, 0 1px 2px #ff0000';
+    const shadowShort = '0 12px 40px rgba(0,0,0,.55),0 0 0 1px #0008,0 1px 2px red';
+    const LONG: Appearance = { mode: 'light', colour: { ...DAYLIGHT.colour, bg: '#ffffff', surface: '#FFFFFF', 'accent-ink': '#ff0000', 'code-block-bg': '#d2b48c' }, skin: { popShadow: shadowLong, sectionTracking: '-0.011em' } };
+    const SHORT: Appearance = { mode: 'light', colour: { ...DAYLIGHT.colour, bg: '#fff', surface: '#FFF', 'accent-ink': 'red', 'code-block-bg': 'tan' }, skin: { popShadow: shadowShort, sectionTracking: '-.011em' } };
+    expect(parseAppearance(SHORT).refused).toEqual([]);
+    const computed = (h: Pick<FrameHost, 'frame'>, colourProps: readonly string[]) =>
+      h.frame().evaluate((names) => {
+        const root = document.body.querySelector(':scope > article') as HTMLElement;
+        const probe = (prop: string, value: string): string => {
+          const el = document.createElement('div');
+          el.style.setProperty(prop, value);
+          root.append(el);
+          const v = getComputedStyle(el).getPropertyValue(prop);
+          el.remove();
+          return v;
+        };
+        return {
+          colours: names.map((n) => probe('color', `var(${n})`)),
+          tracking: probe('letter-spacing', 'var(--dr-section-tracking)'),
+          shadow: probe('box-shadow', 'var(--dr-pop-shadow)'),
+        };
+      }, colourProps);
+    const COLOUR_PROPS = APPEARANCE_SLOTS.colour.map((s) => SLOT_PROPERTY.colour[s]);
+    const seeded = async (a: Appearance) => {
+      await open();
+      try {
+        await mountReady(host, { appearance: a });
+        return { got: await computed(host, COLOUR_PROPS), props: (await read(host, ALL)).props };
+      } finally {
+        await done();
+      }
+    };
+    const long = await seeded(LONG);
+    const short = await seeded(SHORT);
+    expect(short.got).toEqual(long.got);
+    expect(long.got.colours[0]).toBe('rgb(255, 255, 255)');
+    expect(long.got.shadow).toContain('rgb(255, 0, 0)');
+    expect(long.got.tracking).not.toBe('normal');
+    // The colours the reader wrote are the six-digit forms; the skin values are the received spellings.
+    expect(short.props).toEqual(expectedOf(parseAppearance(SHORT).appearance));
+    expect(short.props.slice(0, 2)).toEqual(['#ffffff', '#FFFFFF']);
+    // An op of the short spelling over a seed of the long one leaves the computed values where they were.
+    await open();
+    try {
+      await mountReady(host, { appearance: LONG });
+      await host.send('main', { t: 'appearance', v: 1, appearance: SHORT });
+      let props = (await read(host, ALL)).props;
+      for (let i = 0; i < 40 && props.at(-2) !== '-.011em'; i += 1) {
+        await sleep(25);
+        props = (await read(host, ALL)).props;
+      }
+      expect(props).toEqual(expectedOf(parseAppearance(SHORT).appearance));
+      expect(await computed(host, COLOUR_PROPS)).toEqual(long.got);
+      expect(host.errors).toEqual([]);
+      expect(host.cspConsole).toEqual([]);
+    } finally {
+      await done();
+    }
+  }, 240_000);
+
   it('a malformed op changes nothing, and the frame keeps working', async () => {
     await open();
     try {
