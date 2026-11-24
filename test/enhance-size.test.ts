@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Text size (LX6.3), the stored pref of the reading settings: `size` is `s`, `m`, `l` or `xl` (16, 18, 20, 22 px), kept
+// Text size (LX6.3), the stored pref of the reading settings: `size` is `s`, `m`, `l` or `xl` (16, 20 and 22 px for s, l and xl; m is the reader's own size of the face and width: 18, 17, 17.5 or 16.5 px), kept
 // beside width and font in the reader's own stored prefs and never on the bridge. Its jsdom cases: the Aa row, the root's
 // `data-size`, the stored value, the default for an absent or unknown value, and the wire's prefs left as they were.
 // The computed sizes in the real stylesheet are in test/browser/frame-pages.test.ts (T14), the place kept in T12b.

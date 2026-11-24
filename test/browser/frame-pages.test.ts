@@ -31,7 +31,7 @@
 //   T12  a resize and a width change keep the place and land on a whole line
 //   T12b a change of text size keeps the place in screens mode: the first line shown stays the first line shown, whole
 //   T13  `scroll` and `off` turn nothing: no band, no prevented keys, taps and swipes do nothing
-//   T14p the text size is a screen control: in print media every size keeps the 11pt baseline and the unscaled rem (LX6.3 fix round 1)
+//   T14p the text size is a screen control: in print media the body size, the rem parts and the column are the same for every size, in both faces (serif prints at 11 pt; the sans face's print size is its own and unchanged)
 //   T14  the text sizes (LX6.3): s, l and xl are 16, 20 and 22 px of body text everywhere; m is the reader's existing size per face and
 //        device (serif 18 px, serif phone 17, sans 17.5, sans phone 16.5), absent reads m, and rem parts follow (every cell: reader-size.test.ts, Z1)
 //
@@ -1580,7 +1580,7 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 240_000);
 
-  it('T14p (default layout): the text size is a screen control: in print media every size prints at the 11 pt baseline with the rem parts unscaled', async () => {
+  it('T14p (default layout): the text size is a screen control: in print media the body size, the rem parts and the column are the same for every size, in the serif and the sans face', async () => {
     const host = await open(browser, LINES);
     try {
       const read = (): Promise<{ print: boolean; body: number; h2: number; measure: number }> =>
@@ -1601,17 +1601,22 @@ describeBrowsers((browser: BrowserName) => {
       })();
       expect([screenXl.print, screenXl.body], 'on screen xl is 22 px').toEqual([false, 22]);
       await host.page.emulateMedia({ media: 'print' });
-      await sleep(400);
-      let base: { body: number; h2: number; measure: number } | null = null;
-      for (const size of ['m', 's', 'l', 'xl'] as const) {
-        await chooseSize(host, size);
+      for (const font of ['serif', 'sans'] as const) {
+        await host.setPrefs({ font });
         await sleep(400);
-        const r = await read();
-        expect(r.print, 'the frame is in print media').toBe(true);
-        expect(r.body, `print, size ${size}: 11 pt`).toBeCloseTo(11 * (96 / 72), 3);
-        base ??= r;
-        expect(r.h2, `print, size ${size}: the rem parts are not scaled`).toBeCloseTo(base.h2, 3);
-        expect(r.measure, `print, size ${size}: the column is not scaled`).toBeCloseTo(base.measure, 1);
+        let base: { body: number; h2: number; measure: number } | null = null;
+        for (const size of ['m', 's', 'l', 'xl'] as const) {
+          await chooseSize(host, size);
+          await sleep(400);
+          const r = await read();
+          expect(r.print, 'the frame is in print media').toBe(true);
+          base ??= r;
+          expect(r.body, `${font}, print, size ${size}: the body size is the one of size m`).toBe(base.body);
+          expect(r.h2, `${font}, print, size ${size}: the rem parts are not scaled`).toBeCloseTo(base.h2, 3);
+          expect(r.measure, `${font}, print, size ${size}: the column is not scaled`).toBeCloseTo(base.measure, 1);
+        }
+        // what the face prints at is its own and is not this wave's: serif is the 11 pt print rule, sans keeps its screen size
+        if (font === 'serif') expect(base?.body, 'serif prints at 11 pt').toBeCloseTo(11 * (96 / 72), 3);
       }
     } finally {
       await host.page.emulateMedia({ media: null }).catch(() => undefined);

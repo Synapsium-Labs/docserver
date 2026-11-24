@@ -188,6 +188,55 @@ describe('setEnhancementReading: in place, with no remount (default layout)', ()
     expect(root.classList.contains('has-toc')).toBe(false);
   });
 
+  /** Enhance `root` once, then remount it from that instance's own callback: the new enhance() starts behind the teardown, so `during` runs while it has no context. */
+  async function remountDuring(root: HTMLElement, options: Record<string, unknown>, during: () => void): Promise<void> {
+    let started: Promise<void> | null = null;
+    await enhance(root, {
+      onReader: () => {
+        void destroyEnhancement(root);
+        started = enhance(root, options as never);
+        during();
+      },
+    });
+    key(root, 'r');
+    await started;
+  }
+  const RAIL = `${DOC}\n\n## 4. Four\n\nText.\n\n## 5. Five\n\nText.\n`;
+
+  it('a host callback that asks for a mode while the features are building does not lose to an older start-up request: the newest valid mode wins, and the rail class still ends as the mode says', async () => {
+    const root = mount(RAIL);
+    let asked = 0;
+    await remountDuring(
+      root,
+      {
+        onReader: () => undefined,
+        info: { sha: 'abcdef1', commits: [{ sha: 'abcdef1', subject: 'a', date: '2026-01-01T18:45:00Z', parents: ['1234567'] }] },
+        changes: () => Promise.resolve({ changed: [] }),
+        storageKey: 'k',
+        // since writes `seen` while the features build: a host `set` that calls back into the reader
+        storage: { snapshot: {}, set: () => { if (asked++ === 0) setEnhancementReading(root, 'off'); } },
+      },
+      () => setEnhancementReading(root, 'screens'),
+    );
+    expect(asked, 'the host callback ran while the features built').toBeGreaterThan(0);
+    expect(contextOf(root)?.reader.mode(), 'the later `off` wins').toBe('off');
+    expect(root.hasAttribute('data-reading')).toBe(false);
+    expect(root.classList.contains('has-toc'), 'off: the rail class is on').toBe(true);
+  });
+
+  it('an invalid mode asked for while a document starts changes nothing: it does not replace a valid pending choice, as after start-up', async () => {
+    const root = mount(RAIL);
+    await remountDuring(root, { onReader: () => undefined }, () => {
+      setEnhancementReading(root, 'screens');
+      for (const bad of ['pages', '', 'Screens', 1, null, undefined, {}]) setEnhancementReading(root, bad);
+    });
+    expect(contextOf(root)?.reader.mode()).toBe('screens');
+    expect(root.getAttribute('data-reading')).toBe('screens');
+    expect(root.classList.contains('has-toc')).toBe(false);
+    for (const bad of ['pages', 1, null]) setEnhancementReading(root, bad);
+    expect(contextOf(root)?.reader.mode(), 'after start-up the same calls change nothing too').toBe('screens');
+  });
+
   it('every layout shares it: the reader service is part of every instance (ctx.reader)', async () => {
     const { root } = await reading();
     const r = contextOf(root)?.reader;
@@ -434,18 +483,30 @@ describe('entering reader mode closes what it hides, and only that (default layo
     expect(ctx?.overlays.isOpen('drawer')).toBe(false);
   });
 
-  it('the changes menu open in the bar tools is closed too, and the menu button reads closed', async () => {
+  it('the "Changes since" picker is in the visible review strip, so reader mode leaves its menu alone: it stays open across entry, screens to scroll and exit, and Escape and the trigger still dismiss it', async () => {
     const { root, acts } = await reading(withChanges, MANY);
     const ctx = contextOf(root);
     const trigger = root.querySelector('.chg-trig') as HTMLButtonElement;
+    expect(trigger.closest('.review-strip, .rs-facts'), 'the picker is in the strip, not in the bar tools').not.toBeNull();
+    expect(trigger.closest('.bar-tools')).toBeNull();
     trigger.click();
     expect(ctx?.overlays.isOpen('changes')).toBe(true);
-    setEnhancementReading(root, 'screens');
+    for (const mode of ['screens', 'scroll', 'off', 'scroll'] as const) {
+      setEnhancementReading(root, mode);
+      expect(ctx?.overlays.isOpen('changes'), `the menu stays open in ${mode}`).toBe(true);
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    }
+    // explicit dismissal still works, with a mode on: Escape closes the visible menu first and sends nothing, the next one exits
+    key(root, 'Escape');
     expect(ctx?.overlays.isOpen('changes')).toBe(false);
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(ctx?.overlays.any()).toBe(false);
+    expect(acts).toEqual([]);
     key(root, 'Escape');
     expect(acts).toEqual(['exit']);
+    // and the trigger opens and closes it inside a mode
+    trigger.click();
+    expect(ctx?.overlays.isOpen('changes')).toBe(true);
+    trigger.click();
+    expect(ctx?.overlays.isOpen('changes')).toBe(false);
   });
 
   it('what the mode leaves visible stays open, each on its own: the full-screen figure, the quick jump, the keys sheet and the settings menu', async () => {

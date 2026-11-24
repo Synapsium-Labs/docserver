@@ -1398,7 +1398,7 @@ html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip,
 [data-docreader-root][data-docreader-root][data-docreader-root][data-reading] > :is(.doc-progress, .doc-toc, .toc-scrim) { display: none; }
 /* screen pages (LX6.2): the ground over the line the bottom edge cuts, drawn by the turn, removed by the next scroll */
 [data-docreader-root][data-docreader-root][data-docreader-root] > .page-band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; background: var(--bg); pointer-events: none; }
-/* text size (LX6.3): data-size s, l or xl sets the body size and --rem with it (so every rem part and the column follow); absent is m, 18px; screen only, so print keeps its 11pt */
+/* text size (LX6.3): data-size s, l or xl sets the body size and --rem with it; absent is m, the face's own size (18px serif, 17px serif phone, 17.5px sans, 16.5px sans phone); screen only */
 [data-docreader-root][data-size="s"] { --sz: 16px; }
 [data-docreader-root][data-size="l"] { --sz: 20px; }
 [data-docreader-root][data-size="xl"] { --sz: 22px; }

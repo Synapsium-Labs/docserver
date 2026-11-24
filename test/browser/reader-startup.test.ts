@@ -3,6 +3,8 @@
 // context yet and keeps the host's calls (the newest wins), and a document that builds a rail is shown at a width where the
 // rail is a column (1400 px).
 //
+//   S2  the "Changes since" picker sits in the visible review strip: with a reading mode on it is shown and opens its menu, the menu
+//       stays open across screens, scroll and off, and Escape still dismisses it (nothing hides or closes it)
 //   S1  started in reader mode: the root carries data-reading, the text column is the one a rail-less root has (no rail
 //       padding), the rail is built but hidden, and `off` gives the rail and its padding back with the same elements, no remount
 import { afterAll, expect, it } from 'vitest';
@@ -65,6 +67,43 @@ describeBrowsers((browser: BrowserName) => {
       expect(later.padLeft, 'the same column as one entered later').toBe(started.padLeft);
       expect(later.textLeft).toBe(started.textLeft);
       expect(later.hasToc).toBe(false);
+    } finally {
+      await doc.close();
+    }
+  }, 120_000);
+
+  it('S2 (default layout): the Changes since picker is visible with a reading mode on, opens its menu there, keeps it open across every mode change, and Escape still dismisses it', async () => {
+    const commits = [
+      { sha: 'abcdef1', subject: 'feat: newer change', date: '2026-01-01T18:45:00Z', parents: ['1234567'] },
+      { sha: '1234567', subject: 'fix: older change', date: '2026-01-01T18:15:00Z', parents: ['2345678'] },
+    ];
+    const doc = await openDoc(DOC, { info: { sha: 'abcdef1', commits }, changes: { changed: [] } }, { browser, viewport: { width: 900, height: 900 } });
+    try {
+      const set = (mode: string): Promise<void> => doc.page.evaluate((m) => (window.__docreaderHarness as HarnessApi).setReading(m), mode);
+      const state = (): Promise<{ reading: string | null; trigger: boolean; open: boolean }> =>
+        doc.page.evaluate(() => {
+          const root = (window.__docreaderHarness as HarnessApi).root;
+          const t = root.querySelector('.chg-trig') as HTMLElement | null;
+          const m = root.querySelector('.chg-menu') as HTMLElement | null;
+          const r = t?.getBoundingClientRect();
+          return {
+            reading: root.getAttribute('data-reading'),
+            trigger: t !== null && getComputedStyle(t).display !== 'none' && r !== undefined && r.width > 0 && r.height > 0,
+            open: m !== null && !m.hidden && getComputedStyle(m).display !== 'none',
+          };
+        });
+      await set('screens');
+      expect(await state(), 'reading on: the picker is shown, its menu closed').toEqual({ reading: 'screens', trigger: true, open: false });
+      await doc.page.locator('.chg-trig').click();
+      expect((await state()).open, 'the click opens the menu in reader mode').toBe(true);
+      for (const mode of ['scroll', 'off', 'screens']) {
+        await set(mode);
+        const now = await state();
+        expect(now.open, `the menu stays open in ${mode}`).toBe(true);
+        expect(now.trigger).toBe(true);
+      }
+      await doc.page.keyboard.press('Escape');
+      expect((await state()).open, 'Escape dismisses the visible menu').toBe(false);
     } finally {
       await doc.close();
     }

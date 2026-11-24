@@ -2,9 +2,9 @@
 // switches it with `setEnhancementReading(root, mode)` (the frame's `reading` op): `screens`, `scroll` or `off`. While it is not
 // `off` the root carries `data-reading` (the stylesheet hides the bar, running head, progress line, rail, settings button and top
 // space in place, with no remount, and the settings menu still opens from its command); the contents rail's `has-toc` class is
-// taken off and put back, so the text column is the one a rail-less root has; an open contents drawer or "Changes since" menu, which
-// the hidden chrome would leave open and unseen, is closed at a mode change (the figure, jump, keys sheet and settings stay). A mode that
-// is not one of the three changes nothing.
+// taken off and put back, so the text column is the one a rail-less root has; an open contents drawer, which the hidden chrome would leave
+// open and unseen, is closed at a mode change (the "Changes since" menu is in the visible review strip, and the figure, jump, keys sheet
+// and settings stay too: the reader dismisses none of them). A mode that is not one of the three changes nothing.
 //
 //   mode()        the mode now ('off' until the host sends one);
 //   set(mode)     switch, keeping the reader's place across the layout change; emits the 'reading' event (events.on('reading', fn):
@@ -94,9 +94,9 @@ export function createReader(args: ReaderArgs): Reader {
       const on = next !== 'off';
       const was = mode;
       position.keep(() => {
-        // The contents drawer and the changes menu are chrome the stylesheet hides in a reader mode: one left open would swallow input unseen, so each
-        // closes by its own owner at every mode change (the figure, jump, keys sheet and settings menu stay visible, and stay).
-        for (const kind of ['changes', 'drawer'] as const) overlays.close(kind);
+        // The contents drawer is chrome the stylesheet hides in a reader mode (nothing opens it there either): one left open would swallow input unseen, so
+        // it closes by its own owner at every mode change. The "Changes since" menu lives in the visible review strip, and with the figure, jump, keys sheet and settings menu it is left to its owner.
+        overlays.close('drawer');
         mode = next as ReadingMode;
         journal.setAttribute(root, 'data-reading', on ? mode : null);
         if (was === 'off') hadToc = root.classList.contains('has-toc');

@@ -27,7 +27,7 @@ export interface Prefs {
   font: 'serif' | 'sans';
   /** The reading lens: 'all' shows everything; 'product' quiets implementation detail, never removing it. */
   lens: 'all' | 'product';
-  /** The text size: 16, 18 (the default), 20 or 22 px. Reader-local, like the lens: it never rides the bridge's `prefs` op. */
+  /** The text size: 's' (16 px), 'l' (20) or 'xl' (22), the same in every face and width, and 'm' (the default), the reader's own size, which differs by face and width (18 px serif, 17 serif at a phone width, 17.5 sans, 16.5 sans at a phone width). Screen only. Reader-local, like the lens: it never rides the bridge's `prefs` op. */
   size: 's' | 'm' | 'l' | 'xl';
 }
 
