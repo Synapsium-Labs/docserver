@@ -12,7 +12,34 @@ How versions move:
 
 Each release is built once from a signed tag, attested, and published with provenance through npm trusted publishing; the README's Release verification section gives the commands that check a published version.
 
-## Unreleased
+## 1.2.0
+
+A minor: new options, operations, exports, layouts and assets, and four asset hashes moved. It is the first version published as `@synapsium-labs/pinax-lib`; 1.0.0 and 1.1.0 were published as `@synapsium-labs/docserver`. Bridge protocol 1 and seed schema 1 are unchanged: the wire and the seed grow additively, and an older frame or host ignores or refuses what it does not know. The sections below are the changes of this version as they landed, newest first.
+
+**A host that serves the frame re-pins its page policy to this release.** `frameCsp()` lists a new bootstrap hash and the default layout's new enhance hash, and `frameCsp(layout)` for each new layout lists that layout's own enhance hash (the `csp` fields below), and `MAX_SRCDOC_CHARS_DEFAULT` moved with the assets and the new seed fields' caps. A host that pins the frame's page policy by hand and does not re-pin it gets no `ready`: the bootstrap is blocked, and `onFallback('timeout')` follows when the watchdog runs out.
+
+The assets that moved since 1.1.0, each with the sha256 that `assets/assets.json` records (`assets/assets.json` also records the new `version`); `assets/frame/guard.js`, the fonts and both Mermaid builds did not move:
+
+- `assets/frame/bootstrap.js`: `d0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63`, csp `'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM='`
+- `assets/frame/enhance.js`: `0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef`, csp `'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8='`
+- `assets/frame/reader.css`: `32aa81ef916560fe4a304599dfcebcd96cd4825e1d8c33d0e6ae81916d563529`
+- `assets/reader.css`: `816db9774bbda71b99b85d1404523c8c837866bee2072eae0806339405cc2996`
+
+The assets new in 1.2.0, each with the sha256 that `assets/assets.json` records (each `assets/layouts/<name>.css` is the source that the frame's `assets/frame/layout-<name>.css` copies byte for byte):
+
+- `assets/frame/enhance-classic.js`: `608037f6acd409299b19fa32b65c2488dd8bbf276da3d182d38a298d9c5af86a`, csp `'sha256-YIA39qzUCSmbGfoytlwkiN2Lvydto9GC04opjZxa+Go='`
+- `assets/frame/enhance-editorial.js`: `91948b8a6af0c8f0c30b36a5a935f71c727fdb386e1f6ce58ee4a4be38f66edd`, csp `'sha256-kZSLimrwyPDDCzalqTX3HHJ/2zhuH2zljuSkvjj2bt0='`
+- `assets/frame/enhance-guided.js`: `152934356f24ee2286a67176d0497213c97825fe36b1344622df46fc26273a14`, csp `'sha256-FSk0NW8k7iKGpnF20ElyE8l4Jf42sTRGIt9G/CYnOhQ='`
+- `assets/frame/enhance-review.js`: `920c60b298691f8293b79df9208e96f4a54cf4260a7f4501bf4ee30aa51a51a3`, csp `'sha256-kgxgsphpH4KTt535II6W9KVM9CYKf0UBv07jCqUaUaM='`
+- `assets/frame/layout-classic.css`: `90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c`
+- `assets/frame/layout-editorial.css`: `c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda`
+- `assets/frame/layout-guided.css`: `9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c`
+- `assets/frame/layout-review.css`: `920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68`
+- `assets/layouts/classic.css`: `90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c`
+- `assets/layouts/editorial.css`: `c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda`
+- `assets/layouts/guided.css`: `9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c`
+- `assets/layouts/review.css`: `920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68`
+- `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`
 
 Reader mode, the library's half (a minor when released). Bridge protocol 1 and seed schema 1 are unchanged; two ops are added, one per direction, and an older frame or host ignores or refuses what it does not know:
 
