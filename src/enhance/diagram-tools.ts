@@ -212,7 +212,10 @@ export function build(ctx: FeatureContext): void {
     return { width: box.width || rect.width || 1, height: box.height || rect.height || 1, stageWidth: stage.clientWidth, stageHeight: stage.clientHeight };
   };
   const apply = (): void => {
-    if (openSvg !== null) ctx.journal.setStyle(openSvg, 'transform', `translate(${String(x)}px, ${String(y)}px) scale(${String(scale)})`);
+    if (openSvg === null) return;
+    ctx.journal.setStyle(openSvg, 'transform', `translate(${String(x)}px, ${String(y)}px) scale(${String(scale)})`);
+    // A pan, a zoom or a fit in the full screen is reading that moves no vertical share (reader mode LX6.1: sent only while it is on).
+    ctx.reader.act('active');
   };
   const fitWhole = (): void => {
     const size = dimensions();

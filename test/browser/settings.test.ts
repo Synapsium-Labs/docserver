@@ -58,6 +58,18 @@ describeBrowsers((browser) => {
         return (document.querySelector('main[data-harness-root] .codehilite') as HTMLElement).getBoundingClientRect().top;
       });
       expect(Math.abs(wide - before)).toBeLessThanOrEqual(2);
+      for (const size of ['xl', 's'] as const) {
+        const sized = await doc.page.evaluate(async (v) => {
+          const root = document.querySelector('main[data-harness-root]') as HTMLElement;
+          const input = root.querySelector(`input[data-pref="size"][value="${v}"]`) as HTMLInputElement;
+          input.checked = true;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          return { top: (document.querySelector('main[data-harness-root] .codehilite') as HTMLElement).getBoundingClientRect().top, body: parseFloat(getComputedStyle(root).fontSize) };
+        }, size);
+        expect(sized.body, `size ${size} took effect`).toBe(size === 'xl' ? 22 : 16);
+        expect(Math.abs(sized.top - before), `the place after size ${size}`).toBeLessThanOrEqual(2);
+      }
       const lensBefore = await doc.page.evaluate(async () => {
         const root = document.querySelector('main[data-harness-root]') as HTMLElement;
         const anchor = root.querySelectorAll('h2')[16] as HTMLElement;

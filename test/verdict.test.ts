@@ -23,6 +23,7 @@ const META: RenderMeta = {
   tables: 0,
   mermaidKinds: [],
   items: [],
+  readingMinutes: 0,
 };
 
 function result(html: string, over: Partial<RenderResult> = {}): RenderResult {

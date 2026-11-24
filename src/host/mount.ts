@@ -58,6 +58,10 @@
 // earlier copy, and in an extreme skew enough to close the frame); and three runs' figures in flight at once, where a third copy of an
 // index is refused (the run's own, so the consumer keeps a stale copy) and, with figure sizes that change between those runs, an honest
 // copy can be refused by the 2 x 16 MiB cap on what a run hands on.
+// Reader mode (LX6.1): `onReader` asks the frame to send its `reader` acts (the seed's `bridge.reader`, set by that adapter alone;
+// the frame paces them itself, so a host that gave it is never refused for a well-paced frame) and is handed each as `onReader(act)`;
+// `DocFrame.setReading(mode)` posts a `reading` op once ready, else queues it (the latest wins), and seeds every later mount, which posts
+// it again at its own ready (an `off` posts nothing: a new mount is off).
 // `closeOverlay()`, `goto(id, from?)` and `printFigures()` post their command
 // after ready and do nothing before it, after destroy() or after a fallback, as `command` does (they move no focus).
 //
@@ -78,7 +82,7 @@ import { ITEM_LIMITS, itemsWhy, type ItemLink } from '../frame/items.js';
 import { isFrameLayout, type FrameLayout } from '../frame/layouts.js';
 import { mermaidGate, type MermaidGateCaps } from '../frame/gate.js';
 import { FRAME_MANIFEST } from '../frame/manifest.generated.js';
-import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, type FrameToParent, type PlaceKind } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, BRIDGE_PROTOCOL, FRAME_PREF_VALUES, isFullSha, READING_MODES, type FrameToParent, type PlaceKind, type ReaderAct, type ReadingMode } from '../frame/protocol.js';
 import { hex, sha256Text } from '../frame/sha256.js';
 import type { FramePrefs } from '../frame/wire-types.js';
 import { hiddenChars, type HiddenChar } from './copy.js';
@@ -195,6 +199,14 @@ export interface HostAdapters {
    * does not keep it). Giving it is what asks the frame to send progress at all (batch 1.1, C108).
    */
   onProgress?(share: number): void;
+  /**
+   * Reader mode (LX6.1): giving it asks the frame to send its `reader` acts, one call each: `menu` (a tap on the top band), `exit`
+   * (Esc, or `r`, while reader mode is on), `toggle` (`r` while it is off) and `active` (a table or code block scrolled sideways, or
+   * a scroll, pan or zoom in a figure's full screen, while reader mode is on: at most one a minute). The frame sends nothing to a
+   * host without it, and paces its acts itself (at most four a second, the latest act of each 250 ms window at its end); ./host
+   * does not throttle. What each act does is the host's.
+   */
+  onReader?(act: ReaderAct): void;
   onReady?(): void;
   /** Required. The frame's own error reason never reaches it. */
   onFallback(reason: FallbackReason): void;
@@ -212,6 +224,13 @@ export interface DocFrame {
    * update(); after destroy() it does nothing.
    */
   setAppearance(a: Appearance): void;
+  /**
+   * Reader mode (LX6.1): `screens`, `scroll` or `off`, posted as a `reading` op once ready, else queued (the latest wins); it seeds
+   * every later mount, which posts it again at its own ready, so the same iframe carries the mode in place (no remount) and a
+   * remount keeps it. A mode outside the three is a TypeError, whatever the state. After a fallback it posts nothing but seeds a
+   * later update(); after destroy() it does nothing.
+   */
+  setReading(mode: ReadingMode): void;
   /**
    * Runs one of the reader's tools without the reader's own bar, as a toggle (batch 1.1, C108): focuses the iframe, then
    * posts the command. Before the frame is ready, after destroy() and after a fallback it does nothing (it is not
@@ -251,11 +270,11 @@ export type ToolCommand = (typeof TOOL_COMMANDS)[number];
 const ADAPTER_KEYS: readonly string[] = Object.freeze([
   'assets', 'watchdogMs', 'store', 'storePrefix', 'docKey', 'prefs', 'features', 'mermaidGate', 'mermaidDraw', 'title',
   'focus', 'onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'loadMermaid', 'appearance',
-  'onPlace', 'onPrintFigure', 'items', 'changesBase', 'layout',
+  'onReader', 'onPlace', 'onPrintFigure', 'items', 'changesBase', 'layout',
 ]);
 
 /** The callbacks, each a function when given. */
-const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'onPlace', 'onPrintFigure', 'items'] as const);
+const CALLBACKS = Object.freeze(['onLink', 'onHash', 'copy', 'changes', 'openVersion', 'onProgress', 'onReady', 'onFallback', 'onReader', 'onPlace', 'onPrintFigure', 'items'] as const);
 type CallbackName = (typeof CALLBACKS)[number];
 
 const MERMAID_DRAW: readonly string[] = Object.freeze(['auto', 'on-request', 'after-ready']);
@@ -582,6 +601,10 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
   let sendPrefs: (p: Partial<FramePrefs>) => void = () => undefined;
   /** Posts an appearance verdict on the current mount's port (now or at its ready). */
   let sendAppearance: (a: Appearance) => void = () => undefined;
+  /** The mode every mount posts at its own ready (reader mode): the latest setReading. */
+  let seedReading: ReadingMode = 'off';
+  /** Posts a reading mode on the current mount's port (now or at its ready). */
+  let sendReading: (mode: ReadingMode) => void = () => undefined;
   /** Focuses the current mount's iframe and posts a command on its port; nothing before its ready or once it is gone. */
   let sendCommand: (name: ToolCommand) => void = () => undefined;
   /** Posts a command that moves no focus (close-overlay, goto) on the current mount's port, once it is ready. */
@@ -694,6 +717,8 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
           // Likewise: places by onPlace alone, print figures by onPrintFigure alone.
           places,
           printFigures: c.callbacks.onPrintFigure !== undefined,
+          // And reader mode by onReader alone: a frame is never sent to a host that did not ask to hear its acts.
+          reader: c.callbacks.onReader !== undefined,
         },
       };
       page = frameDocument(d, frameOptions);
@@ -731,6 +756,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
     let figureBytes = 0;
     let pending: Partial<FramePrefs> | null = null;
     let pendingAppearance: Appearance | null = null;
+    let pendingReading: ReadingMode | null = seedReading === 'off' ? null : seedReading;
     let answer: Build | null = null;
     let sent = false;
     const changeTimers = new Set<number>();
@@ -864,6 +890,9 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
         case 'progress':
           call('onProgress', Number(msg.p) / 1000);
           return;
+        case 'reader':
+          call('onReader', msg.act);
+          return;
         case 'version': {
           const v: { sha?: string; only?: string } = {};
           if (msg.sha !== undefined) v.sha = msg.sha;
@@ -897,6 +926,10 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       if (pendingAppearance !== null) {
         post({ t: 'appearance', v: 1, appearance: pendingAppearance });
         pendingAppearance = null;
+      }
+      if (pendingReading !== null) {
+        post({ t: 'reading', mode: pendingReading });
+        pendingReading = null;
       }
       call('onReady');
       deliver();
@@ -950,6 +983,11 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       if (!live) return;
       if (ready) post({ t: 'appearance', v: 1, appearance: a });
       else pendingAppearance = a;
+    };
+    sendReading = (mode) => {
+      if (!live) return;
+      if (ready) post({ t: 'reading', mode });
+      else pendingReading = mode;
     };
     sendCommand = (name) => {
       if (!live || !ready) return;
@@ -1006,6 +1044,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       teardown = null;
       sendPrefs = () => undefined;
       sendAppearance = () => undefined;
+      sendReading = () => undefined;
       sendCommand = () => undefined;
       sendWire = () => undefined;
       sendPrintFigures = () => undefined;
@@ -1023,6 +1062,14 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       const verdict = parseAppearance(a).appearance;
       seedAppearance = verdict;
       sendAppearance(verdict);
+    },
+    setReading(mode) {
+      if (typeof mode !== 'string' || !(READING_MODES as readonly string[]).includes(mode)) {
+        throw new TypeError(`pinax-lib host: reading mode must be one of ${READING_MODES.join(', ')}`);
+      }
+      if (destroyed) return;
+      seedReading = mode;
+      sendReading(mode);
     },
     command(name) {
       if (typeof name !== 'string' || !(TOOL_COMMANDS as readonly string[]).includes(name)) {
@@ -1055,6 +1102,7 @@ export function mountDocFrame(el: HTMLElement, o: { readonly document: RenderInp
       teardown = null;
       sendPrefs = () => undefined;
       sendAppearance = () => undefined;
+      sendReading = () => undefined;
       sendCommand = () => undefined;
       sendWire = () => undefined;
       sendPrintFigures = () => undefined;

@@ -72,6 +72,8 @@ import { createHost } from './host.js';
 import { createJournal, type Journal, type JournalControl } from './journal.js';
 import { createKeys } from './keys.js';
 import { createNavigation, createPosition } from './nav.js';
+import { createPages } from './pages.js';
+import { createReader, READING_MODES } from './reader.js';
 import { normalizeOptions, normalizePrefs, type NormalizedInfo, type NormalizedOptions } from './options.js';
 import { createOverlays, OVERLAY_ORDER } from './overlays.js';
 import { sectionMinutes } from './reading.js';
@@ -103,6 +105,10 @@ interface Instance {
   state: ReaderState | null;
   /** setEnhancementPrefs changes made before startup created the state; applied as soon as it exists. */
   pendingPrefs: Partial<Prefs> | null;
+  /** The newest valid setEnhancementReading mode made before the features were built (the context may exist already): applied once they are. */
+  pendingReading: unknown;
+  /** True from the reservation until the features are built: a setEnhancementReading call made meanwhile is kept, not applied. */
+  building: boolean;
   /** The newest setEnhancementAppearance verdict made before startup created the state: hosted, over the options', as soon as it exists. */
   pendingAppearance: Appearance | null;
   /** The context features were built with, once startup made it. */
@@ -423,6 +429,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     onRelayout: relayout.onRelayout,
     headCtl: createHeadCtl({ root, journal }),
     slots: bar?.slots ?? null,
+    reader: createReader({ root, journal, host, keys, overlays, events, position, relayout: relayout.relayout, keyboard: options.keyboard, live }),
     commands: createCommands(live),
     folds: createFolds(root),
     setPrefs: (change) => {
@@ -433,6 +440,8 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     },
   };
   inst.ctx = ctx;
+  // Screen pages (LX6.2, pages.ts): a shared service like the reader's, in every layout's bundle, inert until the host sends `reading`.
+  createPages(ctx);
   // The host's history moved to an entry of this document (commands.ts: `goto`): the export goToHash, as a command.
   ctx.commands.register('goto', (args) => {
     const { id, from } = (typeof args === 'object' && args !== null ? args : {}) as { id?: unknown; from?: unknown };
@@ -451,6 +460,12 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     f.build(ctx);
     if (!live()) return;
   }
+  // A setEnhancementReading call made before the features were built (reader mode LX6.1): the reader judges the newest mode now, once
+  // the rail has put its `has-toc` class on, so that class is the one the reader takes off (and gives back on `off`).
+  inst.building = false;
+  const reading = inst.pendingReading;
+  inst.pendingReading = undefined;
+  if (reading !== undefined) ctx.reader.set(reading);
   // Once every feature is built: the bar's skeleton goes in, and the first measure is asked for.
   bar?.attach();
   ctx.relayout('start');
@@ -472,7 +487,7 @@ function changePrefs(inst: Instance, change: Partial<Prefs>): void {
   if (!changed || ctx === null) return;
   const now = state.prefs;
   ctx.events.emit('prefs', Object.freeze({ ...now }));
-  if (now.width !== was.width || now.font !== was.font) ctx.relayout('prefs');
+  if (now.width !== was.width || now.font !== was.font || now.size !== was.size) ctx.relayout('prefs');
   if (now.lens !== was.lens) ctx.relayout('lens');
 }
 
@@ -623,6 +638,8 @@ export function enhance(root: HTMLElement, options?: EnhanceOptions): Promise<vo
     state: null,
     pendingPrefs: null,
     pendingAppearance: null,
+    pendingReading: undefined,
+    building: true,
     ctx: null,
     built: [],
     destroyed: null,
@@ -703,6 +720,24 @@ export function setEnhancementPrefs(root: HTMLElement, prefs: Partial<Prefs>): v
       return;
     }
     changePrefs(inst, change);
+  });
+}
+
+/**
+ * Reader mode (LX6.1; reader.ts): switch the root to `screens`, `scroll` or `off`, in place and at once: while it is not `off` the root
+ * carries `data-reading` and the reader's chrome is hidden (no remount: the same elements, the same nonce). A mode that is not one of
+ * the three changes nothing, as does a root that is not enhanced (or no longer). Never throws. A call made while `enhance` is still
+ * starting, up to the moment its features are built (host callbacks that run during the build included), is kept and applied then, once
+ * the rail has put its class on: the newest valid mode wins, and a mode that is not one of the three replaces nothing.
+ */
+export function setEnhancementReading(root: HTMLElement, mode: unknown): void {
+  if (!isElement(root)) return;
+  const inst = findByRoot(root);
+  if (inst === undefined) return;
+  operate(inst, () => {
+    if (inst.building || inst.ctx === null) {
+      if ((READING_MODES as readonly unknown[]).includes(mode)) inst.pendingReading = mode;
+    } else inst.ctx.reader.set(mode);
   });
 }
 

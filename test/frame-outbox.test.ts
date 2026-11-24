@@ -631,7 +631,7 @@ async function randomRun(seed: number, calls: number): Promise<Run> {
   const outbox = box;
   const a = createAdapters(outbox, {
     snapshot: [],
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false, reader: false },
   });
   // Progress calls come from a generator of their own, so the sequence of the other calls is unchanged.
   const pr = rng(seed + 7919);

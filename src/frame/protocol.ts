@@ -13,6 +13,7 @@
 // The limits are enforced on both sides: the frame paces itself by them (src/frame-runtime/outbox.ts) and `./host`'s
 // limiter reads them as token buckets (src/host/limits.ts).
 import { DOC_FIELDS } from './doc-fields.generated.js';
+import { freeze } from './freeze.js';
 
 export { DOC_FIELDS };
 
@@ -33,7 +34,7 @@ export type ErrorWhy = (typeof ERROR_WHY)[number];
  * strict 1-second window): at most 16 messages and at most 8 store.set in any 1000 ms, the post-ready flush included.
  * conformance/bridge-cases.json's timed sequences fix the bucket reading exactly.
  */
-export const BRIDGE_LIMITS = Object.freeze({
+export const BRIDGE_LIMITS = freeze({
   // The parent's limits, read as token buckets.
   bucketCapacity: 40,
   bucketRefillPerSecond: 20,
@@ -43,6 +44,10 @@ export const BRIDGE_LIMITS = Object.freeze({
   coalesceMs: 250,
   /** The window in which the frame sends one `progress` (leading edge: the first at once, the latest of the window at its end), batch 1.1. */
   progressWindowMs: 250,
+  /** The window in which the frame sends one `menu`, `exit` or `toggle` of `reader` (leading edge, the latest act of the window at its end; reader mode LX6.1). */
+  readerWindowMs: 250,
+  /** The window of the frame's one `active` of `reader`, on its own: at most one per window, never in the one above and never in place of an act waiting in it. */
+  readerActiveMs: 60000,
   refusalsToClose: 16,
   valueMaxBytes: 65536,
   copyMaxBytes: 65536,
@@ -75,7 +80,7 @@ export const BRIDGE_LIMITS = Object.freeze({
  * The store's reader-wide keys (L2's `<ns>:prefs` and `<ns>:ui`, src/enhance/state.ts), as the bridge names them:
  * `pref:prefs` and `pref:ui`.
  */
-export const PREF_KEYS = Object.freeze(['prefs', 'ui'] as const);
+export const PREF_KEYS = freeze(['prefs', 'ui'] as const);
 export type PrefKey = (typeof PREF_KEYS)[number];
 
 /**
@@ -104,14 +109,14 @@ export function isFullSha(s: unknown): s is string {
 }
 
 /** The values each pref of the `prefs` op takes: theme, width and font (the lens stays frame-local, Q1). */
-export const FRAME_PREF_VALUES = Object.freeze({
-  theme: Object.freeze(['auto', 'light', 'dark'] as const),
-  width: Object.freeze(['standard', 'wide'] as const),
-  font: Object.freeze(['serif', 'sans'] as const),
+export const FRAME_PREF_VALUES = freeze({
+  theme: freeze(['auto', 'light', 'dark'] as const),
+  width: freeze(['standard', 'wide'] as const),
+  font: freeze(['serif', 'sans'] as const),
 });
 
 /** The kinds of a `place` op: the full-screen figure opened, or closed (the only place: the keys sheet, the quick jump, the settings and the like are not). */
-export const PLACE_KINDS = Object.freeze(['overlay', 'overlay-closed'] as const);
+export const PLACE_KINDS = /* @__PURE__ */ freeze(['overlay', 'overlay-closed'] as const);
 export type PlaceKind = (typeof PLACE_KINDS)[number];
 
 /**
@@ -121,7 +126,7 @@ export type PlaceKind = (typeof PLACE_KINDS)[number];
  * wire's `close-overlay`, `goto` and `print-figures`, which the reader gets handlers for in its own tasks (a reader that
  * does not know a name answers false).
  */
-export const COMMAND_OPS = Object.freeze(['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto', 'print-figures'] as const);
+export const COMMAND_OPS = freeze(['jump', 'settings', 'contents', 'outline', 'close-overlay', 'goto', 'print-figures'] as const);
 export type CommandOp = (typeof COMMAND_OPS)[number];
 
 /**
@@ -135,6 +140,14 @@ const PROGRESS = new RegExp(PROGRESS_SOURCE);
 export function isProgressThousandths(p: unknown): p is string {
   return typeof p === 'string' && PROGRESS.test(p);
 }
+
+/** The modes of a `reading` op: screen pages, a plain scroll, or reader mode off (reader mode, LX6.1). The reader keeps a twin (src/enhance/reader.ts), held equal by test. */
+export const READING_MODES = freeze(['screens', 'scroll', 'off'] as const);
+export type ReadingMode = (typeof READING_MODES)[number];
+
+/** The acts of a `reader` op: the top band's `menu`, `exit`, `toggle` and `active` (a sideways scroll or a figure's pan or zoom; reader mode, LX6.1). */
+export const READER_ACTS = freeze(['menu', 'exit', 'toggle', 'active'] as const);
+export type ReaderAct = (typeof READER_ACTS)[number];
 
 /** The reader prefs the bridge carries, each optional. */
 export type FramePrefValues = { -readonly [K in keyof typeof FRAME_PREF_VALUES]?: (typeof FRAME_PREF_VALUES)[K][number] };
@@ -157,7 +170,9 @@ export type ParentToFrame =
    * skin?, label?}`. The port parser checks only the outer shape; the reader script runs `parseAppearance` on the value. A
    * frame older than this release ignores the op, as it ignores every op it does not know.
    */
-  | { t: 'appearance'; v: 1; appearance: object };
+  | { t: 'appearance'; v: 1; appearance: object }
+  /** Reader mode (LX6.1): in place, hide or restore the reader's chrome, and turn screen pages on or off. An unknown mode is ignored by the frame. */
+  | { t: 'reading'; mode: ReadingMode };
 
 /** What the frame sends, on the port only. Flat; every value a string except v. */
 export type FrameToParent =
@@ -180,38 +195,42 @@ export type FrameToParent =
   /** The frame's full-screen figure opened or closed; sent only when the seed's bridge asks for places. */
   | { t: 'place'; kind: PlaceKind }
   /** One figure of a print run as a PNG, in base64: `i` of `n`, both canonical decimal strings; sent only when the seed's bridge asks for print figures. */
-  | { t: 'print-figure'; i: string; n: string; png: string };
+  | { t: 'print-figure'; i: string; n: string; png: string }
+  /** What reader mode asks of the host (LX6.1); sent only when the seed's bridge asks for it, paced by the frame (BRIDGE_LIMITS.readerWindowMs and readerActiveMs). */
+  | { t: 'reader'; act: ReaderAct };
 
 /**
  * Every key each op may carry, `t` included, by its `t`: the one table both parsers read. A key outside its op's set
  * is a refusal; which keys are required, and each value's grammar, are Reference §6.3, §6.5 and §11.3 (and the
  * fixtures of conformance/bridge-cases.json).
  */
-export const OP_KEYS = Object.freeze({
-  hello: Object.freeze(['t', 'v'] as const),
-  prefs: Object.freeze(['t', 'theme', 'width', 'font'] as const),
-  'changes.result': Object.freeze(['t', 'sha', 'ranges', 'removedAfter', 'unavailable'] as const),
-  mermaid: Object.freeze(['t', 'text', 'unavailable'] as const),
-  command: Object.freeze(['t', 'name', 'id', 'from'] as const),
-  appearance: Object.freeze(['t', 'v', 'appearance'] as const),
-  ready: Object.freeze(['t', 'v', 'nonce'] as const),
-  error: Object.freeze(['t', 'why'] as const),
-  'store.set': Object.freeze(['t', 'key', 'value'] as const),
-  navigate: Object.freeze(['t', 'href'] as const),
-  copy: Object.freeze(['t', 'text'] as const),
-  changes: Object.freeze(['t', 'sha'] as const),
-  hash: Object.freeze(['t', 'id', 'push', 'from'] as const),
-  version: Object.freeze(['t', 'sha', 'only'] as const),
-  progress: Object.freeze(['t', 'p'] as const),
-  place: Object.freeze(['t', 'kind'] as const),
-  'print-figure': Object.freeze(['t', 'i', 'n', 'png'] as const),
+export const OP_KEYS = freeze({
+  hello: freeze(['t', 'v'] as const),
+  prefs: freeze(['t', 'theme', 'width', 'font'] as const),
+  'changes.result': freeze(['t', 'sha', 'ranges', 'removedAfter', 'unavailable'] as const),
+  mermaid: freeze(['t', 'text', 'unavailable'] as const),
+  command: freeze(['t', 'name', 'id', 'from'] as const),
+  appearance: freeze(['t', 'v', 'appearance'] as const),
+  reading: freeze(['t', 'mode'] as const),
+  ready: freeze(['t', 'v', 'nonce'] as const),
+  error: freeze(['t', 'why'] as const),
+  'store.set': freeze(['t', 'key', 'value'] as const),
+  navigate: freeze(['t', 'href'] as const),
+  copy: freeze(['t', 'text'] as const),
+  changes: freeze(['t', 'sha'] as const),
+  hash: freeze(['t', 'id', 'push', 'from'] as const),
+  version: freeze(['t', 'sha', 'only'] as const),
+  progress: freeze(['t', 'p'] as const),
+  place: freeze(['t', 'kind'] as const),
+  'print-figure': freeze(['t', 'i', 'n', 'png'] as const),
+  reader: freeze(['t', 'act'] as const),
 } satisfies Record<FrameToParent['t'] | ParentToFrame['t'], readonly string[]>);
 
 /** The ops the frame sends (`./host` reads only these). */
-export const FRAME_OPS = Object.freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress', 'place', 'print-figure'] as const satisfies readonly FrameToParent['t'][]);
+export const FRAME_OPS = /* @__PURE__ */ freeze(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress', 'place', 'print-figure', 'reader'] as const satisfies readonly FrameToParent['t'][]);
 
 /** The ops the parent sends (the frame reads only these: hello on the window, the others on the port). */
-export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance'] as const satisfies readonly ParentToFrame['t'][]);
+export const PARENT_OPS = /* @__PURE__ */ freeze(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance', 'reading'] as const satisfies readonly ParentToFrame['t'][]);
 
 /**
  * The parent-to-frame op names the frame's port parser accepts (src/frame-runtime/inbound.ts reads this one list, built into
@@ -219,4 +238,4 @@ export const PARENT_OPS = Object.freeze(['hello', 'prefs', 'changes.result', 'me
  * bootstrap's own check, and the port parser refuses it. 1.1.0 hard-coded the first four here; the appearance contract adds
  * `appearance`. conformance/frame-boundaries.json records the list at every landing that changes it (test/frame-boundaries.test.ts).
  */
-export const FRAME_ACCEPTS = Object.freeze(['prefs', 'changes.result', 'mermaid', 'command', 'appearance'] as const satisfies readonly ParentToFrame['t'][]);
+export const FRAME_ACCEPTS = freeze(['prefs', 'changes.result', 'mermaid', 'command', 'appearance', 'reading'] as const satisfies readonly ParentToFrame['t'][]);

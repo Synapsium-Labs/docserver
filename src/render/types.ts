@@ -170,6 +170,13 @@ export interface RenderMeta {
    * Plain text, not escaped HTML.
    */
   items: readonly string[];
+  /**
+   * The document's reading time in minutes, unrounded, by the rule of the reader's byline: prose at 230 words a minute, code at
+   * 520 and half a minute a figure, summed over the sections the h1 and h2 headings cut. The byline's text is this number
+   * rounded (at least one minute); a host that shows a time left takes its share of it. 0 for a document with no text. This
+   * library's own key: the conformance goldens do not carry it.
+   */
+  readingMinutes: number;
 }
 
 export interface RenderResult {

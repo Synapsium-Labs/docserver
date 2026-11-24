@@ -45,6 +45,26 @@ div .aa-wrap chrome
             "Wide"
     fieldset chrome
       legend chrome
+        "Text size"
+      div .seg chrome
+        span .opt chrome
+          input chrome
+          label chrome
+            "S"
+        span .opt chrome
+          input chrome
+          label chrome
+            "M"
+        span .opt chrome
+          input chrome
+          label chrome
+            "L"
+        span .opt chrome
+          input chrome
+          label chrome
+            "XL"
+    fieldset chrome
+      legend chrome
         "Reading lens"
       div .seg chrome
         span .opt chrome

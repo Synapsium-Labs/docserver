@@ -26,7 +26,7 @@
 //
 // Rows: the newest entry equals the computed values; each entry's lists are the previous entry's plus its DELTAS row's additions
 // at the end (entry 1, the appearance contract: `appearance` to the accepted list; entry 2, the parity wire: `place` and
-// `print-figure` to the frame ops); the port parser, driven with one well-formed message per op name of OP_KEYS, PARENT_OPS and
+// `print-figure` to the frame ops; entry 6, reader mode: `reader` to the frame ops and `reading` to the accepted list); the port parser, driven with one well-formed message per op name of OP_KEYS, PARENT_OPS and
 // FRAME_OPS and a planted name, accepts exactly the names of FRAME_ACCEPTS and refuses `hello`; the masked policy equals the
 // previous entry's and holds one hash source per script the frame inlines (the manifest's entries that carry one, KNOWN's
 // length). The behaviour rows (the srcdoc's CSP meta, the iframe's `csp` attribute and a port spy's count of frame-to-parent
@@ -111,7 +111,7 @@ function maskedCsp(policy: string): string {
 /**
  * The deltas of the record, keyed by entry index (0 is 1.1.0's, which has none) and append-only like the record: what each
  * entry adds to the previous entry's two lists, at their end. A landing that appends an entry writes its row here; an entry
- * with no row, and a row with no entry, red. Entry 1 is the appearance contract's, entry 2 the parity wire's.
+ * with no row, and a row with no entry, red. Entry 1 is the appearance contract's, entry 2 the parity wire's, entry 6 reader mode's.
  */
 const DELTAS: readonly { readonly entry: number; readonly addsFrameOps: readonly string[]; readonly addsFrameAccepts: readonly string[] }[] = [
   { entry: 1, addsFrameOps: [], addsFrameAccepts: ['appearance'] },
@@ -122,6 +122,8 @@ const DELTAS: readonly { readonly entry: number; readonly addsFrameOps: readonly
   { entry: 4, addsFrameOps: [], addsFrameAccepts: [] },
   // Entry 5, the guided layout (parity Task 13): no new op and nothing new accepted; the entry adds the policy of `guided`.
   { entry: 5, addsFrameOps: [], addsFrameAccepts: [] },
+  // Entry 6, reader mode (LX6.1): `reader` to the frame ops and `reading` to the accepted list, two disjoint names, the policies unchanged.
+  { entry: 6, addsFrameOps: ['reader'], addsFrameAccepts: ['reading'] },
 ];
 
 const recordText = readFileSync(`${ROOT}${RECORD}`, 'utf8');
@@ -284,6 +286,7 @@ describe('the port parser accepts exactly FRAME_ACCEPTS: one well-formed message
     mermaid: { t: 'mermaid', unavailable: true },
     command: { t: 'command', name: 'jump' },
     appearance: { t: 'appearance', v: 1, appearance: { mode: 'dark' } },
+    reading: { t: 'reading', mode: 'screens' },
     ready: { t: 'ready', v: 1, nonce: NONCE },
     error: { t: 'error', why: 'boot' },
     'store.set': { t: 'store.set', key: 'pref:prefs', value: 'null' },
@@ -295,6 +298,7 @@ describe('the port parser accepts exactly FRAME_ACCEPTS: one well-formed message
     progress: { t: 'progress', p: '500' },
     place: { t: 'place', kind: 'overlay' },
     'print-figure': { t: 'print-figure', i: '0', n: '1', png: 'iVBORw0KGgo=' },
+    reader: { t: 'reader', act: 'menu' },
   };
   const PLANTED = 'planted-op';
 

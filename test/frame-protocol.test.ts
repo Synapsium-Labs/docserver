@@ -25,7 +25,7 @@ import {
   type ParentToFrame,
 } from '../src/frame/index.js';
 // The wire helpers the frame runtime and `./host` read inside the package: never part of `./frame`'s public surface.
-import { COMMAND_OPS, FRAME_OPS, FRAME_PREF_VALUES, isBridgeStoreKey, isFullSha, isProgressThousandths, PARENT_OPS, PLACE_KINDS, PROGRESS_SOURCE } from '../src/frame/protocol.js';
+import { COMMAND_OPS, FRAME_OPS, FRAME_PREF_VALUES, isBridgeStoreKey, isFullSha, isProgressThousandths, PARENT_OPS, PLACE_KINDS, PROGRESS_SOURCE, READER_ACTS, READING_MODES } from '../src/frame/protocol.js';
 
 const ROOT = new URL('../', import.meta.url);
 const readText = (rel: string): string => readFileSync(new URL(rel, ROOT), 'utf8');
@@ -74,6 +74,8 @@ describe('U9 BRIDGE_LIMITS: exactly Reference §8.4 (ruling R5)', () => {
       changesInFlight: 1,
       coalesceMs: 250,
       progressWindowMs: 250,
+      readerWindowMs: 250,
+      readerActiveMs: 60000,
       refusalsToClose: 16,
       valueMaxBytes: 65536,
       copyMaxBytes: 65536,
@@ -168,6 +170,7 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       mermaid: ['t', 'text', 'unavailable'],
       command: ['t', 'name', 'id', 'from'],
       appearance: ['t', 'v', 'appearance'],
+      reading: ['t', 'mode'],
       ready: ['t', 'v', 'nonce'],
       error: ['t', 'why'],
       'store.set': ['t', 'key', 'value'],
@@ -179,14 +182,15 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
       progress: ['t', 'p'],
       place: ['t', 'kind'],
       'print-figure': ['t', 'i', 'n', 'png'],
+      reader: ['t', 'act'],
     });
     expect(Object.isFrozen(OP_KEYS)).toBe(true);
     for (const keys of Object.values(OP_KEYS)) expect(Object.isFrozen(keys)).toBe(true);
   });
 
   it('FRAME_OPS and PARENT_OPS split it by direction, with no op in both', () => {
-    expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress', 'place', 'print-figure']);
-    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+    expect([...FRAME_OPS]).toEqual(['ready', 'error', 'store.set', 'navigate', 'copy', 'changes', 'hash', 'version', 'progress', 'place', 'print-figure', 'reader']);
+    expect([...PARENT_OPS]).toEqual(['hello', 'prefs', 'changes.result', 'mermaid', 'command', 'appearance', 'reading']);
     expect([...FRAME_OPS, ...PARENT_OPS].sort()).toEqual(Object.keys(OP_KEYS).sort());
   });
 
@@ -204,10 +208,12 @@ describe('OP_KEYS: the op key sets per t, one table for both parsers', () => {
     expectTypeOf<(typeof OP_KEYS)['hash'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'hash' }>>>();
     expectTypeOf<(typeof OP_KEYS)['place'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'place' }>>>();
     expectTypeOf<(typeof OP_KEYS)['print-figure'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'print-figure' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['reading'][number]>().toEqualTypeOf<Keys<Extract<ParentToFrame, { t: 'reading' }>>>();
+    expectTypeOf<(typeof OP_KEYS)['reader'][number]>().toEqualTypeOf<Keys<Extract<FrameToParent, { t: 'reader' }>>>();
   });
 
-  it("FRAME_ACCEPTS is the port parser's list: the four ops of 1.1.0 and `appearance`, frozen, with no `hello`, and inside PARENT_OPS", () => {
-    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+  it("FRAME_ACCEPTS is the port parser's list: the four ops of 1.1.0, `appearance` and `reading`, frozen, with no `hello`, and inside PARENT_OPS", () => {
+    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance', 'reading']);
     expect(Object.isFrozen(FRAME_ACCEPTS)).toBe(true);
     expect(FRAME_ACCEPTS).not.toContain('hello');
     for (const op of FRAME_ACCEPTS) expect(PARENT_OPS, op).toContain(op);
@@ -349,6 +355,8 @@ const REQUIRED: Readonly<Record<string, readonly string[]>> = {
   prefs: [],
   command: ['name'],
   appearance: ['v', 'appearance'],
+  reading: ['mode'],
+  reader: ['act'],
 };
 
 const refuse = (reason: string): Verdict => ({ verdict: 'refuse', reason });
@@ -441,6 +449,9 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context'], giv
     case 'version':
       for (const k of ['sha', 'only']) if (Object.hasOwn(msg, k) && !isFullSha(msg[k])) return refuse('sha');
       return ACCEPT;
+    case 'reader':
+      // reader mode (LX6.1): one act of the closed set; an unknown act is 'type'.
+      return (READER_ACTS as readonly string[]).includes(msg['act'] as string) ? ACCEPT : refuse('type');
     case 'progress': {
       // thousandths of the share, 0 to 1000: no sign, no point, no leading zero.
       const p = msg['p'] as string;
@@ -453,7 +464,7 @@ function parentReads(m: unknown, ports: number, ctx: BridgeCases['context'], giv
 
 /** The frame's reading of a parent-to-frame message (Reference §6.3 on the window, §6.5 on the port). */
 function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: BridgeCases['context']): Verdict {
-  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+  const c = common(m, channel === 'window' ? ['hello'] : ['prefs', 'changes.result', 'mermaid', 'command', 'appearance', 'reading']);
   if ('fail' in c) return c.fail;
   const o = c.msg;
   const t = o['t'];
@@ -494,6 +505,10 @@ function frameReads(m: unknown, ports: number, channel: 'window' | 'port', ctx: 
     if (!Object.hasOwn(o, 'from')) return ACCEPT;
     if (typeof o['from'] !== 'string') return refuse('type');
     return o['from'].length <= 4096 ? ACCEPT : refuse('oversize');
+  }
+  if (t === 'reading') {
+    // reading (reader mode, LX6.1): `mode`, one of the three; the frame ignores any other, which the fixtures call a 'type' refusal.
+    return typeof o['mode'] === 'string' && (READING_MODES as readonly string[]).includes(o['mode']) ? ACCEPT : refuse('type');
   }
   if (t === 'appearance') {
     // appearance: exactly {v: 1, appearance}, where `appearance` is a plain object with no proto key at its top level
@@ -704,8 +719,8 @@ describe('the parity wire (docserver parity T1): the places, the print figures a
     expect(L.printFiguresTotalMaxBytes % L.printFigurePngMaxBytes).toBe(0);
   });
 
-  it('FRAME_ACCEPTS did not grow: place and print-figure go to the parent, and goto is a command (P1d)', () => {
-    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance']);
+  it('FRAME_ACCEPTS did not grow for the parity wire: place and print-figure go to the parent, and goto is a command (P1d); reader mode adds `reading` only', () => {
+    expect([...FRAME_ACCEPTS]).toEqual(['prefs', 'changes.result', 'mermaid', 'command', 'appearance', 'reading']);
     for (const op of ['place', 'print-figure']) {
       expect(FRAME_OPS as readonly string[]).toContain(op);
       expect(FRAME_ACCEPTS as readonly string[]).not.toContain(op);

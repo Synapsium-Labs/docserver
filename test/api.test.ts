@@ -71,9 +71,9 @@ describe('./render: signatures (ruling C2)', () => {
     expectTypeOf<RenderResult['meta']>().toEqualTypeOf<RenderMeta>();
   });
 
-  it('RenderMeta holds front, frontList, title, headings, figures, tables, mermaidKinds and items', () => {
+  it('RenderMeta holds front, frontList, title, headings, figures, tables, mermaidKinds, items and readingMinutes', () => {
     expectTypeOf<keyof RenderMeta>().toEqualTypeOf<
-      'front' | 'frontList' | 'title' | 'headings' | 'figures' | 'tables' | 'mermaidKinds' | 'items'
+      'front' | 'frontList' | 'title' | 'headings' | 'figures' | 'tables' | 'mermaidKinds' | 'items' | 'readingMinutes'
     >();
     expectTypeOf<RenderMeta['front']>().toEqualTypeOf<Readonly<Record<string, string | readonly string[]>> | null>();
     expectTypeOf<RenderMeta['frontList']>().toEqualTypeOf<readonly FrontEntry[] | null>();
@@ -81,6 +81,7 @@ describe('./render: signatures (ruling C2)', () => {
     expectTypeOf<RenderMeta['headings']>().toEqualTypeOf<readonly Heading[]>();
     expectTypeOf<RenderMeta['mermaidKinds']>().toEqualTypeOf<readonly string[]>();
     expectTypeOf<RenderMeta['items']>().toEqualTypeOf<readonly string[]>();
+    expectTypeOf<RenderMeta['readingMinutes']>().toEqualTypeOf<number>();
     expectTypeOf<Heading>().toEqualTypeOf<{ level: 1 | 2 | 3 | 4 | 5 | 6; id: string; text: string }>();
     expectTypeOf<FrontEntry>().toEqualTypeOf<{ key: string; list: boolean; vals: string[] }>();
   });

@@ -1355,7 +1355,8 @@ html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip,
   [data-docreader-root] .peek-bar,
   [data-docreader-root] .short-view,
   [data-docreader-root] .h-ctl,
-  [data-docreader-root] .skip-link { display: none !important; }
+  [data-docreader-root] .skip-link,
+  [data-docreader-root] .page-band { display: none !important; }
   [data-docreader-root][data-docreader-root]:not(i) > [hidden] { content-visibility: visible !important; display: revert !important; }
   [data-docreader-root] .tech { max-height: none !important; -webkit-mask-image: none !important; mask-image: none !important; }
   [data-docreader-root] .short.headlines .rest,
@@ -1389,3 +1390,16 @@ html[data-docreader-hosted]:not([data-docreader-root]) > body > .mermaidTooltip,
   [data-docreader-root] .codehilite * { color: #111 !important; background: transparent !important; }
   [data-docreader-root] .codehilite pre { background: #f5f3ee !important; white-space: pre-wrap; }
 }
+/* ─── reader mode: data-reading hides the chrome in place; the bar stays, with no height (the inner row is 0 high), so the settings command still opens its menu ─── */
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] { --bar-h: 0px !important; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading]:not(i) { padding-top: 8px; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] .topbar-inner { height: 0; padding: 0; background: none; box-shadow: none; }
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] :is(.running-head, .aa-btn, .bar-tools > :not(.aa-wrap)),
+[data-docreader-root][data-docreader-root][data-docreader-root][data-reading] > :is(.doc-progress, .doc-toc, .toc-scrim) { display: none; }
+/* screen pages (LX6.2): the ground over the line the bottom edge cuts, drawn by the turn, removed by the next scroll */
+[data-docreader-root][data-docreader-root][data-docreader-root] > .page-band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; background: var(--bg); pointer-events: none; }
+/* text size (LX6.3): data-size s, l or xl sets the body size and --rem with it; absent is m, the face's own size (18px serif, 17px serif phone, 17.5px sans, 16.5px sans phone); screen only */
+[data-docreader-root][data-size="s"] { --sz: 16px; }
+[data-docreader-root][data-size="l"] { --sz: 20px; }
+[data-docreader-root][data-size="xl"] { --sz: 22px; }
+@media screen { [data-docreader-root][data-docreader-root][data-size]:not(i) { font-size: var(--sz); --rem: calc(var(--sz) * 8 / 9); } }

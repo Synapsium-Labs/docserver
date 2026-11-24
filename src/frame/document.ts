@@ -190,8 +190,8 @@ export interface FrameOptions {
    */
   readonly appearance?: unknown;
   /**
-   * Which ops the parent answers; each defaults to true except `progress`, `places` and `printFigures`, which default to
-   * false (the frame sends `progress`, `place` and `print-figure` only to a parent that asked for them, and `hash`'s `push`
+   * Which ops the parent answers; each defaults to true except `progress`, `places`, `printFigures` and `reader`, which default to
+   * false (the frame sends `progress`, `place`, `print-figure` and `reader` only to a parent that asked for them, and `hash`'s `push`
    * and `from` only under `places`). A false leaves that enhance callback absent.
    */
   readonly bridge?: {
@@ -203,6 +203,7 @@ export interface FrameOptions {
     readonly progress?: boolean;
     readonly places?: boolean;
     readonly printFigures?: boolean;
+    readonly reader?: boolean;
   };
   /**
    * The resolved item links (parity Task 4): at most 50 `{ value, href }`, `value` 1 to 100 code units (an item value of
@@ -485,9 +486,9 @@ function mermaidOf(b: Budget, m: unknown): SeedMermaid | null {
 }
 
 /** The bridge switches that are off unless the host asks for them; the others default to true. Held here, not in seed.ts: only the host side reads it, and seed.ts is bundled into the bootstrap. */
-const BRIDGE_OFF_BY_DEFAULT: readonly (typeof BRIDGE_KEYS)[number][] = ['progress', 'places', 'printFigures'];
+const BRIDGE_OFF_BY_DEFAULT: readonly (typeof BRIDGE_KEYS)[number][] = ['progress', 'places', 'printFigures', 'reader'];
 
-/** The bridge switches, copied, each absent one true, except `progress`, `places` and `printFigures`: absent, each is false. */
+/** The bridge switches, copied, each absent one true, except `progress`, `places`, `printFigures` and `reader`: absent, each is false. */
 function bridgeOf(budget: Budget, b: unknown): Seed['bridge'] {
   const f = fieldsOf(budget, b, 'bridge', BRIDGE_KEYS);
   return Object.fromEntries(BRIDGE_KEYS.map((k) => [k, field(f, k, !BRIDGE_OFF_BY_DEFAULT.includes(k))])) as Seed['bridge'];

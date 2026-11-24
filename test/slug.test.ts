@@ -209,6 +209,7 @@ describe('render: heading ids, meta.headings and meta.title', () => {
       tables: 0,
       mermaidKinds: [],
       items: [],
+      readingMinutes: expect.closeTo(4 / 230, 12),
     });
     expect(render('- # in list\n\n> ## in quote\n').meta.headings).toEqual([
       { level: 1, id: 'in-list', text: 'in list' },

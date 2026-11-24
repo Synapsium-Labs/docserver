@@ -17,7 +17,10 @@
 // document's live instance only when there is exactly one, so two roots on a page never act on one key (RF2). Host
 // content outside every root gets nothing. For the instance it reaches, in the reference's order:
 //   - a key whose default was already prevented (by the page, or a feature's own handler) is left alone;
-//   - Escape closes that instance's top overlay (overlays.ts), whatever the target and `keyboard`;
+//   - Escape closes that instance's top overlay (overlays.ts), whatever the target and `keyboard`; with none open, a binding of
+//     "Escape" runs instead (reader mode's exit: reader.ts), under the rules of any other key (not in a field, not with Ctrl, Cmd or
+//     Alt). This layer does not read `keyboard` for it: the binding exists only because its owner made it, and reader.ts binds
+//     Escape only with `keyboard` on (and an onReader), so with `keyboard: false` there is nothing here to run;
 //   - Ctrl or Cmd with K (never with Alt) runs the CHORD binding, from an editable field too, unless `keyboard` is
 //     false or a dialog is open (overlays.any());
 //   - any other key with Ctrl, Cmd or Alt, any key with `keyboard: false`, a key in an editable field (input,
@@ -46,8 +49,8 @@ export interface KeyBinding {
   readonly label: string;
   /** Whether the key applies now; default always. */
   readonly when?: () => boolean;
-  /** Do it: the default is prevented unless this returns false. */
-  readonly run: () => boolean | void;
+  /** Do it, given the key's event: the default is prevented unless this returns false. */
+  readonly run: (e: KeyboardEvent) => boolean | void;
   /** False keeps it off the sheet; default true. */
   readonly listed?: boolean;
 }
@@ -118,13 +121,14 @@ export function createKeys(args: KeysArgs): Keys {
   const applies = (b: KeyBinding): boolean => b.when === undefined || b.when();
   const runIt = (b: KeyBinding, e: KeyboardEvent): void => {
     if (!applies(b)) return;
-    if (b.run() !== false) e.preventDefault();
+    if (b.run(e) !== false) e.preventDefault();
   };
 
   const handle = (e: KeyboardEvent): void => {
     const k = e.key;
     if (k === 'Escape') {
-      overlays.close();
+      const b = bound.get(k);
+      if (!overlays.close() && b !== undefined && !e.ctrlKey && !e.metaKey && !e.altKey && !editable(e.target)) runIt(b, e);
       return;
     }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && k.toLowerCase() === 'k') {

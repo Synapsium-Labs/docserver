@@ -173,11 +173,11 @@ function verdictFailures(c: CorpusCase, verdict: Verdict, result: RenderResult, 
 /**
  * The meta as the goldens write it: the reference renderer's keys. `items` (the item values of a render given a `reader`,
  * RenderMeta.items) is this library's own addition, so an empty one is left out; a golden case is rendered with no `reader`,
- * so any other value is a difference and stays in.
+ * so any other value is a difference and stays in. `readingMinutes` is this library's own key too, and is always left out.
  */
 function goldenMeta(meta: RenderResult['meta']): unknown {
-  const { items, ...rest } = meta;
-  return Array.isArray(items) && items.length === 0 ? rest : meta;
+  const { items, readingMinutes: _readingMinutes, ...rest } = meta;
+  return Array.isArray(items) && items.length === 0 ? rest : { ...rest, items };
 }
 
 function checkCase(c: CorpusCase, render: RenderFn, o: RunCorpusOptions): CaseResult {

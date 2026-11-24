@@ -1206,18 +1206,18 @@ describe("L3.D5 host half, the Mermaid gate and the bridge switches (Reference Â
 
   it('the bridge switches follow which adapters exist', () => {
     const all = mount(PLAIN, { changes: () => Promise.resolve(null), onProgress: () => undefined });
-    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false });
+    expect(seedOf(all.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: true, hash: true, copy: true, changes: true, versions: true, progress: true, places: false, printFigures: false, reader: false });
     all.frame.destroy();
     const none = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined });
-    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false });
+    expect(seedOf(none.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false, reader: false });
   });
 
   it('B7.2: progress is switched on by onProgress alone, and by nothing else (B7i)', () => {
     const without = mount(PLAIN, { changes: () => Promise.resolve(null) });
-    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false });
+    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false });
     without.frame.destroy();
     const only = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined, onProgress: () => undefined });
-    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true, places: false, printFigures: false });
+    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: true, places: false, printFigures: false, reader: false });
   });
 
   it('features and prefs pass through to the seed', () => {
@@ -3399,4 +3399,167 @@ describe('docserver parity T9: HostAdapters.layout', () => {
     mountDocFrame(container, { document: input(PLAIN), adapters: adaptersFor(seen, over) });
     return seen.events.filter(([n]) => n === 'fallback').map(([, v]) => v);
   }
+});
+
+describe('reader mode, host half (LX6.1): adapters.onReader and DocFrame.setReading', () => {
+  const readerLog: unknown[] = [];
+  beforeEach(() => {
+    readerLog.length = 0;
+  });
+  const withReader = (): Partial<Record<keyof HostAdapters, unknown>> => ({ onReader: (act: unknown) => readerLog.push(act) });
+  const readingOps = (m: Mounted): unknown[] => frameBound(m).filter((x) => (x as { t?: unknown }).t === 'reading');
+  const lastSrcdoc = (): string => {
+    const all = container.querySelectorAll('iframe');
+    return (all[all.length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? '';
+  };
+
+  it('each act reaches onReader as the string, as a method of the adapters object, and a throw is caught and logged without a refusal', async () => {
+    const seen: Seen = { events: [] };
+    const adapters = adaptersFor(seen, {
+      onReader(this: unknown, act: unknown) {
+        seen.events.push(['this', this === adapters]);
+        readerLog.push(act);
+        throw new Error('boom');
+      },
+    });
+    const frame = mountDocFrame(container, { document: input(PLAIN), adapters });
+    const ch = channels[channels.length - 1] as FakeChannel;
+    const nonce = NONCE_RE.exec(container.querySelector('iframe')?.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    ch.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    for (const act of ['menu', 'exit', 'toggle', 'active']) ch.port1.onmessage?.({ data: { t: 'reader', act }, ports: [] });
+    expect(readerLog).toEqual(['menu', 'exit', 'toggle', 'active']);
+    expect(seen.events.filter(([n]) => n === 'this')).toEqual([['this', true], ['this', true], ['this', true], ['this', true]]);
+    expect(seen.events.filter(([n]) => n === 'fallback')).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+    frame.destroy();
+  });
+
+  it('an act outside the four, an extra key and a reader op before ready never reach onReader; the refusals count, none of them acts', async () => {
+    const early = mount(PLAIN, withReader());
+    early.say({ t: 'reader', act: 'menu' });
+    expect(readerLog).toEqual([]);
+    const m = await ready(PLAIN, withReader());
+    for (const bad of [{ t: 'reader', act: 'pages' }, { t: 'reader', act: 1 }, { t: 'reader' }, { t: 'reader', act: 'menu', mode: 'off' }, { t: 'reading', mode: 'off' }]) m.say(bad);
+    expect(readerLog).toEqual([]);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('a host with no onReader is sent nothing and counts nothing: the seed says reader false, and a stray act is harmless', async () => {
+    const m = await ready();
+    expect(seedOf(m.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ reader: false });
+    m.say({ t: 'reader', act: 'menu' });
+    expect(m.seen.events.map(([n]) => n)).toEqual(['ready']);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('the seed asks for reader mode by onReader alone, and by nothing else', () => {
+    const only = mount(PLAIN, { onLink: undefined, onHash: undefined, copy: undefined, openVersion: undefined, onReader: () => undefined });
+    expect(seedOf(only.iframe.getAttribute('srcdoc') ?? '')['bridge']).toEqual({ links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false, reader: true });
+    const without = mount(PLAIN, { onProgress: () => undefined, onPlace: () => undefined });
+    expect(seedOf(without.iframe.getAttribute('srcdoc') ?? '')['bridge']).toMatchObject({ reader: false });
+  });
+
+  it('onReader must be a function when given, and is a known adapter key', () => {
+    expect(() => mount(PLAIN, { onReader: 'x' })).toThrow(TypeError);
+    expect(() => mount(PLAIN, { onReader: {} })).toThrow(/adapters\.onReader must be a function/);
+    expect(iframes()).toBe(0);
+  });
+
+  it('the acts at ten a second never close the bridge: 200 admitted acts of a paced frame leave no refusal and no fallback', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const m = mount(PLAIN, withReader());
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    // The frame's own pacing is the outbox's (test/reader-ops.test.ts): at most four `reader` acts a second, which the host's bucket carries.
+    for (let i = 0; i < 200; i += 1) {
+      m.say({ t: 'reader', act: i % 5 === 4 ? 'active' : 'menu' });
+      vi.advanceTimersByTime(250);
+    }
+    expect(readerLog).toHaveLength(200);
+    expect(m.fallbacks()).toEqual([]);
+  });
+
+  it('setReading before ready queues and posts nothing; the latest wins and is posted once at ready, with the keys t and mode', async () => {
+    const m = mount();
+    await m.loaded();
+    m.frame.setReading('screens');
+    m.frame.setReading('scroll');
+    expect(frameBound(m)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(readingOps(m)).toEqual([{ t: 'reading', mode: 'scroll' }]);
+  });
+
+  it('what is queued before ready is posted in one order, prefs then appearance then reading, so the host\'s onReady wins and a remount replays the mode last', async () => {
+    const m = mount();
+    await m.loaded();
+    m.frame.setReading('screens');
+    m.frame.setAppearance({ mode: 'dark' });
+    m.frame.setPrefs({ width: 'wide' });
+    expect(frameBound(m)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m).map((x) => (x as { t: string }).t)).toEqual(['prefs', 'appearance', 'reading']);
+  });
+
+  it('setReading after ready posts at once, each mode; the same iframe carries it (no remount)', async () => {
+    const m = await ready();
+    const before = iframes();
+    for (const mode of ['screens', 'off', 'scroll'] as const) m.frame.setReading(mode);
+    expect(readingOps(m)).toEqual([{ t: 'reading', mode: 'screens' }, { t: 'reading', mode: 'off' }, { t: 'reading', mode: 'scroll' }]);
+    expect(iframes()).toBe(before);
+    expect(lastSrcdoc()).toBe(m.iframe.getAttribute('srcdoc'));
+  });
+
+  it("a mode outside the three, or not a string, is a TypeError whatever the state; nothing is posted", async () => {
+    const m = await ready();
+    for (const bad of ['pages', 'Screens', '', 'toString', 1, null, undefined, ['off']]) expect(() => m.frame.setReading(bad as never), String(bad)).toThrow(TypeError);
+    expect(readingOps(m)).toEqual([]);
+    m.frame.destroy();
+    expect(() => m.frame.setReading('pages' as never)).toThrow(TypeError);
+  });
+
+  it('update() seeds the latest mode: the new mount posts it at its own ready, an off posts nothing, and the old mount posts nothing more', async () => {
+    const m = await ready();
+    m.frame.setReading('screens');
+    m.frame.update(input(PLAIN));
+    const fresh = channels[channels.length - 1] as FakeChannel;
+    expect(fresh.port1.sent).toEqual([]);
+    const iframe = container.querySelectorAll('iframe')[container.querySelectorAll('iframe').length - 1] as HTMLIFrameElement;
+    const nonce = NONCE_RE.exec(iframe.getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    expect(fresh.port1.sent).toEqual([{ t: 'reading', mode: 'screens' }]);
+    const old = channels[channels.length - 2] as FakeChannel;
+    expect(old.port1.sent.filter((x) => (x as { t?: unknown }).t === 'reading')).toEqual([{ t: 'reading', mode: 'screens' }]);
+    m.frame.setReading('off');
+    m.frame.update(input(PLAIN));
+    const third = channels[channels.length - 1] as FakeChannel;
+    const nonce3 = NONCE_RE.exec((container.querySelectorAll('iframe')[container.querySelectorAll('iframe').length - 1] as HTMLIFrameElement).getAttribute('srcdoc') ?? '')?.[1] ?? '';
+    third.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce: nonce3 }, ports: [] });
+    expect(third.port1.sent).toEqual([]);
+  });
+
+  it('setReading made inside onReady is posted after the queued mode, and wins', async () => {
+    let frame: DocFrame | undefined;
+    const m = mount(PLAIN, { onReady: () => frame?.setReading('off') });
+    frame = m.frame;
+    await m.loaded();
+    m.frame.setReading('screens');
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(readingOps(m)).toEqual([{ t: 'reading', mode: 'screens' }, { t: 'reading', mode: 'off' }]);
+  });
+
+  it('after destroy() setReading does nothing; after a fallback it posts nothing but seeds a later update()', async () => {
+    const m = await ready();
+    m.frame.destroy();
+    expect(() => m.frame.setReading('screens')).not.toThrow();
+    expect(readingOps(m)).toEqual([]);
+    const f = mount();
+    await f.loaded();
+    f.say({ t: 'ready', v: 1, nonce: 'wrong' });
+    f.frame.setReading('screens');
+    expect(frameBound(f)).toEqual([]);
+    f.frame.update(input(PLAIN));
+    const fresh = channels[channels.length - 1] as FakeChannel;
+    const nonce = NONCE_RE.exec(lastSrcdoc())?.[1] ?? '';
+    fresh.port1.onmessage?.({ data: { t: 'ready', v: 1, nonce }, ports: [] });
+    expect(fresh.port1.sent).toEqual([{ t: 'reading', mode: 'screens' }]);
+  });
 });

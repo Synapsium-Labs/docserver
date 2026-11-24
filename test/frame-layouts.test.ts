@@ -234,28 +234,28 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
  */
 const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid', string>> = {
   guard: 'ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d',
-  bootstrap: '47d310d29e5eb9487b66a8250ebddacbb15392cc6380b9424dd03cb33cc76d3d',
-  enhance: '22bf8ad1bca38e15f6373617d50977ce6d9f7e07b301acf0a28622218e855759',
-  css: '367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2',
+  bootstrap: 'd0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63',
+  enhance: '0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef',
+  css: '32aa81ef916560fe4a304599dfcebcd96cd4825e1d8c33d0e6ae81916d563529',
   mermaid: '7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3',
 };
 
 /** frameCsp() at landing A, whole. */
 const DEFAULT_CSP =
-  "default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-R9MQ0p5euUh7ZqglDr3ay7FTksxjgLlCTdA8szzHbT0=' " +
-  "'sha256-Ir+K0byjjhX2NzYX1Ql3zm2ffgezAazwooYiIY6FV1k=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
+  "default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM=' " +
+  "'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
   "style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'";
 
 /**
  * The default srcdoc of two fixed renders at landing A's code, measured before this task changed anything (the same render
  * results, nonces, options and assets): the sha256 of the string and its length. `plain` is FIXTURE with nonce `a`x32 and no option
  * but the policy and the assets; `rich` is the same document with Mermaid on, rules and no keyboard, a dark theme, and `progress`
- * and `places` on, nonce `b`x32. Re-measured at the readiness wave's tip, after the enhance bundle was rebuilt (docserver readiness T5): 94 characters
+ * and `places` on, nonce `b`x32. Re-measured at reader mode LX6.3 (text size: the stylesheet and every enhance bundle move) and at LX6.1 (the seed gains `"reader":false`, the bundles and the stylesheet move). Before that, at the readiness wave tip (docserver readiness T5): 94 characters
  * longer than landing A's, the same render and options.
  */
 const DEFAULT_SRCDOC = {
-  plain: { sha256: 'e8087b8ca364b238180d756bf08d2fa458ab90feb45705d8ff3d26abb3ee9c22', length: 826100 },
-  rich: { sha256: 'ee1887e63a9e71e0da5e5aee6efeed9b0f256a7edc6d0bcf06f66239e2f94275', length: 4573121 },
+  plain: { sha256: 'b3fe2b9a3845a94f4a299b3aa7d6f4d4d4ba002297f019eeb3f1ba34c883b6d6', length: 834903 },
+  rich: { sha256: 'e979ac8191a816650f499b8ad752f062a32ce67e47a1459e8bd220f416fdd186', length: 4581924 },
 } as const;
 
 /** The two default srcdocs, with `layout` as given (undefined: the option left out). */
@@ -283,7 +283,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
       expect(sha(built.files[name].text), `${name} text`).toBe(DEFAULT_SHA256[name]);
     }
     // The default enhance bundle's size, which the layouts are measured against (test 8's layout row).
-    expect(FRAME_MANIFEST.enhance.chars).toBe(225803);
+    expect(FRAME_MANIFEST.enhance.chars).toBe(233003);
     expect(FRAME_MANIFEST.enhance.layout).toBe('default');
   });
 
@@ -307,7 +307,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
     // Its value at landing A's formula, at this tip: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
     // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
-    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_224_353);
+    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_233_156);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);
   });

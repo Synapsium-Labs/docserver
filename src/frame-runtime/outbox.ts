@@ -24,7 +24,12 @@
 // ms, batch 1.1): the first value at once, the window's latest at its end, so the final value always arrives, at most
 // four a second. A progress still waiting in the pacer's line takes the newer value in place (as store.set does for its
 // key), so at most one progress ever waits there and a navigate asked for later is never queued behind stale values
-// (ruling T7-b). hash is coalesced over 100 ms: the latest id when the window that the first opened ends, with `push` and the `from` of the
+// (ruling T7-b). `reader` (reader mode, LX6.1) paces its `menu`, `exit` and `toggle` like navigate and version, over
+// BRIDGE_LIMITS.readerWindowMs (250 ms): the first at once, the latest act of the window at its end. Its `active` is on its
+// own window, BRIDGE_LIMITS.readerActiveMs (60 s), and is not in that lane at all: the first at once, any other within the
+// window dropped (no trailing copy), and so it is never held in place of a `menu`, `exit` or `toggle` waiting in the lane,
+// and never makes one wait; before ready it is dropped, not queued (it exists only while reader mode is on, which the parent
+// sets after ready). hash is coalesced over 100 ms: the latest id when the window that the first opened ends, with `push` and the `from` of the
 // first push of the window when it held one (a jump is not lost to a `j` or `k` that follows it, docserver parity T6).
 //
 // The changes slot: one request in flight, one queued. A request is in flight from the instant it is posted; its
@@ -44,7 +49,7 @@ export interface OutboxClock {
 /** The limits the outbox paces by (BRIDGE_LIMITS). */
 export type OutboxLimits = Pick<
   typeof BRIDGE_LIMITS,
-  'frameWindowMs' | 'frameMaxPerWindow' | 'frameStoreSetMaxPerWindow' | 'frameCopyMaxPerWindow' | 'frameChangesTimeoutMs' | 'coalesceMs' | 'progressWindowMs'
+  'frameWindowMs' | 'frameMaxPerWindow' | 'frameStoreSetMaxPerWindow' | 'frameCopyMaxPerWindow' | 'frameChangesTimeoutMs' | 'coalesceMs' | 'progressWindowMs' | 'readerWindowMs' | 'readerActiveMs'
 >;
 
 export interface OutboxOptions {
@@ -55,7 +60,7 @@ export interface OutboxOptions {
 }
 
 /** The ops send() takes; copy and changes have their own calls. */
-export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' | 'place' | 'print-figure' }>;
+export type QueuedOp = Extract<FrameToParent, { t: 'store.set' | 'navigate' | 'version' | 'hash' | 'progress' | 'place' | 'print-figure' | 'reader' }>;
 
 /** A changes answer as L2's `changes` callback resolves it (L2's readChangeSet reads it), or null. */
 export interface ChangesAnswer {
@@ -67,7 +72,7 @@ export type ChangesResult = Extract<ParentToFrame, { t: 'changes.result' }>;
 
 export interface Outbox {
   /**
-   * store.set, navigate, version, hash, progress, place or print-figure: queued before open(), paced and coalesced after.
+   * store.set, navigate, version, hash, progress, place, print-figure or reader: queued before open(), paced and coalesced after.
    * `done`, for a print-figure (it is never coalesced), is called once the op has been posted.
    */
   send(op: QueuedOp, done?: () => void): void;
@@ -125,13 +130,16 @@ export function createOutbox(o: OutboxOptions): Outbox {
   let pacerTimer: unknown;
   let current: Request | null = null;
   let next: Request | null = null;
-  const lanes: Record<'navigate' | 'version' | 'progress', Lane> = {
+  const lanes: Record<'navigate' | 'version' | 'progress' | 'reader', Lane> = {
     navigate: { active: false, held: null, timer: undefined },
     version: { active: false, held: null, timer: undefined },
     progress: { active: false, held: null, timer: undefined },
+    reader: { active: false, held: null, timer: undefined },
   };
   /** Each leading-edge lane's window, in ms. */
-  const windowOf = { navigate: L.coalesceMs, version: L.coalesceMs, progress: L.progressWindowMs } as const;
+  const windowOf = { navigate: L.coalesceMs, version: L.coalesceMs, progress: L.progressWindowMs, reader: L.readerWindowMs } as const;
+  /** When the last `active` of `reader` went (it has its own window, outside the lane above). */
+  let activeAt = -L.readerActiveMs;
   const hashLane: Lane = { active: false, held: null, timer: undefined };
 
   /** The send times in `xs` no more than `ms` old at `now` (older ones are dropped for good). */
@@ -285,7 +293,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
   };
 
   const route = (op: QueuedOp, done?: () => void): void => {
-    if (op.t === 'navigate' || op.t === 'version' || op.t === 'progress') lead(lanes[op.t], op, windowOf[op.t]);
+    if (op.t === 'navigate' || op.t === 'version' || op.t === 'progress' || op.t === 'reader') lead(lanes[op.t], op, windowOf[op.t]);
     else if (op.t === 'hash') trail(op);
     else enqueue({ kind: 'op', op, done });
   };
@@ -293,7 +301,14 @@ export function createOutbox(o: OutboxOptions): Outbox {
   return {
     send(op, done) {
       if (disposed) return;
-      if (!opened) queueEarly({ kind: 'op', op, done });
+      if (op.t === 'reader' && op.act === 'active') {
+        // Its own window, outside the lane (see the header): dropped before ready and inside the window, else straight to the line.
+        const now = clock.now();
+        if (opened && now - activeAt >= L.readerActiveMs) {
+          activeAt = now;
+          enqueue({ kind: 'op', op });
+        }
+      } else if (!opened) queueEarly({ kind: 'op', op, done });
       else route(op, done);
     },
     copy(text) {
@@ -358,7 +373,7 @@ export function createOutbox(o: OutboxOptions): Outbox {
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const t of [pacerTimer, lanes.navigate.timer, lanes.version.timer, lanes.progress.timer, hashLane.timer]) if (t !== undefined) clock.clearTimeout(t);
+      for (const t of [pacerTimer, lanes.navigate.timer, lanes.version.timer, lanes.progress.timer, lanes.reader.timer, hashLane.timer]) if (t !== undefined) clock.clearTimeout(t);
       for (const req of [current, next]) if (req !== null) end(req, null);
       for (const e of early) if (e.kind === 'changes' && e.req !== current) end(e.req, null);
       current = null;

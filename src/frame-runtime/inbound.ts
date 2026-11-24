@@ -23,13 +23,15 @@
 //                   code units, counted by length): the shape only, and the token's own grammar is the reader's (the
 //                   bootstrap does not bundle it). Every other name, `close-overlay` and `print-figures` included, is
 //                   exactly `name`: an `id` or a `from` on it is ignored (the parity wire).
+//   reading         exactly `mode`, a string that is one of READING_MODES; an unknown mode, a non-string or another key is ignored
+//                   (reader mode, LX6.1): no state change and no error. Whether the reader has a reader mode is its own answer.
 //   appearance      exactly `v` (the number 1) and `appearance`, a plain object (prototype Object.prototype or null) whose
 //                   own properties are all data properties with string keys and no proto key: the outer shape and nothing
 //                   deeper. The reader script runs the contract's full validator (parseAppearance) on every value it
 //                   applies, so a forged value meets the whole grammar in the frame (the appearance contract, section 8).
 import { ANCHOR_LIMITS } from '../frame/anchor.js';
 import { isFragmentId } from '../frame/fragment.js';
-import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_ACCEPTS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, type CommandOp, type ParentToFrame } from '../frame/protocol.js';
+import { BRIDGE_LIMITS, COMMAND_OPS, FRAME_ACCEPTS, FRAME_PREF_VALUES, isFullSha, OP_KEYS, READING_MODES, type CommandOp, type ParentToFrame, type ReadingMode } from '../frame/protocol.js';
 
 const getProto = Object.getPrototypeOf;
 const ownKeys = Reflect.ownKeys;
@@ -82,6 +84,11 @@ export function parseParentMessage(data: unknown): ParentToFrame | null {
     // Every key of the op is required, so the key set above and the size settle the keys; then v, then the value.
     const value = m.get('appearance');
     return m.size === 3 && m.get('v') === 1 && own(value) !== null ? { t: 'appearance', v: 1, appearance: value as object } : null;
+  }
+  if (op === 'reading') {
+    const mode = m.get('mode');
+    // Another key is already refused by the key set above, and a missing `mode` is no member of READING_MODES.
+    return (READING_MODES as readonly unknown[]).includes(mode) ? { t: 'reading', mode: mode as ReadingMode } : null;
   }
   if (op === 'command') {
     const name = m.get('name');

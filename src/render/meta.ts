@@ -8,8 +8,12 @@ import type { RenderEnv } from './env.js';
 import { frontRecord } from './frontMatter.js';
 import type { RenderMeta } from './types.js';
 
-/** The meta of one rendered document, with its item values (items.ts). Call it after the env's render has finished. */
-export function collectMeta(env: RenderEnv, items: readonly string[]): RenderMeta {
+/**
+ * The meta of one rendered document, with its item values (items.ts) and its reading time in minutes (print/facts.ts's
+ * documentMinutes of the html, the rule src/enhance/reading.ts applies to the same html in the DOM). Call it after the env's
+ * render has finished.
+ */
+export function collectMeta(env: RenderEnv, items: readonly string[], readingMinutes: number): RenderMeta {
   const headings = env.headings;
   const frontList = env.frontList ?? null;
   return {
@@ -21,5 +25,6 @@ export function collectMeta(env: RenderEnv, items: readonly string[]): RenderMet
     tables: env.tables,
     mermaidKinds: env.mermaidKinds,
     items,
+    readingMinutes,
   };
 }

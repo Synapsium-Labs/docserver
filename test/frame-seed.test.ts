@@ -68,7 +68,7 @@ function base(): Seed {
     snapshot: [],
     features: {},
     mermaid: null,
-    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false },
+    bridge: { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false },
   };
 }
 
@@ -97,7 +97,7 @@ function full(): Seed {
     ],
     features: { rules: true, folds: false, keyboard: true, chrome: { bar: false }, vocabulary: { ids: false, qualifiers: ['annex'] } },
     mermaid: { maxTextSize: 16384, maxEdges: 500, secure: ['themeCSS'], draw: 'on-request' },
-    bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true, places: false, printFigures: false },
+    bridge: { links: true, hash: false, copy: true, changes: false, versions: true, progress: true, places: false, printFigures: false, reader: false },
     items: [{ value: 'AB-12', href: 'https://tracker.example/AB-12' }],
   };
 }
@@ -194,15 +194,15 @@ describe('L3.M4 validateSeed: the shape', () => {
     expect(Object.isFrozen(SEED_KEYS) && Object.isFrozen(OPTIONAL_SEED_KEYS)).toBe(true);
   });
 
-  it("B7.6 BRIDGE_KEYS is the five answered ops, the progress switch and the two of the parity wire; the seed's bridge keeps exactly those keys, closed", () => {
-    expect([...BRIDGE_KEYS]).toEqual(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures']);
-    for (const k of ['progress', 'places', 'printFigures'] as const) {
+  it("B7.6 BRIDGE_KEYS is the five answered ops, the progress switch, the two of the parity wire and reader mode's; the seed's bridge keeps exactly those keys, closed", () => {
+    expect([...BRIDGE_KEYS]).toEqual(['links', 'hash', 'copy', 'changes', 'versions', 'progress', 'places', 'printFigures', 'reader']);
+    for (const k of ['progress', 'places', 'printFigures', 'reader'] as const) {
       for (const v of [true, false]) expect(validateSeed({ ...base(), bridge: { ...base().bridge, [k]: v } }), `${k} ${String(v)}`).toMatchObject({ ok: true });
       expect(validateSeed(loose({ bridge: { ...base().bridge, [k]: 'true' } })), k).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
       expect(validateSeed(loose({ bridge: { ...base().bridge, [k]: undefined } })), k).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
     }
-    // A seed of the previous shape (no places, no printFigures) is refused: frameDocument and the bootstrap ship together.
-    const { places: _p, printFigures: _f, ...old } = base().bridge;
+    // A seed of the previous shape (no places, no printFigures, no reader) is refused: frameDocument and the bootstrap ship together.
+    const { places: _p, printFigures: _f, reader: _r, ...old } = base().bridge;
     expect(validateSeed(loose({ bridge: old }))).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
     expect(validateSeed(loose({ bridge: { ...base().bridge, command: true } }))).toEqual({ ok: false, nonce: NONCE, why: 'bridge' });
   });
@@ -479,15 +479,17 @@ const BAD: readonly Row[] = [
   ['bridge', {}, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true }, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true }, 'bridge'],
-  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: 0, places: false, printFigures: false }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, prefs: true }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, command: true }, 'bridge'],
+  ['bridge', { links: 1, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: 0, places: false, printFigures: false, reader: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false, prefs: true }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false, command: true }, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false }, 'bridge'],
   ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, printFigures: false }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: 1, printFigures: false }, 'bridge'],
-  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: 'false' }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, printFigures: false, reader: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: 1, printFigures: false, reader: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: 'false', reader: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false }, 'bridge'],
+  ['bridge', { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: 1 }, 'bridge'],
   ['bridge', null, 'bridge'],
 ];
 
@@ -911,7 +913,7 @@ describe('L3.M20 IMAGE_BUDGET_CHARS and SEED_FIELDS_MAX_CHARS recompute from the
       // The validator keeps a repeated word (L2 drops it), so the longest list repeats the longest word.
       features: maximalFeatures(L.words, () => lt(L.wordMaxCodeUnits)) as Seed['features'],
       mermaid: { maxTextSize: L.maxTextSize, maxEdges: L.maxEdges, secure: Array.from({ length: L.secureKeys }, (_, i) => `k${'0'.repeat(L.secureKeyMaxCodeUnits - 4)}${String(i).padStart(3, '0')}`), draw: longest(MERMAID_DRAW) as MermaidDraw },
-      bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false },
+      bridge: { links: false, hash: false, copy: false, changes: false, versions: false, progress: false, places: false, printFigures: false, reader: false },
       appearance: maximalAppearance() as SeedAppearance,
       fonts: { sans: 'A'.repeat(SEED_LIMITS.fontFaceMaxChars), mono: `${'A'.repeat(SEED_LIMITS.fontFaceMaxChars - 1)}=` },
       // 50 links, each a value of 100 and an href of 4096 code units of the character that escapes longest (the outer check lets them in).

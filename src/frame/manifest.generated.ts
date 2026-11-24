@@ -5,16 +5,16 @@
 // layout's), else null. A frame inlines exactly one layout's assets; the size contract (test/size-contract.test.ts) counts by it.
 export const FRAME_MANIFEST = {
   guard: { path: "frame/guard.js", sha256: "ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d", bytes: 3643, chars: 3643, csp: "'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0='", layout: null },
-  bootstrap: { path: "frame/bootstrap.js", sha256: "47d310d29e5eb9487b66a8250ebddacbb15392cc6380b9424dd03cb33cc76d3d", bytes: 32740, chars: 32740, csp: "'sha256-R9MQ0p5euUh7ZqglDr3ay7FTksxjgLlCTdA8szzHbT0='", layout: null },
-  enhance: { path: "frame/enhance.js", sha256: "22bf8ad1bca38e15f6373617d50977ce6d9f7e07b301acf0a28622218e855759", bytes: 225821, chars: 225803, csp: "'sha256-Ir+K0byjjhX2NzYX1Ql3zm2ffgezAazwooYiIY6FV1k='", layout: "default" },
-  css: { path: "frame/reader.css", sha256: "367c2b55a35c4907c9aa775ce8a3c389b0f8bd38c0f9e1ed51f634d225a881a2", bytes: 564567, chars: 562299, csp: null, layout: null },
+  bootstrap: { path: "frame/bootstrap.js", sha256: "d0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63", bytes: 32681, chars: 32681, csp: "'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM='", layout: null },
+  enhance: { path: "frame/enhance.js", sha256: "0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef", bytes: 233021, chars: 233003, csp: "'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8='", layout: "default" },
+  css: { path: "frame/reader.css", sha256: "32aa81ef916560fe4a304599dfcebcd96cd4825e1d8c33d0e6ae81916d563529", bytes: 566226, chars: 563946, csp: null, layout: null },
   mermaid: { path: "mermaid/mermaid.frame.js", sha256: "7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3", bytes: 3747084, chars: 3746940, csp: "'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='", layout: null },
-  enhanceClassic: { path: "frame/enhance-classic.js", sha256: "784594145e1f448b9f79a6fb2ce1ab0e849c50168eaae43a02d1d84567e9bbae", bytes: 142512, chars: 142503, csp: "'sha256-eEWUFF4fRIufeab7LOGrDoScUBaOquQ6AtHYRWfpu64='", layout: "classic" },
+  enhanceClassic: { path: "frame/enhance-classic.js", sha256: "608037f6acd409299b19fa32b65c2488dd8bbf276da3d182d38a298d9c5af86a", bytes: 149675, chars: 149666, csp: "'sha256-YIA39qzUCSmbGfoytlwkiN2Lvydto9GC04opjZxa+Go='", layout: "classic" },
   cssClassic: { path: "frame/layout-classic.css", sha256: "90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c", bytes: 4205, chars: 4205, csp: null, layout: "classic" },
-  enhanceEditorial: { path: "frame/enhance-editorial.js", sha256: "6aada501607c3dd80c6a8e6948a71bd8bc145f44d2cbf3702f411b0ec5a05104", bytes: 163281, chars: 163263, csp: "'sha256-aq2lAWB8PdgMao5pSKcb2LwUX0TSy/NwL0EbDsWgUQQ='", layout: "editorial" },
+  enhanceEditorial: { path: "frame/enhance-editorial.js", sha256: "91948b8a6af0c8f0c30b36a5a935f71c727fdb386e1f6ce58ee4a4be38f66edd", bytes: 170451, chars: 170433, csp: "'sha256-kZSLimrwyPDDCzalqTX3HHJ/2zhuH2zljuSkvjj2bt0='", layout: "editorial" },
   cssEditorial: { path: "frame/layout-editorial.css", sha256: "c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda", bytes: 3801, chars: 3801, csp: null, layout: "editorial" },
-  enhanceReview: { path: "frame/enhance-review.js", sha256: "6098583df6b74fb90f8cc77810fc98edc089a7cc497e3a6680a729806c281987", bytes: 192387, chars: 192369, csp: "'sha256-YJhYPfa3T7kPjMd4EPyY7cCJp8xJfjpmgKcpgGwoGYc='", layout: "review" },
+  enhanceReview: { path: "frame/enhance-review.js", sha256: "920c60b298691f8293b79df9208e96f4a54cf4260a7f4501bf4ee30aa51a51a3", bytes: 199543, chars: 199525, csp: "'sha256-kgxgsphpH4KTt535II6W9KVM9CYKf0UBv07jCqUaUaM='", layout: "review" },
   cssReview: { path: "frame/layout-review.css", sha256: "920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68", bytes: 8860, chars: 8860, csp: null, layout: "review" },
-  enhanceGuided: { path: "frame/enhance-guided.js", sha256: "1e3c1fab4001e46a299a10190c93ca4b0c730b8f7005d0bd74820c1e2d653deb", bytes: 181511, chars: 181501, csp: "'sha256-Hjwfq0AB5GopmhAZDJPKSwxzC49wBdC9dIIMHi1lPes='", layout: "guided" },
+  enhanceGuided: { path: "frame/enhance-guided.js", sha256: "152934356f24ee2286a67176d0497213c97825fe36b1344622df46fc26273a14", bytes: 188645, chars: 188635, csp: "'sha256-FSk0NW8k7iKGpnF20ElyE8l4Jf42sTRGIt9G/CYnOhQ='", layout: "guided" },
   cssGuided: { path: "frame/layout-guided.css", sha256: "9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c", bytes: 11553, chars: 11553, csp: null, layout: "guided" },
 } as const;

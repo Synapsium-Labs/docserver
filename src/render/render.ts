@@ -26,7 +26,9 @@ import { createEnv, type RenderEnv } from './env.js';
 import { pyEscape } from './escape.js';
 import { collectItems } from './items.js';
 import { collectMeta } from './meta.js';
+import { documentMinutes } from './print/facts.js';
 import { printHtml } from './print/index.js';
+import { parse } from './print/tree.js';
 import { utf8Length } from './pyText.js';
 import { checkReader } from './reader.js';
 import { DEFAULT_MAX_BYTES, type RenderMeta, type RenderOptions, type RenderResult } from './types.js';
@@ -41,6 +43,7 @@ export const EMPTY_META: RenderMeta = Object.freeze({
   tables: 0,
   mermaidKinds: Object.freeze([]),
   items: Object.freeze([]),
+  readingMinutes: 0,
 });
 
 /** The reference renderer's failure block, before the escaped source and its closing tag. */
@@ -171,7 +174,7 @@ export function renderWith(markdown: string, o: RenderOptions | undefined, engin
     if (html === undefined) {
       return { html: fallbackHtml(src, maxHtmlBytes), outcome: 'output-over-limit', bytes, meta: EMPTY_META };
     }
-    const meta = collectMeta(env, collectItems(html, reader.itemFields ?? [], reader.itemHeadings ?? []));
+    const meta = collectMeta(env, collectItems(html, reader.itemFields ?? [], reader.itemHeadings ?? []), documentMinutes(parse(html)));
     if (!print) return { html, outcome: 'rendered', bytes, meta };
     // Print mode (print/index.ts): the same document with the reader's blocks written in. It is bounded like the html.
     const printed = printHtml(html, reader, meta.frontList);

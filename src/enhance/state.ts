@@ -5,7 +5,7 @@
 // Storage keys (the README states them; LD8 adds the two in the middle). Each starts with the namespace, the host's
 // `namespace` option (Task 8; `docreader` when it gives none, options.ts), so no key is fixed and two readers under
 // two namespaces share no key, and so no write queue, on one storage object:
-//   <ns>:prefs                      a JSON object { theme, width, font, lens }, reader-wide
+//   <ns>:prefs                      a JSON object { theme, width, font, lens, size }, reader-wide
 //   <ns>:ui                         a JSON object of UI memory fields (which rail tab, say), reader-wide
 //   <ns>:pos:<posKey>               the reading position of one document, as its feature stores it
 //   <ns>:doc:<storageKey>:<name>    per-document JSON, such as docreader:doc:project-a:specs:x.md:folds
@@ -64,7 +64,7 @@ export const UI_KEY = `${DEFAULT_NAMESPACE}:ui`;
 
 /** The defaults: the first value each pref accepts. */
 export function defaultPrefs(): Prefs {
-  return { theme: PREF_VALUES.theme[0], width: PREF_VALUES.width[0], font: PREF_VALUES.font[0], lens: PREF_VALUES.lens[0] };
+  return { theme: PREF_VALUES.theme[0], width: PREF_VALUES.width[0], font: PREF_VALUES.font[0], lens: PREF_VALUES.lens[0], size: PREF_VALUES.size[0] };
 }
 
 export interface ReaderState {
@@ -395,7 +395,7 @@ export function createReaderState(args: StateArgs): ReaderState {
 
 /**
  * Put the prefs on the root: data-theme (absent for 'auto', so the stylesheet's system rule applies), data-width,
- * data-font and the lens class. This is the sole writer of the root preference state, so startup and later changes
+ * data-font, data-size (absent for 'm', the stylesheet's own size) and the lens class. This is the sole writer of the root preference state, so startup and later changes
  * take the same journaled, conditionally-restored path.
  */
 export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Prefs>): void {
@@ -403,6 +403,7 @@ export function applyPrefs(journal: Journal, root: Element, prefs: Readonly<Pref
   journal.setAttribute(root, 'data-width', prefs.width);
   journal.setAttribute(root, 'data-font', prefs.font);
   journal.toggleClass(root, 'lens-product', prefs.lens === 'product');
+  journal.setAttribute(root, 'data-size', prefs.size === 'm' ? null : prefs.size);
 }
 
 /** Mermaid's tooltip colours on the document element: the verdict's slot, and the custom property the stylesheet reads. */

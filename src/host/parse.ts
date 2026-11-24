@@ -27,9 +27,11 @@ import {
   isProgressThousandths,
   OP_KEYS,
   PLACE_KINDS,
+  READER_ACTS,
   type ErrorWhy,
   type FrameToParent,
   type PlaceKind,
+  type ReaderAct,
 } from '../frame/protocol.js';
 
 /** Why a frame-to-parent message is refused: the parser's part of bridge-cases.json's closed list of reasons. */
@@ -112,6 +114,7 @@ const REQUIRED_KEYS: Readonly<Record<FrameOp, readonly string[]>> = Object.freez
   progress: Object.freeze(['p']),
   place: Object.freeze(['kind']),
   'print-figure': Object.freeze(['i', 'n', 'png']),
+  reader: Object.freeze(['act']),
 });
 
 /** Own keys no message may carry: an own `__proto__`, `constructor` or `prototype` (checked before the key set). */
@@ -300,6 +303,12 @@ function judge(data: unknown, nonce: string, ctx: ParseContext): ParsedBridgeMes
       if (run.bytes - replaced + bytes > BRIDGE_LIMITS.printFiguresTotalMaxBytes) return refuse('oversize');
       if ((run.handed ?? 0) + bytes > PRINT_RUN_HANDED_MAX_BYTES) return refuse('oversize');
       return { ok: true, msg: { t: 'print-figure', i: iText, n: nText, png }, bytes };
+    }
+    case 'reader': {
+      // Reader mode (LX6.1): one act of the closed set. It needs nothing of the mount's state: a frame never sends it to a host with
+      // no onReader, and a hostile one that does is paced by the limiter like any other message.
+      const act = str('act');
+      return (READER_ACTS as readonly string[]).includes(act) ? { ok: true, msg: { t: 'reader', act: act as ReaderAct } } : refuse('type');
     }
     case 'progress': {
       // The share in thousandths, a string inside PROGRESS_SOURCE; a string outside it is refused as `type` (no new reason, batch 1.1).

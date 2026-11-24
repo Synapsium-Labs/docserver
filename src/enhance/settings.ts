@@ -9,6 +9,7 @@ const choices: { readonly [K in keyof Prefs]: readonly [Prefs[K], string][] } = 
   theme: [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']],
   font: [['serif', 'Serif'], ['sans', 'Sans']],
   width: [['standard', 'Standard'], ['wide', 'Wide']],
+  size: [['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']],
   lens: [['all', 'Everything'], ['product', 'Product']],
 };
 
@@ -16,6 +17,7 @@ const labels: { readonly [K in keyof Prefs]: string } = {
   theme: 'Theme',
   font: 'Typeface',
   width: 'Text width',
+  size: 'Text size',
   lens: 'Reading lens',
 };
 
@@ -75,7 +77,7 @@ export function build(ctx: FeatureContext): void {
       const option = chrome(doc, 'span', { className: 'opt' }, [input, caption]);
       ctx.journal.listen(input, 'change', () => {
         if (!input.checked) return;
-        if (name === 'font' || name === 'width' || name === 'lens') ctx.position.keep(() => {
+        if (name === 'font' || name === 'width' || name === 'size' || name === 'lens') ctx.position.keep(() => {
           ctx.setPrefs({ [name]: value } as Pick<Prefs, typeof name>);
           ctx.relayout('prefs');
         });

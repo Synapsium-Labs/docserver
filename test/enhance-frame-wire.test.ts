@@ -35,13 +35,13 @@ describe("src/frame/wire-types.ts: exactly L2's shapes, with no DOM (finding C1)
     // Reference §1's FramePrefs, `Pick<EnhancePrefs, 'theme' | 'width' | 'font'>`, taken from wire-types.ts.
     expectTypeOf<Wire.FramePrefs>().toEqualTypeOf<Pick<Prefs, 'theme' | 'width' | 'font'>>();
     expectTypeOf<Required<FramePrefValues>>().toEqualTypeOf<Pick<Prefs, 'theme' | 'width' | 'font'>>();
-    expectTypeOf<keyof typeof FRAME_PREF_VALUES>().toEqualTypeOf<Exclude<keyof Prefs, 'lens'>>();
+    expectTypeOf<keyof typeof FRAME_PREF_VALUES>().toEqualTypeOf<Exclude<keyof Prefs, 'lens' | 'size'>>();
   });
 });
 
-describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", () => {
+describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the reader-local prefs, the lens (finding C3) and the text size (LX6.3)", () => {
   it('the same prefs, in the same order, each with the same values in the same order (the first the default)', () => {
-    const l2 = Object.fromEntries(Object.entries(PREF_VALUES).filter(([k]) => k !== 'lens'));
+    const l2 = Object.fromEntries(Object.entries(PREF_VALUES).filter(([k]) => k !== 'lens' && k !== 'size'));
     expect(Object.keys(FRAME_PREF_VALUES)).toEqual(Object.keys(l2));
     expect(FRAME_PREF_VALUES).toEqual(l2);
   });
@@ -50,10 +50,15 @@ describe("FRAME_PREF_VALUES: L2's PREF_VALUES without the lens (finding C3)", ()
     expect(Object.keys(PREF_VALUES)).toContain('lens');
     expect(Object.keys(FRAME_PREF_VALUES)).not.toContain('lens');
   });
+
+  it("the text size is L2's too and stays out (LX6.3): PREF_VALUES carries one, the bridge's prefs op does not", () => {
+    expect(Object.keys(PREF_VALUES)).toContain('size');
+    expect(Object.keys(FRAME_PREF_VALUES)).not.toContain('size');
+  });
 });
 
 describe("the frame's registered reader api (C-F4)", () => {
-  it('the enhance entry registers exactly the seven members, runEnhancementCommand and the two appearance members among them', async () => {
+  it('the enhance entry registers exactly the eight members, runEnhancementCommand, the two appearance members and setEnhancementReading among them', async () => {
     const script = document.createElement('script');
     const seen: unknown[] = [];
     script.addEventListener('docserver:register', (e) => void seen.push((e as CustomEvent).detail));
@@ -67,14 +72,14 @@ describe("the frame's registered reader api (C-F4)", () => {
     expect(seen).toHaveLength(1);
     const detail = seen[0] as { name: string; api: Record<string, unknown> };
     expect(detail.name).toBe('enhance');
-    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs']);
+    expect(Object.keys(detail.api).sort()).toEqual(['destroyEnhancement', 'enhance', 'goToHash', 'loadHostFonts', 'runEnhancementCommand', 'setEnhancementAppearance', 'setEnhancementPrefs', 'setEnhancementReading']);
     expect(typeof detail.api['runEnhancementCommand']).toBe('function');
   });
 });
 
 describe('the place wire: the reader reports its figure overlay (docserver parity T3)', () => {
   const TOKEN = JSON.stringify({ line: '12-14', offset: 40, y: 560 });
-  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false } as const;
+  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false } as const;
 
   function sentBy(bridge: typeof BRIDGE | (Omit<typeof BRIDGE, 'places'> & { places: boolean })): { sent: QueuedOp[]; a: ReturnType<typeof createAdapters> } {
     const sent: QueuedOp[] = [];
@@ -259,7 +264,7 @@ describe('the place wire: the reader reports its figure overlay (docserver parit
 });
 
 describe('the print wire: the adapter forwards a figure only under bridge.printFigures (docserver parity T6)', () => {
-  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: true } as const;
+  const BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: true, reader: false } as const;
   const PNG = 'iVBORw0KGgo=';
 
   function printBy(bridge: typeof BRIDGE | (Omit<typeof BRIDGE, 'printFigures'> & { printFigures: boolean })): { sent: QueuedOp[]; dones: number; a: ReturnType<typeof createAdapters> } {
@@ -339,7 +344,7 @@ describe('the item link of the frame: seeded hrefs, drawn by the reader (docserv
     return (seen[0] as { api: Api }).api;
   }
 
-  const SEED_BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false } as const;
+  const SEED_BRIDGE = { links: true, hash: true, copy: true, changes: true, versions: true, progress: false, places: false, printFigures: false, reader: false } as const;
   const adaptersOf = (items?: readonly { value: string; href: string }[]): ReturnType<typeof createAdapters> =>
     createAdapters({ send: () => undefined } as unknown as Outbox, { snapshot: [], bridge: SEED_BRIDGE, ...(items === undefined ? {} : { items }) });
 

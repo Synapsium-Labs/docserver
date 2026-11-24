@@ -14,6 +14,14 @@ export interface HarnessApi {
   violations(): string[];
   /** destroyEnhancement(root). */
   destroy(): Promise<void>;
+  /** setEnhancementReading(root, mode) (reader mode): in place, on the enhanced root. */
+  setReading(mode: string): void;
+  /**
+   * enhance(root, the page's options), with each of `modes` asked for through setEnhancementReading while it starts: the enhance
+   * is a remount made from the host's own callback (the old one's destroy waits for the callback to unwind), so the new one has
+   * no context yet and keeps the calls, the newest winning. Then waits for the fonts.
+   */
+  enhanceReading(modes: readonly string[]): Promise<EnhanceOutcome>;
 }
 
 declare global {
