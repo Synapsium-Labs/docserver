@@ -57,11 +57,11 @@ describe('the contract constants', () => {
 });
 
 describe('test 1: parseAppearance accepts the edges of every grammar', () => {
-  it('a full appearance comes back whole, outer spaces dropped, case kept', () => {
+  it('a full appearance comes back whole, outer spaces dropped, a colour in lower case and a skin value as written (D-9019)', () => {
     const c = colours();
     c.bg = '#ABCDEF';
     const a = { mode: 'light', colour: c, skin: { radius: '8px', popShadow: '0 0 0 1px #5F697C' }, label: 'Phosphor & Ink' };
-    expect(parseAppearance(a)).toEqual({ appearance: a, refused: [] });
+    expect(parseAppearance(a)).toEqual({ appearance: { ...a, colour: { ...c, bg: '#abcdef' } }, refused: [] });
   });
 
   it.each([
@@ -87,10 +87,11 @@ describe('test 1: parseAppearance accepts the edges of every grammar', () => {
     expect(skin(slot, value)).toEqual({ appearance: { mode: 'dark', skin: { [slot]: value } }, refused: [] });
   });
 
-  it('a mode of light, dark or auto stands; every colour slot takes upper and lower case hex', () => {
+  it('a mode of light, dark or auto stands; every colour slot takes upper and lower case hex, and gives lower case (D-9019)', () => {
     for (const mode of ['light', 'dark', 'auto']) expect(parseAppearance({ mode }).appearance.mode).toBe(mode);
     const c = Object.fromEntries(COLOUR_SLOTS.map((s, i) => [s, i % 2 ? '#2E3440' : '#2e3440']));
-    expect(parseAppearance({ mode: 'dark', colour: c })).toEqual({ appearance: { mode: 'dark', colour: c }, refused: [] });
+    const lower = Object.fromEntries(COLOUR_SLOTS.map((s) => [s, '#2e3440']));
+    expect(parseAppearance({ mode: 'dark', colour: c })).toEqual({ appearance: { mode: 'dark', colour: lower }, refused: [] });
   });
 });
 
@@ -199,7 +200,7 @@ describe('test 1: parseAppearance leaves out what the grammar refuses, naming ea
 
 describe('test 1: the forms the first consumer sends', () => {
   it('#2E3440 and #2e3440 pass in a colour slot, #2E3440FF does not, while popShadow takes the eight-digit form', () => {
-    for (const hex of ['#2E3440', '#2e3440']) expect(parseAppearance({ mode: 'dark', colour: { ...colours(), bg: hex } }).appearance.colour?.bg).toBe(hex);
+    for (const hex of ['#2E3440', '#2e3440']) expect(parseAppearance({ mode: 'dark', colour: { ...colours(), bg: hex } }).appearance.colour?.bg).toBe('#2e3440'); // one form (D-9019)
     expect(parseAppearance({ mode: 'dark', colour: { ...colours(), bg: '#2E3440FF' } }).refused).toEqual([{ key: 'colour.bg', why: 'grammar' }]);
     expect(accepted('popShadow', '0 0 0 1px #2E3440FF')).toBe(true);
   });
@@ -212,10 +213,10 @@ describe('test 1: the forms the first consumer sends', () => {
     expect(refusal('sectionWeight', 600)).toEqual([{ key: 'skin.sectionWeight', why: 'type' }]);
   });
 
-  it('leading and trailing U+0020 are ignored and dropped from the verdict; the colour keeps its case', () => {
+  it('leading and trailing U+0020 are ignored and dropped from the verdict; a colour comes out in lower case (D-9019)', () => {
     expect(skin('radius', '   10px  ').appearance.skin).toEqual({ radius: '10px' });
     expect(skin('popShadow', ' 0 0 0 1px #5F697C ').appearance.skin).toEqual({ popShadow: '0 0 0 1px #5F697C' });
-    expect(parseAppearance({ mode: 'dark', colour: { ...colours(), bg: '  #ABCDEF ' } }).appearance.colour?.bg).toBe('#ABCDEF');
+    expect(parseAppearance({ mode: 'dark', colour: { ...colours(), bg: '  #ABCDEF ' } }).appearance.colour?.bg).toBe('#abcdef');
     expect(parseAppearance({ mode: ' dark ' }).appearance.mode).toBe('dark');
   });
 

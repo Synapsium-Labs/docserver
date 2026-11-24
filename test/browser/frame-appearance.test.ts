@@ -29,11 +29,13 @@ import { browserFor, closeBrowsers, describeBrowsers } from './harness.js';
 let built: BuiltFrame;
 let assets: FrameAssets;
 
-const FIXTURES = JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'appearance', 'fixtures.json'), 'utf8')) as {
+// The palettes as the verdict gives them back: a colour comes out as lower-case `#rrggbb` (ccrc D-9019), so the rows that
+// compare what the reader wrote with what was handed in hand in that form. Case handling itself is in the contract's rows.
+const FIXTURES = (JSON.parse(readFileSync(path.join(ROOT, 'conformance', 'appearance', 'fixtures.json'), 'utf8')) as {
   name: string;
   mode: 'light' | 'dark';
   colour: Record<AppearanceColourSlot, string>;
-}[];
+}[]).map((f) => ({ ...f, colour: Object.fromEntries(Object.entries(f.colour).map(([k, v]) => [k, v.toLowerCase()])) as Record<AppearanceColourSlot, string> }));
 const PHOSPHOR = FIXTURES.find((f) => f.name === 'Phosphor & Ink') as (typeof FIXTURES)[number];
 const DAYLIGHT = FIXTURES.find((f) => f.name === 'Phosphor Daylight') as (typeof FIXTURES)[number];
 const SKIN = { radius: '6px', radiusSmall: '3px', radiusLarge: '12px', controlRow: '40px', popShadow: '0 12px 40px rgba(0, 0, 0, 0.55)', sectionCase: 'uppercase' };
@@ -221,9 +223,9 @@ describeBrowsers((browser) => {
     expect(long.got.colours[0]).toBe('rgb(255, 255, 255)');
     expect(long.got.shadow).toContain('rgb(255, 0, 0)');
     expect(long.got.tracking).not.toBe('normal');
-    // The colours the reader wrote are the six-digit forms; the skin values are the received spellings.
+    // The colours the reader wrote are the one form, lower-case six-digit hex; the skin values are the received spellings.
     expect(short.props).toEqual(expectedOf(parseAppearance(SHORT).appearance));
-    expect(short.props.slice(0, 2)).toEqual(['#ffffff', '#FFFFFF']);
+    expect(short.props.slice(0, 2)).toEqual(['#ffffff', '#ffffff']);
     // An op of the short spelling over a seed of the long one leaves the computed values where they were.
     await open();
     try {

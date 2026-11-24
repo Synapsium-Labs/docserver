@@ -1116,6 +1116,32 @@ describe('the appearance contract: FrameOptions.appearance and FrameAssets.fonts
     expect(partial).toEqual({ mode: 'light', label: 'x' });
   });
 
+  it("D-9019: a seed from a minifier's spellings carries each colour's six-digit form, and stays within the longest appearance's seed text", () => {
+    // The longest of the new spellings: six-letter names (the table's longest), a short tracking, compact shadows. The seed
+    // writes the verdict, so a name is seeded as its seven-character hex, never as its text.
+    const HEX: Readonly<Record<string, string>> = {
+      maroon: '#800000', orange: '#ffa500', orchid: '#da70d6', salmon: '#fa8072', sienna: '#a0522d', silver: '#c0c0c0',
+      tomato: '#ff6347', violet: '#ee82ee', bisque: '#ffe4c4', indigo: '#4b0082', purple: '#800080',
+    };
+    const names = Object.keys(HEX);
+    const colour = Object.fromEntries(COLOUR_SLOTS.map((k, i) => [k, names[i % names.length] as string]));
+    const shadow = '-64px -64px 64px -8px rgba(255,255,255,.999)';
+    const skin = { radius: '24px', radiusSmall: '24px', radiusLarge: '24px', controlRow: '56px', popShadow: [shadow, '-64px -64px 64px -8px maroon', '-64px -64px 64px -8px #abcd'].join(','), sectionFamily: 'mono', sectionSize: '16px', sectionWeight: '900', sectionTracking: '-.100em', sectionCase: 'uppercase' };
+    const short = { mode: 'light', colour, skin, label: '<'.repeat(64) };
+    expect(parseAppearance(short).refused).toEqual([]);
+    const seed = seedOf(frame(plain(), { appearance: short }));
+    const seeded = seed['appearance'] as { colour: Record<string, string> };
+    for (const k of COLOUR_SLOTS) expect(seeded.colour[k], k).toMatch(/^#[0-9a-f]{6}$/);
+    expect(seeded.colour['bg']).toBe('#800000');
+    expect(validateSeed(seed)).toEqual({ ok: true, seed });
+    // The seed is exactly the one a host's six-digit spelling of the same colours gives.
+    const long = { ...short, colour: Object.fromEntries(Object.entries(colour).map(([k, v]) => [k, HEX[v] as string])) };
+    expect(Object.values(long.colour).every((v) => /^#[0-9a-f]{6}$/.test(v))).toBe(true);
+    expect(seed['appearance']).toEqual(seedOf(frame(plain(), { appearance: long }))['appearance']);
+    const text = JSON.stringify(seed['appearance']).replace(/</g, '\\u003c');
+    expect(text.length).toBeLessThan(MAXIMAL_APPEARANCE_TEXT().length);
+  });
+
   it('any value given is taken through parseAppearance and never throws: null, a string, an array, a getter, a cycle, a revoked proxy', () => {
     const revoked = Proxy.revocable({}, {});
     revoked.revoke();

@@ -83,8 +83,9 @@ const NAMES =
   'violetEE82EEwheatF5DEB3';
 
 /**
- * An opaque colour's six-digit form, or '' for none: `#rrggbb` as written, `#rgb` with each digit doubled (the case kept),
- * and a table name as its colour's hex, in upper case.
+ * An opaque colour's six-digit form, or '' for none: a six-digit hex as written, `#rgb` with each digit doubled, a table name
+ * as its colour's hex (in the table's upper case). parseAppearance lower-cases it: the one form the reader, the seed and
+ * Mermaid's derivation read.
  */
 const hexOf = (t: string): string => {
   if (/^#(?:[\dA-Fa-f]{3}){1,2}$/.test(t)) return t[4] ? t : t.replace(/\w/g, '$&$&');
@@ -242,8 +243,8 @@ export function parseAppearance(x: unknown): { appearance: Appearance; refused: 
         for (const [s, raw] of entries) {
           const key = `${k}.${s}`;
           const t = typeof raw === 'string' ? trim(raw) : '';
-          // A colour is kept in its six-digit form, which the reader computes with; a skin value as received.
-          const c = k === 'colour' ? hexOf(t) : t;
+          // A colour is kept in its one form, lower-case six-digit hex, which the reader computes with; a skin value as received.
+          const c = k === 'colour' ? hexOf(t).toLowerCase() : t;
           const why = !slots.includes(s) ? 'unknown-key' : typeof raw !== 'string' ? 'type'
             : k === 'colour' ? (c === '' ? 'grammar' : '') : skinWhy(s as AppearanceSkinSlot, t);
           if (why === '') g[s] = c;

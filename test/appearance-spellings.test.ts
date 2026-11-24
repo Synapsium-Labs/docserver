@@ -6,13 +6,14 @@
 // leading and a trailing decimal zero (`-0.011em` to `-.011em`, `0.080em` to `.08em`) and lower-cases hex and units.
 //
 // What this file holds the validator to, row by row: every such spelling of an already-acceptable value is accepted, in every
-// colour slot and in each skin slot it can reach; a colour comes out in its six-digit form, so two equivalent spellings give
-// the same verdict text (a skin value keeps its received spelling: only the stylesheet reads it, and the browser gate,
+// colour slot and in each skin slot it can reach; a colour comes out in one form, `#rrggbb` in lower case, which the reader, the
+// seed and Mermaid's derivation read, so two equivalent spellings give the same verdict text (a skin value keeps its received spelling: only the stylesheet reads it, and the browser gate,
 // test/browser/frame-appearance.test.ts, measures that the computed values are the same); and the near misses stay refused,
 // with the same refusal words. The grammar stays closed: a closed table of colour names, no new function notation and no
 // wider range.
 import { describe, expect, it } from 'vitest';
-import { APPEARANCE_SLOTS, parseAppearance, type AppearanceRefusal } from '../src/enhance/appearance.js';
+import { APPEARANCE_SLOTS, parseAppearance, type AppearanceColourSlot, type AppearanceRefusal } from '../src/enhance/appearance.js';
+import { mermaidThemeOf, seriesOf } from '../src/enhance/appearance-mermaid.js';
 
 /** Every CSS named colour with its sRGB value (CSS Color 4, section 6.1), `transparent` and the system colours aside. */
 const CSS_NAMED: Readonly<Record<string, string>> = Object.fromEntries(
@@ -74,19 +75,19 @@ const refusedSkin = (slot: string, value: string): AppearanceRefusal[] => skinVe
 /** The colour rewrites, each with a spelling a minifier writes and the long spelling it stands for. */
 const COLOUR_CLASSES: readonly (readonly [string, string, string])[] = [
   ['an opaque short hex, lower case', '#fff', '#ffffff'],
-  ['an opaque short hex, upper case (the case a host typed, kept)', '#FFF', '#FFFFFF'],
+  ['an opaque short hex, upper case', '#FFF', '#FFFFFF'],
   ['an opaque short hex of three distinct digits', '#1a2', '#11aa22'],
-  ['a name for an opaque colour', 'red', '#FF0000'],
-  ['a name whose colour has no short hex', 'tan', '#D2B48C'],
+  ['a name for an opaque colour', 'red', '#ff0000'],
+  ['a name whose colour has no short hex', 'tan', '#d2b48c'],
 ];
 
-describe('D-9019: every colour slot takes the short spellings of an opaque colour, in their six-digit form', () => {
+describe('D-9019: every colour slot takes the short spellings of an opaque colour, in their one form', () => {
   for (const slot of COLOUR_SLOTS) {
     it.each(COLOUR_CLASSES)(`${slot}: %s (%s) is accepted and gives the verdict of %s`, (_name, short, long) => {
       const v = colourVerdict(slot, short);
       expect(v.refused).toEqual([]);
       expect(colourOf(slot, short)).toBe(colourOf(slot, long));
-      expect(colourOf(slot, long)).toBe(long);
+      expect(colourOf(slot, long)).toBe(long.toLowerCase());
     });
   }
 
@@ -95,15 +96,16 @@ describe('D-9019: every colour slot takes the short spellings of an opaque colou
     expect(colourOf('bg', ' navy  ')).toBe('#000080');
   });
 
-  it("the six-digit form keeps the case a host wrote: a short hex doubles each digit, a name gives its colour's hex in upper case", () => {
-    expect(colourOf('accent', '#AbC')).toBe('#AAbbCC');
-    expect(colourOf('accent', '#ABCDEF')).toBe('#ABCDEF');
+  it("the one form is lower case whatever case arrived: a short hex doubles each digit, a name gives its colour's hex", () => {
+    expect(colourOf('accent', '#AbC')).toBe('#aabbcc');
+    expect(colourOf('accent', '#ABCDEF')).toBe('#abcdef');
+    expect(colourOf('accent', '#AbCdEf')).toBe('#abcdef');
     expect(colourOf('accent', 'olive')).toBe('#808000');
-    expect(colourOf('accent', 'khaki')).toBe('#F0E68C');
+    expect(colourOf('accent', 'khaki')).toBe('#f0e68c');
   });
 
   it.each(Object.entries(SHORT_NAMES))('the name %s is accepted as #%s, its CSS colour', (name, hex) => {
-    expect(colourOf('text', name)).toBe(`#${hex.toUpperCase()}`);
+    expect(colourOf('text', name)).toBe(`#${hex}`);
     expect(CSS_NAMED[name]).toBe(hex);
   });
 
@@ -119,6 +121,88 @@ describe('D-9019: every colour slot takes the short spellings of an opaque colou
     expect(others).toHaveLength(117);
     expect(others).toContain('grey');
     for (const n of others) expect(colourVerdict('text', n), n).toEqual({ appearance: { mode: 'dark' }, refused: [{ key: 'colour.text', why: 'grammar' }] });
+  });
+});
+
+describe('D-9019 (addendum): the colour downstream readers get is one form', () => {
+  /** The verdict's colour group for a full group with the given slots replaced. */
+  const group = (over: Record<string, string>): Record<AppearanceColourSlot, string> => {
+    const v = parseAppearance({ mode: 'dark', colour: { ...colours(), ...over } });
+    expect(v.refused).toEqual([]);
+    return v.appearance.colour as Record<AppearanceColourSlot, string>;
+  };
+
+  it.each([
+    ['a short hex', '#f0a', '#ff00aa'],
+    ['a short hex in upper case', '#F0A', '#FF00AA'],
+    ['a six-digit hex in upper case', '#FF00AA', '#ff00aa'],
+    ['a name', 'tomato', '#ff6347'],
+  ])("Mermaid's derivation of %s (%s) in every colour slot is the derivation of its six-digit spelling %s", (_name, short, long) => {
+    for (const slot of COLOUR_SLOTS) expect(mermaidThemeOf(group({ [slot]: short })), slot).toEqual(mermaidThemeOf(group({ [slot]: long })));
+  });
+
+  it("the derived tints mix the colour, not its text: a short accent and a named no give the six-digit spellings' tints", () => {
+    const short = mermaidThemeOf(group({ accent: '#f0a', no: 'red', surface: '#fff', text: 'navy' }));
+    const long = mermaidThemeOf(group({ accent: '#ff00aa', no: '#ff0000', surface: '#ffffff', text: '#000080' }));
+    expect(short['activeTaskBkgColor']).toBe(long['activeTaskBkgColor']);
+    expect(short['critBkgColor']).toBe(long['critBkgColor']);
+    expect(short['activeTaskBkgColor']).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("the seed's text of the longest names is the six-digit form's: no name reaches the seed, and the bound holds", () => {
+    // The seed writes the verdict (frameDocument; test/frame-document.test.ts mounts it). A six-letter name is seeded as seven
+    // characters, so the longest-seed figure, which counts seven a colour, still bounds it.
+    const names = ['maroon', 'orange', 'orchid', 'salmon', 'sienna', 'silver', 'tomato', 'violet', 'bisque', 'indigo', 'purple'];
+    const short = group(Object.fromEntries(COLOUR_SLOTS.map((k, i) => [k, names[i % names.length] as string])));
+    const text = JSON.stringify(short);
+    for (const n of names) expect(Object.values(short), n).not.toContain(n); // `violet` is also a slot name, so the keys are not searched
+    expect(Object.values(short).every((v) => /^#[0-9a-f]{6}$/.test(v))).toBe(true);
+    expect(text.length).toBe(JSON.stringify(colours()).length);
+  });
+
+  it('four spellings of one colour are one series colour', () => {
+    const c = group({ accent: 'red', ok: '#f00', wait: '#ff0000', no: '#FF0000' });
+    const s = seriesOf(c);
+    expect(s.filter((x) => x === '#ff0000')).toHaveLength(1);
+    expect(s).toEqual(seriesOf(group({ accent: '#ff0000', ok: '#ff0000', wait: '#ff0000', no: '#ff0000' })));
+  });
+
+  it('every accepted spelling of a colour gives one form: #, then six lower-case hex digits', () => {
+    for (const v of ['#fff', '#FFF', '#aBc', '#ffffff', '#ABCDEF', ...Object.keys(SHORT_NAMES)]) {
+      const out = colourOf('bg', v) ?? '';
+      expect(out, v).toMatch(/^#[0-9a-f]{6}$/);
+      if (v.startsWith('#')) expect(out, v).toBe((v.length === 7 ? v : v.replace(/\w/g, '$&$&')).toLowerCase()); // a hex: its own digits
+    }
+  });
+});
+
+describe('D-9019 (addendum): skin values, one spelling where the reader reads one again', () => {
+  // After the verdict the reader reads two skin values again as text: controlRow (compared to the last one, to relayout) and
+  // sectionFamily (written as an attribute). Neither gains a spelling: each value has exactly one accepted spelling. The
+  // other slots are read by the stylesheet only; popShadow and sectionTracking keep the spelling received, which the browser
+  // gate measures to compute as the long spelling does.
+  const ONE_SPELLING: readonly (readonly [string, string, readonly string[]])[] = [
+    ['radius', '8px', ['08px', '8.0px', '8PX', '8.px', '.8e1px', '+8px']],
+    ['radiusSmall', '0px', ['0', '00px', '0.0px', '-0px', '.0px']],
+    ['radiusLarge', '24px', ['024px', '24.0px', '24PX']],
+    ['controlRow', '40px', ['040px', '40.0px', '4e1px', '40PX', '40.px']],
+    ['sectionFamily', 'mono', ['MONO', 'Mono', 'monospace']],
+    ['sectionSize', '12px', ['012px', '12.0px', '12PX', '.12e2px']],
+    ['sectionWeight', '400', ['0400', '400.0', '4e2', '400.']],
+    ['sectionCase', 'uppercase', ['UPPERCASE', 'Uppercase']],
+  ];
+
+  it.each(ONE_SPELLING)('%s: %s is its one spelling; the equivalent spellings stay refused', (slot, one, others) => {
+    expect(skinOf(slot, one)).toBe(one);
+    for (const o of others) expect(refusedSkin(slot, o), `${slot} ${o}`).toEqual([{ key: `skin.${slot}`, why: 'grammar' }]);
+  });
+
+  it.each([
+    ['popShadow', '0 0 rgba(0,0,0,.5)'],
+    ['popShadow', '0 0 #0008,0 1px red'],
+    ['sectionTracking', '-.011em'],
+  ])('%s: %s is kept as received (the stylesheet reads it, no script does)', (slot, v) => {
+    expect(skinOf(slot, v)).toBe(v);
   });
 });
 
