@@ -160,6 +160,34 @@ describe('setEnhancementReading: in place, with no remount (default layout)', ()
     expect(contextOf(root)?.reader.mode()).toBe('scroll');
   });
 
+  it("a mode asked for while a rail-building document starts leaves the rail class off (the latest call wins), and off gives it back without a remount", async () => {
+    const root = mount(`${DOC}\n\n## 4. Four\n\nText.\n\n## 5. Five\n\nText.\n`);
+    // A remount made from the host's own callback: the destroy waits for the callback to unwind, so the new enhance() starts
+    // behind it, with no context yet, and the host's calls in between are kept (the newest wins).
+    let started: Promise<void> | null = null;
+    await enhance(root, {
+      onReader: () => {
+        void destroyEnhancement(root);
+        started = enhance(root, { onReader: () => undefined });
+        expect(contextOf(root)?.reader, 'the new enhance() has built nothing yet').toBeUndefined();
+        setEnhancementReading(root, 'screens');
+        setEnhancementReading(root, 'scroll');
+      },
+    });
+    key(root, 'r');
+    await started;
+    expect(contextOf(root)?.reader.mode()).toBe('scroll');
+    expect(root.getAttribute('data-reading')).toBe('scroll');
+    expect(root.querySelector('.doc-toc'), 'the rail was built').not.toBeNull();
+    expect(root.classList.contains('has-toc'), 'reader mode started: no rail padding').toBe(false);
+    const rail = root.querySelector('.doc-toc');
+    setEnhancementReading(root, 'off');
+    expect(root.classList.contains('has-toc')).toBe(true);
+    expect(root.querySelector('.doc-toc')).toBe(rail);
+    setEnhancementReading(root, 'screens');
+    expect(root.classList.contains('has-toc')).toBe(false);
+  });
+
   it('every layout shares it: the reader service is part of every instance (ctx.reader)', async () => {
     const { root } = await reading();
     const r = contextOf(root)?.reader;
@@ -349,5 +377,97 @@ describe('active: a box scrolled sideways while reader mode is on, and a figure 
     target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'touch', clientX: 10, clientY: 10 }));
     target.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 25 }));
     expect(acts).toEqual(['active', 'active', 'active']);
+  });
+});
+
+describe('entering reader mode closes what it hides, and only that (default layout)', () => {
+  const MANY = `${DOC}\n\n## 4. Four\n\nText.\n\n## 5. Five\n\nText.\n`;
+  const COMMITS = {
+    sha: 'abcdef1',
+    commits: [
+      { sha: 'abcdef1', subject: 'feat: newer change', date: '2026-01-01T18:45:00Z', parents: ['1234567'] },
+      { sha: '1234567', subject: 'fix: older change', date: '2026-01-01T18:15:00Z', parents: ['2345678'] },
+    ],
+  };
+  const withChanges = { info: COMMITS, changes: () => Promise.resolve({ changed: [] }) };
+
+  it('the contents drawer open on a phone is closed by every mode that leaves off: nothing stays open to swallow input, and Escape sends exit', async () => {
+    for (const mode of ['screens', 'scroll'] as const) {
+      const { root, acts } = await reading({}, MANY);
+      const ctx = contextOf(root);
+      expect(ctx?.commands.run('contents'), 'the drawer opens below 1240 px').toBe(true);
+      expect(ctx?.overlays.isOpen('drawer')).toBe(true);
+      expect(root.classList.contains('toc-open')).toBe(true);
+      setEnhancementReading(root, mode);
+      expect(ctx?.overlays.isOpen('drawer'), `${mode}: the drawer is closed`).toBe(false);
+      expect(root.classList.contains('toc-open')).toBe(false);
+      expect(root.querySelector('.toc-scrim')?.hasAttribute('hidden')).toBe(true);
+      expect(ctx?.overlays.any(), `${mode}: no dialog is left open`).toBe(false);
+      key(root, 'Escape');
+      expect(acts, `${mode}: Escape is the reader's again`).toEqual(['exit']);
+    }
+  });
+
+  it('a drawer a host command opened inside reader mode (hidden, with the rail class off) is closed by the next mode change, so it never shows up open on restoring', async () => {
+    const { root } = await reading({}, MANY);
+    const ctx = contextOf(root);
+    setEnhancementReading(root, 'screens');
+    expect(ctx?.commands.run('contents')).toBe(true);
+    expect(ctx?.overlays.isOpen('drawer')).toBe(true);
+    setEnhancementReading(root, 'scroll');
+    expect(ctx?.overlays.isOpen('drawer')).toBe(false);
+    expect(ctx?.commands.run('contents')).toBe(true);
+    setEnhancementReading(root, 'off');
+    expect(ctx?.overlays.isOpen('drawer')).toBe(false);
+    expect(root.classList.contains('toc-open')).toBe(false);
+  });
+
+  it('the changes menu open in the bar tools is closed too, and the menu button reads closed', async () => {
+    const { root, acts } = await reading(withChanges, MANY);
+    const ctx = contextOf(root);
+    const trigger = root.querySelector('.chg-trig') as HTMLButtonElement;
+    trigger.click();
+    expect(ctx?.overlays.isOpen('changes')).toBe(true);
+    setEnhancementReading(root, 'screens');
+    expect(ctx?.overlays.isOpen('changes')).toBe(false);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(ctx?.overlays.any()).toBe(false);
+    key(root, 'Escape');
+    expect(acts).toEqual(['exit']);
+  });
+
+  it('what the mode leaves visible stays open, each on its own: the full-screen figure, the quick jump, the keys sheet and the settings menu', async () => {
+    const openers: Record<string, (root: HTMLElement) => void> = {
+      figure: (root) => (Array.from(root.querySelectorAll('button')).find((b) => b.textContent === 'Full screen') as HTMLButtonElement).click(),
+      jump: (root) => void contextOf(root)?.commands.run('jump'),
+      keys: (root) => void key(root, '?'),
+      settings: (root) => void contextOf(root)?.commands.run('settings'),
+    };
+    for (const [kind, openIt] of Object.entries(openers)) {
+      const { root } = await reading({}, MANY, FIGURE);
+      const ctx = contextOf(root);
+      openIt(root);
+      expect(ctx?.overlays.isOpen(kind as never), `${kind} is open`).toBe(true);
+      for (const mode of ['screens', 'scroll', 'off'] as const) {
+        setEnhancementReading(root, mode);
+        expect(ctx?.overlays.isOpen(kind as never), `${kind} stays open in ${mode}`).toBe(true);
+      }
+    }
+  });
+
+  it('Escape keeps its order in reader mode: a settings menu opened there is closed first, and only then does Escape send exit', async () => {
+    const { root, acts } = await reading({}, MANY);
+    const ctx = contextOf(root);
+    setEnhancementReading(root, 'screens');
+    expect(ctx?.commands.run('settings')).toBe(true);
+    key(root, 'Escape');
+    expect(ctx?.overlays.isOpen('settings')).toBe(false);
+    expect(acts).toEqual([]);
+    key(root, 'Escape');
+    expect(acts).toEqual(['exit']);
+    // a change from one reading mode to the other closes nothing the reader opened
+    ctx?.commands.run('settings');
+    setEnhancementReading(root, 'scroll');
+    expect(ctx?.overlays.isOpen('settings')).toBe(true);
   });
 });

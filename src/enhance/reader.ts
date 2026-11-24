@@ -2,7 +2,9 @@
 // switches it with `setEnhancementReading(root, mode)` (the frame's `reading` op): `screens`, `scroll` or `off`. While it is not
 // `off` the root carries `data-reading` (the stylesheet hides the bar, running head, progress line, rail, settings button and top
 // space in place, with no remount, and the settings menu still opens from its command); the contents rail's `has-toc` class is
-// taken off and put back, so the text column is the one a rail-less root has. A mode that is not one of the three changes nothing.
+// taken off and put back, so the text column is the one a rail-less root has; an open contents drawer or "Changes since" menu, which
+// the hidden chrome would leave open and unseen, is closed at a mode change (the figure, jump, keys sheet and settings stay). A mode that
+// is not one of the three changes nothing.
 //
 //   mode()        the mode now ('off' until the host sends one);
 //   set(mode)     switch, keeping the reader's place across the layout change; emits the 'reading' event (events.on('reading', fn):
@@ -22,6 +24,7 @@ import type { Host } from './host.js';
 import type { Journal } from './journal.js';
 import type { Keys } from './keys.js';
 import type { Position } from './nav.js';
+import type { Overlays } from './overlays.js';
 import type { Events, RelayoutReason } from './registry.js';
 
 /** The modes the host sets; the frame wire keeps a twin (src/frame/protocol.ts READING_MODES), held equal by test. */
@@ -46,6 +49,7 @@ export interface ReaderArgs {
   readonly journal: Journal;
   readonly host: Host;
   readonly keys: Keys;
+  readonly overlays: Overlays;
   readonly events: Events;
   readonly position: Position;
   readonly relayout: (reason: RelayoutReason) => void;
@@ -56,7 +60,7 @@ export interface ReaderArgs {
 
 /** The reader mode of one instance (see the header). */
 export function createReader(args: ReaderArgs): Reader {
-  const { root, journal, host, keys, events, position, relayout, keyboard, live } = args;
+  const { root, journal, host, keys, overlays, events, position, relayout, keyboard, live } = args;
   let mode: ReadingMode = 'off';
   /** Whether the root held the rail's `has-toc` class when reader mode took it off. */
   let hadToc = false;
@@ -90,6 +94,9 @@ export function createReader(args: ReaderArgs): Reader {
       const on = next !== 'off';
       const was = mode;
       position.keep(() => {
+        // The contents drawer and the changes menu are chrome the stylesheet hides in a reader mode: one left open would swallow input unseen, so each
+        // closes by its own owner at every mode change (the figure, jump, keys sheet and settings menu stay visible, and stay).
+        for (const kind of ['changes', 'drawer'] as const) overlays.close(kind);
         mode = next as ReadingMode;
         journal.setAttribute(root, 'data-reading', on ? mode : null);
         if (was === 'off') hadToc = root.classList.contains('has-toc');

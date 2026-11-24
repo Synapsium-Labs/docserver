@@ -105,7 +105,7 @@ interface Instance {
   state: ReaderState | null;
   /** setEnhancementPrefs changes made before startup created the state; applied as soon as it exists. */
   pendingPrefs: Partial<Prefs> | null;
-  /** The newest setEnhancementReading mode made before startup built the context: applied (judged by the reader) as soon as it exists. */
+  /** The newest setEnhancementReading mode made before startup built the context: applied (judged by the reader) once the features are built. */
   pendingReading: unknown;
   /** The newest setEnhancementAppearance verdict made before startup created the state: hosted, over the options', as soon as it exists. */
   pendingAppearance: Appearance | null;
@@ -427,7 +427,7 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     onRelayout: relayout.onRelayout,
     headCtl: createHeadCtl({ root, journal }),
     slots: bar?.slots ?? null,
-    reader: createReader({ root, journal, host, keys, events, position, relayout: relayout.relayout, keyboard: options.keyboard, live }),
+    reader: createReader({ root, journal, host, keys, overlays, events, position, relayout: relayout.relayout, keyboard: options.keyboard, live }),
     commands: createCommands(live),
     folds: createFolds(root),
     setPrefs: (change) => {
@@ -440,10 +440,6 @@ function build(inst: Instance, opts: NormalizedOptions): void {
   inst.ctx = ctx;
   // Screen pages (LX6.2, pages.ts): a shared service like the reader's, in every layout's bundle, inert until the host sends `reading`.
   createPages(ctx);
-  // A setEnhancementReading call made before the context existed (reader mode LX6.1): the reader judges the mode.
-  const reading = inst.pendingReading;
-  inst.pendingReading = undefined;
-  if (reading !== undefined) ctx.reader.set(reading);
   // The host's history moved to an entry of this document (commands.ts: `goto`): the export goToHash, as a command.
   ctx.commands.register('goto', (args) => {
     const { id, from } = (typeof args === 'object' && args !== null ? args : {}) as { id?: unknown; from?: unknown };
@@ -462,6 +458,11 @@ function build(inst: Instance, opts: NormalizedOptions): void {
     f.build(ctx);
     if (!live()) return;
   }
+  // A setEnhancementReading call made before the features were built (reader mode LX6.1): the reader judges the newest mode now, once
+  // the rail has put its `has-toc` class on, so that class is the one the reader takes off (and gives back on `off`).
+  const reading = inst.pendingReading;
+  inst.pendingReading = undefined;
+  if (reading !== undefined) ctx.reader.set(reading);
   // Once every feature is built: the bar's skeleton goes in, and the first measure is asked for.
   bar?.attach();
   ctx.relayout('start');

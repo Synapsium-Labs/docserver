@@ -13,6 +13,11 @@
 //        the last one arrives, and the frame still answers a later setReading.
 //   R5   a table scrolled sideways sends `active` once while the mode is on (the one-a-minute window is the unit rows'),
 //        and none while it is off.
+//   R7   at 390 px, entering reader mode from an open Contents drawer (screens, then scroll) closes the drawer: the top band
+//        sends `menu`, a tap turns the screen in `screens` and not in `scroll`, and Escape sends `exit` (review fix F1)
+//   R8   a real remount (update()) after setReading('screens'): the new frame reaches data-reading once it is ready (the latest mode
+//        replayed over its port at that ready, not carried in its seed, so the chrome shows until then), and setReading('off')
+//        restores the chrome it built in place; a mount that left the rail out has none to restore (review fix D-8950)
 //   R6   a frame mounted without onReader leaves `r` unbound and sends no reader op (nothing is counted as refused: no fallback).
 //
 // Waits are polls on a condition, never a fixed sleep for something that must happen; a row that must see that something did NOT
@@ -266,6 +271,96 @@ describeBrowsers((browser: BrowserName) => {
       expect((await host.lib()).events.some((e) => e.kind === 'fallback')).toBe(false);
     } finally {
       await host.close();
+    }
+  }, 240_000);
+
+  it('R7 (default layout): at 390 px, entering reader mode from an open Contents drawer closes it: the top band sends menu, a tap turns the screen only in screens mode, and Escape sends exit', async () => {
+    const host = await open(browser, {}, 390);
+    try {
+      const drawer = (): Promise<{ open: boolean; shown: boolean }> =>
+        host.frame().evaluate(() => {
+          const rail = document.querySelector('.doc-toc') as HTMLElement;
+          return { open: (document.querySelector('[data-docreader-root]') as HTMLElement).classList.contains('toc-open'), shown: getComputedStyle(rail).display !== 'none' };
+        });
+      const scrollY = (): Promise<number> => host.frame().evaluate(() => window.scrollY);
+      const tapAt = async (fx: number, y: number): Promise<void> => {
+        const box = await host.page.locator('iframe').boundingBox();
+        if (box === null) throw new Error('no iframe');
+        await host.page.mouse.click(box.x + 390 * fx, box.y + y);
+      };
+      const openDrawer = async (): Promise<void> => {
+        await host.command('contents');
+        await until(async () => (await drawer()).open, 'the contents drawer opens');
+      };
+      await openDrawer();
+      await host.setReading('screens');
+      await until(async () => (await reading(host)) === 'screens', 'reader mode is on');
+      await sleep(350);
+      // the top band answers (the open drawer swallowed it: every press was taken for a press on an overlay)
+      await tapAt(0.5, 20);
+      await until(async () => (await acts(host)).includes('menu'), 'menu arrives');
+      // a tap turns the screen
+      await sleep(350);
+      const y0 = await scrollY();
+      await tapAt(0.7, 400);
+      await until(async () => (await scrollY()) > y0, 'a tap turns the screen');
+      expect(await drawer(), 'the drawer is closed, not only hidden').toEqual({ open: false, shown: false });
+      // and in scroll mode, entered from an open drawer too, the band answers and a tap does not turn
+      await host.setReading('off');
+      await until(async () => (await reading(host)) === null, 'reader mode is off');
+      await sleep(350);
+      await openDrawer();
+      await host.setReading('scroll');
+      await until(async () => (await reading(host)) === 'scroll', 'scroll mode is on');
+      await sleep(350);
+      expect((await drawer()).open).toBe(false);
+      const menus = (await acts(host)).filter((a) => a === 'menu').length;
+      await tapAt(0.5, 20);
+      await until(async () => (await acts(host)).filter((a) => a === 'menu').length === menus + 1, 'menu arrives in scroll mode');
+      const y1 = await scrollY();
+      await tapAt(0.7, 400);
+      await sleep(500);
+      expect(await scrollY(), 'scroll does not turn').toBe(y1);
+      // Escape is the reader's again: no invisible drawer takes it
+      await sleep(300);
+      await press(host, 'Escape');
+      await until(async () => (await acts(host)).includes('exit'), 'exit arrives');
+      expect((await host.lib()).events.some((e) => e.kind === 'fallback')).toBe(false);
+    } finally {
+      await host.close();
+    }
+  }, 240_000);
+
+  it('R8 (default layout): a remount after setReading carries the mode: the new frame is in it once ready, and off restores the chrome it built, in place; a mount without a rail has none to restore', async () => {
+    for (const features of [undefined, { chrome: { rail: false } }] as const) {
+      const host = await open(browser, features === undefined ? {} : { features }, 1400);
+      try {
+        const readies = async (): Promise<number> => (await host.lib()).events.filter((e) => e.kind === 'ready').length;
+        await host.setReading('screens');
+        await until(async () => (await reading(host)) === 'screens', 'the first frame is in reader mode');
+        await host.update(input(DOC));
+        await until(async () => (await readies()) === 2 && (await reading(host)) === 'screens', 'the new frame is ready and in reader mode');
+        const record = await host.lib();
+        expect(record.iframes).toBe(1);
+        const nonce = record.iframe?.nonce;
+        expect(nonce).not.toBeNull();
+        const hidden = await shown(host);
+        expect(hidden, 'the chrome it built is hidden').toEqual({ bar: false, running: false, progress: false, rail: false, aa: false });
+        await host.frame().evaluate(() => {
+          (document.querySelector('.topbar') as HTMLElement).dataset['mark'] = 'same-object';
+        });
+        await host.setReading('off');
+        await until(async () => (await reading(host)) === null, 'data-reading is gone');
+        const back = await shown(host);
+        expect(back, features === undefined ? 'every piece of chrome comes back' : 'what the mount built comes back, and the rail it left out stays out').toEqual({ bar: true, running: true, progress: true, rail: features === undefined, aa: true });
+        const after = await host.lib();
+        expect(after.iframe?.nonce, 'in place: the same frame').toBe(nonce);
+        expect(after.iframes).toBe(1);
+        expect(await host.frame().evaluate(() => (document.querySelector('.topbar') as HTMLElement).dataset['mark'])).toBe('same-object');
+        expect(after.events.some((e) => e.kind === 'fallback')).toBe(false);
+      } finally {
+        await host.close();
+      }
     }
   }, 240_000);
 });

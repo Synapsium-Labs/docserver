@@ -32,7 +32,8 @@
 //   T12b a change of text size keeps the place in screens mode: the first line shown stays the first line shown, whole
 //   T13  `scroll` and `off` turn nothing: no band, no prevented keys, taps and swipes do nothing
 //   T14p the text size is a screen control: in print media every size keeps the 11pt baseline and the unscaled rem (LX6.3 fix round 1)
-//   T14  the text sizes (LX6.3): s, m, l and xl are 16, 18, 20 and 22 px of body text, absent reads m, and rem parts follow
+//   T14  the text sizes (LX6.3): s, l and xl are 16, 20 and 22 px of body text everywhere; m is the reader's existing size per face and
+//        device (serif 18 px, serif phone 17, sans 17.5, sans phone 16.5), absent reads m, and rem parts follow (every cell: reader-size.test.ts, Z1)
 //
 // Waits are polls on a condition; a row that must see something NOT happen waits a fixed beat after an ordered command.
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -1618,7 +1619,7 @@ describeBrowsers((browser: BrowserName) => {
     }
   }, 240_000);
 
-  it('T14 (default layout): the sizes s, m, l and xl are 16, 18, 20 and 22 px of body text; absent reads m; the rem parts and the column follow', async () => {
+  it('T14 (default layout): the sizes s, l and xl are 16, 20 and 22 px of body text and m is the existing size of the face and device (18, 17, 17.5, 16.5); absent reads m; the rem parts and the column follow', async () => {
     const host = await open(browser, LINES);
     try {
       const read = (): Promise<{ body: number; h2: number; measure: number; size: string | null; checked: string[] }> =>
@@ -1648,7 +1649,7 @@ describeBrowsers((browser: BrowserName) => {
         expect(r.h2 / m.h2, `size ${size}: the headings (rem parts) follow`).toBeCloseTo(px / 18, 2);
         expect(r.measure / m.measure, `size ${size}: the column follows`).toBeCloseTo(px / 18, 2);
       }
-      // the sans face (its own 17.5 px at m) and a phone view (its own 17 px at m) take the same four sizes
+      // the sans face (its own 17.5 px at m) and a phone view (its own 17 px at m) take the same three other sizes
       await host.setPrefs({ font: 'sans' });
       await sleep(500);
       expect((await read()).body, 'sans at m keeps its own size').toBe(17.5);
@@ -1664,6 +1665,14 @@ describeBrowsers((browser: BrowserName) => {
         await chooseSize(host, size);
         await sleep(400);
         expect((await read()).body, `phone, size ${size}`).toBe(px);
+      }
+      // the sans face on a phone: its own 16.5 px at m
+      await host.setPrefs({ font: 'sans' });
+      await sleep(500);
+      for (const [size, px] of [['m', 16.5], ['s', 16], ['l', 20]] as const) {
+        await chooseSize(host, size);
+        await sleep(400);
+        expect((await read()).body, `sans phone, size ${size}`).toBe(px);
       }
     } finally {
       await host.close();

@@ -3488,6 +3488,17 @@ describe('reader mode, host half (LX6.1): adapters.onReader and DocFrame.setRead
     expect(readingOps(m)).toEqual([{ t: 'reading', mode: 'scroll' }]);
   });
 
+  it('what is queued before ready is posted in one order, prefs then appearance then reading, so the host\'s onReady wins and a remount replays the mode last', async () => {
+    const m = mount();
+    await m.loaded();
+    m.frame.setReading('screens');
+    m.frame.setAppearance({ mode: 'dark' });
+    m.frame.setPrefs({ width: 'wide' });
+    expect(frameBound(m)).toEqual([]);
+    m.say({ t: 'ready', v: 1, nonce: m.nonce });
+    expect(frameBound(m).map((x) => (x as { t: string }).t)).toEqual(['prefs', 'appearance', 'reading']);
+  });
+
   it('setReading after ready posts at once, each mode; the same iframe carries it (no remount)', async () => {
     const m = await ready();
     const before = iframes();

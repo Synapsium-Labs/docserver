@@ -8,7 +8,7 @@
 // package's Mermaid file, which the harness serves at MERMAID_PATH (LD4: the host passes the module). With them,
 // `enhance()` also waits, at most DIAGRAMS_WAIT_MS, for the root's `data-docreader-diagrams` to leave `drawing` (LD5:
 // a host waiting for diagrams reads that attribute), and answers an error when it never does.
-import { destroyEnhancement, enhance } from '../../../src/enhance/index.js';
+import { destroyEnhancement, enhance, setEnhancementReading } from '../../../src/enhance/index.js';
 import type { EnhanceOutcome, HarnessApi } from './api.js';
 import { snapshot } from './snapshot.js';
 import { trackSource } from './source.js';
@@ -82,6 +82,28 @@ function start(): void {
     snapshot: (scope) => snapshot(root, scope, isSource),
     violations: () => [...violations],
     destroy: () => destroyEnhancement(root),
+    setReading: (mode) => setEnhancementReading(root, mode),
+    async enhanceReading(modes): Promise<EnhanceOutcome> {
+      try {
+        const base = isRecord(options) ? options : {};
+        const hold: { again?: Promise<void> } = {};
+        await enhance(root, {
+          ...base,
+          onReader: () => {
+            void destroyEnhancement(root);
+            hold.again = enhance(root, base);
+            for (const m of modes) setEnhancementReading(root, m);
+          },
+        } as Parameters<typeof enhance>[1]);
+        root.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }));
+        await hold.again;
+        await document.fonts.ready;
+        return { ok: true };
+      } catch (e) {
+        const code = typeof e === 'object' && e !== null && 'code' in e ? String(e.code) : '';
+        return { ok: false, code, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
   };
   window.__docreaderHarness = api;
   document.documentElement.setAttribute('data-harness', 'loaded');
