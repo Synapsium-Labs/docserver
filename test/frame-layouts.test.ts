@@ -227,15 +227,15 @@ describe('the layout table: the build\'s names, the library\'s and the manifest\
 
 /**
  * The five entries the default frame inlines, as Landing A's merge (1c2120d) records them, with the one move since: the enhance
- * bundle, rebuilt by the seeded base's wait for the last-visit measure (docserver readiness T5; the guard, the bootstrap, the
- * stylesheet and Mermaid are Landing A's own): the sha256 of
+ * bundle, rebuilt by the seeded base's wait for the last-visit measure (docserver readiness T5) and since by reader mode and by
+ * D-9019's grammars (the guard, the bootstrap and Mermaid are Landing A's own; the stylesheet moved with reader mode): the sha256 of
  * each asset's text. Literals on purpose: a layout, its plugin or any change of the build must leave every one in place (the
  * orchestrator's ruling R1), and a test that read them from the manifest it checks could not tell.
  */
 const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' | 'mermaid', string>> = {
   guard: 'ff3c25da5703bc06d40ca0412b2e760c619a73a4153306f4d0f3b662bda65c4d',
   bootstrap: 'd0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63',
-  enhance: '0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef',
+  enhance: 'd2c7df4e3c29a12555c3324333a5a52def3c3f02290b510fd4abc658521f076b',
   css: '32aa81ef916560fe4a304599dfcebcd96cd4825e1d8c33d0e6ae81916d563529',
   mermaid: '7585b2055ba386b9acff71b9c8a0c40b36dec79c2106a4aa56048c8fe59832c3',
 };
@@ -243,19 +243,20 @@ const DEFAULT_SHA256: Readonly<Record<'guard' | 'bootstrap' | 'enhance' | 'css' 
 /** frameCsp() at landing A, whole. */
 const DEFAULT_CSP =
   "default-src 'none'; script-src 'sha256-/zwl2lcDvAbUDKBBKy52DGGac6QVMwb00PO2Yr2mXE0=' 'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM=' " +
-  "'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
+  "'sha256-0sffTjwpoSVVwzJDM6WlLe88PwIpC1EP1KvGWFIfB2s=' 'sha256-dYWyBVujhrms/3G5yKDECzbex5whBqSqVgSMj+WYMsM='; " +
   "style-src 'unsafe-inline' data:; font-src data:; img-src data:; base-uri 'none'; form-action 'none'";
 
 /**
  * The default srcdoc of two fixed renders at landing A's code, measured before this task changed anything (the same render
  * results, nonces, options and assets): the sha256 of the string and its length. `plain` is FIXTURE with nonce `a`x32 and no option
  * but the policy and the assets; `rich` is the same document with Mermaid on, rules and no keyboard, a dark theme, and `progress`
- * and `places` on, nonce `b`x32. Re-measured at reader mode LX6.3 (text size: the stylesheet and every enhance bundle move) and at LX6.1 (the seed gains `"reader":false`, the bundles and the stylesheet move). Before that, at the readiness wave tip (docserver readiness T5): 94 characters
+ * and `places` on, nonce `b`x32. Re-measured at D-9019 (the appearance grammars take a minifier's spellings: every enhance bundle
+ * moves, 556 characters longer), at reader mode LX6.3 (text size: the stylesheet and every enhance bundle move) and at LX6.1 (the seed gains `"reader":false`, the bundles and the stylesheet move). Before that, at the readiness wave tip (docserver readiness T5): 94 characters
  * longer than landing A's, the same render and options.
  */
 const DEFAULT_SRCDOC = {
-  plain: { sha256: 'b3fe2b9a3845a94f4a299b3aa7d6f4d4d4ba002297f019eeb3f1ba34c883b6d6', length: 834903 },
-  rich: { sha256: 'e979ac8191a816650f499b8ad752f062a32ce67e47a1459e8bd220f416fdd186', length: 4581924 },
+  plain: { sha256: '7d0d8fcf02aba949ad1cd033ed1992c60b08de7565c0c01d6214c74e3b8ddaa4', length: 835459 },
+  rich: { sha256: '1275b28762a73ffdb817c4f3a730dc126d9dff5313766b7d7ee02ad3fd32b61f', length: 4582480 },
 } as const;
 
 /** The two default srcdocs, with `layout` as given (undefined: the option left out). */
@@ -283,7 +284,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
       expect(sha(built.files[name].text), `${name} text`).toBe(DEFAULT_SHA256[name]);
     }
     // The default enhance bundle's size, which the layouts are measured against (test 8's layout row).
-    expect(FRAME_MANIFEST.enhance.chars).toBe(233003);
+    expect(FRAME_MANIFEST.enhance.chars).toBe(233559);
     expect(FRAME_MANIFEST.enhance.layout).toBe('default');
   });
 
@@ -307,7 +308,7 @@ describe('the default frame is unmoved by the layouts (R1)', () => {
     expect(maxSrcdocChars()).toBe(MAX_SRCDOC_CHARS_DEFAULT);
     // Its value at landing A's formula, at this tip: the html cap, the five assets, the images, the seed fields at their caps and the skeleton (measured with
     // the tree at 1c2120d's formula: test/frame-document.test.ts derives it from those sources and measures the skeleton on a srcdoc).
-    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_233_156);
+    expect(MAX_SRCDOC_CHARS_DEFAULT).toBe(116_233_712);
     const five = FRAME_MANIFEST.guard.chars + FRAME_MANIFEST.bootstrap.chars + FRAME_MANIFEST.enhance.chars + FRAME_MANIFEST.css.chars + FRAME_MANIFEST.mermaid.chars;
     expect(MAX_SRCDOC_CHARS_DEFAULT - SEED_HTML_MAX_CHARS - five - IMAGE_BUDGET_CHARS - SEED_FIELDS_MAX_CHARS).toBeGreaterThan(CSP_MAX_CHARS);
   });

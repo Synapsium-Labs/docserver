@@ -67,42 +67,72 @@ export type SlotProperty = (typeof SLOT_PROPERTY.colour)[AppearanceColourSlot] |
 
 // ───────── the value grammars (§2, "The value grammars, exact") ─────────
 
-const HEX = /^#[0-9A-Fa-f]{6}$/;
+// A host's stylesheet build may rewrite a value to an equivalent spelling before the host reads and forwards it (ccrc D-9019):
+// a short hex, a colour name, a compact `rgba()`, a number without its leading or trailing zeros. Each grammar takes those
+// spellings of a value it accepts, and only those: a closed name table, no new notation, no wider range.
+
+/**
+ * The colour names a minifier writes: the CSS names shorter than every hex spelling of their colour, `gray` alone for
+ * #808080 (a minifier never writes `grey`), each followed by that colour's hex in upper case (a name is lower case, so the
+ * two never run together), after a leading `0` (so every name follows a hex digit). 31 of CSS's 148.
+ */
+const NAMES =
+  '0azureF0FFFFbeigeF5F5DCbisqueFFE4C4brownA52A2AcoralFF7F50goldFFD700gray808080green008000indigo4B0082' +
+  'ivoryFFFFF0khakiF0E68ClinenFAF0E6maroon800000navy000080olive808000orangeFFA500orchidDA70D6peruCD853FpinkFFC0CB' +
+  'plumDDA0DDpurple800080redFF0000salmonFA8072siennaA0522DsilverC0C0C0snowFFFAFAtanD2B48Cteal008080tomatoFF6347' +
+  'violetEE82EEwheatF5DEB3';
+
+/**
+ * An opaque colour's six-digit form, or '' for none: a six-digit hex as written, `#rgb` with each digit doubled, a table name
+ * as its colour's hex (in the table's upper case). parseAppearance lower-cases it: the one form the reader, the seed and
+ * Mermaid's derivation read.
+ */
+const hexOf = (t: string): string => {
+  if (/^#(?:[\dA-Fa-f]{3}){1,2}$/.test(t)) return t[4] ? t : t.replace(/\w/g, '$&$&');
+  // A name is letters only before it is put in a pattern; it must sit between two hex runs of the table.
+  const m = /^[a-z]+$/.test(t) ? new RegExp(`[\\dA-F]${t}([\\dA-F]{6})`).exec(NAMES) : null;
+  return m === null ? '' : `#${m[1] as string}`;
+};
 const MODES = ['light', 'dark', 'auto'];
 /** The label's refused categories: controls, format characters, line and paragraph separators, lone surrogates. */
 const LABEL_REFUSED = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/u;
 
 /**
- * `SHADOW(, SHADOW){0,2}`; `SHADOW` is `LEN LEN( LEN( LEN)?)? COLOUR`. Built per call (a call at the top level would run at
- * import). Groups: four lengths, then the three integers of an `rgba(`; the ranges are x and y ±64, blur 0 to 64, spread
- * ±8, integers 0 to 255.
+ * `SHADOW(,[ ]SHADOW){0,2}`; `SHADOW` is `LEN LEN( LEN( LEN)?)? COLOUR`, and `COLOUR` a hex of 3, 4, 6 or 8 digits, an
+ * `rgba(` whose commas take one space or none and whose alpha may drop its leading zero, or a table name. Built per call (a
+ * call at the top level would run at import). Groups: four lengths, the three integers of an `rgba(`, then a name; the
+ * ranges are x and y ±64, blur 0 to 64, spread ±8, integers 0 to 255, and a name must be in the table (else `grammar`).
  */
 const popShadow = (v: string): '' | 'grammar' | 'range' => {
-  const len = '(0|0px|-?[1-9][0-9]?px)';
-  const int = '(0|[1-9][0-9]{0,2})';
-  const one = `${len} ${len}(?: ${len}(?: ${len})?)? (?:#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?|rgba\\(${int}, ${int}, ${int}, (?:0|1|0\\.[0-9]{1,3}|1\\.0{1,3})\\))`;
-  if (!new RegExp(`^${one}(?:, ${one}){0,2}$`).test(v)) return 'grammar';
-  const each = new RegExp(one, 'y');
-  for (let at = 0; at < v.length; at += 2) {
-    each.lastIndex = at;
+  const len = '(0|0px|-?[1-9]\\d?px)';
+  const int = '(0|[1-9]\\d{0,2})';
+  const h = '[\\dA-Fa-f]';
+  const one = `${len} ${len}(?: ${len}(?: ${len})?)? (?:#(?:${h}{8}|${h}{6}|${h}{3,4})|rgba\\(${int}, ?${int}, ?${int}, ?(?:0|1|0?\\.\\d{1,3}|1\\.0{1,3})\\)|([a-z]+))`;
+  if (!new RegExp(`^${one}(?:, ?${one}){0,2}$`).test(v)) return 'grammar';
+  const each = new RegExp(`${one},? ?`, 'y');
+  let why: '' | 'grammar' | 'range' = '';
+  while (each.lastIndex < v.length) {
     const m = each.exec(v) as RegExpExecArray;
-    at = each.lastIndex;
     const [x, y, blur, spread, r, g, b] = [1, 2, 3, 4, 5, 6, 7].map((i) => parseInt(m[i] ?? '0', 10));
-    if (Math.abs(x as number) > 64 || Math.abs(y as number) > 64 || (blur as number) < 0 || (blur as number) > 64 || Math.abs(spread as number) > 8 || Math.max(r as number, g as number, b as number) > 255) return 'range';
+    if (m[8] !== undefined && hexOf(m[8]) === '') return 'grammar';
+    if (Math.abs(x as number) > 64 || Math.abs(y as number) > 64 || (blur as number) < 0 || (blur as number) > 64 || Math.abs(spread as number) > 8 || Math.max(r as number, g as number, b as number) > 255) why = 'range';
   }
-  return '';
+  return why;
 };
+
+/** A whole pixel length of at most two digits, three skin slots' pattern. */
+const PX = /^(?:0|[1-9]\d?)px$/;
 
 /** The skin slots' patterns with their range where the pattern is looser than it: [pattern, lowest, highest]. */
 const SKIN_RULES: Readonly<Record<Exclude<AppearanceSkinSlot, 'popShadow'>, readonly [RegExp, number?, number?]>> = {
-  radius: [/^(?:0|[1-9][0-9]?)px$/, 0, 24],
-  radiusSmall: [/^(?:0|[1-9][0-9]?)px$/, 0, 24],
-  radiusLarge: [/^(?:0|[1-9][0-9]?)px$/, 0, 24],
-  controlRow: [/^[1-9][0-9]px$/, 28, 56],
+  radius: [PX, 0, 24],
+  radiusSmall: [PX, 0, 24],
+  radiusLarge: [PX, 0, 24],
+  controlRow: [/^[1-9]\dpx$/, 28, 56],
   sectionFamily: [/^(?:sans|mono)$/],
   sectionSize: [/^1[0-6]px$/],
   sectionWeight: [/^[1-9]00$/],
-  sectionTracking: [/^-?0(?:\.[0-9]{1,3})?em$/, -0.1, 0.3],
+  sectionTracking: [/^-?(?:0|0?\.\d{1,3})em$/, -0.1, 0.3],
   sectionCase: [/^(?:none|uppercase)$/],
 };
 
@@ -213,9 +243,11 @@ export function parseAppearance(x: unknown): { appearance: Appearance; refused: 
         for (const [s, raw] of entries) {
           const key = `${k}.${s}`;
           const t = typeof raw === 'string' ? trim(raw) : '';
+          // A colour is kept in its one form, lower-case six-digit hex, which the reader computes with; a skin value as received.
+          const c = k === 'colour' ? hexOf(t).toLowerCase() : t;
           const why = !slots.includes(s) ? 'unknown-key' : typeof raw !== 'string' ? 'type'
-            : k === 'colour' ? (HEX.test(t) ? '' : 'grammar') : skinWhy(s as AppearanceSkinSlot, t);
-          if (why === '') g[s] = t;
+            : k === 'colour' ? (c === '' ? 'grammar' : '') : skinWhy(s as AppearanceSkinSlot, t);
+          if (why === '') g[s] = c;
           else mine.push({ key, why });
           if (why !== '' && why !== 'unknown-key') bad = true;
         }

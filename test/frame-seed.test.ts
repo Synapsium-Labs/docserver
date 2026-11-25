@@ -783,13 +783,13 @@ describe('L3.M20 escapedHtmlLength: the html as the seed carries it', () => {
 
 /**
  * The longest verdict parseAppearance accepts, built here from the grammar and its ranges, independent of seed.ts: the
- * longest mode word, 33 colours of `#rrggbb`, every skin slot at its longest value and a label of 64 `<`.
+ * longest mode word, 33 colours of `#rrggbb` (lower case: the verdict's one form, ccrc D-9019), every skin slot at its longest value and a label of 64 `<`.
  */
 function maximalAppearance(): Record<string, unknown> {
   const shadow = '-64px -64px 64px -8px rgba(255, 255, 255, 0.999)';
   return {
     mode: 'light',
-    colour: Object.fromEntries(APPEARANCE_SLOTS.colour.map((k) => [k, '#ABCDEF'])),
+    colour: Object.fromEntries(APPEARANCE_SLOTS.colour.map((k) => [k, '#abcdef'])),
     skin: {
       radius: '24px',
       radiusSmall: '24px',

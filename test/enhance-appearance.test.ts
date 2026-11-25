@@ -20,11 +20,13 @@ import { SEED_LIMITS } from '../src/frame/seed.js';
 import { loadHostFonts } from '../src/frame-runtime/host-fonts.js';
 import { render } from '../src/render/index.js';
 
-const FIXTURES = JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'conformance', 'appearance', 'fixtures.json'), 'utf8')) as {
+// The palettes as the verdict gives them back: a colour comes out as lower-case `#rrggbb` (ccrc D-9019), so the rows that
+// compare what the reader wrote with what was handed in hand in that form. Case handling itself is in the contract's rows.
+const FIXTURES = (JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'conformance', 'appearance', 'fixtures.json'), 'utf8')) as {
   name: string;
   mode: 'light' | 'dark';
   colour: Record<AppearanceColourSlot, string>;
-}[];
+}[]).map((f) => ({ ...f, colour: Object.fromEntries(Object.entries(f.colour).map(([k, v]) => [k, v.toLowerCase()])) as Record<AppearanceColourSlot, string> }));
 const PHOSPHOR = FIXTURES.find((f) => f.name === 'Phosphor & Ink')!;
 const DAYLIGHT = FIXTURES.find((f) => f.name === 'Phosphor Daylight')!;
 
@@ -115,9 +117,16 @@ describe('test 3: the seed paints before the first yield', () => {
     expect(root2.hasAttribute('data-theme')).toBe(false);
   });
 
+  it('D-9019: an upper-case, a short and a named colour are written as lower-case #rrggbb, the verdict, never the text handed in', async () => {
+    const root = mount();
+    await enhance(root, { appearance: { mode: 'dark', colour: { ...PHOSPHOR.colour, bg: '#ABCDEF', surface: '#FFF', text: 'tan' }, skin: { sectionTracking: '-.011em' } } });
+    expect([prop(root, '--bg'), prop(root, '--surface'), prop(root, '--text')]).toEqual(['#abcdef', '#ffffff', '#d2b48c']);
+    expect(prop(root, '--dr-section-tracking')).toBe('-.011em');
+  });
+
   it('a bad colour value drops the whole colour group, keeps the skin and stays hosted', async () => {
     const root = mount();
-    await enhance(root, { appearance: { mode: 'light', colour: { ...PHOSPHOR.colour, bg: 'red' }, skin: { radius: '3px' } } });
+    await enhance(root, { appearance: { mode: 'light', colour: { ...PHOSPHOR.colour, bg: 'blue' }, skin: { radius: '3px' } } }); // a name outside the table (D-9019)
     expect(root.hasAttribute('data-docreader-hosted')).toBe(true);
     expect(root.hasAttribute('data-docreader-colours')).toBe(false);
     expect(set(root, COLOUR_PROPS)).toEqual([]);

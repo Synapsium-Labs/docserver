@@ -21,16 +21,16 @@ A minor: new options, operations, exports, layouts and assets, and four asset ha
 The assets that moved since 1.1.0, each with the sha256 that `assets/assets.json` records (`assets/assets.json` also records the new `version`); `assets/frame/guard.js`, the fonts and both Mermaid builds did not move:
 
 - `assets/frame/bootstrap.js`: `d0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63`, csp `'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM='`
-- `assets/frame/enhance.js`: `0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef`, csp `'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8='`
+- `assets/frame/enhance.js`: `d2c7df4e3c29a12555c3324333a5a52def3c3f02290b510fd4abc658521f076b`, csp `'sha256-0sffTjwpoSVVwzJDM6WlLe88PwIpC1EP1KvGWFIfB2s='`
 - `assets/frame/reader.css`: `32aa81ef916560fe4a304599dfcebcd96cd4825e1d8c33d0e6ae81916d563529`
 - `assets/reader.css`: `816db9774bbda71b99b85d1404523c8c837866bee2072eae0806339405cc2996`
 
 The assets new in 1.2.0, each with the sha256 that `assets/assets.json` records (each `assets/layouts/<name>.css` is the source that the frame's `assets/frame/layout-<name>.css` copies byte for byte):
 
-- `assets/frame/enhance-classic.js`: `608037f6acd409299b19fa32b65c2488dd8bbf276da3d182d38a298d9c5af86a`, csp `'sha256-YIA39qzUCSmbGfoytlwkiN2Lvydto9GC04opjZxa+Go='`
-- `assets/frame/enhance-editorial.js`: `91948b8a6af0c8f0c30b36a5a935f71c727fdb386e1f6ce58ee4a4be38f66edd`, csp `'sha256-kZSLimrwyPDDCzalqTX3HHJ/2zhuH2zljuSkvjj2bt0='`
-- `assets/frame/enhance-guided.js`: `152934356f24ee2286a67176d0497213c97825fe36b1344622df46fc26273a14`, csp `'sha256-FSk0NW8k7iKGpnF20ElyE8l4Jf42sTRGIt9G/CYnOhQ='`
-- `assets/frame/enhance-review.js`: `920c60b298691f8293b79df9208e96f4a54cf4260a7f4501bf4ee30aa51a51a3`, csp `'sha256-kgxgsphpH4KTt535II6W9KVM9CYKf0UBv07jCqUaUaM='`
+- `assets/frame/enhance-classic.js`: `a38e327fe8e84040670b7e55bd4ec7c96104101b4ed153164222d6641df39b66`, csp `'sha256-o44yf+joQEBnC35VvU7HyWEEEBtO0VMWQiLWZB3zm2Y='`
+- `assets/frame/enhance-editorial.js`: `b927eed071e344802fe8791db248f104e0313e65e6a6fa0929d35a2241f65d68`, csp `'sha256-uSfu0HHjRIAv6HkdskjxBOAxPmXmpvoJKdNaIkH2XWg='`
+- `assets/frame/enhance-guided.js`: `3e58f544b6654bb50dc5a2dc9157d27d76a08ebbe8a3faf8a484c1a273a8e8fe`, csp `'sha256-Plj1RLZlS7UNxaLckVfSfXagjrvoo/r4pITBonOo6P4='`
+- `assets/frame/enhance-review.js`: `0dbc9a178b0d9221a53e59aac5b2b29ef67e57844417e1dbd1e8133efb7d1910`, csp `'sha256-DbyaF4sNkiGlPlmqxbKynvZ+V4REF+Hb0egTPvt9GRA='`
 - `assets/frame/layout-classic.css`: `90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c`
 - `assets/frame/layout-editorial.css`: `c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda`
 - `assets/frame/layout-guided.css`: `9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c`
@@ -40,6 +40,13 @@ The assets new in 1.2.0, each with the sha256 that `assets/assets.json` records 
 - `assets/layouts/guided.css`: `9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c`
 - `assets/layouts/review.css`: `920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68`
 - `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`
+
+The appearance grammars take the spellings a host's stylesheet build writes (ccrc D-9019). A host reads its palette from its own custom properties and forwards that text verbatim, as the contract asks, and a minifier may have rewritten it: Lightning CSS 1.32.0, measured in a custom property, writes `#fff` for `#ffffff`, `#0008` for `#00000088`, a colour name where it is shorter than every hex spelling, `rgba(0,0,0,.5)` for a legacy target, `-.011em` for `-0.011em` and `.08em` for `0.080em`. Each such value was refused, and one refused colour drops the whole colour group, so a minified palette fell back to the library's own colours.
+
+- **The contract text moves.** A colour slot takes `#rgb` and 31 colour names (the CSS names shorter than every hex spelling of their colour, `gray` and not `grey`, lower case) beside `#rrggbb`; `popShadow` takes a 3- or 4-digit hex, those names, an `rgba(` with no space after a comma and an alpha without its leading zero, and a comma between shadows with no space; `sectionTracking` takes a length without its leading zero. Nothing else is newly accepted: an alpha form in a colour slot, every other name, `transparent`, `currentcolor`, the CSS-wide keywords, other functions and other white space stay refused, and every range applies to the parsed value. The README's "Equivalent spellings" states the grammar whole.
+- **The verdict.** A colour comes out in one form, `#rrggbb` in lower case, whatever spelling or case arrived: a six-digit hex lower-cased, `#rgb` with each digit doubled, a name as its colour's hex. A host that handed in `#2E3440` gets `#2e3440` back, where this candidate's contract kept the case. The frame applies it, the seed carries it (its size bound is unchanged) and `mermaidThemeOf` reads it. A skin value comes out as received. Two equivalent spellings give the same computed values in the frame. A host that relied on `parseAppearance` refusing `#fff` or `red` in a colour slot now gets the colour group.
+- **Unchanged.** The slots, the group rule (all or nothing for colours), the refusal words, the size stop and the payload limits.
+- **Frame assets.** Every enhance bundle grows by 556 characters (the name table and the patterns), so the five enhance hashes above and `MAX_SRCDOC_CHARS_DEFAULT` move; the bootstrap, the guard, the stylesheets and Mermaid do not. No render golden, layout snapshot or bridge case moved.
 
 Reader mode, the library's half (a minor when released). Bridge protocol 1 and seed schema 1 are unchanged; two ops are added, one per direction, and an older frame or host ignores or refuses what it does not know:
 
@@ -57,9 +64,9 @@ Review and Guided sealed-frame layouts (a minor when released). `FRAME_LAYOUTS` 
 - **Guided:** a hero with a glance, sections that show their intro and fold the rest behind one button (`hidden="until-found"`, so a link or the browser's find opens the fold), Expand all, Collapse all and the lens in the bar, reading times in the Contents, term definitions and tables as cards on a phone. No Index tab, ID links, review strip, read marks, change stepper or settings menu.
 - **Goldens:** no existing golden moved. The corpus adds 54 DOM snapshots for each new layout (none of the existing snapshots moved), and `conformance/frame-boundaries.json` appends two entries (review's policy, then guided's), keeping the earlier records intact.
 - **Shared folds (ccrc D-8881):** Guided keeps its folded sections in the per-document `folds` field the default layout also uses, and its choice of layers in the reader's UI memory, rather than a field of its own, because the bootstrap has no room for one (32 740 of 32 768 bytes). So a section folded in one of the two layouts shows folded in the other for the same document, where the other has a fold for it. Each layout reads the field safely whatever the other wrote (a value that is not a list, an entry that is not a string or an id it has no section for is ignored, never thrown on and never rewritten by a read). Three limits (ccrc D-8881): a document with nothing folded reads as unvisited (the default layout deletes the field when nothing is folded, so Guided applies its own first-visit layers next time: all folded for a long document unless the reader chose full, or when its layers choice is guided); the default layout's own fold write (a fold, a reveal or `beforematch`) keeps only its own entries, so an id only Guided has a layer for is dropped at that write, while Guided's write keeps the entries it does not own; and Guided's reader-wide layers choice lives in the existing UI preference (`pref:ui`, key `layers`), which adds no field.
-- `assets/frame/enhance-review.js`: `920c60b298691f8293b79df9208e96f4a54cf4260a7f4501bf4ee30aa51a51a3`, csp `'sha256-kgxgsphpH4KTt535II6W9KVM9CYKf0UBv07jCqUaUaM='`
+- `assets/frame/enhance-review.js`: `0dbc9a178b0d9221a53e59aac5b2b29ef67e57844417e1dbd1e8133efb7d1910`, csp `'sha256-DbyaF4sNkiGlPlmqxbKynvZ+V4REF+Hb0egTPvt9GRA='`
 - `assets/frame/layout-review.css`: `920780aaeccf034223d33179d0f1a77fab74663d317825f75960b7920a7def68`
-- `assets/frame/enhance-guided.js`: `152934356f24ee2286a67176d0497213c97825fe36b1344622df46fc26273a14`, csp `'sha256-FSk0NW8k7iKGpnF20ElyE8l4Jf42sTRGIt9G/CYnOhQ='`
+- `assets/frame/enhance-guided.js`: `3e58f544b6654bb50dc5a2dc9157d27d76a08ebbe8a3faf8a484c1a273a8e8fe`, csp `'sha256-Plj1RLZlS7UNxaLckVfSfXagjrvoo/r4pITBonOo6P4='`
 - `assets/frame/layout-guided.css`: `9ceef0b3f36b5d9ec611767f20622d0edc7cf0a91f76be65e34f61dbb897304c`
 
 Classic and Editorial sealed-frame layouts (a minor when released). `FRAME_LAYOUTS`, `FrameLayout` and `isFrameLayout` name the layouts. `FrameOptions.layout` and `HostAdapters.layout` select one at mount; omission keeps the default frame byte for byte. A host supplies that layout's script as `assets.enhance` and its stylesheet as `assets.layoutCss`. `frameCsp(layout)` pins one enhance hash, and `maxSrcdocChars(layout)` uses that frame's assets. The shared assets, default CSP, `MAX_SRCDOC_CHARS_DEFAULT`, sandbox, bridge protocol and seed schema do not change. Standalone `./enhance` still runs the default graph only.
@@ -67,9 +74,9 @@ Classic and Editorial sealed-frame layouts (a minor when released). `FRAME_LAYOU
 - **Classic:** summary and status boxes, numbered headings, a Contents sidebar and phone drawer, and phone section chips. No review strip, Index tab or settings menu.
 - **Editorial:** title block, linked standing counts, plan labels without outline controls, a running head and a Contents-only rail. Quick jump includes rules, rows and captioned figures.
 - **Goldens:** no existing golden moved. The corpus adds 54 DOM snapshots for each new layout, and `conformance/frame-boundaries.json` appends the per-layout policies while keeping the earlier records intact. Review updated six of the new `rail/*.dom.txt` cases in each layout to record the drawer's Close control: `drawer`, `hostile-marks`, `malformed-mark-length`, `malformed-marks`, `marks-index` and `plan-marks`.
-- `assets/frame/enhance-classic.js`: `608037f6acd409299b19fa32b65c2488dd8bbf276da3d182d38a298d9c5af86a`, csp `'sha256-YIA39qzUCSmbGfoytlwkiN2Lvydto9GC04opjZxa+Go='`
+- `assets/frame/enhance-classic.js`: `a38e327fe8e84040670b7e55bd4ec7c96104101b4ed153164222d6641df39b66`, csp `'sha256-o44yf+joQEBnC35VvU7HyWEEEBtO0VMWQiLWZB3zm2Y='`
 - `assets/frame/layout-classic.css`: `90de780c9e0f98fea4bb916357b1ce74a962e577027e1cb88f28e0470b7ea23c`
-- `assets/frame/enhance-editorial.js`: `91948b8a6af0c8f0c30b36a5a935f71c727fdb386e1f6ce58ee4a4be38f66edd`, csp `'sha256-kZSLimrwyPDDCzalqTX3HHJ/2zhuH2zljuSkvjj2bt0='`
+- `assets/frame/enhance-editorial.js`: `b927eed071e344802fe8791db248f104e0313e65e6a6fa0929d35a2241f65d68`, csp `'sha256-uSfu0HHjRIAv6HkdskjxBOAxPmXmpvoJKdNaIkH2XWg='`
 - `assets/frame/layout-editorial.css`: `c15993de4b7d34298fe9287c25516e8254cc1ff70f5b4c9eca92f731b8835dda`
 
 Print mode (a minor when released): `render(md, { print: true })` writes the reader's blocks statically (the eyebrow, byline, facts panel, review strip, section numbers, boxes, status labels, plan marks and, with `reader.rules`, rule paragraphs and the rules index) inside one `div.docreader-print`, for a host that prints a document without the browser reader. New: the `print` option, `ReaderVocabulary.rules`, `assets/print.css` (every rule under `.docreader-print`; listed in `assets/assets.json`, not a frame asset), and `conformance/print/` (seven fixtures with their pinned output, and `vocabulary.json`, the elements, classes and two open class families a host derives its print allow-list from), which the package ships. `reader` is now checked whole, as the reader checks `features.vocabulary`: a list, group or grammar it would refuse is a TypeError. Without `print` the html and the meta are byte for byte what they were, and no golden moves. No frame asset changes.
@@ -101,7 +108,7 @@ These cases are pinned by rows of `test/host-mount.test.ts` (the reopened run's 
 The frame assets' sizes are now held by two append-only tables, `conformance/size/shares.json` and `conformance/size/growth.json`, judged at every landing against its first parent by `test/size-contract.test.ts` through one `Size-Design:` line in the landing's message; `FRAME_MANIFEST` entries gain a `layout` field (`"default"` for the enhance bundle, `null` for the rest).
 
 - `assets/frame/bootstrap.js`: `d0ab0f7e312251e25005b7c090dbb8129a971c0755d456cf35f82fe450d26c63`, csp `'sha256-0KsPfjEiUeJQBbfAkNu4EpqXHAdV1FbPNfgv5FDSbGM='`
-- `assets/frame/enhance.js`: `0a1b49f4a8c20dd3fe7df8d4589cc7ff5030fde2cc548015d2d7ff47d5c787ef`, csp `'sha256-ChtJ9KjCDdP+ffjUWJzH/1Aw/eLMVIAV0tf/R9XHh+8='`
+- `assets/frame/enhance.js`: `d2c7df4e3c29a12555c3324333a5a52def3c3f02290b510fd4abc658521f076b`, csp `'sha256-0sffTjwpoSVVwzJDM6WlLe88PwIpC1EP1KvGWFIfB2s='`
 - `assets/frame/reader.css`: `32aa81ef916560fe4a304599dfcebcd96cd4825e1d8c33d0e6ae81916d563529`
 - `assets/reader.css`: `816db9774bbda71b99b85d1404523c8c837866bee2072eae0806339405cc2996`
 - `assets/print.css`: `2ba6cfdc58eaf2e5bced8b767eb85fb3255bcd1c9a23ee1e62ee5add4bfb6113`
